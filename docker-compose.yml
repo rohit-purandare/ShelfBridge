@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  shelfbridge:
+    build: .
+    container_name: shelfbridge
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - TZ=Etc/UTC
+      - NODE_ENV=production
+    volumes:
+      # Mount configuration file (read-only)
+      - ./config/config.yaml:/app/config/config.yaml:ro
+      # Mount data directory for persistent cache
+      - ./data:/app/data
+    command: ["npm", "start"]
+    healthcheck:
+      test: ["CMD", "node", "src/main.js", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.docker.compose.project=shelfbridge"
+      - "com.docker.compose.service=shelfbridge"
+    networks:
+      - shelfbridge-network
+
+networks:
+  shelfbridge-network:
+    driver: bridge 

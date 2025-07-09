@@ -1,0 +1,83 @@
+# Node dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Build and cache
+build/
+dist/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+public/
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Dependency directories
+bower_components/
+jspm_packages/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc cache and temp
+.tmp/
+tmp/
+temp/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker
+.dockerignore
+docker-compose.local.yml
+
+# Application specific
+# Ignore all data except .gitkeep (if you want to keep the folder structure)
+data/*
+!data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# Config
+config/config.yaml
+# (keep config.yaml.example for reference)
+
+# Export and schema files
+cache_export.json
+book_cache_export.json
+schema-inputs.out
+schema-detail.out 

@@ -1,0 +1,40 @@
+{
+  "name": "shelfbridge",
+  "version": "1.0.0",
+  "description": "Sync your audiobook listening progress from Audiobookshelf to Hardcover automatically",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "sync": "node src/main.js sync",
+    "test": "node src/main.js test",
+    "config": "node src/main.js config",
+    "cache": "node src/main.js cache",
+    "dev": "node --watch src/main.js"
+  },
+  "keywords": [
+    "audiobookshelf",
+    "hardcover",
+    "sync",
+    "audiobooks",
+    "reading-progress"
+  ],
+  "author": "Rohit Purandare",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "better-sqlite3": "^12.2.0",
+    "commander": "^11.1.0",
+    "cron": "^3.1.6",
+    "js-yaml": "^4.1.0",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

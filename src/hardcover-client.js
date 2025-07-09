@@ -1,0 +1,630 @@
+import axios from 'axios';
+import { RateLimiter } from './utils.js';
+
+const RATE_LIMIT_PER_MINUTE = 60;
+const MAX_PARALLEL_WORKERS = 5;
+
+export class HardcoverClient {
+    constructor(token) {
+        this.token = token;
+        this.apiUrl = 'https://api.hardcover.app/v1/graphql';
+        this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
+        
+        // Setup axios instance with authentication
+        this.client = axios.create({
+            baseURL: this.apiUrl,
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 second timeout
+        });
+        
+        console.log('HardcoverClient initialized');
+    }
+
+    async testConnection() {
+        const query = `
+            query {
+                me {
+                    id
+                    username
+                }
+            }
+        `;
+
+        try {
+            const result = await this._executeQuery(query);
+            return result && result.me;
+        } catch (error) {
+            console.error('Connection test failed:', error.message);
+            return false;
+        }
+    }
+
+    async getSchema() {
+        const query = `
+            query IntrospectionQuery {
+                __schema {
+                    mutationType {
+                        fields {
+                            name
+                            args {
+                                name
+                                type {
+                                    name
+                                    kind
+                                    ofType {
+                                        name
+                                        kind
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        try {
+            const result = await this._executeQuery(query);
+            return result;
+        } catch (error) {
+            console.error('Error getting schema:', error.message);
+            return null;
+        }
+    }
+
+    async getUserBooks() {
+        console.log('Fetching user\'s book library from Hardcover...');
+
+        const query = `
+            query getUserBooks($offset: Int = 0, $limit: Int = 100) {
+                me {
+                    user_books(
+                        offset: $offset,
+                        limit: $limit
+                    ) {
+                        id
+                        status_id
+                        book {
+                            id
+                            title
+                            contributions(where: {contributable_type: {_eq: "Book"}}) {
+                                author {
+                                    id
+                                    name
+                                }
+                            }
+                            editions {
+                                id
+                                isbn_10
+                                isbn_13
+                                asin
+                                pages
+                                audio_seconds
+                                physical_format
+                                reading_format { format }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        const allBooks = [];
+        let offset = 0;
+        const limit = 100;
+
+        try {
+            while (true) {
+                const variables = { offset, limit };
+                const result = await this._executeQuery(query, variables);
+
+                if (!result) {
+                    console.error('No result from GraphQL query');
+                    break;
+                }
+
+                console.debug(`GraphQL result structure: ${typeof result}`);
+
+                if (!result.me) {
+                    console.error(`'me' key not found in result. Available keys: ${Object.keys(result)}`);
+                    break;
+                }
+
+                const meData = result.me;
+                console.debug(`Me data type: ${typeof meData}`);
+
+                let books = [];
+                
+                // Handle both possible response formats
+                if (Array.isArray(meData)) {
+                    // If meData is a list, extract user_books from the first item
+                    if (meData.length > 0 && meData[0].user_books) {
+                        books = meData[0].user_books;
+                        console.debug(`Found user_books in me list with ${books.length} items`);
+                    } else {
+                        console.error(`Expected user_books in me list but not found. Structure: ${meData.length > 0 ? JSON.stringify(meData[0]) : 'Empty list'}`);
+                        books = [];
+                    }
+                } else if (typeof meData === 'object' && meData.user_books) {
+                    // Standard format: me.user_books
+                    books = meData.user_books;
+                    console.debug(`Found user_books in me data with ${books.length} items`);
+                } else {
+                    console.error(`Unexpected me data structure. Type: ${typeof meData}, Keys: ${typeof meData === 'object' ? Object.keys(meData) : 'Not an object'}`);
+                    break;
+                }
+
+                if (!books || books.length === 0) {
+                    break;
+                }
+
+                allBooks.push(...books);
+
+                // If we got fewer books than the limit, we've reached the end
+                if (books.length < limit) {
+                    break;
+                }
+
+                offset += limit;
+                console.debug(`Fetched ${allBooks.length} books so far...`);
+            }
+
+            console.log(`Retrieved ${allBooks.length} books from Hardcover library`);
+            return allBooks;
+
+        } catch (error) {
+            console.error('Error fetching user books:', error.message);
+            throw error;
+        }
+    }
+
+    async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds = false) {
+        // Get current date
+        const startedAt = new Date().toISOString().slice(0, 10);
+        // Check for existing progress
+        const progressInfo = await this.getBookCurrentProgress(userBookId);
+        if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && progressInfo.latest_read.id) {
+            // Update existing progress
+            const readId = progressInfo.latest_read.id;
+            const mutation = useSeconds ? `
+                mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
+                    update_user_book_read(id: $id, object: {
+                        progress_seconds: $seconds,
+                        edition_id: $editionId,
+                        started_at: $startedAt
+                    }) {
+                        error
+                        user_book_read {
+                            id
+                            progress_seconds
+                            edition_id
+                        }
+                    }
+                }
+            ` : `
+                mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
+                    update_user_book_read(id: $id, object: {
+                        progress_pages: $pages,
+                        edition_id: $editionId,
+                        started_at: $startedAt
+                    }) {
+                        error
+                        user_book_read {
+                            id
+                            progress_pages
+                            edition_id
+                        }
+                    }
+                }
+            `;
+            const variables = useSeconds ? {
+                id: readId,
+                seconds: currentProgress,
+                editionId,
+                startedAt
+            } : {
+                id: readId,
+                pages: currentProgress,
+                editionId,
+                startedAt
+            };
+            try {
+                const result = await this._executeQuery(mutation, variables);
+                return result && result.update_user_book_read && result.update_user_book_read.user_book_read;
+            } catch (error) {
+                console.error('Error updating reading progress:', error.message);
+                return false;
+            }
+        } else {
+            // Insert new progress record
+            return await this.insertUserBookRead(userBookId, currentProgress, editionId, startedAt, useSeconds);
+        }
+    }
+
+    async markBookCompleted(userBookId, editionId, totalValue, useSeconds = false) {
+        // First get the user_book_read record ID
+        const progressInfo = await this.getBookCurrentProgress(userBookId);
+        if (!progressInfo || !progressInfo.latest_read || !progressInfo.latest_read.id) {
+            console.error('No existing progress record found for book completion');
+            return false;
+        }
+
+        const readId = progressInfo.latest_read.id;
+        const mutation = useSeconds ? `
+            mutation markBookCompleted($id: Int!, $editionId: Int!, $seconds: Int!) {
+                update_user_book_read(
+                    id: $id,
+                    object: {
+                        progress_seconds: $seconds,
+                        edition_id: $editionId,
+                        finished_at: "now()"
+                    }
+                ) {
+                    error
+                    user_book_read {
+                        id
+                        progress_seconds
+                        finished_at
+                        edition_id
+                    }
+                }
+            }
+        ` : `
+            mutation markBookCompleted($id: Int!, $editionId: Int!, $pages: Int!) {
+                update_user_book_read(
+                    id: $id,
+                    object: {
+                        progress_pages: $pages,
+                        edition_id: $editionId,
+                        finished_at: "now()"
+                    }
+                ) {
+                    error
+                    user_book_read {
+                        id
+                        progress_pages
+                        finished_at
+                        edition_id
+                    }
+                }
+            }
+        `;
+
+        const variables = useSeconds ? {
+            id: readId,
+            editionId,
+            seconds: totalValue
+        } : {
+            id: readId,
+            editionId,
+            pages: totalValue
+        };
+
+        try {
+            const result = await this._executeQuery(mutation, variables);
+            return result && result.update_user_book_read && result.update_user_book_read.user_book_read;
+        } catch (error) {
+            console.error('Error marking book completed:', error.message);
+            return false;
+        }
+    }
+
+    async updateBookStatus(userBookId, statusId) {
+        const mutation = `
+            mutation updateBookStatus($userBookId: Int!, $statusId: Int!) {
+                update_user_book(
+                    where: { id: { _eq: $userBookId } }
+                    _set: { status_id: $statusId }
+                ) {
+                    affected_rows
+                }
+            }
+        `;
+
+        const variables = {
+            userBookId,
+            statusId
+        };
+
+        try {
+            const result = await this._executeQuery(mutation, variables);
+            return result && result.update_user_book && result.update_user_book.affected_rows > 0;
+        } catch (error) {
+            console.error('Error updating book status:', error.message);
+            return false;
+        }
+    }
+
+    async getBookCurrentProgress(userBookId) {
+        const query = `
+            query getBookProgress($userBookId: Int!) {
+                user_book_reads(where: {user_book_id: {_eq: $userBookId}}, order_by: {id: desc}, limit: 1) {
+                    id
+                    progress_pages
+                    progress_seconds
+                    user_book_id
+                    edition_id
+                    finished_at
+                }
+                user_books(where: {id: {_eq: $userBookId}}) {
+                    id
+                    status_id
+                }
+            }
+        `;
+        const variables = { userBookId };
+        try {
+            const result = await this._executeQuery(query, variables);
+            if (result && result.user_book_reads && result.user_book_reads.length > 0) {
+                return {
+                    latest_read: result.user_book_reads[0],
+                    user_book: result.user_books && result.user_books[0] ? result.user_books[0] : null,
+                    has_progress: true
+                };
+            }
+            return { latest_read: null, user_book: null, has_progress: false };
+        } catch (error) {
+            console.error('Error getting book current progress:', error.message);
+            return { latest_read: null, user_book: null, has_progress: false };
+        }
+    }
+
+    async insertUserBookRead(userBookId, currentProgress, editionId, startedAt, useSeconds = false) {
+        const mutation = useSeconds ? `
+            mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
+                insert_user_book_read(user_book_id: $id, user_book_read: {
+                    progress_seconds: $seconds,
+                    edition_id: $editionId,
+                    started_at: $startedAt
+                }) {
+                    error
+                    user_book_read {
+                        id
+                        started_at
+                        finished_at
+                        edition_id
+                        progress_seconds
+                    }
+                }
+            }
+        ` : `
+            mutation InsertUserBookRead($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
+                insert_user_book_read(user_book_id: $id, user_book_read: {
+                    progress_pages: $pages,
+                    edition_id: $editionId,
+                    started_at: $startedAt
+                }) {
+                    error
+                    user_book_read {
+                        id
+                        started_at
+                        finished_at
+                        edition_id
+                        progress_pages
+                    }
+                }
+            }
+        `;
+        const variables = useSeconds ? {
+            id: userBookId,
+            seconds: currentProgress,
+            editionId,
+            startedAt
+        } : {
+            id: userBookId,
+            pages: currentProgress,
+            editionId,
+            startedAt
+        };
+        try {
+            const result = await this._executeQuery(mutation, variables);
+            return result && result.insert_user_book_read && result.insert_user_book_read.user_book_read;
+        } catch (error) {
+            console.error('Error inserting user book read:', error.message);
+            return null;
+        }
+    }
+
+    async searchBooksByIsbn(isbn) {
+        const query = `
+            query searchBooksByIsbn($isbn: String!) {
+                book_edition(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
+                    id
+                    isbn_10
+                    isbn_13
+                    pages
+                    audio_seconds
+                    physical_format
+                    reading_format { format }
+                    book {
+                        id
+                        title
+                        contributions(where: {contributable_type: {_eq: "Book"}}) {
+                            author {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        const variables = { isbn };
+
+        try {
+            const result = await this._executeQuery(query, variables);
+            return result && result.book_edition ? result.book_edition : [];
+        } catch (error) {
+            console.error('Error searching books by ISBN:', error.message);
+            return [];
+        }
+    }
+
+    async searchBooksByAsin(asin) {
+        const query = `
+            query searchBooksByAsin($asin: String!) {
+                book_edition(where: { asin: { _eq: $asin } }) {
+                    id
+                    isbn_10
+                    isbn_13
+                    asin
+                    pages
+                    audio_seconds
+                    physical_format
+                    reading_format { format }
+                    book {
+                        id
+                        title
+                        contributions(where: {contributable_type: {_eq: "Book"}}) {
+                            author {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        const variables = { asin };
+
+        try {
+            const result = await this._executeQuery(query, variables);
+            return result && result.book_edition ? result.book_edition : [];
+        } catch (error) {
+            console.error('Error searching books by ASIN:', error.message);
+            return [];
+        }
+    }
+
+    async addBookToLibrary(bookId, statusId = 2, editionId = null) {
+        const mutation = `
+            mutation addBookToLibrary($bookId: Int!, $statusId: Int!, $editionId: Int) {
+                insert_user_book_one(object: {
+                    book_id: $bookId,
+                    status_id: $statusId,
+                    edition_id: $editionId
+                }) {
+                    id
+                    book {
+                        title
+                    }
+                }
+            }
+        `;
+
+        const variables = {
+            bookId,
+            statusId,
+            editionId
+        };
+
+        try {
+            const result = await this._executeQuery(mutation, variables);
+            return result && result.insert_user_book_one ? result.insert_user_book_one : null;
+        } catch (error) {
+            console.error('Error adding book to library:', error.message);
+            return null;
+        }
+    }
+
+    async getDetailedSchema() {
+        const query = `
+            query DetailedIntrospectionQuery {
+                __schema {
+                    types {
+                        name
+                        kind
+                        fields {
+                            name
+                            type {
+                                name
+                                kind
+                                ofType {
+                                    name
+                                    kind
+                                }
+                            }
+                        }
+                        inputFields {
+                            name
+                            type {
+                                name
+                                kind
+                                ofType {
+                                    name
+                                    kind
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        try {
+            const result = await this._executeQuery(query);
+            return result;
+        } catch (error) {
+            console.error('Error getting detailed schema:', error.message);
+            return null;
+        }
+    }
+
+    async _executeQuery(query, variables = null) {
+        await this.rateLimiter.waitIfNeeded();
+
+        try {
+            const requestData = {
+                query,
+                variables
+            };
+
+            const response = await this.client.post('', requestData);
+            
+            console.debug(`GraphQL query executed successfully`);
+            
+            if (response.data.errors) {
+                console.error('GraphQL errors:', response.data.errors);
+                throw new Error(`GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`);
+            }
+            
+            return response.data.data;
+        } catch (error) {
+            if (error.response) {
+                console.error(`HTTP ${error.response.status} error:`, error.response.data);
+                throw new Error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
+            } else if (error.request) {
+                console.error('Network error:', error.message);
+                throw new Error(`Network error: ${error.message}`);
+            } else {
+                console.error('Request error:', error.message);
+                throw error;
+            }
+        }
+    }
+
+    async getCurrentUser() {
+        const query = `
+            query {
+                me {
+                    id
+                    username
+                    email
+                }
+            }
+        `;
+
+        try {
+            const result = await this._executeQuery(query);
+            return result && result.me ? result.me : null;
+        } catch (error) {
+            console.error('Error getting current user:', error.message);
+            return null;
+        }
+    }
+} 

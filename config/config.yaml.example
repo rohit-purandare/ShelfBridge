@@ -1,0 +1,17 @@
+global:
+  min_progress_threshold: 5.0
+  parallel: true
+  workers: 3  # Number of parallel workers for sync operations
+  dry_run: false
+  sync_schedule: "0 3 * * *"  # Every day at 3am
+  timezone: "Etc/UTC"  # Default: UTC. Change to your local timezone if needed
+
+users:
+  - id: alice
+    abs_url: https://audiobookshelf.alice.com
+    abs_token: <alice_abs_token>
+    hardcover_token: <alice_hardcover_token>
+  - id: bob
+    abs_url: https://audiobookshelf.bob.com
+    abs_token: <bob_abs_token>
+    hardcover_token: <bob_hardcover_token> 
