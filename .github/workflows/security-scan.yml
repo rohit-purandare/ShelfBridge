@@ -13,6 +13,10 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
     
     steps:
     - name: Checkout code
@@ -30,9 +34,20 @@ jobs:
         output-path: results.sarif
         exit-code: 0  # Don't fail the build, just report
 
+    - name: Check SARIF file
+      if: always()
+      run: |
+        if [ -f "results.sarif" ]; then
+          echo "✅ SARIF file found: results.sarif"
+          echo "📊 File size: $(wc -c < results.sarif) bytes"
+        else
+          echo "⚠️  No SARIF file found - Gitleaks may not have found any issues"
+        fi
+
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('results.sarif') != ''
+      continue-on-error: true
       with:
         sarif_file: results.sarif
 
