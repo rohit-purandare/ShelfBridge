@@ -28,8 +28,8 @@ regexes = [
     # Comments about keys
     "//.*api.*key",
     "//.*token",
-    "/*.*api.*key.**/",
-    "/*.*token.**/",
+    "/\\*.*api.*key.*\\*/",
+    "/\\*.*token.*\\*/",
 ]
 
 # Allowlist specific commits (if needed)
