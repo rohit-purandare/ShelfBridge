@@ -10,11 +10,11 @@ paths = [
     # Ignore node_modules
     "node_modules/",
     # Ignore example files
-    "*.example",
-    "config.yaml.example",
+    ".*\\.example$",
+    "config\\.yaml\\.example",
     # Ignore documentation
-    "README.md",
-    "*.md",
+    "README\\.md",
+    ".*\\.md$",
 ]
 
 # Allowlist specific patterns that are false positives
