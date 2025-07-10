@@ -29,9 +29,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        config-path: .gitleaks.toml
-        report-format: sarif
-        output-path: results.sarif
+        config: .gitleaks.toml
+        format: sarif
+        output: results.sarif
         exit-code: 0  # Don't fail the build, just report
 
     - name: Check SARIF file
