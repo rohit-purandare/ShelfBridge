@@ -87,7 +87,7 @@ test/
 
 # Security and audit files
 npm-audit-report.json
-gitleaks-report.sarif
+results.sarif
 *.audit
 *.security
 

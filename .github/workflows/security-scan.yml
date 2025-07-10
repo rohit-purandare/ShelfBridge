@@ -27,14 +27,14 @@ jobs:
       with:
         config-path: .gitleaks.toml
         report-format: sarif
-        output-path: gitleaks-report.sarif
+        output-path: results.sarif
         exit-code: 0  # Don't fail the build, just report
 
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
-        sarif_file: gitleaks-report.sarif
+        sarif_file: results.sarif
 
     - name: Run npm audit
       run: |
