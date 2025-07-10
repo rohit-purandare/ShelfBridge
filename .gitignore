@@ -80,4 +80,7 @@ config/config.yaml
 cache_export.json
 book_cache_export.json
 schema-inputs.out
-schema-detail.out 
+schema-detail.out
+
+# Test files
+test/ 

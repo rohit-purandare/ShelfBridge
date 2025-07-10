@@ -181,13 +181,21 @@ export class HardcoverClient {
         }
     }
 
-    async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds = false) {
-        // Get current date
-        const startedAt = new Date().toISOString().slice(0, 10);
+    async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds = false, startedAt = null) {
         // Check for existing progress
         const progressInfo = await this.getBookCurrentProgress(userBookId);
+        
+        // If there's existing progress AND it has a finished_at date, create new session
+        if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && 
+            progressInfo.latest_read.finished_at) {
+            // Book was previously completed - create new reading session
+            console.log('Book was previously completed, creating new reading session');
+            const startDate = startedAt ? startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+            return await this.insertUserBookRead(userBookId, currentProgress, editionId, startDate, useSeconds);
+        }
+        
         if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && progressInfo.latest_read.id) {
-            // Update existing progress
+            // Update existing progress - include started_at if provided
             const readId = progressInfo.latest_read.id;
             const mutation = useSeconds ? `
                 mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
@@ -201,6 +209,7 @@ export class HardcoverClient {
                             id
                             progress_seconds
                             edition_id
+                            started_at
                         }
                     }
                 }
@@ -216,6 +225,7 @@ export class HardcoverClient {
                             id
                             progress_pages
                             edition_id
+                            started_at
                         }
                     }
                 }
@@ -224,84 +234,109 @@ export class HardcoverClient {
                 id: readId,
                 seconds: currentProgress,
                 editionId,
-                startedAt
+                startedAt: startedAt ? startedAt.slice(0, 10) : null
             } : {
                 id: readId,
                 pages: currentProgress,
                 editionId,
-                startedAt
+                startedAt: startedAt ? startedAt.slice(0, 10) : null
             };
             try {
                 const result = await this._executeQuery(mutation, variables);
-                return result && result.update_user_book_read && result.update_user_book_read.user_book_read;
+                if (result && result.update_user_book_read && result.update_user_book_read.user_book_read) {
+                    const updatedRecord = result.update_user_book_read.user_book_read;
+                    console.log(`Updated progress - preserved original start date: ${updatedRecord.started_at}`);
+                    return updatedRecord;
+                }
+                return false;
             } catch (error) {
                 console.error('Error updating reading progress:', error.message);
                 return false;
             }
         } else {
-            // Insert new progress record
-            return await this.insertUserBookRead(userBookId, currentProgress, editionId, startedAt, useSeconds);
+            // Insert new progress record - use provided startedAt or current date
+            const startDate = startedAt ? startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+            return await this.insertUserBookRead(userBookId, currentProgress, editionId, startDate, useSeconds);
         }
     }
 
-    async markBookCompleted(userBookId, editionId, totalValue, useSeconds = false) {
+    async markBookCompleted(userBookId, editionId, totalValue, useSeconds = false, finishedAt = null, startedAt = null) {
         // First get the user_book_read record ID
         const progressInfo = await this.getBookCurrentProgress(userBookId);
+        let readId;
+        
         if (!progressInfo || !progressInfo.latest_read || !progressInfo.latest_read.id) {
-            console.error('No existing progress record found for book completion');
-            return false;
+            // No existing progress record, create one with 100% progress
+            console.log('No existing progress record found, creating new one for completion');
+            const newRecord = await this.insertUserBookRead(userBookId, totalValue, editionId, startedAt, useSeconds);
+            if (!newRecord) {
+                console.error('Failed to create new progress record for completion');
+                return false;
+            }
+            readId = newRecord.id;
+        } else {
+            readId = progressInfo.latest_read.id;
         }
 
-        const readId = progressInfo.latest_read.id;
-        const mutation = useSeconds ? `
-            mutation markBookCompleted($id: Int!, $editionId: Int!, $seconds: Int!) {
-                update_user_book_read(
-                    id: $id,
-                    object: {
-                        progress_seconds: $seconds,
-                        edition_id: $editionId,
-                        finished_at: "now()"
-                    }
-                ) {
-                    error
-                    user_book_read {
-                        id
-                        progress_seconds
-                        finished_at
-                        edition_id
-                    }
-                }
-            }
-        ` : `
-            mutation markBookCompleted($id: Int!, $editionId: Int!, $pages: Int!) {
-                update_user_book_read(
-                    id: $id,
-                    object: {
-                        progress_pages: $pages,
-                        edition_id: $editionId,
-                        finished_at: "now()"
-                    }
-                ) {
-                    error
-                    user_book_read {
-                        id
-                        progress_pages
-                        finished_at
-                        edition_id
+        // Build mutation with optional finishedAt and startedAt
+        let mutation, variables;
+        if (useSeconds) {
+            mutation = `
+                mutation markBookCompleted($id: Int!, $editionId: Int!, $seconds: Int!${finishedAt ? ", $finishedAt: date" : ""}${startedAt ? ", $startedAt: date" : ""}) {
+                    update_user_book_read(
+                        id: $id,
+                        object: {
+                            progress_seconds: $seconds,
+                            edition_id: $editionId${finishedAt ? ",\n                            finished_at: $finishedAt" : ""}${startedAt ? ",\n                            started_at: $startedAt" : ""}
+                        }
+                    ) {
+                        error
+                        user_book_read {
+                            id
+                            progress_seconds
+                            finished_at
+                            started_at
+                            edition_id
+                        }
                     }
                 }
-            }
-        `;
-
-        const variables = useSeconds ? {
-            id: readId,
-            editionId,
-            seconds: totalValue
-        } : {
-            id: readId,
-            editionId,
-            pages: totalValue
-        };
+            `;
+            variables = {
+                id: readId,
+                editionId,
+                seconds: totalValue
+            };
+            if (finishedAt) variables.finishedAt = finishedAt;
+            if (startedAt) variables.startedAt = startedAt;
+        } else {
+            mutation = `
+                mutation markBookCompleted($id: Int!, $editionId: Int!, $pages: Int!${finishedAt ? ", $finishedAt: date" : ""}${startedAt ? ", $startedAt: date" : ""}) {
+                    update_user_book_read(
+                        id: $id,
+                        object: {
+                            progress_pages: $pages,
+                            edition_id: $editionId${finishedAt ? ",\n                            finished_at: $finishedAt" : ""}${startedAt ? ",\n                            started_at: $startedAt" : ""}
+                        }
+                    ) {
+                        error
+                        user_book_read {
+                            id
+                            progress_pages
+                            finished_at
+                            started_at
+                            edition_id
+                        }
+                    }
+                }
+            `;
+            variables = {
+                id: readId,
+                editionId,
+                pages: totalValue
+            };
+            if (finishedAt) variables.finishedAt = finishedAt;
+            if (startedAt) variables.startedAt = startedAt;
+        }
 
         try {
             const result = await this._executeQuery(mutation, variables);
@@ -347,6 +382,7 @@ export class HardcoverClient {
                     progress_seconds
                     user_book_id
                     edition_id
+                    started_at
                     finished_at
                 }
                 user_books(where: {id: {_eq: $userBookId}}) {
@@ -421,7 +457,12 @@ export class HardcoverClient {
         };
         try {
             const result = await this._executeQuery(mutation, variables);
-            return result && result.insert_user_book_read && result.insert_user_book_read.user_book_read;
+            if (result && result.insert_user_book_read && result.insert_user_book_read.user_book_read) {
+                const newRecord = result.insert_user_book_read.user_book_read;
+                console.log(`Created new progress record with start date: ${newRecord.started_at}`);
+                return newRecord;
+            }
+            return null;
         } catch (error) {
             console.error('Error inserting user book read:', error.message);
             return null;
@@ -578,6 +619,13 @@ export class HardcoverClient {
     async _executeQuery(query, variables = null) {
         await this.rateLimiter.waitIfNeeded();
 
+        // Debug logging for mutations
+        if (query.trim().startsWith('mutation')) {
+            console.log('🔍 [DEBUG] Hardcover Mutation:');
+            console.log('Query:', query);
+            console.log('Variables:', JSON.stringify(variables, null, 2));
+        }
+
         try {
             const requestData = {
                 query,
@@ -586,11 +634,30 @@ export class HardcoverClient {
 
             const response = await this.client.post('', requestData);
             
+            // Validate response
+            if (!response || !response.data) {
+                throw new Error('Invalid response from GraphQL API');
+            }
+            
+            if (response.status < 200 || response.status >= 300) {
+                throw new Error(`GraphQL API request failed with status ${response.status}: ${response.statusText}`);
+            }
+            
             console.debug(`GraphQL query executed successfully`);
             
             if (response.data.errors) {
                 console.error('GraphQL errors:', response.data.errors);
                 throw new Error(`GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`);
+            }
+            
+            if (!response.data.data) {
+                throw new Error('GraphQL response contains no data');
+            }
+            
+            // Debug logging for mutation responses
+            if (query.trim().startsWith('mutation')) {
+                console.log('🔍 [DEBUG] Hardcover Response:');
+                console.log(JSON.stringify(response.data, null, 2));
             }
             
             return response.data.data;

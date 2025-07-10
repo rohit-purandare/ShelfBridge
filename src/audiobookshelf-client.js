@@ -152,6 +152,25 @@ export class AudiobookshelfClient {
                 itemData.progress_percentage = progressData.progress * 100;
                 itemData.current_time = progressData.currentTime;
                 itemData.is_finished = progressData.isFinished;
+                
+                // Use media progress startedAt if available
+                if (progressData.startedAt) {
+                    itemData.started_at = progressData.startedAt;
+                    console.log(`[DEBUG] Raw startedAt for ${itemData.media?.metadata?.title}: ${progressData.startedAt} (${new Date(progressData.startedAt).toISOString()})`);
+                }
+                // Use media progress finishedAt if available
+                if (progressData.finishedAt) {
+                    itemData.finished_at = progressData.finishedAt;
+                    console.log(`[DEBUG] Raw finishedAt for ${itemData.media?.metadata?.title}: ${progressData.finishedAt} (${new Date(progressData.finishedAt).toISOString()})`);
+                }
+                // Use media progress lastUpdate for last listened
+                if (progressData.lastUpdate) {
+                    itemData.last_listened_at = progressData.lastUpdate;
+                    console.log(`[DEBUG] Raw lastUpdate for ${itemData.media?.metadata?.title}: ${progressData.lastUpdate} (${new Date(progressData.lastUpdate).toISOString()})`);
+                } else {
+                    itemData.last_listened_at = null;
+                    console.log(`[DEBUG] No lastUpdate for ${itemData.media?.metadata?.title}`);
+                }
             }
 
             return itemData;
@@ -160,7 +179,6 @@ export class AudiobookshelfClient {
             return null;
         }
     }
-
     async _getUserProgress(itemId) {
         try {
             // This endpoint can return 404 if there's no progress, which is normal
@@ -171,6 +189,40 @@ export class AudiobookshelfClient {
             return null;
         }
     }
+
+    async _getPlaybackSessions() {
+        try {
+            // Get all user's listening sessions with pagination - this gives us updatedAt timestamps
+            let page = 0;
+            let allSessions = [];
+            let total = 0;
+            let itemsPerPage = 10;
+
+            while (true) {
+                const response = await this._makeRequest('GET', `/api/sessions?page=${page}`, null, [404]);
+                if (!response) break;
+                
+                if (page === 0) {
+                    total = response.total;
+                    itemsPerPage = response.itemsPerPage;
+                }
+                
+                allSessions = allSessions.concat(response.sessions || []);
+                
+                if (allSessions.length >= total) break;
+                page++;
+            }
+            
+            console.log(`[DEBUG] Fetched ${allSessions.length} total sessions across ${page + 1} pages`);
+            return { sessions: allSessions };
+        } catch (error) {
+            // Not an error, just means no session data
+            console.error('Error fetching playback sessions:', error.message);
+            return null;
+        }
+    }
+
+
 
     async getLibraries() {
         try {
@@ -213,6 +265,15 @@ export class AudiobookshelfClient {
             const response = await this.client.request(config);
             
             console.debug(`${method} ${endpoint} -> ${response.status}`);
+            
+            // Validate response
+            if (!response || response.status < 200 || response.status >= 300) {
+                throw new Error(`API request failed with status ${response?.status}: ${response?.statusText}`);
+            }
+            
+            if (!response.data) {
+                throw new Error('API response contains no data');
+            }
             
             return response.data;
         } catch (error) {

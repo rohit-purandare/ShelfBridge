@@ -53,16 +53,11 @@ export function extractIsbn(bookData) {
     // Try different possible ISBN fields
     const isbnFields = ['isbn', 'isbn_10', 'isbn_13', 'isbn10', 'isbn13'];
     
-    console.log(`[DEBUG] extractIsbn - Available fields:`, Object.keys(bookData));
-    console.log(`[DEBUG] extractIsbn - Checking fields:`, isbnFields);
-    
     // Check direct fields first
     for (const field of isbnFields) {
         if (bookData[field]) {
-            console.log(`[DEBUG] extractIsbn - Found field '${field}': '${bookData[field]}'`);
             const normalized = normalizeIsbn(bookData[field]);
             if (normalized) {
-                console.log(`[DEBUG] extractIsbn - Normalized '${field}': '${normalized}'`);
                 return normalized;
             }
         }
@@ -70,13 +65,10 @@ export function extractIsbn(bookData) {
     
     // Check inside media object
     if (bookData.media) {
-        console.log(`[DEBUG] extractIsbn - Checking media object fields:`, Object.keys(bookData.media));
         for (const field of isbnFields) {
             if (bookData.media[field]) {
-                console.log(`[DEBUG] extractIsbn - Found media field '${field}': '${bookData.media[field]}'`);
                 const normalized = normalizeIsbn(bookData.media[field]);
                 if (normalized) {
-                    console.log(`[DEBUG] extractIsbn - Normalized media '${field}': '${normalized}'`);
                     return normalized;
                 }
             }
@@ -84,13 +76,10 @@ export function extractIsbn(bookData) {
         
         // Check inside media.metadata object
         if (bookData.media.metadata) {
-            console.log(`[DEBUG] extractIsbn - Checking media.metadata fields:`, Object.keys(bookData.media.metadata));
             for (const field of isbnFields) {
                 if (bookData.media.metadata[field]) {
-                    console.log(`[DEBUG] extractIsbn - Found metadata field '${field}': '${bookData.media.metadata[field]}'`);
                     const normalized = normalizeIsbn(bookData.media.metadata[field]);
                     if (normalized) {
-                        console.log(`[DEBUG] extractIsbn - Normalized metadata '${field}': '${normalized}'`);
                         return normalized;
                     }
                 }
@@ -98,7 +87,6 @@ export function extractIsbn(bookData) {
         }
     }
     
-    console.log(`[DEBUG] extractIsbn - No valid ISBN found`);
     return null;
 }
 
@@ -112,15 +100,11 @@ export function extractAsin(bookData) {
     
     const asinFields = ['asin', 'amazon_asin'];
     
-    console.log(`[DEBUG] extractAsin - Checking fields:`, asinFields);
-    
     // Check direct fields first
     for (const field of asinFields) {
         if (bookData[field]) {
-            console.log(`[DEBUG] extractAsin - Found field '${field}': '${bookData[field]}'`);
             const normalized = normalizeAsin(bookData[field]);
             if (normalized) {
-                console.log(`[DEBUG] extractAsin - Normalized '${field}': '${normalized}'`);
                 return normalized;
             }
         }
@@ -128,13 +112,10 @@ export function extractAsin(bookData) {
     
     // Check inside media object
     if (bookData.media) {
-        console.log(`[DEBUG] extractAsin - Checking media object fields:`, Object.keys(bookData.media));
         for (const field of asinFields) {
             if (bookData.media[field]) {
-                console.log(`[DEBUG] extractAsin - Found media field '${field}': '${bookData.media[field]}'`);
                 const normalized = normalizeAsin(bookData.media[field]);
                 if (normalized) {
-                    console.log(`[DEBUG] extractAsin - Normalized media '${field}': '${normalized}'`);
                     return normalized;
                 }
             }
@@ -142,13 +123,10 @@ export function extractAsin(bookData) {
         
         // Check inside media.metadata object
         if (bookData.media.metadata) {
-            console.log(`[DEBUG] extractAsin - Checking media.metadata fields:`, Object.keys(bookData.media.metadata));
             for (const field of asinFields) {
                 if (bookData.media.metadata[field]) {
-                    console.log(`[DEBUG] extractAsin - Found metadata field '${field}': '${bookData.media.metadata[field]}'`);
                     const normalized = normalizeAsin(bookData.media.metadata[field]);
                     if (normalized) {
-                        console.log(`[DEBUG] extractAsin - Normalized metadata '${field}': '${normalized}'`);
                         return normalized;
                     }
                 }
@@ -156,7 +134,6 @@ export function extractAsin(bookData) {
         }
     }
     
-    console.log(`[DEBUG] extractAsin - No valid ASIN found`);
     return null;
 }
 

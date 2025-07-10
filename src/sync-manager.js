@@ -12,6 +12,7 @@ import {
     calculateCurrentSeconds,
     formatDuration
 } from './utils.js';
+import { DateTime } from 'luxon';
 
 export class SyncManager {
     constructor(user, globalConfig, dryRun = false) {
@@ -19,6 +20,7 @@ export class SyncManager {
         this.userId = user.id;
         this.globalConfig = globalConfig;
         this.dryRun = dryRun;
+        this.timezone = globalConfig.timezone || 'UTC';
         
         // Initialize clients
         this.audiobookshelf = new AudiobookshelfClient(
@@ -70,6 +72,10 @@ export class SyncManager {
                 return result;
             }
 
+            // Get all playback sessions once
+            const sessionData = await this.audiobookshelf._getPlaybackSessions();
+            console.log(`[DEBUG] Fetched ${sessionData?.sessions?.length || 0} playback sessions`);
+
             // Create lookup maps for efficient matching
             const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
             const isbnLookup = this._createIsbnLookup(hardcoverBooks);
@@ -84,9 +90,9 @@ export class SyncManager {
 
             // Sync books
             if (this.globalConfig.parallel) {
-                await this._syncBooksParallel(syncableBooks, identifierLookup, result);
+                await this._syncBooksParallel(syncableBooks, identifierLookup, result, sessionData);
             } else {
-                await this._syncBooksSequential(syncableBooks, identifierLookup, result);
+                await this._syncBooksSequential(syncableBooks, identifierLookup, result, sessionData);
             }
 
             // Update timing data
@@ -166,10 +172,10 @@ export class SyncManager {
         return lookup;
     }
 
-    async _syncBooksSequential(syncableBooks, identifierLookup, result) {
+    async _syncBooksSequential(syncableBooks, identifierLookup, result, sessionData) {
         for (const absBook of syncableBooks) {
             try {
-                const syncResult = await this._syncSingleBook(absBook, identifierLookup);
+                const syncResult = await this._syncSingleBook(absBook, identifierLookup, sessionData);
                 this._updateResult(result, syncResult);
             } catch (error) {
                 console.error(`Error syncing book ${absBook.title}:`, error.message);
@@ -178,26 +184,28 @@ export class SyncManager {
         }
     }
 
-    async _syncBooksParallel(syncableBooks, identifierLookup, result) {
+    async _syncBooksParallel(syncableBooks, identifierLookup, result, sessionData) {
         const workers = this.globalConfig.workers || 3;
         const chunks = this._chunkArray(syncableBooks, workers);
 
         for (const chunk of chunks) {
-            const promises = chunk.map(absBook => 
-                this._syncSingleBook(absBook, identifierLookup).catch(error => {
-                    console.error(`Error syncing book ${absBook.title}:`, error.message);
-                    return { error: error.message, book: absBook.title };
-                })
-            );
+            const promises = chunk.map(async (absBook) => {
+                try {
+                    return await this._syncSingleBook(absBook, identifierLookup, sessionData);
+                } catch (error) {
+                    console.error(`Error syncing book ${absBook.title || 'Unknown'}:`, error.message);
+                    return { 
+                        status: 'error', 
+                        reason: error.message, 
+                        title: absBook.title || 'Unknown Title' 
+                    };
+                }
+            });
 
             const results = await Promise.all(promises);
             
             for (const syncResult of results) {
-                if (syncResult.error) {
-                    result.errors.push(`Error syncing ${syncResult.book}: ${syncResult.error}`);
-                } else {
-                    this._updateResult(result, syncResult);
-                }
+                this._updateResult(result, syncResult);
             }
         }
     }
@@ -210,11 +218,61 @@ export class SyncManager {
         return chunks;
     }
 
-    async _syncSingleBook(absBook, identifierLookup) {
+    async _syncSingleBook(absBook, identifierLookup, sessionData) {
         const title = extractTitle(absBook) || 'Unknown Title';
         const progressPercent = absBook.progress_percentage || 0;
         
         console.log(`Processing: ${title} (${progressPercent.toFixed(1)}%)`);
+
+        // Add last listened timestamp from playback sessions
+        let usedSessionData = false;
+        if (sessionData && sessionData.sessions && sessionData.sessions.length > 0) {
+            // Find sessions for this specific book
+            const bookSessions = sessionData.sessions.filter(session => 
+                session.libraryItemId === absBook.id
+            );
+            
+            if (bookSessions.length > 0) {
+                // Get the most recent session's updatedAt
+                const latestSession = bookSessions.reduce((latest, session) => {
+                    return (!latest || session.updatedAt > latest.updatedAt) ? session : latest;
+                });
+                
+                if (latestSession && latestSession.updatedAt) {
+                    // Convert to configured timezone
+                    const lastListenedAtUTC = DateTime.fromMillis(latestSession.updatedAt, { zone: 'utc' });
+                    const lastListenedAtLocal = lastListenedAtUTC.setZone(this.timezone);
+                    absBook.last_listened_at = lastListenedAtLocal.toISO();
+                    usedSessionData = true;
+                    console.log(`[DEBUG] Found session updatedAt for ${title}: ${latestSession.updatedAt} (${lastListenedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')})`);
+                }
+            } else {
+                console.log(`[DEBUG] No playback sessions found for ${title}`);
+            }
+        }
+        
+        // Convert last_listened_at from media progress to configured timezone (if no sessions found for this book)
+        if (absBook.last_listened_at && !usedSessionData) {
+            const lastListenedAtUTC = DateTime.fromMillis(absBook.last_listened_at, { zone: 'utc' });
+            const lastListenedAtLocal = lastListenedAtUTC.setZone(this.timezone);
+            absBook.last_listened_at = lastListenedAtLocal.toISO();
+            console.log(`[DEBUG] Converted lastUpdate for ${title}: ${lastListenedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
+        }
+        
+        // Convert startedAt from media progress to configured timezone
+        if (absBook.started_at) {
+            const startedAtUTC = DateTime.fromMillis(absBook.started_at, { zone: 'utc' });
+            const startedAtLocal = startedAtUTC.setZone(this.timezone);
+            absBook.started_at = startedAtLocal.toISO();
+            console.log(`[DEBUG] startedAt for ${title}: ${startedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
+        }
+        // Convert finishedAt from media progress to configured timezone
+        if (absBook.finished_at) {
+            const finishedAtUTC = DateTime.fromMillis(absBook.finished_at, { zone: 'utc' });
+            const finishedAtLocal = finishedAtUTC.setZone(this.timezone);
+            absBook.finished_at = finishedAtLocal.toISO();
+            console.log(`[DEBUG] finishedAt for ${title}: ${finishedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
+        }
 
         // Extract identifiers
         const identifiers = this._extractBookIdentifier(absBook);
@@ -246,9 +304,9 @@ export class SyncManager {
             return await this._tryAutoAddBook(absBook, identifiers);
         }
 
-        // Check if progress has changed
+        // Check if progress has changed (unless force sync is enabled)
         const identifier = identifierType === 'asin' ? identifiers.asin : identifiers.isbn;
-        if (!(this.cache.hasProgressChanged(this.userId, identifier, title, progressPercent, identifierType))) {
+        if (!this.globalConfig.force_sync && !(this.cache.hasProgressChanged(this.userId, identifier, title, progressPercent, identifierType))) {
             console.log(`Skipping ${title}: Progress unchanged`);
             return { status: 'skipped', reason: 'Progress unchanged', title };
         }
@@ -406,14 +464,25 @@ export class SyncManager {
             } else if (edition.pages) {
                 totalValue = edition.pages;
             }
-            const success = await this.hardcover.markBookCompleted(userBookId, edition.id, totalValue, useSeconds);
+            // Pass finished_at and started_at to Hardcover client if present
+            const finishedAt = absBook.finished_at ? absBook.finished_at.slice(0, 10) : null;
+            const startedAt = absBook.started_at ? absBook.started_at.slice(0, 10) : null;
+            const success = await this.hardcover.markBookCompleted(userBookId, edition.id, totalValue, useSeconds, finishedAt, startedAt);
             if (success) {
                 console.log(`Successfully marked ${title} as completed`);
                 // Cache the progress
                 const identifier = this._extractBookIdentifier(absBook);
                 const identifierType = identifier.asin ? 'asin' : 'isbn';
                 const identifierValue = identifier.asin || identifier.isbn;
-                this.cache.storeProgress(this.userId, identifierValue, title, 100, identifierType);
+                this.cache.storeProgress(
+                    this.userId, 
+                    identifierValue, 
+                    title, 
+                    100, 
+                    identifierType,
+                    absBook.last_listened_at,
+                    absBook.started_at
+                );
                 return { status: 'completed', title };
             } else {
                 console.error(`Failed to mark ${title} as completed`);
@@ -450,7 +519,8 @@ export class SyncManager {
                 currentProgress,
                 progressPercent,
                 edition.id,
-                useSeconds
+                useSeconds,
+                absBook.started_at // Use Audiobookshelf's started_at (which will be new for resumed books)
             );
 
             if (result && result.id) {
@@ -459,7 +529,15 @@ export class SyncManager {
                 const identifier = this._extractBookIdentifier(absBook);
                 const identifierType = identifier.asin ? 'asin' : 'isbn';
                 const identifierValue = identifier.asin || identifier.isbn;
-                this.cache.storeProgress(this.userId, identifierValue, title, progressPercent, identifierType);
+                this.cache.storeProgress(
+                    this.userId, 
+                    identifierValue, 
+                    title, 
+                    progressPercent, 
+                    identifierType,
+                    absBook.last_listened_at,
+                    absBook.started_at
+                );
                 return { status: 'synced', title };
             } else {
                 console.error(`Failed to update progress for ${title}`);

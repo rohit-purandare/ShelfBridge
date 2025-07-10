@@ -43,6 +43,8 @@ export class BookCache {
                     last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_listened_at TIMESTAMP,
+                    started_at TIMESTAMP,
                     UNIQUE(user_id, identifier, title)
                 )
             `);
@@ -50,6 +52,19 @@ export class BookCache {
             // Add user_id column if missing (for migration)
             try {
                 this.db.exec('ALTER TABLE books ADD COLUMN user_id TEXT NOT NULL DEFAULT ""');
+            } catch (err) {
+                // Column already exists, ignore error
+            }
+
+            // Add timestamp columns if missing (for migration)
+            try {
+                this.db.exec('ALTER TABLE books ADD COLUMN last_listened_at TIMESTAMP');
+            } catch (err) {
+                // Column already exists, ignore error
+            }
+
+            try {
+                this.db.exec('ALTER TABLE books ADD COLUMN started_at TIMESTAMP');
             } catch (err) {
                 // Column already exists, ignore error
             }
@@ -109,34 +124,19 @@ export class BookCache {
             const normalizedTitle = title.toLowerCase().trim();
             const currentTime = new Date().toISOString();
 
-            // Check if the row exists
-            const checkStmt = this.db.prepare(`
-                SELECT 1 FROM books 
-                WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+            // Use UPSERT to avoid race conditions
+            const upsertStmt = this.db.prepare(`
+                INSERT INTO books (user_id, identifier, identifier_type, title, author, edition_id, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, identifier, title) 
+                DO UPDATE SET 
+                    edition_id = excluded.edition_id,
+                    author = excluded.author,
+                    updated_at = excluded.updated_at
             `);
             
-            const exists = checkStmt.get(userId, identifier, identifierType, normalizedTitle);
-
-            if (exists) {
-                // Only update edition_id, author, updated_at
-                const updateStmt = this.db.prepare(`
-                    UPDATE books 
-                    SET edition_id = ?, author = ?, updated_at = ?
-                    WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
-                `);
-                
-                updateStmt.run(editionId, author, currentTime, userId, identifier, identifierType, normalizedTitle);
-                console.debug(`Cached edition mapping for ${title}: ${identifier} (${identifierType.toUpperCase()}) -> ${editionId} (author: ${author})`);
-            } else {
-                // Insert a new row, progress_percent will be default (0.0)
-                const insertStmt = this.db.prepare(`
-                    INSERT INTO books (user_id, identifier, identifier_type, title, author, edition_id, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `);
-                
-                insertStmt.run(userId, identifier, identifierType, normalizedTitle, author, editionId, currentTime);
-                console.debug(`Cached edition mapping for ${title}: ${identifier} (${identifierType.toUpperCase()}) -> ${editionId} (author: ${author})`);
-            }
+            upsertStmt.run(userId, identifier, identifierType, normalizedTitle, author, editionId, currentTime);
+            console.debug(`Cached edition mapping for ${title}: ${identifier} (${identifierType.toUpperCase()}) -> ${editionId} (author: ${author})`);
         } catch (err) {
             console.error(`Error storing edition mapping for ${title}: ${err.message}`);
         }
@@ -169,41 +169,28 @@ export class BookCache {
         }
     }
 
-    storeProgress(userId, identifier, title, progressPercent, identifierType = 'isbn') {
+    storeProgress(userId, identifier, title, progressPercent, identifierType = 'isbn', lastListenedAt = null, startedAt = null) {
         this.init();
         
         try {
             const normalizedTitle = title.toLowerCase().trim();
             const currentTime = new Date().toISOString();
 
-            // Check if the row exists
-            const checkStmt = this.db.prepare(`
-                SELECT 1 FROM books 
-                WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+            // Use UPSERT to avoid race conditions
+            const upsertStmt = this.db.prepare(`
+                INSERT INTO books (user_id, identifier, identifier_type, title, progress_percent, last_sync, updated_at, last_listened_at, started_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, identifier, title) 
+                DO UPDATE SET 
+                    progress_percent = excluded.progress_percent,
+                    last_sync = excluded.last_sync,
+                    updated_at = excluded.updated_at,
+                    last_listened_at = excluded.last_listened_at,
+                    started_at = excluded.started_at
             `);
             
-            const exists = checkStmt.get(userId, identifier, identifierType, normalizedTitle);
-
-            if (exists) {
-                // Update existing row
-                const updateStmt = this.db.prepare(`
-                    UPDATE books 
-                    SET progress_percent = ?, last_sync = ?, updated_at = ?
-                    WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
-                `);
-                
-                updateStmt.run(progressPercent, currentTime, currentTime, userId, identifier, identifierType, normalizedTitle);
-                console.debug(`Updated progress for ${title}: ${progressPercent}%`);
-            } else {
-                // Insert new row
-                const insertStmt = this.db.prepare(`
-                    INSERT INTO books (user_id, identifier, identifier_type, title, progress_percent, last_sync, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `);
-                
-                insertStmt.run(userId, identifier, identifierType, normalizedTitle, progressPercent, currentTime, currentTime);
-                console.debug(`Stored progress for ${title}: ${progressPercent}%`);
-            }
+            upsertStmt.run(userId, identifier, identifierType, normalizedTitle, progressPercent, currentTime, currentTime, lastListenedAt, startedAt);
+            console.debug(`Stored progress for ${title}: ${progressPercent}% (last listened: ${lastListenedAt}, started: ${startedAt})`);
         } catch (err) {
             console.error(`Error storing progress for ${title}: ${err.message}`);
         }
@@ -325,9 +312,19 @@ export class BookCache {
 
     close() {
         if (this.db) {
-            this.db.close();
-            this.db = null;
-            console.log('Database connection closed');
+            try {
+                this.db.close();
+                console.log('Database connection closed successfully');
+            } catch (error) {
+                console.error('Error closing database connection:', error.message);
+            } finally {
+                this.db = null;
+            }
         }
+    }
+
+    // Destructor to ensure cleanup
+    destroy() {
+        this.close();
     }
 } 

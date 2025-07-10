@@ -25,6 +25,7 @@ program
     .description('Sync reading progress')
     .option('--all-users', 'Sync all users')
     .option('-u, --user <userId>', 'Sync specific user')
+    .option('--force', 'Force sync even if progress unchanged (ignores cache)')
     .action(async (options) => {
         try {
             const config = new Config();
@@ -34,6 +35,11 @@ program
             // Override dry_run from config if --dry-run flag is used
             if (options.dryRun) {
                 globalConfig.dry_run = true;
+            }
+            
+            // Add force flag to global config
+            if (options.force) {
+                globalConfig.force_sync = true;
             }
             
             if (options.user) {
@@ -278,6 +284,8 @@ program
                         console.log(`   Progress: ${book.progress_percent}%`);
                         console.log(`   Author: ${book.author || 'Unknown'}`);
                         console.log(`   Last Sync: ${book.last_sync}`);
+                        console.log(`   Started At: ${book.started_at || 'Not set'}`);
+                        console.log(`   Last Listened: ${book.last_listened_at || 'Not set'}`);
                         console.log('');
                     });
                 }
@@ -369,11 +377,23 @@ program
             const books = await audiobookshelf.getReadingProgress();
             console.log(`\nFound ${books.length} total books in Audiobookshelf`);
             
+            // Debug: print all book titles and their progress
             books.forEach((book, index) => {
                 const title = (book.media && book.media.metadata && book.media.metadata.title) || book.title || 'Unknown';
                 const progress = book.progress_percentage || 0;
                 const isFinished = book.is_finished || false;
                 console.log(`${index + 1}. '${title}' - Progress: ${progress}% - Finished: ${isFinished}`);
+                
+                // Show raw progress data for books with progress
+                if (progress > 0) {
+                    console.log(`   Raw progress data for '${title}':`);
+                    console.log(`   - progress_percentage: ${book.progress_percentage}`);
+                    console.log(`   - current_time: ${book.current_time}`);
+                    console.log(`   - is_finished: ${book.is_finished}`);
+                    console.log(`   - started_at: ${book.started_at || 'Not available'}`);
+                    console.log(`   - last_listened_at: ${book.last_listened_at || 'Not available'}`);
+                    console.log(`   - All progress fields:`, Object.keys(book).filter(key => key.includes('progress') || key.includes('time') || key.includes('date') || key.includes('start') || key.includes('finish')));
+                }
             });
             
         } catch (error) {
@@ -383,6 +403,15 @@ program
     });
 
 async function syncUser(user, globalConfig) {
+    // Validate user object
+    if (!user) {
+        throw new Error('User object is required');
+    }
+    
+    if (!user.id || !user.abs_url || !user.abs_token || !user.hardcover_token) {
+        throw new Error(`Invalid user configuration: missing required fields for user ${user.id || 'unknown'}`);
+    }
+    
     const startTime = Date.now();
     console.log(`Starting sync for user: ${user.id}`);
     
@@ -560,4 +589,25 @@ program.parse();
 // If no command is provided, show help
 if (!process.argv.slice(2).length) {
     program.outputHelp();
-} 
+}
+
+// Graceful shutdown handler
+process.on('SIGINT', () => {
+    console.log('\nReceived SIGINT, shutting down gracefully...');
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('\nReceived SIGTERM, shutting down gracefully...');
+    process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
+}); 
