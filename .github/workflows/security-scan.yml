@@ -1,0 +1,122 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better scanning
+
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        config-path: .gitleaks.toml
+        report-format: sarif
+        output-path: gitleaks-report.sarif
+        exit-code: 0  # Don't fail the build, just report
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: gitleaks-report.sarif
+
+    - name: Run npm audit
+      run: |
+        npm audit --audit-level=moderate --json > npm-audit-report.json || true
+
+    - name: Upload npm audit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: npm-audit-report
+        path: npm-audit-report.json
+
+    - name: Check for hardcoded secrets
+      run: |
+        echo "Checking for common secret patterns..."
+        
+        # Check for API keys, tokens, passwords, etc.
+        SECRETS_FOUND=0
+        
+        # Check for API keys (various formats)
+        if grep -r -i "api[_-]?key" src/ config/ --exclude-dir=node_modules; then
+          echo "⚠️  Potential API keys found"
+          SECRETS_FOUND=1
+        fi
+        
+        # Check for tokens
+        if grep -r -i "token" src/ config/ --exclude-dir=node_modules | grep -v "//.*token"; then
+          echo "⚠️  Potential tokens found"
+          SECRETS_FOUND=1
+        fi
+        
+        # Check for passwords
+        if grep -r -i "password" src/ config/ --exclude-dir=node_modules | grep -v "//.*password"; then
+          echo "⚠️  Potential passwords found"
+          SECRETS_FOUND=1
+        fi
+        
+        # Check for AWS keys
+        if grep -r "AKIA[0-9A-Z]{16}" src/ config/ --exclude-dir=node_modules; then
+          echo "🚨 AWS Access Key ID found!"
+          SECRETS_FOUND=1
+        fi
+        
+        # Check for private keys
+        if grep -r "BEGIN.*PRIVATE KEY" src/ config/ --exclude-dir=node_modules; then
+          echo "🚨 Private key found!"
+          SECRETS_FOUND=1
+        fi
+        
+        if [ $SECRETS_FOUND -eq 0 ]; then
+          echo "✅ No obvious secrets found in code"
+        fi
+
+    - name: Check for config files with sensitive data
+      run: |
+        echo "Checking config files..."
+        
+        # Check if config.yaml exists and might contain secrets
+        if [ -f "config/config.yaml" ]; then
+          echo "⚠️  config/config.yaml exists - ensure it's in .gitignore"
+          if grep -q "config.yaml" .gitignore; then
+            echo "✅ config.yaml is properly ignored"
+          else
+            echo "❌ config.yaml is NOT in .gitignore"
+            exit 1
+          fi
+        fi
+        
+        # Check for any .env files
+        if find . -name "*.env*" -not -path "./node_modules/*" | grep -q .; then
+          echo "⚠️  .env files found - ensure they're in .gitignore"
+          if grep -q "\.env" .gitignore; then
+            echo "✅ .env files are properly ignored"
+          else
+            echo "❌ .env files are NOT in .gitignore"
+            exit 1
+          fi
+        fi
+
+    - name: Security summary
+      if: always()
+      run: |
+        echo "🔒 Security scan completed"
+        echo "📊 Check the Actions tab for detailed results"
+        echo "📋 Review any warnings or errors above" 

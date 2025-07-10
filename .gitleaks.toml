@@ -1,0 +1,60 @@
+# Gitleaks configuration for ShelfBridge
+# This file configures what secrets to look for and what to ignore
+
+[allowlist]
+# Allowlist patterns for false positives
+description = "Allowlist for ShelfBridge project"
+paths = [
+    # Ignore test files
+    "test/",
+    # Ignore node_modules
+    "node_modules/",
+    # Ignore example files
+    "*.example",
+    "config.yaml.example",
+    # Ignore documentation
+    "README.md",
+    "*.md",
+]
+
+# Allowlist specific patterns that are false positives
+regexes = [
+    # Example API keys in documentation
+    "api_key.*example",
+    "token.*example",
+    # Test data
+    "test.*api.*key",
+    "mock.*token",
+    # Comments about keys
+    "//.*api.*key",
+    "//.*token",
+    "/*.*api.*key.**/",
+    "/*.*token.**/",
+]
+
+# Allowlist specific commits (if needed)
+commits = [
+    # Add specific commit hashes here if needed
+]
+
+# Allowlist specific files (if needed)
+files = [
+    # Add specific files here if needed
+]
+
+[[rules]]
+# Custom rule for ShelfBridge specific patterns
+id = "shelfbridge-custom"
+description = "ShelfBridge specific secret patterns"
+regex = '''(?i)(?:shelfbridge|abs|hardcover)[_-]?(?:api[_-]?key|token|secret|password)'''
+tags = ["key", "shelfbridge"]
+
+[[rules]]
+# Custom rule for configuration secrets
+id = "config-secrets"
+description = "Secrets in configuration files"
+regex = '''(?i)(?:api[_-]?key|token|secret|password)[_-]?=.*[a-zA-Z0-9]{20,}'''
+tags = ["key", "config"]
+
+# Include all default rules
+include_default = true 

@@ -10,7 +10,8 @@
     "test": "node src/main.js test",
     "config": "node src/main.js config",
     "cache": "node src/main.js cache",
-    "dev": "node --watch src/main.js"
+    "dev": "node --watch src/main.js",
+    "prepare": "husky install"
   },
   "keywords": [
     "audiobookshelf",
@@ -32,7 +33,8 @@
     "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "husky": "^8.0.3"
   },
   "engines": {
     "node": ">=18.0.0"
