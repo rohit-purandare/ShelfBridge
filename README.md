@@ -32,9 +32,68 @@ You'll need active accounts and API access for both services:
 - **Node.js**: 18.0.0 or higher (check with `node --version`)
 - **Operating System**: Linux, macOS, or Windows
 
-## 🚀 Quick Start
+## 🚀 Setup Instructions
 
-### 1. Installation
+Choose the setup method that best fits your needs:
+
+### 🐳 Method 1: Docker Compose (Recommended)
+
+**When to use:** Perfect for most users who want a hassle-free, production-ready setup with automatic updates and easy management.
+
+**Benefits:** 
+- No Node.js installation required
+- Automatic container management
+- Easy updates and rollbacks
+- Isolated environment
+
+#### Option A: Pre-built Image (Easiest)
+
+1. **Start the service:**
+   ```bash
+   # Clone the repository for the docker-compose.yml file
+   git clone https://github.com/rohit-purandare/ShelfBridge.git
+   cd ShelfBridge
+   
+   # This pulls the latest image and starts the container
+   docker-compose up -d
+   ```
+
+2. **Set up your configuration:**
+   ```bash
+   # Copy the example configuration
+   cp config/config.yaml.example config/config.yaml
+   
+   # Edit with your actual credentials
+   nano config/config.yaml
+   
+   # Restart to use your config
+   docker-compose restart
+   ```
+
+3. **View logs and verify:**
+   ```bash
+   # Check if everything is working
+   docker-compose logs -f shelfbridge
+   ```
+
+#### Option B: Build from Source
+
+For development or customization:
+
+```bash
+# Use the development compose file to build locally
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+---
+
+### 📦 Method 2: npm/Node.js Setup
+
+**When to use:** Best for developers, contributors, or users who prefer direct Node.js control and want to run custom modifications.
+
+**Requirements:** Node.js 18.0.0 or higher
+
+#### 1. Installation
 
 ```bash
 # Clone the repository
@@ -45,7 +104,7 @@ cd ShelfBridge
 npm install
 ```
 
-### 2. Configuration Setup
+#### 2. Configuration Setup
 
 ```bash
 # Create necessary directories
@@ -58,7 +117,7 @@ cp config/config.yaml.example config/config.yaml
 nano config/config.yaml
 ```
 
-### 3. Configure Your Credentials
+#### 3. Configure Your Credentials
 
 Edit `config/config.yaml` with your actual API tokens:
 
@@ -78,7 +137,7 @@ users:
     hardcover_token: your_hardcover_api_token_here    # From hardcover.app/account/developer
 ```
 
-### 4. Test Your Setup
+#### 4. Test Your Setup
 
 Before running a full sync, verify your configuration:
 
@@ -90,14 +149,79 @@ node src/main.js debug --user your_username
 node src/main.js sync --dry-run
 ```
 
-### 5. Run Your First Sync
+#### 5. Run Your First Sync
 
 ```bash
 # Perform the actual sync
 npm run sync
 ```
 
-**Expected output on success:**
+---
+
+### ⚙️ Method 3: Manual Docker Run
+
+**When to use:** Advanced users who need custom Docker configurations or want granular control over container settings.
+
+**Note:** This method requires manual configuration and maintenance.
+
+#### Pre-built Image
+
+```bash
+# Create directories
+mkdir -p config data
+
+# Run the container
+docker run -d \
+  --name shelfbridge \
+  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  -e TZ=Etc/UTC \
+  -e NODE_ENV=production \
+  ghcr.io/rohit-purandare/shelfbridge:latest
+
+# Copy and edit configuration
+cp config/config.yaml.example config/config.yaml
+nano config/config.yaml
+
+# Restart container with your config
+docker restart shelfbridge
+```
+
+#### Build from Source
+
+```bash
+# Build the image
+docker build -t shelfbridge .
+
+# Run the container
+docker run -d \
+  --name shelfbridge \
+  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  -e TZ=Etc/UTC \
+  -e NODE_ENV=production \
+  shelfbridge
+```
+
+### 🏷️ Available Images
+
+Pre-built images are available from GitHub Container Registry:
+
+- `ghcr.io/rohit-purandare/shelfbridge:latest` - Latest stable build from main branch
+- `ghcr.io/rohit-purandare/shelfbridge:main` - Development build from main branch
+- Version tags (e.g., `v1.0.0`) - Available only if semantic version releases have been published
+
+**Note:** Check the [repository packages page](https://github.com/rohit-purandare/ShelfBridge/pkgs/container/shelfbridge) to see all currently available tags.
+
+**Platforms:** Supports both `linux/amd64` and `linux/arm64` (Intel/AMD and ARM processors including Apple Silicon and Raspberry Pi).
+
+---
+
+## ✅ Verification (All Methods)
+
+After completing setup with any method above, verify your installation:
+
+**Expected output on successful sync:**
 ```
 ==================================================
 📚 SYNC SUMMARY
@@ -145,14 +269,14 @@ npm run sync
 
 ### Basic Configuration Options
 
-| Option | Description | Default | Example |
-|--------|-------------|---------|---------|
-| `min_progress_threshold` | Minimum progress % to sync | 5.0 | Skip books under 5% |
-| `parallel` | Enable parallel processing | true | Faster sync |
-| `workers` | Number of parallel workers | 3 | 1-10 recommended |
-| `dry_run` | Show what would be synced | false | Testing mode |
-| `sync_schedule` | Cron schedule for auto-sync | "0 3 * * *" | Daily at 3am |
-| `timezone` | Timezone for scheduling | "Etc/UTC" | "America/New_York" |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `min_progress_threshold` | Minimum progress % to sync | 5.0 |
+| `parallel` | Enable parallel processing | true |
+| `workers` | Number of parallel workers | 3 |
+| `dry_run` | Show what would be synced | false |
+| `sync_schedule` | Cron schedule for auto-sync | "0 3 * * *" |
+| `timezone` | Timezone for scheduling | "Etc/UTC" |
 
 ### Multi-User Configuration
 
@@ -234,103 +358,7 @@ node src/main.js cache --export
 node src/main.js cache --stats
 ```
 
-## 🐳 Docker Deployment
 
-### Using Docker Compose (Recommended)
-
-#### Option 1: Pre-built Image from GHCR (Easiest)
-
-The repository includes a `docker-compose.yml` file that pulls the latest image from GitHub Container Registry:
-
-1. **Start the service:**
-   ```bash
-   # This will pull the latest image, auto-create config template, and start the container
-   docker-compose up -d
-   ```
-
-2. **Set up your configuration:**
-   ```bash
-   # The sample config is automatically created on first run
-   # Copy it to create your actual config
-   cp config/config.yaml.example config/config.yaml
-   
-   # Edit with your actual credentials
-   nano config/config.yaml
-   
-   # Restart to use your config
-   docker-compose restart
-   ```
-
-3. **View logs:**
-   ```bash
-   # Check if everything is working
-   docker-compose logs -f shelfbridge
-   ```
-
-4. **Stop the service:**
-   ```bash
-   docker-compose down
-   ```
-
-#### Option 2: Local Development Build
-
-For development or if you want to build from source, use the development compose file:
-
-```bash
-# Use the development compose file to build locally
-docker-compose -f docker-compose.dev.yml up -d
-
-# This will:
-# - Build the image from your local source
-# - Mount source code for live editing
-# - Use development environment settings
-```
-
-### Using Docker Run
-
-#### Pre-built Image (Recommended)
-
-```bash
-# The container automatically provides config.yaml.example on first run
-# Just create your config directory and run
-mkdir -p config data
-
-# Run the container (it will auto-create config.yaml.example)
-# Then copy and edit your config
-docker run -d \
-  --name shelfbridge \
-  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  -e TZ=Etc/UTC \
-  -e NODE_ENV=production \
-  ghcr.io/rohit-purandare/shelfbridge:latest
-```
-
-#### Build Locally
-
-```bash
-# Build the image from source
-docker build -t shelfbridge .
-
-# Then run the container
-docker run -d \
-  --name shelfbridge \
-  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  -e TZ=Etc/UTC \
-  -e NODE_ENV=production \
-  shelfbridge
-```
-
-### Available Images
-
-The following pre-built images are automatically published to GitHub Container Registry:
-
-- `ghcr.io/rohit-purandare/shelfbridge:latest` - Latest stable build from main branch
-- `ghcr.io/rohit-purandare/shelfbridge:v1.0.0` - Specific version tags
-- `ghcr.io/rohit-purandare/shelfbridge:main` - Latest development build
-
-**Note:** Images are built for both `linux/amd64` and `linux/arm64` platforms, supporting x86 and ARM processors (including Apple Silicon and Raspberry Pi).
 
 ## 🔧 How It Works
 
