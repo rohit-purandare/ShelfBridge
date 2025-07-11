@@ -178,25 +178,43 @@ export class SyncManager {
                     const identifier = identifiers.asin || identifiers.isbn;
                     const identifierType = identifiers.asin ? 'asin' : 'isbn';
                     
-                    if (identifier && !this.globalConfig.force_sync) {
-                        const hasChanged = await this.cache.hasProgressChanged(
-                            this.userId, 
-                            identifier, 
-                            bookDetail.title, 
-                            currentProgress, 
-                            identifierType
-                        );
+                    if (!this.globalConfig.force_sync) {
+                        let hasChanged = false;
+                        
+                        if (identifier) {
+                            // Use identifier-based caching (preferred)
+                            hasChanged = await this.cache.hasProgressChanged(
+                                this.userId, 
+                                identifier, 
+                                bookDetail.title, 
+                                currentProgress, 
+                                identifierType
+                            );
+                        } else {
+                            // Fallback to title-based caching for books without identifiers
+                            logger.debug(`No identifier found for ${bookDetail.title}, using title-based progress tracking`);
+                            hasChanged = await this.cache.hasProgressChanged(
+                                this.userId, 
+                                bookDetail.title, // Use title as identifier
+                                bookDetail.title, 
+                                currentProgress, 
+                                'title' // Use 'title' as identifier type
+                            );
+                        }
                         
                         if (!hasChanged) {
                             logger.debug(`Skipping ${bookDetail.title} - no progress change`, {
-                                progress: currentProgress
+                                progress: currentProgress,
+                                identifierUsed: identifier || 'title'
                             });
                             bookDetail.status = 'skipped';
                             bookDetail.actions.push(`Skipped: No progress change (${currentProgress}%)`);
                             result.books_skipped++;
                             continue;
                         } else {
-                            const cachedProgress = await this.cache.getLastProgress(this.userId, identifier, bookDetail.title, identifierType);
+                            const fallbackIdentifier = identifier || bookDetail.title;
+                            const fallbackIdentifierType = identifier ? identifierType : 'title';
+                            const cachedProgress = await this.cache.getLastProgress(this.userId, fallbackIdentifier, bookDetail.title, fallbackIdentifierType);
                             bookDetail.actions.push(`Progress changed: ${cachedProgress}% → ${currentProgress}%`);
                             bookDetail.progress.changed = true;
                         }
@@ -837,6 +855,9 @@ export class SyncManager {
                         author: author
                     });
 
+                    const currentProgress = absBook.progress_percentage || 0;
+                    
+                    // Store initial cache data
                     await this.cache.storeBookSyncData(
                         this.userId, 
                         identifier, 
@@ -844,10 +865,45 @@ export class SyncManager {
                         editionId, 
                         identifierType, 
                         author,
-                        0, // New book starts at 0% progress
-                        null, // No last listened timestamp yet
-                        null  // No started timestamp yet
+                        currentProgress, // Use actual current progress instead of 0
+                        absBook.last_listened_at,
+                        absBook.started_at
                     );
+
+                    // If there's meaningful progress, immediately sync it to Hardcover
+                    if (currentProgress > 0 && !this._isZeroProgress(currentProgress)) {
+                        logger.info(`Auto-added book has ${currentProgress}% progress, syncing immediately`, {
+                            title: title,
+                            progress: currentProgress
+                        });
+                        
+                        try {
+                            // Create hardcover match object for progress sync
+                            const hardcoverMatch = { 
+                                userBook: { id: addResult.id, book: edition.book }, 
+                                edition: edition 
+                            };
+                            
+                            // Check if book should be marked as completed
+                            const isFinished = absBook.is_finished === true || absBook.is_finished === 1;
+                            if (isFinished) {
+                                await this._handleCompletionStatus(addResult.id, edition, title, currentProgress, absBook, isFinished);
+                                logger.info(`Auto-added book marked as completed`, { title: title });
+                            } else if (currentProgress >= 95) {
+                                await this._handleCompletionStatus(addResult.id, edition, title, currentProgress, absBook, false);
+                                logger.info(`Auto-added book marked as completed (high progress)`, { title: title });
+                            } else {
+                                await this._handleProgressStatus(addResult.id, edition, title, currentProgress, absBook);
+                                logger.info(`Auto-added book progress synced`, { title: title, progress: currentProgress });
+                            }
+                        } catch (progressSyncError) {
+                            // Don't fail the entire auto-add if progress sync fails
+                            logger.warn(`Failed to sync progress for auto-added book ${title}`, {
+                                error: progressSyncError.message,
+                                progress: currentProgress
+                            });
+                        }
+                    }
 
                     return { status: 'auto_added', title, userBookId: addResult.id };
                 } catch (cacheError) {
@@ -909,14 +965,22 @@ export class SyncManager {
                 audioSeconds: selectedEdition.audio_seconds
             });
 
-            // Use Audiobookshelf's is_finished flag if present
+            // Use Audiobookshelf's is_finished flag if present, prioritize it over percentage
             const isFinished = absBook.is_finished === true || absBook.is_finished === 1;
-            if (isFinished || progressPercent >= 95) {
-                logger.debug(`Book ${title} is completed`, {
+            
+            // Prioritize is_finished flag, then fall back to progress percentage
+            if (isFinished) {
+                logger.debug(`Book ${title} is marked as finished in Audiobookshelf`, {
                     isFinished: isFinished,
                     progress: progressPercent
                 });
                 return await this._handleCompletionStatus(userBook.id, selectedEdition, title, progressPercent, absBook, isFinished);
+            } else if (progressPercent >= 95) {
+                logger.debug(`Book ${title} is completed based on high progress`, {
+                    isFinished: isFinished,
+                    progress: progressPercent
+                });
+                return await this._handleCompletionStatus(userBook.id, selectedEdition, title, progressPercent, absBook, false);
             }
 
             // Handle progress update
@@ -943,7 +1007,7 @@ export class SyncManager {
         const identifierType = identifier.asin ? 'asin' : 'isbn';
         const identifierValue = identifier.asin || identifier.isbn;
         
-        const cachedEditionId = this.cache.getEditionForBook(
+        const cachedEditionId = await this.cache.getEditionForBook(
             this.userId, 
             identifierValue, 
             title, 
