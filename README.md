@@ -238,7 +238,9 @@ node src/main.js cache --stats
 
 ### Using Docker Compose (Recommended)
 
-The repository includes a complete `docker-compose.yml` file ready to use:
+#### Option 1: Pre-built Image from GHCR (Easiest)
+
+The repository includes a `docker-compose.yml` file that pulls the latest image from GitHub Container Registry:
 
 1. **Ensure your config file exists:**
    ```bash
@@ -248,7 +250,7 @@ The repository includes a complete `docker-compose.yml` file ready to use:
 
 2. **Start the service:**
    ```bash
-   # This will build the image and start the container
+   # This will pull the latest image from GHCR and start the container
    docker-compose up -d
    ```
 
@@ -263,12 +265,39 @@ The repository includes a complete `docker-compose.yml` file ready to use:
    docker-compose down
    ```
 
-**Note:** The compose file automatically handles building the image, creating networks, and setting up health checks. The `data` directory will be created automatically for cache storage.
+#### Option 2: Local Development Build
+
+For development or if you want to build from source, use the development compose file:
+
+```bash
+# Use the development compose file to build locally
+docker-compose -f docker-compose.dev.yml up -d
+
+# This will:
+# - Build the image from your local source
+# - Mount source code for live editing
+# - Use development environment settings
+```
 
 ### Using Docker Run
 
+#### Pre-built Image (Recommended)
+
 ```bash
-# First build the image
+# Pull and run the latest pre-built image
+docker run -d \
+  --name shelfbridge \
+  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  -e TZ=Etc/UTC \
+  -e NODE_ENV=production \
+  ghcr.io/rohit-purandare/shelfbridge:latest
+```
+
+#### Build Locally
+
+```bash
+# Build the image from source
 docker build -t shelfbridge .
 
 # Then run the container
@@ -280,6 +309,16 @@ docker run -d \
   -e NODE_ENV=production \
   shelfbridge
 ```
+
+### Available Images
+
+The following pre-built images are automatically published to GitHub Container Registry:
+
+- `ghcr.io/rohit-purandare/shelfbridge:latest` - Latest stable build from main branch
+- `ghcr.io/rohit-purandare/shelfbridge:v1.0.0` - Specific version tags
+- `ghcr.io/rohit-purandare/shelfbridge:main` - Latest development build
+
+**Note:** Images are built for both `linux/amd64` and `linux/arm64` platforms, supporting x86 and ARM processors (including Apple Silicon and Raspberry Pi).
 
 ## 🔧 How It Works
 

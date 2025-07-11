@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   shelfbridge:
-    build: .
+    image: ghcr.io/rohit-purandare/shelfbridge:latest
+    # Uncomment the line below and comment the image line above to build locally
+    # build: .
     container_name: shelfbridge
     restart: unless-stopped
     user: "1000:1000"

@@ -63,6 +63,7 @@ Thumbs.db
 # Docker
 .dockerignore
 docker-compose.local.yml
+docker-compose.dev.yml
 
 # Application specific
 # Ignore all data except .gitkeep (if you want to keep the folder structure)
