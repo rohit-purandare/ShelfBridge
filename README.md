@@ -1,8 +1,6 @@
 # ShelfBridge
 
-> **Sync your audiobook reading progress from [Audiobookshelf](https://www.audiobookshelf.org/) to [Hardcover](https://hardcover.app/) automatically.**
-
-ShelfBridge is a Node.js application that bridges the gap between Audiobookshelf and Hardcover, automatically syncing your reading progress and book completion status. It intelligently matches books using ASIN (for audiobooks) and ISBN (for print/ebooks) for accurate synchronization.
+ShelfBridge automatically syncs your reading progress and completion status between your [Audiobookshelf](https://www.audiobookshelf.org/) server and [Hardcover](https://hardcover.app/) account. It intelligently matches books using ASIN (Amazon's book identifier for audiobooks) and ISBN (standard book identifier for print/ebooks) to ensure accurate synchronization.
 
 ## ✨ Features
 
@@ -16,45 +14,53 @@ ShelfBridge is a Node.js application that bridges the gap between Audiobookshelf
 - 📊 **Progress Tracking**: Handles both page-based and time-based progress
 - 🔍 **Debug Tools**: Built-in debugging and cache management commands
 
+## 🔧 Before You Begin
+
+You'll need active accounts and API access for both services:
+
+### Audiobookshelf Requirements
+- **Account Type**: Admin account OR user account with library access
+- **Server Access**: Your Audiobookshelf server URL
+- **API Token**: Generated from Settings > Users > [Your User] > API Token
+
+### Hardcover Requirements  
+- **Account**: Free Hardcover account
+- **API Token**: Get from https://hardcover.app/account/developer
+- **Developer Access**: Enable API access in your account settings
+
+### System Requirements
+- **Node.js**: 18.0.0 or higher (check with `node --version`)
+- **Operating System**: Linux, macOS, or Windows
+
 ## 🚀 Quick Start
 
-### Prerequisites
+### 1. Installation
 
-- Node.js 18.0.0 or higher
-- Audiobookshelf server (with API access)
-- Hardcover account (with API token)
+```bash
+# Clone the repository
+git clone https://github.com/rohit-purandare/ShelfBridge.git
+cd ShelfBridge
 
-### Installation
+# Install dependencies
+npm install
+```
 
-1. **Clone and install dependencies:**
-   ```bash
-   git clone <your-repo-url>
-   cd ShelfBridge
-   npm install
-   ```
+### 2. Configuration Setup
 
-2. **Create configuration:**
-   ```bash
-   mkdir -p config data
-   cp config/config.yaml.example config/config.yaml
-   ```
+```bash
+# Create necessary directories
+mkdir -p config data
 
-3. **Configure your settings:**
-   ```bash
-   # Edit config/config.yaml with your credentials
-   nano config/config.yaml
-   ```
+# Copy the configuration template
+cp config/config.yaml.example config/config.yaml
 
-4. **Run your first sync:**
-   ```bash
-   npm run sync
-   ```
+# Edit with your credentials
+nano config/config.yaml
+```
 
-## ⚙️ Configuration
+### 3. Configure Your Credentials
 
-### Basic Configuration
-
-Create `config/config.yaml` based on the example:
+Edit `config/config.yaml` with your actual API tokens:
 
 ```yaml
 global:
@@ -66,118 +72,213 @@ global:
   timezone: "Etc/UTC"
 
 users:
-  - id: your_user_id
-    abs_url: https://your-audiobookshelf-server.com
-    abs_token: your_audiobookshelf_api_token
-    hardcover_token: your_hardcover_api_token
+  - id: your_username  # Replace with your preferred identifier
+    abs_url: https://your-audiobookshelf-server.com  # Your Audiobookshelf URL
+    abs_token: your_audiobookshelf_api_token_here     # From ABS Settings > Users > API Token
+    hardcover_token: your_hardcover_api_token_here    # From hardcover.app/account/developer
 ```
 
+### 4. Test Your Setup
+
+Before running a full sync, verify your configuration:
+
+```bash
+# Check if your credentials work
+node src/main.js debug --user your_username
+
+# Run a dry-run to see what would be synced (no changes made)
+node src/main.js sync --dry-run
+```
+
+### 5. Run Your First Sync
+
+```bash
+# Perform the actual sync
+npm run sync
+```
+
+**Expected output on success:**
+```
+==================================================
+📚 SYNC SUMMARY
+==================================================
+⏱️  Duration: 2.3s
+📖 Books processed: 15
+✅ Books synced: 3
+🎯 Books completed: 1
+➕ Books auto-added: 0
+⏭️  Books skipped: 11
+❌ Errors: 0
+==================================================
+
+📋 DETAILED BOOK RESULTS
+==================================================
+
+1. ✅ The Seven Husbands of Evelyn Hugo
+   Status: SYNCED
+   Progress: 67.2%
+   Identifiers: ASIN=B01LZXVS4P
+   Actions:
+     • Found in Hardcover library: The Seven Husbands of Evelyn Hugo
+     • Progress updated to 67.2%
+
+2. 🎯 Atomic Habits
+   Status: COMPLETED
+   Progress: 100.0%
+   Identifiers: ISBN=9780735211292
+   Actions:
+     • Found in Hardcover library: Atomic Habits
+     • Marked as completed (100.0%)
+
+3. ⏭️  The Midnight Library
+   Status: SKIPPED
+   Progress: 45.1%
+   Actions:
+     • Skipping - no progress change
+
+==================================================
+
+🏁 Sync completed successfully!
+```
+
+## ⚙️ Configuration
+
+### Basic Configuration Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `min_progress_threshold` | Minimum progress % to sync | 5.0 | Skip books under 5% |
+| `parallel` | Enable parallel processing | true | Faster sync |
+| `workers` | Number of parallel workers | 3 | 1-10 recommended |
+| `dry_run` | Show what would be synced | false | Testing mode |
+| `sync_schedule` | Cron schedule for auto-sync | "0 3 * * *" | Daily at 3am |
+| `timezone` | Timezone for scheduling | "Etc/UTC" | "America/New_York" |
+
 ### Multi-User Configuration
+
+For families or shared servers:
 
 ```yaml
 users:
   - id: alice
-    abs_url: https://audiobookshelf.alice.com
+    abs_url: https://audiobookshelf.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
   - id: bob
-    abs_url: https://audiobookshelf.bob.com
+    abs_url: https://audiobookshelf.example.com  
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
 ```
 
-### Configuration Options
+### Schedule Examples
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `min_progress_threshold` | Minimum progress % to sync | 5.0 |
-| `parallel` | Enable parallel processing | true |
-| `workers` | Number of parallel workers | 3 |
-| `dry_run` | Show what would be synced | false |
-| `sync_schedule` | Cron schedule for auto-sync | "0 3 * * *" |
-| `timezone` | Timezone for scheduling | "Etc/UTC" |
+```yaml
+# Every 6 hours
+sync_schedule: "0 */6 * * *"
+
+# Twice daily (9 AM and 9 PM)  
+sync_schedule: "0 9,21 * * *"
+
+# Weekly on Sundays at 3 AM
+sync_schedule: "0 3 * * 0"
+```
 
 ## 🖥️ Usage
 
-### Command Line Interface
+### One-Time Sync Commands
 
 ```bash
-# Sync all users
+# Sync all configured users (recommended for most users)
 npm run sync
+
+# Alternative direct command (same result)
 node src/main.js sync
 
-# Sync specific user
-node src/main.js sync --user your_user_id
+# Sync only a specific user
+node src/main.js sync --user alice
 
-# Dry run (no changes)
+# Test what would be synced without making changes
 node src/main.js sync --dry-run
-
-# Debug mode
-node src/main.js debug
-
-# Cache management
-node src/main.js cache --show
-node src/main.js cache --clear
-node src/main.js cache --export
 ```
 
-### Available Commands
+### Scheduled Background Service
 
-| Command | Description |
-|---------|-------------|
-| `sync` | Sync reading progress |
-| `debug` | Show raw Audiobookshelf data |
-| `cache --show` | Display cache contents |
-| `cache --clear` | Clear the cache |
-| `cache --export` | Export cache to JSON |
-| `cache --stats` | Show cache statistics |
-
-### Scheduled Sync
-
-Start the scheduled sync service:
+For automatic syncing based on your configured schedule:
 
 ```bash
+# Start the background service (runs continuously)
 npm start
+
+# This runs sync according to your sync_schedule setting
+# The process will keep running until stopped with Ctrl+C
 ```
 
-This runs the sync according to your `sync_schedule` configuration.
+**Note**: Use `npm run sync` for manual/one-time syncing, use `npm start` for automatic scheduled syncing.
+
+### Debug and Cache Management
+
+```bash
+# View raw Audiobookshelf data for troubleshooting
+node src/main.js debug
+
+# Show what's in the cache
+node src/main.js cache --show
+
+# Clear cache if you're having sync issues
+node src/main.js cache --clear
+
+# Export cache contents to JSON file
+node src/main.js cache --export
+
+# Show cache statistics
+node src/main.js cache --stats
+```
 
 ## 🐳 Docker Deployment
 
-### Docker Compose
+### Using Docker Compose (Recommended)
 
-```yaml
-version: '3.8'
+The repository includes a complete `docker-compose.yml` file ready to use:
 
-services:
-  shelfbridge:
-    build: .
-    container_name: shelfbridge
-    restart: unless-stopped
-    user: "1000:1000"
-    environment:
-      - TZ=Etc/UTC
-    volumes:
-      - ./config/config.yaml:/app/config/config.yaml:ro
-      - ./data:/app/data
-    command: ["npm", "start"]
-    healthcheck:
-      test: ["CMD", "node", "src/main.js", "--version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-```
+1. **Ensure your config file exists:**
+   ```bash
+   # Make sure you've completed the configuration setup above
+   ls config/config.yaml
+   ```
 
-### Docker Run
+2. **Start the service:**
+   ```bash
+   # This will build the image and start the container
+   docker-compose up -d
+   ```
+
+3. **View logs:**
+   ```bash
+   # Check if everything is working
+   docker-compose logs -f shelfbridge
+   ```
+
+4. **Stop the service:**
+   ```bash
+   docker-compose down
+   ```
+
+**Note:** The compose file automatically handles building the image, creating networks, and setting up health checks. The `data` directory will be created automatically for cache storage.
+
+### Using Docker Run
 
 ```bash
+# First build the image
+docker build -t shelfbridge .
+
+# Then run the container
 docker run -d \
   --name shelfbridge \
   -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
   -v $(pwd)/data:/app/data \
   -e TZ=Etc/UTC \
-  shelfbridge:latest
+  -e NODE_ENV=production \
+  shelfbridge
 ```
 
 ## 🔧 How It Works
@@ -185,7 +286,7 @@ docker run -d \
 ### Book Matching Logic
 
 1. **ASIN Priority**: For audiobooks, ShelfBridge first tries to match by ASIN (Amazon Standard Identification Number)
-2. **ISBN Fallback**: If no ASIN is found, it falls back to ISBN (ISBN-10 or ISBN-13)
+2. **ISBN Fallback**: If no ASIN is found, it falls back to ISBN (ISBN-10 or ISBN-13)  
 3. **Skip Unmatched**: Books without ISBN/ASIN are skipped to ensure accuracy
 
 ### Progress Synchronization
@@ -205,55 +306,75 @@ ShelfBridge uses SQLite (`data/.book_cache.db`) to cache:
 
 **Benefits:**
 - First sync: Full sync of all books
-- Subsequent syncs: Only changed progress
+- Subsequent syncs: Only changed progress  
 - Performance: Significantly faster after initial sync
 - Persistence: Survives container restarts
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-**"No books found"**
+**"No books found"** *(occurs during first sync or config issues)*
 - Check Audiobookshelf API token and URL
-- Verify library permissions
-- Run `node src/main.js debug` to see raw data
+- Verify library permissions in Audiobookshelf
+- Ensure your user has access to the libraries
+- Run `node src/main.js debug --user your_username` to see raw data
 
-**"GraphQL errors"**
-- Verify Hardcover API token
-- Check book matching (ISBN/ASIN availability)
-- Review Hardcover API documentation
+**"GraphQL errors"** *(occurs when updating Hardcover, usually token/permission issues)*
+- Verify Hardcover API token is correct
+- Check if your Hardcover account has developer API access enabled
+- Ensure book matching succeeded (ISBN/ASIN availability)
+- Review Hardcover API documentation at their developer portal
 
-**"Cache issues"**
+**"Cache issues"** *(sync seems stuck or produces wrong results)*
 - Clear cache: `node src/main.js cache --clear`
 - Check file permissions on `data/` directory
+- Ensure SQLite database isn't corrupted
 
-### Debug Commands
+**"Connection refused"** *(network/server issues)*
+- Verify Audiobookshelf server is accessible from your network
+- Check if server URLs include proper http:// or https://
+- Test manual access to both services
 
-```bash
-# View raw Audiobookshelf data
-node src/main.js debug
+### Debug Process
 
-# Check cache contents
-node src/main.js cache --show
+1. **Check configuration:**
+   ```bash
+   node src/main.js debug --user your_username
+   ```
 
-# Test connections
-npm run test
+2. **Test without changes:**
+   ```bash
+   node src/main.js sync --dry-run --user your_username
+   ```
 
-# Dry run sync
-node src/main.js sync --dry-run
-```
+3. **Check cache contents:**
+   ```bash
+   node src/main.js cache --show
+   ```
 
-### Logs
+4. **Clear cache if needed:**
+   ```bash
+   node src/main.js cache --clear
+   ```
 
-ShelfBridge provides detailed logging:
+5. **Re-run with fresh cache:**
+   ```bash
+   node src/main.js sync --user your_username
+   ```
+
+### Logs and Output
+
+ShelfBridge provides detailed logging for:
 - Progress updates
-- Book matching results
+- Book matching results  
 - API errors
 - Cache operations
+- Network timeouts
 
 ## 🛠️ Development
 
-### Setup
+### Setup for Contributors
 
 ```bash
 # Install dependencies
@@ -300,7 +421,7 @@ ShelfBridge integrates with:
 ### Contributing
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch  
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
@@ -311,9 +432,9 @@ This project is open source. See the LICENSE file for details.
 
 ## 🤝 Support
 
-- **Issues**: Report bugs and feature requests on GitHub
+- **Issues**: Report bugs and feature requests on [GitHub Issues](https://github.com/rohit-purandare/ShelfBridge/issues)
 - **Documentation**: Check this README and inline code comments
-- **Community**: Join discussions in the GitHub repository
+- **Community**: Join discussions in the [GitHub repository](https://github.com/rohit-purandare/ShelfBridge)
 
 ---
 
