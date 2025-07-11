@@ -4,22 +4,42 @@
 # Global Configuration
 # These settings apply to all users and the overall sync behavior
 global:
-  # Minimum progress percentage to sync (0-100)
-  # Books with less than this percentage progress will be skipped
+  # Minimum progress percentage required to sync (default: 5.0)
+  # Books with less than this progress will be skipped
   min_progress_threshold: 5.0
+  
+  # Whether to run without making actual changes (default: false)
+  dry_run: false
+  
+  # Number of parallel workers for API requests (default: 3)
+  workers: 3
+  
+  # Timezone for logging and date formatting (default: UTC)
+  timezone: "UTC"
+  
+  # Whether to automatically add books to Hardcover that don't exist (default: false)
+  # Set to true only if you want ShelfBridge to manage your Hardcover library automatically
+  auto_add_books: false
+
+  # Progress regression protection (NEW)
+  # Prevents accidentally overwriting completion status or high progress
+  prevent_progress_regression: true  # Default: true
+  
+  # Re-reading detection thresholds (NEW)
+  # Controls when new reading sessions are created vs updating existing ones
+  reread_detection:
+    # Progress below this % is considered "starting over" (default: 30)
+    reread_threshold: 30
+    # Progress above this % is considered "high progress" (default: 85) 
+    high_progress_threshold: 85
+    # Block progress drops larger than this % from high progress (default: 50)
+    regression_block_threshold: 50
+    # Warn about progress drops larger than this % from high progress (default: 15)
+    regression_warn_threshold: 15
   
   # Enable parallel processing for faster sync
   # Set to false if you encounter rate limiting or want sequential processing
   parallel: true
-  
-  # Number of parallel workers for sync operations (1-10)
-  # Higher numbers = faster sync but more API load
-  # Recommended: 3-5 for most users
-  workers: 3
-  
-  # Run in dry-run mode without making actual changes
-  # Useful for testing configuration and seeing what would be synced
-  dry_run: false
   
   # Cron schedule for automatic sync (optional)
   # Format: "minute hour day month day-of-week"
@@ -29,12 +49,6 @@ global:
   #   "0 9,21 * * *"  - Twice daily at 9 AM and 9 PM
   #   "0 3 * * 1"     - Every Monday at 3:00 AM
   sync_schedule: "0 3 * * *"
-  
-  # Timezone for scheduling and timestamps
-  # Use standard timezone names like:
-  #   "America/New_York", "America/Los_Angeles", "Europe/London", 
-  #   "Asia/Tokyo", "Australia/Sydney", "Etc/UTC"
-  timezone: "Etc/UTC"
   
   # Force sync even if progress appears unchanged (optional)
   # Useful for recovering from sync errors or cache issues

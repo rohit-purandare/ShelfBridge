@@ -7,6 +7,9 @@ ShelfBridge automatically syncs your reading progress and completion status betw
 - 📚 **Smart Book Matching**: Matches books by ASIN (audiobooks) and falls back to ISBN (print/ebooks)
 - 🔄 **Automatic Sync**: Runs on a schedule or on-demand
 - 🎯 **Completion Detection**: Uses Audiobookshelf's completion flag and progress percentage
+- 🛡️ **Progress Regression Protection**: Prevents accidental overwriting of completion status
+- 🔄 **Re-reading Detection**: Automatically creates new reading sessions for re-reads
+- ➕ **Smart Auto-Add**: Intelligently adds books to Hardcover based on reading progress
 - 💾 **Intelligent Caching**: SQLite cache for efficient syncing and performance
 - 👥 **Multi-User Support**: Sync multiple users in one run
 - 🐳 **Docker Ready**: Production-ready Docker image with health checks
@@ -279,6 +282,55 @@ After completing setup with any method above, verify your installation:
 | `dry_run` | Show what would be synced | false |
 | `sync_schedule` | Cron schedule for auto-sync | "0 3 * * *" |
 | `timezone` | Timezone for scheduling | "Etc/UTC" |
+| `auto_add_books` | Auto-add books to Hardcover if not found | false |
+| `prevent_progress_regression` | Protect against progress regression | true |
+
+**Note on `auto_add_books`**: This setting controls automatic book addition behavior with intelligent defaults:
+
+- **`auto_add_books: false` (default)**: Books already in your Hardcover library will always sync. Books NOT in Hardcover will only be auto-added if you have significant reading progress (above `min_progress_threshold` or explicit 0%). This prevents library clutter while ensuring meaningful progress isn't lost.
+
+- **`auto_add_books: true`**: All books will be auto-added to Hardcover regardless of progress level. Use this if you want ShelfBridge to fully populate your Hardcover library.
+
+**Key Insight**: Even with `auto_add_books: false`, books you're actively reading will still be added to Hardcover automatically. The setting only prevents adding books you barely touched.
+
+### Progress Regression Protection
+
+ShelfBridge includes intelligent protection against accidentally overwriting completion status or high progress when users re-read books.
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `prevent_progress_regression` | Enable/disable progress regression protection | true |
+| `reread_detection.reread_threshold` | Progress % below which is considered "starting over" | 30 |
+| `reread_detection.high_progress_threshold` | Progress % above which regression protection activates | 85 |
+| `reread_detection.regression_block_threshold` | Block progress drops larger than this % from high progress | 50 |
+| `reread_detection.regression_warn_threshold` | Warn about progress drops larger than this % from high progress | 15 |
+
+**Example configuration:**
+```yaml
+global:
+  # Enable progress regression protection (recommended)
+  prevent_progress_regression: true
+  
+  # Fine-tune re-reading detection
+  reread_detection:
+    reread_threshold: 30           # Below 30% = likely starting over
+    high_progress_threshold: 85    # Above 85% = high progress (protect)
+    regression_block_threshold: 50 # Block drops >50% from high progress  
+    regression_warn_threshold: 15  # Warn about drops >15% from high progress
+```
+
+**How it works:**
+- **Completed books**: Any progress on a completed book creates a new reading session
+- **High progress books (≥85%)**: Large progress drops (>50%) are blocked, moderate drops (>15%) generate warnings
+- **Medium/low progress books (<85%)**: Normal updates allowed (handles device sync differences)
+- **Re-reading detection**: When high progress drops to very low progress (≤30%), creates new reading session
+
+**Benefits:**
+- ✅ **Never lose completion data** when re-reading books
+- ✅ **Automatic new sessions** for legitimate re-reads
+- ✅ **Protection** against data corruption or sync errors
+- ✅ **Smart warnings** for suspicious progress changes
+- ✅ **No warning fatigue** from normal reading behaviors
 
 ### Multi-User Configuration
 
@@ -341,6 +393,16 @@ npm start
 
 **Note**: Use `npm run sync` for manual/one-time syncing, use `npm start` for automatic scheduled syncing.
 
+### Configuration Validation
+
+```bash
+# Validate your configuration file
+node src/main.js validate
+
+# Skip validation during sync (not recommended)
+node src/main.js sync --skip-validation
+```
+
 ### Debug and Cache Management
 
 ```bash
@@ -368,7 +430,18 @@ node src/main.js cache --stats
 
 1. **ASIN Priority**: For audiobooks, ShelfBridge first tries to match by ASIN (Amazon Standard Identification Number)
 2. **ISBN Fallback**: If no ASIN is found, it falls back to ISBN (ISBN-10 or ISBN-13)  
-3. **Skip Unmatched**: Books without ISBN/ASIN are skipped to ensure accuracy
+3. **Auto-Add Decision**: Books not found in Hardcover are auto-added based on `auto_add_books` setting and reading progress
+4. **Skip Unmatched**: Books without ISBN/ASIN are skipped to ensure accuracy
+
+### Auto-Add Behavior
+
+ShelfBridge uses intelligent logic to decide when to add books to your Hardcover library:
+
+- **Books already in Hardcover**: Always sync if progress > `min_progress_threshold`
+- **Books NOT in Hardcover**: 
+  - `auto_add_books: true` → Always attempt to add
+  - `auto_add_books: false` → Only add if significant progress (above threshold or explicit 0%)
+- **Books below threshold**: Skipped entirely regardless of settings
 
 ### Progress Synchronization
 
@@ -417,29 +490,47 @@ ShelfBridge uses SQLite (`data/.book_cache.db`) to cache:
 - Check if server URLs include proper http:// or https://
 - Test manual access to both services
 
+**"Configuration validation failed"** *(occurs when config file has errors)*
+- Check YAML syntax using an online YAML validator
+- Verify all required fields are present (see `config/config.yaml.example`)
+- Ensure numeric values are within valid ranges (0-100 for percentages)
+- Run `node src/main.js validate` for detailed error messages
+
+**"Progress regression detected"** *(occurs with new progress protection features)*
+- **Warning messages**: Progress drops from high % are logged but sync continues
+- **Blocked syncs**: Large progress drops from completed books are prevented
+- **New reading sessions**: Re-reading detection automatically creates new sessions
+- **Normal behavior**: Most warnings are informational and don't require action
+- **To disable**: Set `prevent_progress_regression: false` in config if unwanted
+
 ### Debug Process
 
-1. **Check configuration:**
+1. **Validate configuration:**
+   ```bash
+   node src/main.js validate
+   ```
+
+2. **Check configuration:**
    ```bash
    node src/main.js debug --user your_username
    ```
 
-2. **Test without changes:**
+3. **Test without changes:**
    ```bash
    node src/main.js sync --dry-run --user your_username
    ```
 
-3. **Check cache contents:**
+4. **Check cache contents:**
    ```bash
    node src/main.js cache --show
    ```
 
-4. **Clear cache if needed:**
+5. **Clear cache if needed:**
    ```bash
    node src/main.js cache --clear
    ```
 
-5. **Re-run with fresh cache:**
+6. **Re-run with fresh cache:**
    ```bash
    node src/main.js sync --user your_username
    ```
@@ -482,6 +573,7 @@ ShelfBridge/
 │   ├── hardcover-client.js  # Hardcover API client
 │   ├── book-cache.js        # SQLite cache management
 │   ├── config.js            # Configuration loader
+│   ├── config-validator.js  # Configuration validation
 │   └── utils.js             # Utility functions
 ├── config/
 │   ├── config.yaml.example  # Configuration template

@@ -45,10 +45,18 @@ export class SyncManager {
     }
 
     _isZeroProgress(progressValue) {
-        // Only consider undefined, null, or values below threshold as "zero progress"
-        // Allow explicit 0 values to be synced (could be intentional resets)
-        return progressValue === undefined || progressValue === null || 
-               (typeof progressValue === 'number' && progressValue < (this.globalConfig.min_progress_threshold || 5.0));
+        // Consider undefined, null, or values below threshold as "zero progress"
+        // Note: 0% should be considered zero progress for auto-add decisions
+        if (progressValue === undefined || progressValue === null) {
+            return true;
+        }
+        
+        if (typeof progressValue === 'number') {
+            // Values at or below threshold are considered zero progress
+            return progressValue <= (this.globalConfig.min_progress_threshold || 5.0);
+        }
+        
+        return true;
     }
 
     async syncProgress() {
@@ -246,15 +254,30 @@ export class SyncManager {
                     } else {
                         bookDetail.actions.push('Not found in Hardcover library');
                         
-                        // Try to auto-add if enabled
-                        if (this.globalConfig.auto_add_books !== false) {
-                            bookDetail.actions.push('Attempting to auto-add to Hardcover');
+                        // Check if we should try to auto-add this book
+                        const hasSignificantProgress = !this._isZeroProgress(currentProgress);
+                        const shouldAutoAdd = this.globalConfig.auto_add_books === true || hasSignificantProgress;
+                        
+                        if (shouldAutoAdd) {
+                            // Determine reason for auto-add attempt
+                            if (this.globalConfig.auto_add_books === true && hasSignificantProgress) {
+                                bookDetail.actions.push('Attempting to auto-add to Hardcover (enabled + has progress)');
+                            } else if (this.globalConfig.auto_add_books === true) {
+                                bookDetail.actions.push('Attempting to auto-add to Hardcover (auto-add enabled)');
+                            } else {
+                                bookDetail.actions.push(`Attempting to auto-add to Hardcover (has ${currentProgress.toFixed(1)}% progress)`);
+                            }
+                            
                             const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
                             
                             bookDetail.status = autoAddResult.status;
                             
                             if (autoAddResult.status === 'auto_added') {
-                                bookDetail.actions.push(`Successfully auto-added to Hardcover`);
+                                if (this.dryRun) {
+                                    bookDetail.actions.push(`[DRY RUN] Would auto-add to Hardcover`);
+                                } else {
+                                    bookDetail.actions.push(`Successfully auto-added to Hardcover`);
+                                }
                                 result.books_auto_added++;
                             } else if (autoAddResult.status === 'skipped') {
                                 bookDetail.actions.push(`Auto-add skipped: ${autoAddResult.reason}`);
@@ -266,7 +289,7 @@ export class SyncManager {
                             }
                         } else {
                             bookDetail.status = 'skipped';
-                            bookDetail.actions.push('Auto-add disabled - skipped');
+                            bookDetail.actions.push(`Auto-add disabled and no significant progress (${currentProgress.toFixed(1)}%) - skipped`);
                             result.books_skipped++;
                         }
                     }
@@ -965,6 +988,23 @@ export class SyncManager {
                 audioSeconds: selectedEdition.audio_seconds
             });
 
+            // Check for progress regression protection if enabled
+            const shouldProtectAgainstRegression = this.globalConfig.prevent_progress_regression !== false;
+            if (shouldProtectAgainstRegression) {
+                const regressionCheck = await this._checkProgressRegression(userBook.id, progressPercent, title);
+                if (regressionCheck.shouldBlock) {
+                    logger.warn(`Blocking potential progress regression for ${title}: ${regressionCheck.reason}`);
+                    return { 
+                        status: 'skipped', 
+                        reason: `Progress regression protection: ${regressionCheck.reason}`, 
+                        title 
+                    };
+                }
+                if (regressionCheck.shouldWarn) {
+                    logger.warn(`Progress regression detected for ${title}: ${regressionCheck.reason}`);
+                }
+            }
+
             // Use Audiobookshelf's is_finished flag if present, prioritize it over percentage
             const isFinished = absBook.is_finished === true || absBook.is_finished === 1;
             
@@ -997,6 +1037,83 @@ export class SyncManager {
             });
             return { status: 'error', reason: error.message, title };
         }
+    }
+
+    /**
+     * Check for progress regression and determine if sync should be blocked
+     * @param {number} userBookId - Hardcover user book ID
+     * @param {number} newProgressPercent - New progress percentage
+     * @param {string} title - Book title for logging
+     * @returns {Object} Result with shouldBlock, shouldWarn, and reason
+     */
+    async _checkProgressRegression(userBookId, newProgressPercent, title) {
+        const result = {
+            shouldBlock: false,
+            shouldWarn: false,
+            reason: ''
+        };
+
+        try {
+            // Get current progress from Hardcover
+            const progressInfo = await this.hardcover.getBookCurrentProgress(userBookId);
+            
+            if (!progressInfo || !progressInfo.has_progress || !progressInfo.latest_read) {
+                return result; // No existing progress to compare
+            }
+
+            const latestRead = progressInfo.latest_read;
+
+            // If book was completed (has finished_at), block any progress updates
+            if (latestRead.finished_at) {
+                // Get reread threshold from config
+                const rereadThreshold = this.globalConfig.reread_detection?.reread_threshold || 30;
+                
+                // Check if this might be a re-reading scenario
+                if (newProgressPercent <= rereadThreshold) {
+                    result.shouldWarn = true;
+                    result.reason = `Book was completed on ${latestRead.finished_at}, but new progress is ${newProgressPercent}% (possible re-reading)`;
+                } else {
+                    result.shouldBlock = true;
+                    result.reason = `Book was completed on ${latestRead.finished_at}, blocking regression to ${newProgressPercent}%`;
+                }
+                return result;
+            }
+
+            // Calculate previous progress percentage if we have edition info
+            let previousProgressPercent = 0;
+            if (latestRead.edition) {
+                if (latestRead.progress_seconds && latestRead.edition.audio_seconds) {
+                    previousProgressPercent = (latestRead.progress_seconds / latestRead.edition.audio_seconds) * 100;
+                } else if (latestRead.progress_pages && latestRead.edition.pages) {
+                    previousProgressPercent = (latestRead.progress_pages / latestRead.edition.pages) * 100;
+                }
+            }
+
+            // Get thresholds from config
+            const HIGH_PROGRESS_THRESHOLD = this.globalConfig.reread_detection?.high_progress_threshold || 85;
+            const REGRESSION_BLOCK_THRESHOLD = this.globalConfig.reread_detection?.regression_block_threshold || 50;
+            const REGRESSION_WARN_THRESHOLD = this.globalConfig.reread_detection?.regression_warn_threshold || 15;
+
+            if (previousProgressPercent >= HIGH_PROGRESS_THRESHOLD) {
+                const progressDrop = previousProgressPercent - newProgressPercent;
+                
+                if (progressDrop >= REGRESSION_BLOCK_THRESHOLD) {
+                    result.shouldBlock = true;
+                    result.reason = `Significant progress regression: ${previousProgressPercent.toFixed(1)}% → ${newProgressPercent.toFixed(1)}%`;
+                } else if (progressDrop >= REGRESSION_WARN_THRESHOLD) {
+                    result.shouldWarn = true;
+                    result.reason = `Progress regression: ${previousProgressPercent.toFixed(1)}% → ${newProgressPercent.toFixed(1)}%`;
+                }
+            }
+
+        } catch (error) {
+            logger.error(`Error checking progress regression for ${title}`, {
+                error: error.message,
+                userBookId
+            });
+        }
+
+        return result;
     }
 
     async _selectEditionWithCache(absBook, hardcoverMatch, title) {
@@ -1227,7 +1344,8 @@ export class SyncManager {
                 progressPercent,
                 edition.id,
                 useSeconds,
-                this._formatDateForHardcover(absBook.started_at) // Use formatted date instead of raw value
+                this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
+                this.globalConfig.reread_detection // Pass reread configuration
             );
 
             if (result && result.id) {
@@ -1253,7 +1371,8 @@ export class SyncManager {
                                 previousProgress,
                                 edition.id,
                                 useSeconds,
-                                this._formatDateForHardcover(absBook.started_at)
+                                this._formatDateForHardcover(absBook.started_at),
+                                this.globalConfig.reread_detection
                             );
                         } catch (rollbackError) {
                             logger.error(`Failed to rollback progress for ${title}`, {

@@ -182,17 +182,31 @@ export class HardcoverClient {
         }
     }
 
-    async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds = false, startedAt = null) {
+    async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds = false, startedAt = null, rereadConfig = null) {
         // Check for existing progress
         const progressInfo = await this.getBookCurrentProgress(userBookId);
         
-        // If there's existing progress AND it has a finished_at date, create new session
-        if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && 
-            progressInfo.latest_read.finished_at) {
-            // Book was previously completed - create new reading session
-            logger.debug('Book was previously completed, creating new reading session');
+        // Enhanced re-reading detection
+        const edition = progressInfo?.latest_read?.edition || null;
+        const shouldCreateNewSession = this._shouldCreateNewReadingSession(
+            progressInfo, 
+            progressPercentage, 
+            currentProgress, 
+            useSeconds,
+            edition,
+            rereadConfig
+        );
+        
+        if (shouldCreateNewSession.createNew) {
+            logger.info(`Creating new reading session: ${shouldCreateNewSession.reason}`);
             const startDate = startedAt ? startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
             return await this.insertUserBookRead(userBookId, currentProgress, editionId, startDate, useSeconds);
+        }
+        
+        // Check for potentially dangerous progress regression
+        if (shouldCreateNewSession.isRegression) {
+            logger.warn(`Progress regression detected: ${shouldCreateNewSession.reason}`);
+            // Could add user confirmation or admin notification here
         }
         
         if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && progressInfo.latest_read.id) {
@@ -259,6 +273,87 @@ export class HardcoverClient {
             const startDate = startedAt ? startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
             return await this.insertUserBookRead(userBookId, currentProgress, editionId, startDate, useSeconds);
         }
+    }
+
+    /**
+     * Determines if a new reading session should be created based on progress patterns
+     * @param {Object} progressInfo - Current progress information from Hardcover
+     * @param {number} newProgressPercentage - New progress percentage (0-100)
+     * @param {number} newCurrentProgress - New current progress (pages or seconds)
+     * @param {boolean} useSeconds - Whether progress is measured in seconds
+     * @param {Object} edition - Edition information with total pages/seconds (optional)
+     * @param {Object} rereadConfig - Configuration for re-reading detection thresholds
+     * @returns {Object} Decision object with createNew flag and reason
+     */
+    _shouldCreateNewReadingSession(progressInfo, newProgressPercentage, newCurrentProgress, useSeconds, edition = null, rereadConfig = null) {
+        const result = {
+            createNew: false,
+            isRegression: false,
+            reason: ''
+        };
+
+        // Get thresholds from config or use defaults
+        const REREAD_THRESHOLD = rereadConfig?.reread_threshold || 30;
+        const HIGH_PROGRESS_THRESHOLD = rereadConfig?.high_progress_threshold || 85;
+        const REGRESSION_WARNING_THRESHOLD = rereadConfig?.regression_warn_threshold || 10;
+
+        // No existing progress - normal new session
+        if (!progressInfo || !progressInfo.has_progress || !progressInfo.latest_read) {
+            return result;
+        }
+
+        const latestRead = progressInfo.latest_read;
+
+        // Case 1: Book was previously completed (has finished_at) - always create new session
+        if (latestRead.finished_at) {
+            result.createNew = true;
+            result.reason = 'Book was previously completed (finished_at set)';
+            return result;
+        }
+
+        // Calculate previous progress percentage more accurately
+        let previousProgressPercentage = 0;
+        
+        if (useSeconds && latestRead.progress_seconds) {
+            if (edition && edition.audio_seconds) {
+                // Accurate calculation with total duration
+                previousProgressPercentage = (latestRead.progress_seconds / edition.audio_seconds) * 100;
+            } else {
+                // Heuristic: if previous progress is significantly higher than new progress
+                const progressRatio = latestRead.progress_seconds / Math.max(newCurrentProgress, 1);
+                if (progressRatio > 3) {
+                    previousProgressPercentage = Math.min(95, progressRatio * 25); // Rough estimate
+                }
+            }
+        } else if (!useSeconds && latestRead.progress_pages) {
+            if (edition && edition.pages) {
+                // Accurate calculation with total pages
+                previousProgressPercentage = (latestRead.progress_pages / edition.pages) * 100;
+            } else {
+                // Heuristic: if previous progress is significantly higher than new progress
+                const progressRatio = latestRead.progress_pages / Math.max(newCurrentProgress, 1);
+                if (progressRatio > 3) {
+                    previousProgressPercentage = Math.min(95, progressRatio * 25); // Rough estimate
+                }
+            }
+        }
+
+        // Case 2: Significant progress regression indicating re-reading
+        if (previousProgressPercentage >= HIGH_PROGRESS_THRESHOLD && newProgressPercentage <= REREAD_THRESHOLD) {
+            result.createNew = true;
+            result.reason = `Significant progress regression detected: ${previousProgressPercentage.toFixed(1)}% → ${newProgressPercentage.toFixed(1)}% (likely re-reading)`;
+            return result;
+        }
+
+        // Case 3: Progress regression protection (warn but don't create new session)
+        if (previousProgressPercentage > 0 && 
+            (previousProgressPercentage - newProgressPercentage) > REGRESSION_WARNING_THRESHOLD &&
+            previousProgressPercentage >= HIGH_PROGRESS_THRESHOLD) {
+            result.isRegression = true;
+            result.reason = `Progress regression: ${previousProgressPercentage.toFixed(1)}% → ${newProgressPercentage.toFixed(1)}%`;
+        }
+
+        return result;
     }
 
     async markBookCompleted(userBookId, editionId, totalValue, useSeconds = false, finishedAt = null, startedAt = null) {
@@ -399,10 +494,23 @@ export class HardcoverClient {
                     edition_id
                     started_at
                     finished_at
+                    edition {
+                        id
+                        pages
+                        audio_seconds
+                    }
                 }
                 user_books(where: {id: {_eq: $userBookId}}) {
                     id
                     status_id
+                    book {
+                        id
+                        editions {
+                            id
+                            pages
+                            audio_seconds
+                        }
+                    }
                 }
             }
         `;
@@ -487,7 +595,7 @@ export class HardcoverClient {
     async searchBooksByIsbn(isbn) {
         const query = `
             query searchBooksByIsbn($isbn: String!) {
-                book_edition(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
+                editions(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
                     id
                     isbn_10
                     isbn_13
@@ -513,7 +621,7 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(query, variables);
-            return result && result.book_edition ? result.book_edition : [];
+            return result && result.editions ? result.editions : [];
         } catch (error) {
             logger.error('Error searching books by ISBN:', error.message);
             return [];
@@ -523,7 +631,7 @@ export class HardcoverClient {
     async searchBooksByAsin(asin) {
         const query = `
             query searchBooksByAsin($asin: String!) {
-                book_edition(where: { asin: { _eq: $asin } }) {
+                editions(where: { asin: { _eq: $asin } }) {
                     id
                     isbn_10
                     isbn_13
@@ -550,7 +658,7 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(query, variables);
-            return result && result.book_edition ? result.book_edition : [];
+            return result && result.editions ? result.editions : [];
         } catch (error) {
             logger.error('Error searching books by ASIN:', error.message);
             return [];

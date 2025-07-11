@@ -47,6 +47,53 @@ export class ConfigValidator {
                     default: false,
                     optional: true,
                     description: 'Force sync even if progress unchanged'
+                },
+                auto_add_books: {
+                    type: 'boolean',
+                    default: false,
+                    optional: true,
+                    description: 'Automatically add books to Hardcover if not found'
+                },
+                prevent_progress_regression: {
+                    type: 'boolean',
+                    default: true,
+                    optional: true,
+                    description: 'Prevent accidentally overwriting completion status or high progress'
+                },
+                reread_detection: {
+                    type: 'object',
+                    optional: true,
+                    description: 'Controls when new reading sessions are created vs updating existing ones',
+                    properties: {
+                        reread_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 30,
+                            description: 'Progress below this % is considered "starting over" (0-100)'
+                        },
+                        high_progress_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 85,
+                            description: 'Progress above this % is considered "high progress" (0-100)'
+                        },
+                        regression_block_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 50,
+                            description: 'Block progress drops larger than this % from high progress (0-100)'
+                        },
+                        regression_warn_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 15,
+                            description: 'Warn about progress drops larger than this % from high progress (0-100)'
+                        }
+                    }
                 }
             },
             users: {
@@ -168,6 +215,12 @@ export class ConfigValidator {
                 if (rules.minLength !== undefined && actualValue.length < rules.minLength) {
                     errors.push(`Global config: '${key}' must be at least ${rules.minLength} characters (got: ${actualValue.length})`);
                 }
+            }
+
+            // Object validation (for nested objects like reread_detection)
+            if (rules.type === 'object' && actualValue !== undefined) {
+                const objectErrors = this.validateObjectProperties(key, actualValue, rules.properties);
+                errors.push(...objectErrors.map(error => `Global config: ${error}`));
             }
 
             // Custom validation
@@ -301,6 +354,79 @@ export class ConfigValidator {
     }
 
     /**
+     * Validate object properties for nested objects
+     */
+    validateObjectProperties(parentKey, obj, propertiesSchema) {
+        const errors = [];
+
+        if (!propertiesSchema) {
+            return errors;
+        }
+
+        // Check if the value is actually an object
+        if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+            errors.push(`'${parentKey}' must be an object (got: ${typeof obj})`);
+            return errors;
+        }
+
+        // Validate each property in the schema
+        for (const [propKey, propRules] of Object.entries(propertiesSchema)) {
+            const propValue = obj[propKey];
+            const fullKey = `${parentKey}.${propKey}`;
+
+            // Check required fields
+            if (propRules.required && (propValue === undefined || propValue === null)) {
+                errors.push(`'${fullKey}' is required`);
+                continue;
+            }
+
+            // Skip validation for optional undefined values
+            if (propRules.optional && (propValue === undefined || propValue === null)) {
+                continue;
+            }
+
+            // Use default if value is undefined
+            const actualValue = propValue !== undefined ? propValue : propRules.default;
+
+            // Type validation
+            if (propRules.type && actualValue !== undefined) {
+                const typeError = this.validateType(fullKey, actualValue, propRules.type);
+                if (typeError) {
+                    errors.push(typeError);
+                    continue;
+                }
+            }
+
+            // Range validation for numbers
+            if (propRules.type === 'number' && actualValue !== undefined) {
+                if (propRules.min !== undefined && actualValue < propRules.min) {
+                    errors.push(`'${fullKey}' must be at least ${propRules.min} (got: ${actualValue})`);
+                }
+                if (propRules.max !== undefined && actualValue > propRules.max) {
+                    errors.push(`'${fullKey}' must be at most ${propRules.max} (got: ${actualValue})`);
+                }
+            }
+
+            // String length validation
+            if (propRules.type === 'string' && actualValue !== undefined) {
+                if (propRules.minLength !== undefined && actualValue.length < propRules.minLength) {
+                    errors.push(`'${fullKey}' must be at least ${propRules.minLength} characters (got: ${actualValue.length})`);
+                }
+            }
+
+            // Custom validation
+            if (propRules.validate && actualValue !== undefined) {
+                const customError = this.validateCustom(fullKey, actualValue, propRules.validate);
+                if (customError) {
+                    errors.push(customError);
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
      * Custom validation functions
      */
     validateCustom(fieldName, value, validationType) {
@@ -422,7 +548,23 @@ export class ConfigValidator {
             if (rules.default !== undefined) help += `, Default: ${rules.default}`;
             if (rules.required) help += `, Required`;
             if (rules.optional) help += `, Optional`;
-            help += "\n\n";
+            help += "\n";
+
+            // Handle nested object properties
+            if (rules.type === 'object' && rules.properties) {
+                help += `    Properties:\n`;
+                for (const [propKey, propRules] of Object.entries(rules.properties)) {
+                    help += `      ${propKey}: ${propRules.description}\n`;
+                    help += `        Type: ${propRules.type}`;
+                    if (propRules.min !== undefined) help += `, Min: ${propRules.min}`;
+                    if (propRules.max !== undefined) help += `, Max: ${propRules.max}`;
+                    if (propRules.default !== undefined) help += `, Default: ${propRules.default}`;
+                    if (propRules.required) help += `, Required`;
+                    if (propRules.optional) help += `, Optional`;
+                    help += "\n";
+                }
+            }
+            help += "\n";
         }
 
         help += "User Configuration:\n";
