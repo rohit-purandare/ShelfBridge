@@ -8,6 +8,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.event_name == 'push' && contains(github.event.head_commit.message, 'bump version')
     
     steps:
@@ -76,12 +78,10 @@ jobs:
     
     - name: Create Release
       if: steps.check_tag.outputs.skip == 'false'
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.package_version.outputs.version }}
-        release_name: 🚀 ShelfBridge v${{ steps.package_version.outputs.version }}
+        name: 🚀 ShelfBridge v${{ steps.package_version.outputs.version }}
         body_path: ${{ steps.changelog.outputs.changelog_file }}
         draft: false
         prerelease: false
