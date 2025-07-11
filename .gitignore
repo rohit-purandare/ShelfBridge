@@ -81,6 +81,9 @@ config/config.yaml
 cache_export.json
 book_cache_export.json
 schema-inputs.out
+
+# Disabled workflows
+*.disabled
 schema-detail.out
 
 # Test files

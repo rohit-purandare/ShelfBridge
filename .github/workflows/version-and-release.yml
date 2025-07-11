@@ -1,16 +1,16 @@
-name: Release
+name: Version Bump and Release
 
 on:
   push:
     branches: [ main ]
-    paths: [ 'package.json' ]
 
 jobs:
-  release:
+  version-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'bump version')
+    # Skip if this is already a version bump commit to avoid infinite loops
+    if: ${{ !contains(github.event.head_commit.message, 'bump version to v') }}
     
     steps:
     - uses: actions/checkout@v4
@@ -25,6 +25,39 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
+    
+    - name: Configure git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+    
+    - name: Determine version bump type
+      id: bump_type
+      run: |
+        # Check commit message for conventional commit patterns
+        COMMIT_MSG="${{ github.event.head_commit.message }}"
+        if echo "$COMMIT_MSG" | grep -E "^(feat|feature)(\(.+\))?!?:" > /dev/null; then
+          echo "type=minor" >> $GITHUB_OUTPUT
+        elif echo "$COMMIT_MSG" | grep -E "^(fix|bug)(\(.+\))?!?:" > /dev/null; then
+          echo "type=patch" >> $GITHUB_OUTPUT
+        elif echo "$COMMIT_MSG" | grep -E "BREAKING CHANGE" > /dev/null; then
+          echo "type=major" >> $GITHUB_OUTPUT
+        else
+          # Default to patch for any other commits
+          echo "type=patch" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Bump version
+      run: |
+        echo "Bumping ${{ steps.bump_type.outputs.type }} version..."
+        npm version ${{ steps.bump_type.outputs.type }} --no-git-tag-version
+        NEW_VERSION=$(node -p "require('./package.json').version")
+        echo "New version: $NEW_VERSION"
+        # Validate version format
+        if ! echo "$NEW_VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' > /dev/null; then
+          echo "Invalid version format: $NEW_VERSION"
+          exit 1
+        fi
     
     - name: Get version from package.json
       id: package_version
@@ -76,6 +109,25 @@ jobs:
         
         echo "changelog_file=changelog.md" >> $GITHUB_OUTPUT
     
+    - name: Commit version bump
+      if: steps.check_tag.outputs.skip == 'false'
+      run: |
+        NEW_VERSION=${{ steps.package_version.outputs.version }}
+        # Add package.json and package-lock.json (if it exists)
+        git add package.json
+        if [ -f "package-lock.json" ]; then
+          git add package-lock.json
+        fi
+        # Verify we have something to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+          exit 1
+        fi
+        git commit --no-verify -m "bump version to v${NEW_VERSION}"
+        echo "Pushing version bump commit..."
+        git push origin main
+        echo "✅ Version bump pushed successfully"
+    
     - name: Create Release
       if: steps.check_tag.outputs.skip == 'false'
       uses: softprops/action-gh-release@v1
@@ -86,7 +138,7 @@ jobs:
         draft: false
         prerelease: false
     
-    - name: Update package README badge
+    - name: Success message
       if: steps.check_tag.outputs.skip == 'false'
       run: |
         echo "✅ Release v${{ steps.package_version.outputs.version }} created successfully"
