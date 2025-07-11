@@ -49,28 +49,30 @@ Choose the setup method that best fits your needs:
 - Easy updates and rollbacks
 - Isolated environment
 
-#### Option A: Pre-built Image (Easiest)
+#### Zero-Setup Docker Compose
 
-1. **Start the service:**
+ShelfBridge uses named volumes for truly zero-setup deployment - no cloning required!
+
+**Option A: Download and Run (Easiest)**
+
+1. **Download docker-compose.yml:**
    ```bash
-   # Clone the repository for the docker-compose.yml file
-   git clone https://github.com/rohit-purandare/ShelfBridge.git
-   cd ShelfBridge
+   # Create a directory for ShelfBridge
+   mkdir shelfbridge && cd shelfbridge
    
-   # This pulls the latest image and starts the container
+   # Download the compose file
+   curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml
+   
+   # Start the service
    docker-compose up -d
    ```
 
-2. **Set up your configuration:**
+2. **Edit your configuration:**
    ```bash
-   # Copy the example configuration
-   cp config/config.yaml.example config/config.yaml
+   # Access the auto-created config in the Docker volume
+   docker exec -it shelfbridge nano /app/config/config.yaml
    
-   # Edit with your actual credentials
-   nano config/config.yaml
-   
-   # Restart to use your config
-   docker-compose restart
+   # The container will automatically restart when you save changes
    ```
 
 3. **View logs and verify:**
@@ -79,15 +81,50 @@ Choose the setup method that best fits your needs:
    docker-compose logs -f shelfbridge
    ```
 
-#### Option B: Build from Source
-
-For development or customization:
+**Option B: Clone Repository (For Development)**
 
 ```bash
-# Edit docker-compose.yml to build locally instead of pulling image
+# Clone the repository for local development
+git clone https://github.com/rohit-purandare/ShelfBridge.git
+cd ShelfBridge
+
+# Edit docker-compose.yml to build locally (optional)
 # Comment out the 'image:' line and uncomment the 'build: .' line
-# Then run:
+
+# Start the service
 docker-compose up -d
+```
+
+#### What Happens Automatically
+
+When you run `docker-compose up -d`, the container automatically:
+
+- ✅ **Creates volumes**: Docker manages `shelfbridge-config` and `shelfbridge-data` volumes
+- ✅ **Provides template**: `config.yaml.example` is copied to the config volume
+- ✅ **Creates config**: `config.yaml` is auto-created from the template with placeholder values
+- ✅ **Intelligent validation**: Container detects placeholder values and guides you through setup
+- ✅ **Ready to edit**: Edit config using `docker exec` and the container restarts automatically
+
+**Truly zero-setup!** No local directories or files needed.
+
+#### Accessing Configuration Files
+
+With named volumes, config files are stored in Docker-managed volumes. Here's how to access them:
+
+```bash
+# Edit the main configuration file
+docker exec -it shelfbridge nano /app/config/config.yaml
+
+# View the example configuration for reference
+docker exec -it shelfbridge cat /app/config/config.yaml.example
+
+# Copy config file to local directory for easier editing (optional)
+docker cp shelfbridge:/app/config/config.yaml ./config.yaml
+# Edit locally, then copy back:
+docker cp ./config.yaml shelfbridge:/app/config/config.yaml
+
+# View volume location (advanced)
+docker volume inspect shelfbridge-config
 ```
 
 ---
@@ -169,27 +206,41 @@ npm run sync
 
 **Note:** This method requires manual configuration and maintenance.
 
-#### Pre-built Image
+#### Option A: Named Volumes (Recommended)
 
 ```bash
-# Create directories
-mkdir -p config data
+# Create named volumes
+docker volume create shelfbridge-config
+docker volume create shelfbridge-data
 
-# Run the container
+# Run the container with named volumes
 docker run -d \
   --name shelfbridge \
-  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  -e TZ=Etc/UTC \
-  -e NODE_ENV=production \
+  -v shelfbridge-config:/app/config \
+  -v shelfbridge-data:/app/data \
+  --restart unless-stopped \
   ghcr.io/rohit-purandare/shelfbridge:latest
 
-# Copy and edit configuration
-cp config/config.yaml.example config/config.yaml
-nano config/config.yaml
+# Edit the auto-created configuration
+docker exec -it shelfbridge nano /app/config/config.yaml
+```
 
-# Restart container with your config
-docker restart shelfbridge
+#### Option B: Bind Mounts (Local Development)
+
+```bash
+# Create local directories
+mkdir -p config data
+
+# Run the container with bind mounts
+docker run -d \
+  --name shelfbridge \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/rohit-purandare/shelfbridge:latest
+
+# Edit the auto-created configuration locally
+nano config/config.yaml
 ```
 
 #### Build from Source
@@ -198,14 +249,16 @@ docker restart shelfbridge
 # Build the image
 docker build -t shelfbridge .
 
-# Run the container
+# Run with named volumes (recommended)
 docker run -d \
   --name shelfbridge \
-  -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  -e TZ=Etc/UTC \
-  -e NODE_ENV=production \
+  -v shelfbridge-config:/app/config \
+  -v shelfbridge-data:/app/data \
+  --restart unless-stopped \
   shelfbridge
+
+# Edit configuration
+docker exec -it shelfbridge nano /app/config/config.yaml
 ```
 
 ### 🏷️ Available Images

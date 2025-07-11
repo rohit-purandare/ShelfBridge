@@ -8,14 +8,10 @@ services:
     container_name: shelfbridge
     restart: unless-stopped
     user: "1000:1000"
-    environment:
-      - TZ=Etc/UTC
-      - NODE_ENV=production
     volumes:
-      # Mount configuration file (read-only)
-      - ./config/config.yaml:/app/config/config.yaml:ro
-      # Mount data directory for persistent cache
-      - ./data:/app/data
+      # Named volumes for zero-setup - no local directories required
+      - shelfbridge-config:/app/config
+      - shelfbridge-data:/app/data
     command: ["npm", "start"]
     healthcheck:
       test: ["CMD", "node", "src/main.js", "config", "--help"]
@@ -28,6 +24,12 @@ services:
       - "com.docker.compose.service=shelfbridge"
     networks:
       - shelfbridge-network
+
+volumes:
+  shelfbridge-config:
+    driver: local
+  shelfbridge-data:
+    driver: local
 
 networks:
   shelfbridge-network:

@@ -4,6 +4,39 @@ import logger from './logger.js';
 
 export class ConfigValidator {
     constructor() {
+        // Common placeholder patterns to detect
+        this.placeholderPatterns = {
+            urls: [
+                'your-audiobookshelf-server.com',
+                'your-abs-server.com', 
+                'your-server.com',
+                'localhost.example.com',
+                'example.com',
+                'your-domain.com',
+                'audiobookshelf.example.com'
+            ],
+            tokens: [
+                'your_audiobookshelf_api_token',
+                'your_audiobookshelf_token',
+                'your_abs_token',
+                'your_hardcover_api_token',
+                'your_hardcover_token',
+                'your_token_here',
+                'abc123',
+                'xyz789',
+                'token123',
+                'api_token_here',
+                'your_api_key',
+                'your_api_token'
+            ],
+            userIds: [
+                'your_username',
+                'your_user_id',
+                'user_id_here',
+                'username_here'
+            ]
+        };
+
         this.schema = {
             global: {
                 min_progress_threshold: { 
@@ -288,6 +321,19 @@ export class ConfigValidator {
                 continue;
             }
 
+            // Check for placeholder values
+            if (value !== undefined && typeof value === 'string') {
+                let placeholderCategory = null;
+                if (key === 'abs_url') placeholderCategory = 'urls';
+                else if (key === 'abs_token' || key === 'hardcover_token') placeholderCategory = 'tokens';
+                else if (key === 'id') placeholderCategory = 'userIds';
+
+                if (placeholderCategory && this.isPlaceholderValue(value, placeholderCategory)) {
+                    errors.push(`User ${index}: '${key}' contains placeholder value '${value}' - please replace with your actual ${this.getFieldDescription(key)}`);
+                    continue;
+                }
+            }
+
             // Type validation
             if (rules.type && value !== undefined) {
                 const typeError = this.validateType(`User ${index}.${key}`, value, rules.type);
@@ -314,6 +360,19 @@ export class ConfigValidator {
         }
 
         return errors;
+    }
+
+    /**
+     * Get user-friendly field description for error messages
+     */
+    getFieldDescription(fieldName) {
+        const descriptions = {
+            'abs_url': 'Audiobookshelf server URL',
+            'abs_token': 'Audiobookshelf API token',
+            'hardcover_token': 'Hardcover API token',
+            'id': 'user identifier'
+        };
+        return descriptions[fieldName] || fieldName;
     }
 
     /**
@@ -589,18 +648,73 @@ export class ConfigValidator {
 
         let output = "❌ Configuration Validation Failed:\n\n";
         
-        validationResult.errors.forEach(error => {
-            output += `  ✗ ${error}\n`;
-        });
+        const placeholderErrors = validationResult.errors.filter(error => 
+            error.includes('placeholder value')
+        );
+        const otherErrors = validationResult.errors.filter(error => 
+            !error.includes('placeholder value')
+        );
+
+        // Show placeholder errors first with helpful instructions
+        if (placeholderErrors.length > 0) {
+            output += "🔧 PLACEHOLDER VALUES DETECTED:\n\n";
+            placeholderErrors.forEach(error => {
+                output += `  ✗ ${error}\n`;
+            });
+            
+            output += "\n📝 TO FIX PLACEHOLDER VALUES:\n\n";
+            output += "1. Edit your config/config.yaml file\n";
+            output += "2. Replace placeholder values with your actual credentials:\n\n";
+            output += "   abs_url: Replace with your Audiobookshelf server URL\n";
+            output += "            Example: https://audiobookshelf.mydomain.com\n\n";
+            output += "   abs_token: Get from Audiobookshelf Settings > Users > [Your User] > API Token\n\n";
+            output += "   hardcover_token: Get from https://hardcover.app/account/developer\n\n";
+            output += "   id: Choose a unique identifier for this user (e.g., 'alice' or 'john')\n\n";
+        }
+
+        // Show other validation errors
+        if (otherErrors.length > 0) {
+            if (placeholderErrors.length > 0) {
+                output += "🔍 OTHER VALIDATION ERRORS:\n\n";
+            }
+            otherErrors.forEach(error => {
+                output += `  ✗ ${error}\n`;
+            });
+            output += "\n";
+        }
 
         if (validationResult.warnings.length > 0) {
-            output += "\nWarnings:\n";
+            output += "⚠️  WARNINGS:\n\n";
             validationResult.warnings.forEach(warning => {
                 output += `  ⚠ ${warning}\n`;
             });
+            output += "\n";
         }
 
-        output += "\nFix these issues and restart the application.\n";
+        output += "💡 QUICK SETUP HELP:\n\n";
+        output += "• Copy config.yaml.example to config.yaml if it doesn't exist\n";
+        output += "• Edit config.yaml with your actual API credentials\n";
+        output += "• Restart the container/application after making changes\n";
+        output += "• Run 'node src/main.js validate --connections' to test your setup\n\n";
+        output += "🚫 The application will NOT start until these issues are resolved.\n";
+        
         return output;
+    }
+
+    /**
+     * Check if a value matches a placeholder pattern
+     */
+    isPlaceholderValue(value, category) {
+        if (!value || typeof value !== 'string') {
+            return false;
+        }
+
+        const patterns = this.placeholderPatterns[category] || [];
+        const lowerValue = value.toLowerCase();
+        
+        return patterns.some(pattern => 
+            lowerValue.includes(pattern.toLowerCase()) ||
+            value === pattern
+        );
     }
 } 
