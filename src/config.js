@@ -1,6 +1,7 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
 import path from 'path';
+import logger from './logger.js';
 
 export class Config {
     constructor(configPath = 'config/config.yaml') {
@@ -23,7 +24,7 @@ export class Config {
             this.globalConfig = config.global || {};
             this.users = config.users || [];
             
-            console.log(`Loaded configuration from ${this.configPath}`);
+            logger.debug(`Loaded configuration from ${this.configPath}`);
         } catch (error) {
             throw new Error(`Failed to load config file: ${error.message}`);
         }
@@ -64,11 +65,11 @@ export class Config {
         
         if (errors.length > 0) {
             const errorMsg = 'Configuration validation failed:\n' + errors.map(error => `- ${error}`).join('\n');
-            console.error(errorMsg);
+            logger.error(errorMsg);
             throw new Error(errorMsg);
         }
         
-        console.log('Configuration validation passed');
+        logger.debug('Configuration validation passed');
     }
 
     getGlobal() {

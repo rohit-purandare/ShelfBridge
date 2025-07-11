@@ -3,70 +3,27 @@
 
 echo "🔒 Running pre-commit security checks..."
 
-# Check for obvious secrets in staged files
-echo "Checking for secrets in staged files..."
-
-# Get list of staged files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-# Check each staged file for secrets
-SECRETS_FOUND=0
-
-for file in $STAGED_FILES; do
-    # Skip binary files and certain directories
-    if [[ "$file" == *".png" ]] || [[ "$file" == *".jpg" ]] || [[ "$file" == *".gif" ]] || \
-       [[ "$file" == *".pdf" ]] || [[ "$file" == *".zip" ]] || [[ "$file" == *".tar" ]] || \
-       [[ "$file" == *"node_modules/"* ]] || [[ "$file" == *".git/"* ]]; then
-        continue
-    fi
-    
-    # Check for API keys
-    if git diff --cached "$file" | grep -i "api[_-]?key" | grep -v "//.*api.*key" | grep -v "example"; then
-        echo "⚠️  Potential API key found in $file"
-        SECRETS_FOUND=1
-    fi
-    
-    # Check for tokens
-    if git diff --cached "$file" | grep -i "token" | grep -v "//.*token" | grep -v "example" | grep -v "test"; then
-        echo "⚠️  Potential token found in $file"
-        SECRETS_FOUND=1
-    fi
-    
-    # Check for passwords
-    if git diff --cached "$file" | grep -i "password" | grep -v "//.*password" | grep -v "example"; then
-        echo "⚠️  Potential password found in $file"
-        SECRETS_FOUND=1
-    fi
-    
-    # Check for AWS keys
-    if git diff --cached "$file" | grep "AKIA[0-9A-Z]{16}"; then
-        echo "🚨 AWS Access Key ID found in $file"
-        SECRETS_FOUND=1
-    fi
-    
-    # Check for private keys
-    if git diff --cached "$file" | grep "BEGIN.*PRIVATE KEY"; then
-        echo "🚨 Private key found in $file"
-        SECRETS_FOUND=1
-    fi
-done
-
-if [ $SECRETS_FOUND -eq 1 ]; then
+# Run gitleaks to scan for secrets
+echo "Scanning for secrets with gitleaks..."
+if ! gitleaks detect --verbose; then
     echo ""
-    echo "❌ Security check failed! Please review the above warnings."
+    echo "❌ Gitleaks found potential secrets!"
     echo "💡 If these are false positives, add them to .gitleaks.toml allowlist"
     echo "💡 If these are real secrets, remove them and use environment variables instead"
+    echo "💡 Run 'gitleaks detect --verbose' to see details"
     exit 1
 else
-    echo "✅ No obvious secrets found in staged files"
+    echo "✅ No secrets found"
 fi
 
 # Run npm audit if package.json is staged
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 if echo "$STAGED_FILES" | grep -q "package.json\|package-lock.json"; then
     echo "Running npm audit..."
     npm audit --audit-level=moderate || {
         echo "⚠️  npm audit found vulnerabilities. Consider updating dependencies."
         echo "💡 Run 'npm audit fix' to automatically fix some issues"
+        # Don't fail the commit for audit issues, just warn
     }
 fi
 

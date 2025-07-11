@@ -1,26 +1,49 @@
 import axios from 'axios';
 import { RateLimiter } from './utils.js';
+import logger from './logger.js';
 
 const MAX_PARALLEL_WORKERS = 8;
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, maxWorkers = MAX_PARALLEL_WORKERS) {
+    constructor(baseUrl, token, maxWorkers = 3) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.token = token;
         this.maxWorkers = maxWorkers;
-        this.rateLimiter = new RateLimiter(60); // 60 requests per minute
-        
-        // Setup axios instance with authentication
-        this.client = axios.create({
+        this.rateLimiter = new RateLimiter(600); // 10 requests per second = 600 per minute
+
+        // Create axios instance with default config
+        this.axios = axios.create({
             baseURL: this.baseUrl,
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${this.token}`,
                 'Content-Type': 'application/json'
             },
             timeout: 30000 // 30 second timeout
         });
-        
-        console.log(`AudiobookshelfClient initialized for ${this.baseUrl} with ${this.maxWorkers} workers`);
+
+        // Add request interceptor for rate limiting and logging
+        this.axios.interceptors.request.use(async (config) => {
+            await this.rateLimiter.waitIfNeeded();
+            return config;
+        });
+
+        // Add response interceptor for logging
+        this.axios.interceptors.response.use(
+            (response) => {
+                logger.debug(`${response.config.method?.toUpperCase()} ${response.config.url} -> ${response.status}`);
+                return response;
+            },
+            (error) => {
+                const status = error.response?.status || 'ERR';
+                logger.debug(`${error.config?.method?.toUpperCase()} ${error.config?.url} -> ${status}`);
+                return Promise.reject(error);
+            }
+        );
+
+        logger.debug('AudiobookshelfClient initialized', { 
+            baseUrl: this.baseUrl, 
+            maxWorkers: this.maxWorkers 
+        });
     }
 
     async testConnection() {
@@ -28,13 +51,16 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/ping');
             return response !== null;
         } catch (error) {
-            console.error('Audiobookshelf connection test failed:', error.message);
+            logger.error('Audiobookshelf connection test failed', { 
+            error: error.message, 
+            stack: error.stack 
+        });
             return false;
         }
     }
 
     async getReadingProgress() {
-        console.log('Fetching reading progress from Audiobookshelf...');
+        logger.debug('Fetching reading progress from Audiobookshelf');
 
         try {
             // Get user info first
@@ -45,27 +71,33 @@ export class AudiobookshelfClient {
 
             // Get library items in progress (these have some progress)
             const progressItems = await this._getItemsInProgress();
-            console.log(`[DEBUG] Found ${progressItems.length} items in progress`);
+            logger.debug('Found items in progress', { count: progressItems.length });
 
             // Also get all library items to catch books with 0% progress or unknown status
             const allLibraries = await this.getLibraries();
-            console.log(`[DEBUG] Found ${allLibraries.length} libraries`);
+            logger.debug('Found libraries', { count: allLibraries.length });
             
             const allBooks = [];
 
             // Collect all books from all libraries
             for (const library of allLibraries) {
-                console.log(`[DEBUG] Fetching books from library: ${library.name} (${library.id})`);
+                logger.debug('Fetching books from library', { 
+                    libraryName: library.name, 
+                    libraryId: library.id 
+                });
                 const libraryBooks = await this.getLibraryItems(library.id, 1000);
-                console.log(`[DEBUG] Library ${library.name} has ${libraryBooks.length} books`);
+                logger.debug('Library books count', { 
+                    libraryName: library.name, 
+                    count: libraryBooks.length 
+                });
                 allBooks.push(...libraryBooks);
             }
 
-            console.log(`[DEBUG] Total books across all libraries: ${allBooks.length}`);
+            logger.debug('Total books across all libraries', { count: allBooks.length });
 
             // Create a set of IDs that are already in progress
             const progressItemIds = new Set(progressItems.map(item => item.id));
-            console.log(`[DEBUG] Progress item IDs: ${Array.from(progressItemIds)}`);
+            logger.debug('Progress item IDs', { ids: Array.from(progressItemIds) });
 
             // Combine progress items with other books that might need syncing
             const booksToSync = [];
@@ -73,22 +105,30 @@ export class AudiobookshelfClient {
             // Fetch details for progress items in parallel
             const progressPromises = progressItems.map(item => 
                 this._getLibraryItemDetails(item.id).catch(error => {
-                    console.error(`Error fetching details for ${item.id}:`, error.message);
+                    logger.error('Error fetching details for item', { 
+                        itemId: item.id, 
+                        error: error.message 
+                    });
                     return null;
                 })
             );
 
             const progressResults = await Promise.all(progressPromises);
             booksToSync.push(...progressResults.filter(Boolean));
-            console.log(`[DEBUG] Added ${progressResults.filter(Boolean).length} progress items to sync list`);
+            logger.debug('Added progress items to sync list', { 
+                count: progressResults.filter(Boolean).length 
+            });
 
             // Fetch details for other books (with 0% or unknown progress) in parallel
             const otherBooks = allBooks.filter(book => !progressItemIds.has(book.id));
-            console.log(`[DEBUG] Found ${otherBooks.length} other books not in progress`);
+            logger.debug('Found other books not in progress', { count: otherBooks.length });
             
             const otherPromises = otherBooks.map(book => 
                 this._getLibraryItemDetails(book.id).catch(error => {
-                    console.error(`Error fetching details for ${book.id}:`, error.message);
+                    logger.error('Error fetching details for book', { 
+                        bookId: book.id, 
+                        error: error.message 
+                    });
                     return null;
                 })
             );
@@ -101,21 +141,24 @@ export class AudiobookshelfClient {
                 return book;
             });
             booksToSync.push(...otherBooksWithProgress);
-            console.log(`[DEBUG] Added ${otherBooksWithProgress.length} other books to sync list`);
+            logger.debug('Added other books to sync list', { count: otherBooksWithProgress.length });
 
-            console.log(`Found ${booksToSync.length} total books to check for sync`);
+            logger.debug('Total books to check for sync', { count: booksToSync.length });
 
             // Debug: print all book titles and their progress
             booksToSync.forEach(book => {
                 const title = (book.media && book.media.metadata && book.media.metadata.title) || book.title || 'Unknown';
                 const progress = book.progress_percentage || 0;
-                console.log(`[DEBUG] Book: '${title}' - Progress: ${progress}%`);
+                logger.debug('Book progress', { title, progress });
             });
 
             return booksToSync;
 
         } catch (error) {
-            console.error('Error fetching reading progress:', error.message);
+            logger.error('Error fetching reading progress', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             return [];
         }
     }
@@ -125,7 +168,10 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/me');
             return response;
         } catch (error) {
-            console.error('Error getting current user:', error.message);
+            logger.error('Error getting current user', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             return null;
         }
     }
@@ -135,7 +181,10 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/me/items-in-progress');
             return response.libraryItems || [];
         } catch (error) {
-            console.error('Error getting items in progress:', error.message);
+            logger.error('Error getting items in progress', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             return [];
         }
     }
@@ -156,26 +205,44 @@ export class AudiobookshelfClient {
                 // Use media progress startedAt if available
                 if (progressData.startedAt) {
                     itemData.started_at = progressData.startedAt;
-                    console.log(`[DEBUG] Raw startedAt for ${itemData.media?.metadata?.title}: ${progressData.startedAt} (${new Date(progressData.startedAt).toISOString()})`);
+                    logger.debug('Raw startedAt for book', { 
+                        title: itemData.media?.metadata?.title,
+                        startedAt: progressData.startedAt,
+                        startedAtISO: new Date(progressData.startedAt).toISOString()
+                    });
                 }
                 // Use media progress finishedAt if available
                 if (progressData.finishedAt) {
                     itemData.finished_at = progressData.finishedAt;
-                    console.log(`[DEBUG] Raw finishedAt for ${itemData.media?.metadata?.title}: ${progressData.finishedAt} (${new Date(progressData.finishedAt).toISOString()})`);
+                    logger.debug('Raw finishedAt for book', { 
+                        title: itemData.media?.metadata?.title,
+                        finishedAt: progressData.finishedAt,
+                        finishedAtISO: new Date(progressData.finishedAt).toISOString()
+                    });
                 }
                 // Use media progress lastUpdate for last listened
                 if (progressData.lastUpdate) {
                     itemData.last_listened_at = progressData.lastUpdate;
-                    console.log(`[DEBUG] Raw lastUpdate for ${itemData.media?.metadata?.title}: ${progressData.lastUpdate} (${new Date(progressData.lastUpdate).toISOString()})`);
+                    logger.debug('Raw lastUpdate for book', { 
+                        title: itemData.media?.metadata?.title,
+                        lastUpdate: progressData.lastUpdate,
+                        lastUpdateISO: new Date(progressData.lastUpdate).toISOString()
+                    });
                 } else {
                     itemData.last_listened_at = null;
-                    console.log(`[DEBUG] No lastUpdate for ${itemData.media?.metadata?.title}`);
+                    logger.debug('No lastUpdate for book', { 
+                        title: itemData.media?.metadata?.title 
+                    });
                 }
             }
 
             return itemData;
         } catch (error) {
-            console.error(`Error getting library item details for ${itemId}:`, error.message);
+            logger.error('Error getting library item details', { 
+                itemId, 
+                error: error.message, 
+                stack: error.stack 
+            });
             return null;
         }
     }
@@ -213,11 +280,17 @@ export class AudiobookshelfClient {
                 page++;
             }
             
-            console.log(`[DEBUG] Fetched ${allSessions.length} total sessions across ${page + 1} pages`);
+            logger.debug('Fetched playback sessions', { 
+                totalSessions: allSessions.length, 
+                pages: page + 1 
+            });
             return { sessions: allSessions };
         } catch (error) {
             // Not an error, just means no session data
-            console.error('Error fetching playback sessions:', error.message);
+            logger.error('Error fetching playback sessions', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             return null;
         }
     }
@@ -229,7 +302,10 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/libraries');
             return response.libraries || [];
         } catch (error) {
-            console.error('Error getting libraries:', error.message);
+            logger.error('Error getting libraries', { 
+                error: error.message, 
+                stack: error.stack 
+            });
             return [];
         }
     }
@@ -237,10 +313,14 @@ export class AudiobookshelfClient {
     async getLibraryItems(libraryId, limit = 50) {
         try {
             const response = await this._makeRequest('GET', `/api/libraries/${libraryId}/items?limit=${limit}`);
-            console.log(`[DEBUG] Library items API response for ${libraryId}:`, JSON.stringify(response, null, 2));
+            logger.debug('Library items API response', { libraryId, response });
             return response.results || response.libraryItems || [];
         } catch (error) {
-            console.error(`Error getting library items for ${libraryId}:`, error.message);
+            logger.error('Error getting library items', { 
+                libraryId, 
+                error: error.message, 
+                stack: error.stack 
+            });
             return [];
         }
     }
@@ -262,9 +342,7 @@ export class AudiobookshelfClient {
                 config.data = data;
             }
 
-            const response = await this.client.request(config);
-            
-            console.debug(`${method} ${endpoint} -> ${response.status}`);
+            const response = await this.axios.request(config);
             
             // Validate response
             if (!response || response.status < 200 || response.status >= 300) {
@@ -284,13 +362,20 @@ export class AudiobookshelfClient {
                     return null;
                 }
                 
-                console.error(`HTTP ${status} error for ${method} ${endpoint}:`, error.response.data);
+                logger.error(`HTTP ${status} error for ${method} ${endpoint}`, { 
+                    status, 
+                    data: error.response.data 
+                });
                 throw new Error(`HTTP ${status}: ${error.response.data?.message || error.message}`);
             } else if (error.request) {
-                console.error(`Network error for ${method} ${endpoint}:`, error.message);
+                logger.error(`Network error for ${method} ${endpoint}`, { 
+                    error: error.message 
+                });
                 throw new Error(`Network error: ${error.message}`);
             } else {
-                console.error(`Request error for ${method} ${endpoint}:`, error.message);
+                logger.error(`Request error for ${method} ${endpoint}`, { 
+                    error: error.message 
+                });
                 throw error;
             }
         }

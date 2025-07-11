@@ -236,7 +236,10 @@ export function extractAuthor(bookData) {
 export function calculateCurrentPage(percentage, totalPages) {
     if (!totalPages || totalPages <= 0) return 0;
     
-    const currentPage = Math.round((percentage / 100) * totalPages);
+    // Clamp percentage to valid range
+    const clampedPercentage = Math.max(0, Math.min(100, percentage));
+    
+    const currentPage = Math.round((clampedPercentage / 100) * totalPages);
     return Math.max(1, Math.min(currentPage, totalPages));
 }
 
@@ -249,7 +252,10 @@ export function calculateCurrentPage(percentage, totalPages) {
 export function calculateCurrentSeconds(percentage, totalSeconds) {
     if (!totalSeconds || totalSeconds <= 0) return 0;
     
-    const currentSeconds = Math.round((percentage / 100) * totalSeconds);
+    // Clamp percentage to valid range
+    const clampedPercentage = Math.max(0, Math.min(100, percentage));
+    
+    const currentSeconds = Math.round((clampedPercentage / 100) * totalSeconds);
     return Math.max(0, Math.min(currentSeconds, totalSeconds));
 }
 

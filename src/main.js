@@ -2,22 +2,104 @@
 
 import { Command } from 'commander';
 import { Config } from './config.js';
+import { ConfigValidator } from './config-validator.js';
 import { SyncManager } from './sync-manager.js';
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import cron from 'node-cron';
+import logger from './logger.js';
 
 const program = new Command();
 
 program
     .name('ShelfBridge')
-    .description('Sync your audiobook listening progress from Audiobookshelf to Hardcover')
+    .description('Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically')
     .version('1.0.0');
 
-// Global options
-program.option('-v, --verbose', 'Enable verbose logging');
 program.option('--dry-run', 'Run without making changes');
+program.option('--skip-validation', 'Skip configuration validation on startup');
+
+/**
+ * Validate configuration on startup
+ */
+async function validateConfigurationOnStartup(skipValidation = false) {
+    if (skipValidation) {
+        logger.debug('Skipping configuration validation');
+        return;
+    }
+
+    try {
+        logger.debug('Validating configuration...');
+        
+        const config = new Config();
+        const validator = new ConfigValidator();
+        
+        // Validate configuration structure
+        const validationResult = await validator.validateConfiguration(config);
+        
+        if (!validationResult.valid) {
+            logger.error('Configuration validation failed');
+            console.error(validator.formatErrors(validationResult));
+            
+            // Show help for fixing configuration
+            console.log('\n' + '='.repeat(50));
+            console.log('Configuration Help:');
+            console.log('='.repeat(50));
+            console.log(validator.generateHelpText());
+            
+            process.exit(1);
+        }
+        
+        logger.debug('Configuration validation passed');
+        
+    } catch (error) {
+        logger.error('Configuration validation error', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        
+        console.error('\n❌ Configuration validation failed:');
+        console.error(`   ${error.message}`);
+        console.error('\nPlease check your config/config.yaml file and try again.');
+        
+        process.exit(1);
+    }
+}
+
+/**
+ * Test API connections for all users
+ */
+async function testAllConnections() {
+    try {
+        logger.info('Testing API connections...');
+        
+        const config = new Config();
+        const validator = new ConfigValidator();
+        const users = config.getUsers();
+        
+        const connectionErrors = await validator.testConnections(users);
+        
+        if (connectionErrors.length > 0) {
+            logger.error('API connection tests failed');
+            console.error('\n❌ API Connection Tests Failed:');
+            connectionErrors.forEach(error => {
+                console.error(`   ✗ ${error}`);
+            });
+            console.error('\nPlease check your API tokens and server URLs.');
+            return false;
+        }
+        
+        logger.info('✅ All API connections successful');
+        return true;
+    } catch (error) {
+        logger.error('Connection test error', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        return false;
+    }
+}
 
 // Sync command
 program
@@ -28,12 +110,15 @@ program
     .option('--force', 'Force sync even if progress unchanged (ignores cache)')
     .action(async (options) => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             const config = new Config();
             const globalConfig = config.getGlobal();
             const users = config.getUsers();
             
             // Override dry_run from config if --dry-run flag is used
-            if (options.dryRun) {
+            if (options.dryRun || program.opts().dryRun) {
                 globalConfig.dry_run = true;
             }
             
@@ -42,6 +127,13 @@ program
                 globalConfig.force_sync = true;
             }
             
+            // Show startup information
+            logger.debug('Starting sync', {
+                users: users.length,
+                dryRun: globalConfig.dry_run,
+                minProgressThreshold: globalConfig.min_progress_threshold
+            });
+            
             if (options.user) {
                 // Sync specific user
                 const user = config.getUser(options.user);
@@ -49,12 +141,11 @@ program
             } else {
                 // Sync all users
                 for (const user of users) {
-                    console.log(`\n=== Syncing user: ${user.id} ===`);
                     await syncUser(user, globalConfig);
                 }
             }
         } catch (error) {
-            console.error('Sync failed:', error.message);
+            logger.error('Sync failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
@@ -63,10 +154,12 @@ program
 program
     .command('test')
     .description('Test API connections')
-    .option('--all-users', 'Test all users')
     .option('-u, --user <userId>', 'Test specific user')
     .action(async (options) => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             const config = new Config();
             const users = config.getUsers();
             
@@ -75,12 +168,44 @@ program
                 await testUser(user);
             } else {
                 for (const user of users) {
-                    console.log(`\n=== Testing user: ${user.id} ===`);
+                    logger.info('Starting test for user', { userId: user.id });
                     await testUser(user);
                 }
             }
         } catch (error) {
-            console.error('Test failed:', error.message);
+            logger.error('Test failed', { error: error.message, stack: error.stack });
+            process.exit(1);
+        }
+    });
+
+// Validate command
+program
+    .command('validate')
+    .description('Validate configuration without running sync')
+    .option('--connections', 'Test API connections')
+    .option('--help-config', 'Show configuration help')
+    .action(async (options) => {
+        try {
+            if (options.helpConfig) {
+                const validator = new ConfigValidator();
+                console.log(validator.generateHelpText());
+                return;
+            }
+            
+            // Always validate configuration for this command
+            await validateConfigurationOnStartup(false);
+            
+            if (options.connections) {
+                const success = await testAllConnections();
+                if (!success) {
+                    process.exit(1);
+                }
+            }
+            
+            console.log('✅ Configuration validation completed successfully');
+            
+        } catch (error) {
+            logger.error('Validation failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
@@ -231,13 +356,16 @@ program
 // Config command
 program
     .command('config')
-    .description('Show configuration status')
-    .action(() => {
+    .description('Show configuration')
+    .action(async () => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             const config = new Config();
             showConfig(config);
         } catch (error) {
-            console.error('Config check failed:', error.message);
+            logger.error('Config check failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
@@ -252,11 +380,13 @@ program
     .option('--export <filename>', 'Export cache to JSON file')
     .action(async (options) => {
         try {
+            // Skip validation for cache operations (they don't need API access)
+            
             const cache = new BookCache();
             
             if (options.clear) {
                 cache.clearCache();
-                console.log('Cache cleared successfully');
+                logger.info('Cache cleared successfully');
             } else if (options.stats) {
                 const stats = cache.getCacheStats();
                 console.log('=== Cache Statistics ===');
@@ -297,7 +427,7 @@ program
             
             cache.close();
         } catch (error) {
-            console.error('Cache operation failed:', error.message);
+            logger.error('Cache operation failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
@@ -308,96 +438,88 @@ program
     .description('Start scheduled sync (runs in background)')
     .action(async () => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             const config = new Config();
             const cronConfig = config.getCronConfig();
             
-            console.log(`Starting scheduled sync with cron: ${cronConfig.schedule} (timezone: ${cronConfig.timezone})`);
+            logger.info('Starting scheduled sync', { 
+                schedule: cronConfig.schedule, 
+                timezone: cronConfig.timezone 
+            });
             
             // Run initial sync
-            console.log('Running initial sync...');
+            logger.info('Running initial sync...');
             await runScheduledSync(config);
             
             // Schedule recurring sync
             cron.schedule(cronConfig.schedule, () => {
-                console.log('\n=== Scheduled sync triggered ===');
+                logger.info('Scheduled sync triggered');
                 runScheduledSync(config);
             }, {
                 timezone: cronConfig.timezone
             });
             
-            console.log('Scheduled sync started. Press Ctrl+C to stop.');
+            logger.info('Scheduled sync started. Press Ctrl+C to stop.');
             
             // Keep the process running
             process.on('SIGINT', () => {
-                console.log('\nStopping scheduled sync...');
+                logger.info('Stopping scheduled sync...');
                 process.exit(0);
             });
             
+            // Keep alive
+            setInterval(() => {
+                // Do nothing, just keep the process alive
+            }, 60000);
+            
         } catch (error) {
-            console.error('Failed to start scheduled sync:', error.message);
+            logger.error('Cron setup failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
 
-// Interactive command
+// Default command (interactive mode)
 program
-    .command('interactive')
-    .description('Run in interactive mode')
+    .command('start', { isDefault: true })
+    .description('Start in interactive mode')
     .action(async () => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             await runInteractiveMode();
         } catch (error) {
-            console.error('Interactive mode failed:', error.message);
+            logger.error('Interactive mode failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
 
+// Debug command
 program
     .command('debug')
-    .description('Debug: Show raw Audiobookshelf data')
-    .action(async () => {
+    .description('Show debug information')
+    .option('-u, --user <userId>', 'Debug specific user')
+    .action(async (options) => {
         try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
             const config = new Config();
             const users = config.getUsers();
             
-            if (users.length === 0) {
-                console.error('No users configured');
-                process.exit(1);
-            }
-            
-            const user = users[0]; // Use first user
-            console.log(`=== Debugging Audiobookshelf data for user: ${user.id} ===`);
-            
-            const audiobookshelf = new AudiobookshelfClient(
-                user.abs_url, 
-                user.abs_token, 
-                3
-            );
-            
-            const books = await audiobookshelf.getReadingProgress();
-            console.log(`\nFound ${books.length} total books in Audiobookshelf`);
-            
-            // Debug: print all book titles and their progress
-            books.forEach((book, index) => {
-                const title = (book.media && book.media.metadata && book.media.metadata.title) || book.title || 'Unknown';
-                const progress = book.progress_percentage || 0;
-                const isFinished = book.is_finished || false;
-                console.log(`${index + 1}. '${title}' - Progress: ${progress}% - Finished: ${isFinished}`);
-                
-                // Show raw progress data for books with progress
-                if (progress > 0) {
-                    console.log(`   Raw progress data for '${title}':`);
-                    console.log(`   - progress_percentage: ${book.progress_percentage}`);
-                    console.log(`   - current_time: ${book.current_time}`);
-                    console.log(`   - is_finished: ${book.is_finished}`);
-                    console.log(`   - started_at: ${book.started_at || 'Not available'}`);
-                    console.log(`   - last_listened_at: ${book.last_listened_at || 'Not available'}`);
-                    console.log(`   - All progress fields:`, Object.keys(book).filter(key => key.includes('progress') || key.includes('time') || key.includes('date') || key.includes('start') || key.includes('finish')));
+            if (options.user) {
+                const user = config.getUser(options.user);
+                await debugUser(user);
+            } else {
+                for (const user of users) {
+                    logger.info('Starting debug for user', { userId: user.id });
+                    await debugUser(user);
                 }
-            });
-            
+            }
         } catch (error) {
-            console.error('Debug failed:', error.message);
+            logger.error('Debug failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });
@@ -413,7 +535,6 @@ async function syncUser(user, globalConfig) {
     }
     
     const startTime = Date.now();
-    console.log(`Starting sync for user: ${user.id}`);
     
     try {
         const syncManager = new SyncManager(user, globalConfig, globalConfig.dry_run);
@@ -421,6 +542,21 @@ async function syncUser(user, globalConfig) {
         
         // Log summary
         const duration = (Date.now() - startTime) / 1000;
+        
+        logger.debug('Sync completed for user', {
+            userId: user.id,
+            summary: {
+                duration: `${duration.toFixed(1)}s`,
+                books_processed: result.books_processed,
+                books_synced: result.books_synced,
+                books_completed: result.books_completed,
+                books_auto_added: result.books_auto_added,
+                books_skipped: result.books_skipped,
+                errors: result.errors.length
+            }
+        });
+
+        // Display detailed console summary
         console.log('='.repeat(50));
         console.log('📚 SYNC SUMMARY');
         console.log('='.repeat(50));
@@ -429,98 +565,176 @@ async function syncUser(user, globalConfig) {
         console.log(`✅ Books synced: ${result.books_synced}`);
         console.log(`🎯 Books completed: ${result.books_completed}`);
         console.log(`➕ Books auto-added: ${result.books_auto_added}`);
-        console.log(`⏭ Books skipped: ${result.books_skipped}`);
-        
-        if (result.errors.length > 0) {
-            console.log(`❌ Errors encountered: ${result.errors.length}`);
-            for (const error of result.errors) {
-                console.error(`  - ${error}`);
-            }
-        } else {
-            console.log('🎉 No errors encountered!');
-        }
-        
+        console.log(`⏭️  Books skipped: ${result.books_skipped}`);
+        console.log(`❌ Errors: ${result.errors.length}`);
         console.log('='.repeat(50));
+
+        // Show detailed book results if any books were processed
+        if (result.book_details && result.book_details.length > 0) {
+            console.log('\n📋 DETAILED BOOK RESULTS');
+            console.log('='.repeat(50));
+            
+            result.book_details.forEach((book, index) => {
+                const statusIcon = {
+                    'synced': '✅',
+                    'completed': '🎯',
+                    'auto_added': '➕',
+                    'skipped': '⏭️',
+                    'error': '❌'
+                }[book.status] || '❓';
+                
+                console.log(`\n${index + 1}. ${statusIcon} ${book.title}`);
+                console.log(`   Status: ${book.status.toUpperCase()}`);
+                
+                if (book.progress.before !== null) {
+                    console.log(`   Progress: ${book.progress.before.toFixed(1)}%`);
+                }
+                
+                if (book.identifiers && Object.keys(book.identifiers).length > 0) {
+                    const identifierStr = Object.entries(book.identifiers)
+                        .filter(([k, v]) => v)
+                        .map(([k, v]) => `${k.toUpperCase()}=${v}`)
+                        .join(', ');
+                    if (identifierStr) {
+                        console.log(`   Identifiers: ${identifierStr}`);
+                    }
+                }
+                
+                if (book.actions && book.actions.length > 0) {
+                    console.log(`   Actions:`);
+                    book.actions.forEach(action => {
+                        console.log(`     • ${action}`);
+                    });
+                }
+                
+                if (book.errors && book.errors.length > 0) {
+                    console.log(`   Errors:`);
+                    book.errors.forEach(error => {
+                        console.log(`     ❌ ${error}`);
+                    });
+                }
+                
+                if (book.timing) {
+                    console.log(`   Processing time: ${book.timing}ms`);
+                }
+            });
+            
+            console.log('='.repeat(50));
+        }
+
+        // Show error summary if there were errors
+        if (result.errors && result.errors.length > 0) {
+            console.log('\n❌ ERROR SUMMARY');
+            console.log('='.repeat(30));
+            result.errors.forEach((error, index) => {
+                console.log(`${index + 1}. ${error}`);
+            });
+            console.log('='.repeat(30));
+        }
+
+        // Show status breakdown
+        if (result.book_details && result.book_details.length > 0) {
+            const statusCounts = {};
+            result.book_details.forEach(book => {
+                statusCounts[book.status] = (statusCounts[book.status] || 0) + 1;
+            });
+            
+            console.log('\n📊 STATUS BREAKDOWN');
+            console.log('='.repeat(30));
+            Object.entries(statusCounts).forEach(([status, count]) => {
+                const statusIcon = {
+                    'synced': '✅',
+                    'completed': '🎯',
+                    'auto_added': '➕',
+                    'skipped': '⏭️',
+                    'error': '❌'
+                }[status] || '❓';
+                console.log(`${statusIcon} ${status.toUpperCase()}: ${count}`);
+            });
+            console.log('='.repeat(30));
+        }
+
+        console.log('\n🏁 Sync completed successfully!');
         
-        return result;
     } catch (error) {
-        console.error(`Sync failed for user ${user.id}:`, error.message);
+        logger.error('Sync failed for user', { 
+            userId: user.id,
+            error: error.message, 
+            stack: error.stack 
+        });
         throw error;
     }
 }
 
 async function testUser(user) {
-    console.log('🔍 Testing API connections...');
+    const userLogger = logger.forUser(user.id);
+    userLogger.info('Testing API connections');
     
     let absStatus = false;
     let hcStatus = false;
     
     try {
-        console.log('📚 Testing Audiobookshelf connection...');
+        userLogger.info('Testing Audiobookshelf connection');
         const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
         absStatus = await absClient.testConnection();
         
         if (absStatus) {
-            console.log('✅ Audiobookshelf connection: Success');
+            userLogger.info('Audiobookshelf connection successful');
         } else {
-            console.error('❌ Audiobookshelf connection: Failed');
+            userLogger.error('Audiobookshelf connection failed');
         }
     } catch (error) {
-        console.error(`❌ Audiobookshelf connection failed: ${error.message}`);
+        userLogger.error('Audiobookshelf connection failed', { 
+            error: error.message, 
+            stack: error.stack 
+        });
         absStatus = false;
     }
     
     try {
-        console.log('📖 Testing Hardcover connection...');
+        userLogger.info('Testing Hardcover connection');
         const hcClient = new HardcoverClient(user.hardcover_token);
         hcStatus = await hcClient.testConnection();
         
         if (hcStatus) {
-            console.log('✅ Hardcover connection: Success');
+            userLogger.info('Hardcover connection successful');
         } else {
-            console.error('❌ Hardcover connection: Failed');
+            userLogger.error('Hardcover connection failed');
         }
     } catch (error) {
-        console.error(`❌ Hardcover connection failed: ${error.message}`);
+        userLogger.error('Hardcover connection failed', { 
+            error: error.message, 
+            stack: error.stack 
+        });
         hcStatus = false;
     }
     
     // Summary
-    console.log('='.repeat(40));
-    if (absStatus && hcStatus) {
-        console.log('🎉 All connections successful!');
-    } else {
-        console.error('❌ Some connections failed!');
-    }
-    console.log('='.repeat(40));
+    const allSuccessful = absStatus && hcStatus;
+    userLogger.info('Connection test completed', { 
+        audiobookshelf: absStatus, 
+        hardcover: hcStatus, 
+        allSuccessful 
+    });
     
-    return absStatus && hcStatus;
+    return allSuccessful;
 }
 
 function showConfig(config) {
-    console.log('=== Configuration Status ===');
+    logger.info('Showing configuration status');
     
     // Show global config
     const globalConfig = config.getGlobal();
-    console.log('Global settings:');
-    for (const [key, value] of Object.entries(globalConfig)) {
-        console.log(`  ${key}: ${value}`);
-    }
+    logger.info('Global configuration loaded', { 
+        settings: Object.keys(globalConfig),
+        hasAllRequired: true 
+    });
     
     // Show users
     const users = config.getUsers();
-    console.log(`\nConfigured users (${users.length}):`);
-    for (const user of users) {
-        const id = user.id || '[missing id]';
-        const absUrl = user.abs_url || '[missing abs_url]';
-        const absToken = user.abs_token;
-        const hardcoverToken = user.hardcover_token;
-        
-        console.log(`- id: ${id}`);
-        console.log(`    abs_url: ${absUrl}`);
-        console.log(`    abs_token: ${absToken ? 'set' : 'MISSING'}`);
-        console.log(`    hardcover_token: ${hardcoverToken ? 'set' : 'MISSING'}`);
-    }
+    logger.info('User configuration loaded', { 
+        userCount: users.length 
+    });
     
     // Check for missing user fields
     const missing = [];
@@ -533,14 +747,15 @@ function showConfig(config) {
     }
     
     if (missing.length > 0) {
-        console.log('\nSome users have missing fields:');
-        for (const m of missing) {
-            console.log(`  ${m}`);
-        }
-        console.log('\nPlease edit config/config.yaml to fix missing values.');
+        logger.warn('Configuration validation failed', { 
+            missingFields: missing,
+            userCount: users.length 
+        });
         return false;
     } else {
-        console.log('\n✓ All users and global settings are configured correctly!');
+        logger.info('Configuration validation passed', { 
+            userCount: users.length 
+        });
         return true;
     }
 }
@@ -550,12 +765,19 @@ async function runScheduledSync(config) {
         const globalConfig = config.getGlobal();
         const users = config.getUsers();
         
+        logger.info('Starting scheduled sync', { userCount: users.length });
+        
         for (const user of users) {
-            console.log(`\n=== Scheduled sync for user: ${user.id} ===`);
+            logger.info('Starting scheduled sync for user', { userId: user.id });
             await syncUser(user, globalConfig);
         }
+        
+        logger.info('Scheduled sync completed', { userCount: users.length });
     } catch (error) {
-        console.error('Scheduled sync failed:', error.message);
+        logger.error('Scheduled sync failed', { 
+            error: error.message, 
+            stack: error.stack 
+        });
     }
 }
 
@@ -593,12 +815,12 @@ if (!process.argv.slice(2).length) {
 
 // Graceful shutdown handler
 process.on('SIGINT', () => {
-    console.log('\nReceived SIGINT, shutting down gracefully...');
+    logger.info('Received SIGINT, shutting down gracefully');
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-    console.log('\nReceived SIGTERM, shutting down gracefully...');
+    logger.info('Received SIGTERM, shutting down gracefully');
     process.exit(0);
 });
 

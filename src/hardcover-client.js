@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { RateLimiter } from './utils.js';
+import logger from './logger.js';
 
 const RATE_LIMIT_PER_MINUTE = 60;
 const MAX_PARALLEL_WORKERS = 5;
@@ -7,20 +8,20 @@ const MAX_PARALLEL_WORKERS = 5;
 export class HardcoverClient {
     constructor(token) {
         this.token = token;
-        this.apiUrl = 'https://api.hardcover.app/v1/graphql';
+        this.baseUrl = 'https://api.hardcover.app/v1/graphql';
         this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
         
-        // Setup axios instance with authentication
+        // Create axios instance with default config
         this.client = axios.create({
-            baseURL: this.apiUrl,
+            baseURL: this.baseUrl,
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${this.token}`,
                 'Content-Type': 'application/json'
             },
             timeout: 30000 // 30 second timeout
         });
         
-        console.log('HardcoverClient initialized');
+        logger.debug('HardcoverClient initialized');
     }
 
     async testConnection() {
@@ -37,7 +38,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(query);
             return result && result.me;
         } catch (error) {
-            console.error('Connection test failed:', error.message);
+            logger.error('Connection test failed:', error.message);
             return false;
         }
     }
@@ -70,13 +71,13 @@ export class HardcoverClient {
             const result = await this._executeQuery(query);
             return result;
         } catch (error) {
-            console.error('Error getting schema:', error.message);
+            logger.error('Error getting schema:', error.message);
             return null;
         }
     }
 
     async getUserBooks() {
-        console.log('Fetching user\'s book library from Hardcover...');
+        logger.debug('Fetching user\'s book library from Hardcover...');
 
         const query = `
             query getUserBooks($offset: Int = 0, $limit: Int = 100) {
@@ -122,19 +123,19 @@ export class HardcoverClient {
                 const result = await this._executeQuery(query, variables);
 
                 if (!result) {
-                    console.error('No result from GraphQL query');
+                    logger.error('No result from GraphQL query');
                     break;
                 }
 
-                console.debug(`GraphQL result structure: ${typeof result}`);
+                logger.debug(`GraphQL result structure: ${typeof result}`);
 
                 if (!result.me) {
-                    console.error(`'me' key not found in result. Available keys: ${Object.keys(result)}`);
+                    logger.error(`'me' key not found in result. Available keys: ${Object.keys(result)}`);
                     break;
                 }
 
                 const meData = result.me;
-                console.debug(`Me data type: ${typeof meData}`);
+                logger.debug(`Me data type: ${typeof meData}`);
 
                 let books = [];
                 
@@ -143,17 +144,17 @@ export class HardcoverClient {
                     // If meData is a list, extract user_books from the first item
                     if (meData.length > 0 && meData[0].user_books) {
                         books = meData[0].user_books;
-                        console.debug(`Found user_books in me list with ${books.length} items`);
+                        logger.debug(`Found user_books in me list with ${books.length} items`);
                     } else {
-                        console.error(`Expected user_books in me list but not found. Structure: ${meData.length > 0 ? JSON.stringify(meData[0]) : 'Empty list'}`);
+                        logger.error(`Expected user_books in me list but not found. Structure: ${meData.length > 0 ? JSON.stringify(meData[0]) : 'Empty list'}`);
                         books = [];
                     }
                 } else if (typeof meData === 'object' && meData.user_books) {
                     // Standard format: me.user_books
                     books = meData.user_books;
-                    console.debug(`Found user_books in me data with ${books.length} items`);
+                    logger.debug(`Found user_books in me data with ${books.length} items`);
                 } else {
-                    console.error(`Unexpected me data structure. Type: ${typeof meData}, Keys: ${typeof meData === 'object' ? Object.keys(meData) : 'Not an object'}`);
+                    logger.error(`Unexpected me data structure. Type: ${typeof meData}, Keys: ${typeof meData === 'object' ? Object.keys(meData) : 'Not an object'}`);
                     break;
                 }
 
@@ -169,14 +170,14 @@ export class HardcoverClient {
                 }
 
                 offset += limit;
-                console.debug(`Fetched ${allBooks.length} books so far...`);
+                logger.debug(`Fetched ${allBooks.length} books so far...`);
             }
 
-            console.log(`Retrieved ${allBooks.length} books from Hardcover library`);
+            logger.debug(`Retrieved ${allBooks.length} books from Hardcover library`);
             return allBooks;
 
         } catch (error) {
-            console.error('Error fetching user books:', error.message);
+            logger.error('Error fetching user books:', error.message);
             throw error;
         }
     }
@@ -189,7 +190,7 @@ export class HardcoverClient {
         if (progressInfo && progressInfo.has_progress && progressInfo.latest_read && 
             progressInfo.latest_read.finished_at) {
             // Book was previously completed - create new reading session
-            console.log('Book was previously completed, creating new reading session');
+            logger.debug('Book was previously completed, creating new reading session');
             const startDate = startedAt ? startedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
             return await this.insertUserBookRead(userBookId, currentProgress, editionId, startDate, useSeconds);
         }
@@ -245,12 +246,12 @@ export class HardcoverClient {
                 const result = await this._executeQuery(mutation, variables);
                 if (result && result.update_user_book_read && result.update_user_book_read.user_book_read) {
                     const updatedRecord = result.update_user_book_read.user_book_read;
-                    console.log(`Updated progress - preserved original start date: ${updatedRecord.started_at}`);
+                    logger.debug(`Updated progress - preserved original start date: ${updatedRecord.started_at}`);
                     return updatedRecord;
                 }
                 return false;
             } catch (error) {
-                console.error('Error updating reading progress:', error.message);
+                logger.error('Error updating reading progress:', error.message);
                 return false;
             }
         } else {
@@ -267,10 +268,10 @@ export class HardcoverClient {
         
         if (!progressInfo || !progressInfo.latest_read || !progressInfo.latest_read.id) {
             // No existing progress record, create one with 100% progress
-            console.log('No existing progress record found, creating new one for completion');
+            logger.debug('No existing progress record found, creating new one for completion');
             const newRecord = await this.insertUserBookRead(userBookId, totalValue, editionId, startedAt, useSeconds);
             if (!newRecord) {
-                console.error('Failed to create new progress record for completion');
+                logger.error('Failed to create new progress record for completion');
                 return false;
             }
             readId = newRecord.id;
@@ -340,9 +341,17 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(mutation, variables);
-            return result && result.update_user_book_read && result.update_user_book_read.user_book_read;
+            if (result && result.update_user_book_read && result.update_user_book_read.user_book_read) {
+                // Also update the book status to "Read" (status_id = 3)
+                const statusUpdated = await this.updateBookStatus(userBookId, 3);
+                if (!statusUpdated) {
+                    logger.warn('Progress updated but failed to change book status to Read');
+                }
+                return result.update_user_book_read.user_book_read;
+            }
+            return false;
         } catch (error) {
-            console.error('Error marking book completed:', error.message);
+            logger.error('Error marking book completed:', error.message);
             return false;
         }
     }
@@ -351,10 +360,16 @@ export class HardcoverClient {
         const mutation = `
             mutation updateBookStatus($userBookId: Int!, $statusId: Int!) {
                 update_user_book(
-                    where: { id: { _eq: $userBookId } }
-                    _set: { status_id: $statusId }
+                    id: $userBookId,
+                    object: {
+                        status_id: $statusId
+                    }
                 ) {
-                    affected_rows
+                    error
+                    user_book {
+                        id
+                        status_id
+                    }
                 }
             }
         `;
@@ -366,9 +381,9 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(mutation, variables);
-            return result && result.update_user_book && result.update_user_book.affected_rows > 0;
+            return result && result.update_user_book && result.update_user_book.user_book;
         } catch (error) {
-            console.error('Error updating book status:', error.message);
+            logger.error('Error updating book status:', error.message);
             return false;
         }
     }
@@ -403,7 +418,7 @@ export class HardcoverClient {
             }
             return { latest_read: null, user_book: null, has_progress: false };
         } catch (error) {
-            console.error('Error getting book current progress:', error.message);
+            logger.error('Error getting book current progress:', error.message);
             return { latest_read: null, user_book: null, has_progress: false };
         }
     }
@@ -459,12 +474,12 @@ export class HardcoverClient {
             const result = await this._executeQuery(mutation, variables);
             if (result && result.insert_user_book_read && result.insert_user_book_read.user_book_read) {
                 const newRecord = result.insert_user_book_read.user_book_read;
-                console.log(`Created new progress record with start date: ${newRecord.started_at}`);
+                logger.debug(`Created new progress record with start date: ${newRecord.started_at}`);
                 return newRecord;
             }
             return null;
         } catch (error) {
-            console.error('Error inserting user book read:', error.message);
+            logger.error('Error inserting user book read:', error.message);
             return null;
         }
     }
@@ -500,7 +515,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(query, variables);
             return result && result.book_edition ? result.book_edition : [];
         } catch (error) {
-            console.error('Error searching books by ISBN:', error.message);
+            logger.error('Error searching books by ISBN:', error.message);
             return [];
         }
     }
@@ -537,7 +552,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(query, variables);
             return result && result.book_edition ? result.book_edition : [];
         } catch (error) {
-            console.error('Error searching books by ASIN:', error.message);
+            logger.error('Error searching books by ASIN:', error.message);
             return [];
         }
     }
@@ -568,7 +583,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(mutation, variables);
             return result && result.insert_user_book_one ? result.insert_user_book_one : null;
         } catch (error) {
-            console.error('Error adding book to library:', error.message);
+            logger.error('Error adding book to library:', error.message);
             return null;
         }
     }
@@ -611,7 +626,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(query);
             return result;
         } catch (error) {
-            console.error('Error getting detailed schema:', error.message);
+            logger.error('Error getting detailed schema:', error.message);
             return null;
         }
     }
@@ -621,9 +636,9 @@ export class HardcoverClient {
 
         // Debug logging for mutations
         if (query.trim().startsWith('mutation')) {
-            console.log('🔍 [DEBUG] Hardcover Mutation:');
-            console.log('Query:', query);
-            console.log('Variables:', JSON.stringify(variables, null, 2));
+            logger.debug('🔍 [DEBUG] Hardcover Mutation:');
+            logger.debug('Query:', query);
+            logger.debug('Variables:', JSON.stringify(variables, null, 2));
         }
 
         try {
@@ -643,10 +658,10 @@ export class HardcoverClient {
                 throw new Error(`GraphQL API request failed with status ${response.status}: ${response.statusText}`);
             }
             
-            console.debug(`GraphQL query executed successfully`);
+            logger.debug(`GraphQL query executed successfully`);
             
             if (response.data.errors) {
-                console.error('GraphQL errors:', response.data.errors);
+                logger.error('GraphQL errors:', response.data.errors);
                 throw new Error(`GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`);
             }
             
@@ -656,20 +671,20 @@ export class HardcoverClient {
             
             // Debug logging for mutation responses
             if (query.trim().startsWith('mutation')) {
-                console.log('🔍 [DEBUG] Hardcover Response:');
-                console.log(JSON.stringify(response.data, null, 2));
+                logger.debug('🔍 [DEBUG] Hardcover Response:');
+                logger.debug(JSON.stringify(response.data, null, 2));
             }
             
             return response.data.data;
         } catch (error) {
             if (error.response) {
-                console.error(`HTTP ${error.response.status} error:`, error.response.data);
+                logger.error(`HTTP ${error.response.status} error:`, error.response.data);
                 throw new Error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
             } else if (error.request) {
-                console.error('Network error:', error.message);
+                logger.error('Network error:', error.message);
                 throw new Error(`Network error: ${error.message}`);
             } else {
-                console.error('Request error:', error.message);
+                logger.error('Request error:', error.message);
                 throw error;
             }
         }
@@ -690,7 +705,7 @@ export class HardcoverClient {
             const result = await this._executeQuery(query);
             return result && result.me ? result.me : null;
         } catch (error) {
-            console.error('Error getting current user:', error.message);
+            logger.error('Error getting current user:', error.message);
             return null;
         }
     }

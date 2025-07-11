@@ -16,7 +16,7 @@ services:
       - ./data:/app/data
     command: ["npm", "start"]
     healthcheck:
-      test: ["CMD", "node", "src/main.js", "--version"]
+      test: ["CMD", "node", "src/main.js", "config", "--help"]
       interval: 30s
       timeout: 10s
       retries: 3
