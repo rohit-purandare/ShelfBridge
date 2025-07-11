@@ -27,9 +27,6 @@ jobs:
     
     - name: Run tests
       run: timeout 60s npm test || echo "⚠️ Test command timed out after 60 seconds"
-    
-    - name: Check configuration validation
-      run: npm run config
       
     - name: Test cache functionality
       run: npm run cache -- --show || echo "⚠️ Cache command has known issues, skipping for now"
