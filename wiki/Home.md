@@ -50,7 +50,8 @@ New to ShelfBridge? Start here:
 - **[Hardcover API](technical/Hardcover-API.md)** - GraphQL integration
 - **[Book Caching System](technical/Book-Caching-System.md)** - SQLite cache implementation
 
-### Docker & Deployment
+### CI/CD & Automation
+- **[GitHub Workflows](technical/GitHub-Workflows.md)** - Automated testing, security, and releases
 - **[Docker Guide](technical/Docker-Guide.md)** - Docker images and deployment
 - **[Environment Variables](technical/Environment-Variables.md)** - Container configuration
 - **[Health Checks](technical/Health-Checks.md)** - Monitoring container health
