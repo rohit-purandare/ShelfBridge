@@ -21,6 +21,23 @@ These options can be used with any command:
 | `--skip-validation` | Skip configuration validation on startup | `false` |
 | `--help` | Show help for a command | - |
 
+### Command Behavior
+
+**Process Exit:**
+- All commands exit automatically after completion
+- Return control to the terminal/shell
+- Exit with code 0 on success, non-zero on error
+
+**Resource Cleanup:**
+- Database connections are properly closed
+- Temporary resources are cleaned up
+- Safe to run multiple times
+
+**Interruption:**
+- Commands can be interrupted with Ctrl+C
+- Cleanup procedures attempt to run before exit
+- **Risk of data inconsistency**: Interruption during API calls or cache updates may cause the local cache to become out of sync with Hardcover
+
 ## 🔄 Sync Commands
 
 ### `sync` - Synchronize Reading Progress

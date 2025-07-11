@@ -144,6 +144,9 @@ program
                     await syncUser(user, globalConfig);
                 }
             }
+            
+            // Exit successfully after sync completion
+            process.exit(0);
         } catch (error) {
             logger.error('Sync failed', { error: error.message, stack: error.stack });
             process.exit(1);
@@ -172,6 +175,9 @@ program
                     await testUser(user);
                 }
             }
+            
+            // Exit successfully after test completion
+            process.exit(0);
         } catch (error) {
             logger.error('Test failed', { error: error.message, stack: error.stack });
             process.exit(1);
@@ -204,6 +210,8 @@ program
             
             console.log('✅ Configuration validation completed successfully');
             
+            // Exit successfully after validation completion
+            process.exit(0);
         } catch (error) {
             logger.error('Validation failed', { error: error.message, stack: error.stack });
             process.exit(1);
@@ -241,6 +249,9 @@ program
             } else {
                 console.log('No schema information available');
             }
+            
+            // Exit successfully after schema check completion
+            process.exit(0);
         } catch (error) {
             console.error('Schema check failed:', error.message);
             process.exit(1);
@@ -309,6 +320,9 @@ program
             } else {
                 console.log('No detailed schema information available');
             }
+            
+            // Exit successfully after detailed schema check completion
+            process.exit(0);
         } catch (error) {
             console.error('Detailed schema check failed:', error.message);
             process.exit(1);
@@ -347,6 +361,9 @@ program
             } else {
                 console.log('No detailed schema information available');
             }
+            
+            // Exit successfully after schema inputs check completion
+            process.exit(0);
         } catch (error) {
             console.error('Failed to print input types:', error.message);
             process.exit(1);
@@ -364,6 +381,9 @@ program
             
             const config = new Config();
             showConfig(config);
+            
+            // Exit successfully after config check completion
+            process.exit(0);
         } catch (error) {
             logger.error('Config check failed', { error: error.message, stack: error.stack });
             process.exit(1);
@@ -498,6 +518,9 @@ program
             await validateConfigurationOnStartup(program.opts().skipValidation);
             
             await runInteractiveMode();
+            
+            // Exit successfully after interactive mode completion
+            process.exit(0);
         } catch (error) {
             logger.error('Interactive mode failed', { error: error.message, stack: error.stack });
             process.exit(1);
@@ -526,6 +549,9 @@ program
                     await debugUser(user);
                 }
             }
+            
+            // Exit successfully after debug completion
+            process.exit(0);
         } catch (error) {
             logger.error('Debug failed', { error: error.message, stack: error.stack });
             process.exit(1);
