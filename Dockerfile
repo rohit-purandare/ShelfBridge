@@ -14,15 +14,11 @@ RUN npm ci --omit=dev --ignore-scripts
 # Copy source code
 COPY . .
 
-# Create non-root user
-RUN addgroup -g 1000 -S nodejs && \
-    adduser -S nodejs -u 1000
-
-# Change ownership of app directory
-RUN chown -R nodejs:nodejs /app
+# Change ownership of app directory to node user (already exists in node:18-alpine)
+RUN chown -R node:node /app
 
 # Switch to non-root user
-USER nodejs
+USER node
 
 # Create data directory
 RUN mkdir -p data
