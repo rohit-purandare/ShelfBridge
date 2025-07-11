@@ -123,7 +123,7 @@ export class SyncManager {
                     let cachedInfo = null;
                     
                     if (cacheIdentifier) {
-                        cachedInfo = this.cache.getCachedBookInfo(this.userId, cacheIdentifier, bookDetail.title, cacheIdentifierType);
+                        cachedInfo = await this.cache.getCachedBookInfo(this.userId, cacheIdentifier, bookDetail.title, cacheIdentifierType);
                         if (cachedInfo.exists) {
                             bookDetail.actions.push(`Cache data:`);
                             
@@ -179,7 +179,7 @@ export class SyncManager {
                     const identifierType = identifiers.asin ? 'asin' : 'isbn';
                     
                     if (identifier && !this.globalConfig.force_sync) {
-                        const hasChanged = this.cache.hasProgressChanged(
+                        const hasChanged = await this.cache.hasProgressChanged(
                             this.userId, 
                             identifier, 
                             bookDetail.title, 
@@ -196,7 +196,7 @@ export class SyncManager {
                             result.books_skipped++;
                             continue;
                         } else {
-                            const cachedProgress = this.cache.getLastProgress(this.userId, identifier, bookDetail.title, identifierType);
+                            const cachedProgress = await this.cache.getLastProgress(this.userId, identifier, bookDetail.title, identifierType);
                             bookDetail.actions.push(`Progress changed: ${cachedProgress}% → ${currentProgress}%`);
                             bookDetail.progress.changed = true;
                         }
@@ -742,7 +742,7 @@ export class SyncManager {
 
         // Check if progress has changed (unless force sync is enabled)
         const identifier = identifierType === 'asin' ? identifiers.asin : identifiers.isbn;
-        if (!this.globalConfig.force_sync && !(this.cache.hasProgressChanged(this.userId, identifier, title, progressPercent, identifierType))) {
+        if (!this.globalConfig.force_sync && !(await this.cache.hasProgressChanged(this.userId, identifier, title, progressPercent, identifierType))) {
             logger.info(`Skipping ${title}: Progress unchanged`);
             return { status: 'skipped', reason: 'Progress unchanged', title };
         }
@@ -1150,7 +1150,7 @@ export class SyncManager {
             const identifierType = identifier.asin ? 'asin' : 'isbn';
             const identifierValue = identifier.asin || identifier.isbn;
             
-            previousProgress = this.cache.getLastProgress(this.userId, identifierValue, title, identifierType);
+            previousProgress = await this.cache.getLastProgress(this.userId, identifierValue, title, identifierType);
 
             logger.debug(`Previous progress for ${title}`, {
                 previousProgress: previousProgress,
@@ -1271,20 +1271,20 @@ export class SyncManager {
         }
     }
 
-    getCacheStats() {
-        return this.cache.getCacheStats();
+    async getCacheStats() {
+        return await this.cache.getCacheStats();
     }
 
-    clearCache() {
-        this.cache.clearCache();
+    async clearCache() {
+        await this.cache.clearCache();
     }
 
-    exportToJson(filename) {
-        this.cache.exportToJson(filename);
+    async exportToJson(filename) {
+        await this.cache.exportToJson(filename);
     }
 
-    getBooksByAuthor(authorName) {
-        return this.cache.getBooksByAuthor(this.userId, authorName);
+    async getBooksByAuthor(authorName) {
+        return await this.cache.getBooksByAuthor(this.userId, authorName);
     }
 
     getTimingData() {
@@ -1296,6 +1296,31 @@ export class SyncManager {
         for (const [key, value] of Object.entries(this.timingData)) {
             logger.info(`${key}: ${value}ms`);
         }
+    }
+
+    /**
+     * Clean up resources (database connections, etc.)
+     * Should be called when the SyncManager is no longer needed
+     */
+    cleanup() {
+        try {
+            if (this.cache) {
+                this.cache.close();
+                logger.debug('SyncManager: Database connection closed');
+            }
+        } catch (error) {
+            logger.error('Error during SyncManager cleanup', {
+                error: error.message,
+                stack: error.stack
+            });
+        }
+    }
+
+    /**
+     * Destructor-like method for cleanup
+     */
+    destroy() {
+        this.cleanup();
     }
 
     /**

@@ -8,15 +8,44 @@ export class BookCache {
         this.cacheFile = cacheFile;
         this.db = null;
         this.transactionCallbacks = new Map(); // For rollback support
+        this._isInitializing = false;
+        this._initializationPromise = null;
     }
 
-    init() {
-        if (!this.db) {
-            this._initDatabase();
+    async init() {
+        // If already initialized, return immediately
+        if (this.db) {
+            return;
         }
+
+        // If currently initializing, wait for that to complete
+        if (this._isInitializing && this._initializationPromise) {
+            await this._initializationPromise;
+            return;
+        }
+
+        // Start initialization
+        this._isInitializing = true;
+        this._initializationPromise = this._initDatabase()
+            .then(() => {
+                this._isInitializing = false;
+                this._initializationPromise = null;
+            })
+            .catch((error) => {
+                this._isInitializing = false;
+                this._initializationPromise = null;
+                throw error;
+            });
+
+        await this._initializationPromise;
     }
 
-    _initDatabase() {
+    async _initDatabase() {
+        // Double-check pattern: verify db is still null after acquiring lock
+        if (this.db) {
+            return;
+        }
+
         try {
             // Ensure cache directory exists
             const cacheDir = path.dirname(this.cacheFile);
@@ -47,7 +76,6 @@ export class BookCache {
                     last_progress REAL DEFAULT 0.0,
                     progress_percent REAL DEFAULT 0.0,
                     last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_listened_at TIMESTAMP,
                     started_at TIMESTAMP,
@@ -56,38 +84,8 @@ export class BookCache {
                 )
             `);
 
-            // Add user_id column if missing (for migration)
-            try {
-                this.db.exec('ALTER TABLE books ADD COLUMN user_id TEXT NOT NULL DEFAULT ""');
-            } catch (err) {
-                // Column already exists, ignore error
-            }
-
-            // Add timestamp columns if missing (for migration)
-            try {
-                this.db.exec('ALTER TABLE books ADD COLUMN last_listened_at TIMESTAMP');
-            } catch (err) {
-                // Column already exists, ignore error
-            }
-
-            try {
-                this.db.exec('ALTER TABLE books ADD COLUMN started_at TIMESTAMP');
-            } catch (err) {
-                // Column already exists, ignore error
-            }
-
-            try {
-                this.db.exec('ALTER TABLE books ADD COLUMN finished_at TIMESTAMP');
-            } catch (err) {
-                // Column already exists, ignore error
-            }
-
-            // Add identifier_type column if missing (for migration)
-            try {
-                this.db.exec('ALTER TABLE books ADD COLUMN identifier_type TEXT NOT NULL DEFAULT "isbn"');
-            } catch (err) {
-                // Column already exists, ignore error
-            }
+            // Perform migration operations for existing databases
+            this._performMigrations();
 
             // Create indexes for better performance
             try {
@@ -100,9 +98,162 @@ export class BookCache {
 
             logger.debug('Database initialized successfully');
         } catch (err) {
+            // Clean up on failure
+            if (this.db) {
+                try {
+                    this.db.close();
+                } catch (closeErr) {
+                    logger.debug(`Error closing database after init failure: ${closeErr.message}`);
+                }
+                this.db = null;
+            }
+            
             logger.error(`Database initialization failed: ${err.message}`);
             throw err;
         }
+    }
+
+    /**
+     * Perform database migrations for existing databases
+     */
+    _performMigrations() {
+        logger.debug('Performing database migrations...');
+
+        // Migration 1: Add user_id column if missing
+        try {
+            // Check if column exists by trying to select from it
+            this.db.prepare('SELECT user_id FROM books LIMIT 1').get();
+            logger.debug('Migration 1: user_id column already exists');
+        } catch (err) {
+            if (err.message.includes('no such column: user_id')) {
+                try {
+                    this.db.exec('ALTER TABLE books ADD COLUMN user_id TEXT DEFAULT ""');
+                    logger.debug('Migration 1: Added user_id column');
+                } catch (alterErr) {
+                    logger.error(`Migration 1 failed: ${alterErr.message}`);
+                    throw alterErr;
+                }
+            } else {
+                logger.error(`Migration 1 check failed: ${err.message}`);
+                throw err;
+            }
+        }
+
+        // Migration 2: Add timestamp columns if missing
+        const timestampColumns = ['last_listened_at', 'started_at', 'finished_at'];
+        for (const column of timestampColumns) {
+            try {
+                this.db.prepare(`SELECT ${column} FROM books LIMIT 1`).get();
+                logger.debug(`Migration 2: ${column} column already exists`);
+            } catch (err) {
+                if (err.message.includes(`no such column: ${column}`)) {
+                    try {
+                        this.db.exec(`ALTER TABLE books ADD COLUMN ${column} TIMESTAMP`);
+                        logger.debug(`Migration 2: Added ${column} column`);
+                    } catch (alterErr) {
+                        logger.error(`Migration 2 failed for ${column}: ${alterErr.message}`);
+                        throw alterErr;
+                    }
+                } else {
+                    logger.error(`Migration 2 check failed for ${column}: ${err.message}`);
+                    throw err;
+                }
+            }
+        }
+
+        // Migration 3: Add identifier_type column if missing
+        try {
+            this.db.prepare('SELECT identifier_type FROM books LIMIT 1').get();
+            logger.debug('Migration 3: identifier_type column already exists');
+        } catch (err) {
+            if (err.message.includes('no such column: identifier_type')) {
+                try {
+                    this.db.exec('ALTER TABLE books ADD COLUMN identifier_type TEXT DEFAULT "isbn"');
+                    logger.debug('Migration 3: Added identifier_type column');
+                    
+                    // Update existing records to have identifier_type set
+                    const updateStmt = this.db.prepare('UPDATE books SET identifier_type = "isbn" WHERE identifier_type IS NULL OR identifier_type = ""');
+                    const result = updateStmt.run();
+                    logger.debug(`Migration 3: Updated ${result.changes} existing records with default identifier_type`);
+                } catch (alterErr) {
+                    logger.error(`Migration 3 failed: ${alterErr.message}`);
+                    throw alterErr;
+                }
+            } else {
+                logger.error(`Migration 3 check failed: ${err.message}`);
+                throw err;
+            }
+        }
+
+        // Migration 4: Drop redundant last_synced column if it exists
+        try {
+            this.db.prepare('SELECT last_synced FROM books LIMIT 1').get();
+            // Column exists, need to drop it
+            logger.debug('Migration 4: Removing redundant last_synced column');
+            
+            // SQLite doesn't support DROP COLUMN, so we need to recreate the table
+            const transaction = this.db.transaction(() => {
+                // Create temporary table without last_synced column
+                this.db.exec(`
+                    CREATE TABLE books_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        identifier TEXT NOT NULL,
+                        identifier_type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        edition_id INTEGER,
+                        author TEXT,
+                        last_progress REAL DEFAULT 0.0,
+                        progress_percent REAL DEFAULT 0.0,
+                        last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_listened_at TIMESTAMP,
+                        started_at TIMESTAMP,
+                        finished_at TIMESTAMP,
+                        UNIQUE(user_id, identifier, title)
+                    )
+                `);
+                
+                // Copy data from old table to new table (excluding last_synced)
+                this.db.exec(`
+                    INSERT INTO books_temp (
+                        id, user_id, identifier, identifier_type, title, edition_id, author,
+                        last_progress, progress_percent, last_sync, updated_at,
+                        last_listened_at, started_at, finished_at
+                    )
+                    SELECT 
+                        id, user_id, identifier, identifier_type, title, edition_id, author,
+                        last_progress, progress_percent, last_sync, updated_at,
+                        last_listened_at, started_at, finished_at
+                    FROM books
+                `);
+                
+                // Drop old table
+                this.db.exec('DROP TABLE books');
+                
+                // Rename temp table to books
+                this.db.exec('ALTER TABLE books_temp RENAME TO books');
+                
+                // Recreate indexes for the new table
+                this.db.exec('CREATE INDEX IF NOT EXISTS idx_books_user_identifier ON books(user_id, identifier, identifier_type)');
+                this.db.exec('CREATE INDEX IF NOT EXISTS idx_books_user_title ON books(user_id, title)');
+                this.db.exec('CREATE INDEX IF NOT EXISTS idx_books_updated_at ON books(updated_at)');
+                
+                logger.debug('Migration 4: Successfully removed last_synced column and recreated indexes');
+            });
+            
+            transaction();
+            
+        } catch (err) {
+            if (err.message.includes('no such column: last_synced')) {
+                logger.debug('Migration 4: last_synced column does not exist (already clean)');
+            } else {
+                logger.error(`Migration 4 failed: ${err.message}`);
+                throw err;
+            }
+        }
+
+        logger.debug('Database migrations completed successfully');
     }
 
     /**
@@ -112,7 +263,7 @@ export class BookCache {
      * @returns {Promise<any>} - Result of the transaction
      */
     async executeTransaction(operations, options = {}) {
-        this.init();
+        await this.init();
         
         const { 
             rollbackCallbacks = [], 
@@ -126,6 +277,16 @@ export class BookCache {
         // Store rollback callbacks for this transaction
         if (rollbackCallbacks.length > 0) {
             this.transactionCallbacks.set(transactionId, rollbackCallbacks);
+        }
+
+        // Set database-level timeout for the connection
+        let originalBusyTimeout;
+        try {
+            // Get current busy timeout and set a new one
+            originalBusyTimeout = this.db.pragma('busy_timeout', true);
+            this.db.pragma(`busy_timeout = ${timeout}`);
+        } catch (error) {
+            logger.debug(`Could not set database timeout: ${error.message}`);
         }
 
         try {
@@ -148,13 +309,8 @@ export class BookCache {
                 return results;
             });
 
-            // Execute the transaction with timeout
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Transaction timeout')), timeout);
-            });
-
-            const transactionPromise = Promise.resolve(transaction());
-            const results = await Promise.race([transactionPromise, timeoutPromise]);
+            // Execute the transaction directly - better-sqlite3 handles timeouts internally
+            const results = transaction();
 
             logger.debug(`Transaction completed successfully: ${description} (ID: ${transactionId})`);
             
@@ -170,6 +326,15 @@ export class BookCache {
             await this._executeRollbackCallbacks(transactionId);
             
             throw error;
+        } finally {
+            // Restore original busy timeout
+            try {
+                if (originalBusyTimeout !== undefined) {
+                    this.db.pragma(`busy_timeout = ${originalBusyTimeout}`);
+                }
+            } catch (error) {
+                logger.debug(`Could not restore original database timeout: ${error.message}`);
+            }
         }
     }
 
@@ -311,8 +476,8 @@ export class BookCache {
     }
 
     // Keep existing methods for backward compatibility
-    getEditionForBook(userId, identifier, title, identifierType = 'isbn') {
-        this.init();
+    async getEditionForBook(userId, identifier, title, identifierType = 'isbn') {
+        await this.init();
         
         try {
             const stmt = this.db.prepare(`
@@ -336,8 +501,8 @@ export class BookCache {
         }
     }
 
-    storeEditionMapping(userId, identifier, title, editionId, identifierType = 'isbn', author = null) {
-        this.init();
+    async storeEditionMapping(userId, identifier, title, editionId, identifierType = 'isbn', author = null) {
+        await this.init();
         
         try {
             return this._storeEditionMappingOperation(userId, identifier, title, editionId, identifierType, author);
@@ -346,8 +511,8 @@ export class BookCache {
         }
     }
 
-    getLastProgress(userId, identifier, title, identifierType = 'isbn') {
-        this.init();
+    async getLastProgress(userId, identifier, title, identifierType = 'isbn') {
+        await this.init();
         
         try {
             const stmt = this.db.prepare(`
@@ -373,8 +538,8 @@ export class BookCache {
         }
     }
 
-    storeProgress(userId, identifier, title, progressPercent, identifierType = 'isbn', lastListenedAt = null, startedAt = null) {
-        this.init();
+    async storeProgress(userId, identifier, title, progressPercent, identifierType = 'isbn', lastListenedAt = null, startedAt = null) {
+        await this.init();
         
         try {
             return this._storeProgressOperation(userId, identifier, title, progressPercent, identifierType, lastListenedAt, startedAt);
@@ -383,8 +548,8 @@ export class BookCache {
         }
     }
 
-    hasProgressChanged(userId, identifier, title, currentProgress, identifierType = 'isbn') {
-        this.init();
+    async hasProgressChanged(userId, identifier, title, currentProgress, identifierType = 'isbn') {
+        await this.init();
         
         try {
             const stmt = this.db.prepare(`
@@ -416,8 +581,8 @@ export class BookCache {
         }
     }
 
-    clearCache() {
-        this.init(); // Ensure database is initialized
+    async clearCache() {
+        await this.init(); // Ensure database is initialized
         
         try {
             this.db.exec('DELETE FROM books');
@@ -427,8 +592,8 @@ export class BookCache {
         }
     }
 
-    getCacheStats() {
-        this.init(); // Ensure database is initialized
+    async getCacheStats() {
+        await this.init(); // Ensure database is initialized
         
         try {
             const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM books');
@@ -460,8 +625,8 @@ export class BookCache {
         }
     }
 
-    exportToJson(filename = 'book_cache_export.json') {
-        this.init(); // Ensure database is initialized
+    async exportToJson(filename = 'book_cache_export.json') {
+        await this.init(); // Ensure database is initialized
         
         try {
             const stmt = this.db.prepare('SELECT * FROM books ORDER BY updated_at DESC');
@@ -480,9 +645,9 @@ export class BookCache {
         }
     }
 
-    getBooksByAuthor(userId, authorName) {
+    async getBooksByAuthor(userId, authorName) {
         if (!this.db) {
-            return [];
+            await this.init();
         }
         
         try {
@@ -500,8 +665,8 @@ export class BookCache {
         }
     }
 
-    getCachedBookInfo(userId, identifier, title, identifierType = 'isbn') {
-        this.init();
+    async getCachedBookInfo(userId, identifier, title, identifierType = 'isbn') {
+        await this.init();
         
         try {
             const stmt = this.db.prepare(`
@@ -518,43 +683,22 @@ export class BookCache {
                     edition_id: result.edition_id,
                     author: result.author,
                     progress_percent: result.progress_percent,
-                    last_progress: result.last_progress,
                     last_sync: result.last_sync,
-                    updated_at: result.updated_at,
-                    last_listened_at: result.last_listened_at,
                     started_at: result.started_at,
                     finished_at: result.finished_at,
-                    identifier_type: result.identifier_type
+                    last_listened_at: result.last_listened_at,
+                    updated_at: result.updated_at
                 };
             } else {
                 return {
-                    exists: false,
-                    edition_id: null,
-                    author: null,
-                    progress_percent: null,
-                    last_progress: null,
-                    last_sync: null,
-                    updated_at: null,
-                    last_listened_at: null,
-                    started_at: null,
-                    finished_at: null,
-                    identifier_type: null
+                    exists: false
                 };
             }
         } catch (err) {
             logger.error(`Error getting cached book info for ${title}: ${err.message}`);
             return {
                 exists: false,
-                edition_id: null,
-                author: null,
-                progress_percent: null,
-                last_progress: null,
-                last_sync: null,
-                updated_at: null,
-                last_listened_at: null,
-                started_at: null,
-                finished_at: null,
-                identifier_type: null
+                error: err.message
             };
         }
     }
@@ -563,7 +707,7 @@ export class BookCache {
         if (this.db) {
             try {
                 this.db.close();
-                logger.info('Database connection closed successfully');
+                logger.debug('Database connection closed successfully');
             } catch (error) {
                 logger.error('Error closing database connection:', error.message);
             } finally {

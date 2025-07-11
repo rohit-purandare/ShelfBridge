@@ -105,11 +105,20 @@ export class AudiobookshelfClient {
             // Fetch details for progress items in parallel
             const progressPromises = progressItems.map(item => 
                 this._getLibraryItemDetails(item.id).catch(error => {
-                    logger.error('Error fetching details for item', { 
-                        itemId: item.id, 
-                        error: error.message 
-                    });
-                    return null;
+                    // Only catch recoverable errors, let critical ones propagate
+                    if (this._isRecoverableError(error)) {
+                        logger.debug('Recoverable error fetching details for item', { 
+                            itemId: item.id, 
+                            error: error.message 
+                        });
+                        return null;
+                    } else {
+                        logger.error('Critical error fetching details for item', { 
+                            itemId: item.id, 
+                            error: error.message 
+                        });
+                        throw error; // Re-throw critical errors
+                    }
                 })
             );
 
@@ -125,11 +134,20 @@ export class AudiobookshelfClient {
             
             const otherPromises = otherBooks.map(book => 
                 this._getLibraryItemDetails(book.id).catch(error => {
-                    logger.error('Error fetching details for book', { 
-                        bookId: book.id, 
-                        error: error.message 
-                    });
-                    return null;
+                    // Only catch recoverable errors, let critical ones propagate
+                    if (this._isRecoverableError(error)) {
+                        logger.debug('Recoverable error fetching details for book', { 
+                            bookId: book.id, 
+                            error: error.message 
+                        });
+                        return null;
+                    } else {
+                        logger.error('Critical error fetching details for book', { 
+                            bookId: book.id, 
+                            error: error.message 
+                        });
+                        throw error; // Re-throw critical errors
+                    }
                 })
             );
 
@@ -168,11 +186,12 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/me');
             return response;
         } catch (error) {
-            logger.error('Error getting current user', { 
+            // User info failure is always critical - re-throw
+            logger.error('Critical error getting current user', { 
                 error: error.message, 
                 stack: error.stack 
             });
-            return null;
+            throw error;
         }
     }
 
@@ -181,11 +200,19 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/me/items-in-progress');
             return response.libraryItems || [];
         } catch (error) {
-            logger.error('Error getting items in progress', { 
-                error: error.message, 
-                stack: error.stack 
-            });
-            return [];
+            // Check if this is a recoverable error
+            if (this._isRecoverableError(error)) {
+                logger.debug('No items in progress (recoverable error)', { 
+                    error: error.message 
+                });
+                return [];
+            } else {
+                logger.error('Critical error getting items in progress', { 
+                    error: error.message, 
+                    stack: error.stack 
+                });
+                throw error;
+            }
         }
     }
 
@@ -238,12 +265,21 @@ export class AudiobookshelfClient {
 
             return itemData;
         } catch (error) {
-            logger.error('Error getting library item details', { 
-                itemId, 
-                error: error.message, 
-                stack: error.stack 
-            });
-            return null;
+            // Check if this is a recoverable error (item not found, access denied to specific item)
+            if (this._isRecoverableError(error)) {
+                logger.debug('Recoverable error getting library item details', { 
+                    itemId, 
+                    error: error.message 
+                });
+                return null;
+            } else {
+                logger.error('Critical error getting library item details', { 
+                    itemId, 
+                    error: error.message, 
+                    stack: error.stack 
+                });
+                throw error;
+            }
         }
     }
     async _getUserProgress(itemId) {
@@ -302,11 +338,12 @@ export class AudiobookshelfClient {
             const response = await this._makeRequest('GET', '/api/libraries');
             return response.libraries || [];
         } catch (error) {
-            logger.error('Error getting libraries', { 
+            // Library access failure is critical - re-throw
+            logger.error('Critical error getting libraries', { 
                 error: error.message, 
                 stack: error.stack 
             });
-            return [];
+            throw error;
         }
     }
 
@@ -316,13 +353,63 @@ export class AudiobookshelfClient {
             logger.debug('Library items API response', { libraryId, response });
             return response.results || response.libraryItems || [];
         } catch (error) {
-            logger.error('Error getting library items', { 
-                libraryId, 
-                error: error.message, 
-                stack: error.stack 
-            });
-            return [];
+            // Check if this is a recoverable error (library not found)
+            if (this._isRecoverableError(error)) {
+                logger.debug('Recoverable error getting library items', { 
+                    libraryId, 
+                    error: error.message 
+                });
+                return [];
+            } else {
+                logger.error('Critical error getting library items', { 
+                    libraryId, 
+                    error: error.message, 
+                    stack: error.stack 
+                });
+                throw error;
+            }
         }
+    }
+
+    /**
+     * Determine if an error is recoverable (can be safely ignored) vs critical (should propagate)
+     * @param {Error} error - The error to check
+     * @returns {boolean} - True if recoverable, false if critical
+     */
+    _isRecoverableError(error) {
+        const message = error.message.toLowerCase();
+        
+        // HTTP 404 errors are usually recoverable (item not found, no progress data)
+        if (message.includes('http 404') || message.includes('not found')) {
+            return true;
+        }
+        
+        // HTTP 403 errors for specific items might be recoverable (access denied to individual item)
+        // but be conservative - only if the message suggests it's item-specific
+        if (message.includes('http 403') && (message.includes('item') || message.includes('book'))) {
+            return true;
+        }
+        
+        // These errors are always critical
+        const criticalPatterns = [
+            'http 401',     // Unauthorized - authentication failure
+            'http 500',     // Server error
+            'http 502',     // Bad gateway
+            'http 503',     // Service unavailable
+            'network error', // Network connectivity issues
+            'timeout',      // Request timeouts
+            'connection',   // Connection issues
+            'dns',          // DNS resolution issues
+        ];
+        
+        for (const pattern of criticalPatterns) {
+            if (message.includes(pattern)) {
+                return false;
+            }
+        }
+        
+        // If we can't categorize it, treat as critical to be safe
+        return false;
     }
 
     async _makeRequest(method, endpoint, data = null, suppressErrors = []) {

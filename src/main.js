@@ -379,25 +379,31 @@ program
     .option('--show', 'Show detailed cache contents')
     .option('--export <filename>', 'Export cache to JSON file')
     .action(async (options) => {
+        const cache = new BookCache();
+        
+        // Register cleanup for unexpected termination
+        const unregister = registerCleanup(() => cache.close());
+        
         try {
             // Skip validation for cache operations (they don't need API access)
             
-            const cache = new BookCache();
-            
             if (options.clear) {
-                cache.clearCache();
+                await cache.clearCache();
                 logger.info('Cache cleared successfully');
             } else if (options.stats) {
-                const stats = cache.getCacheStats();
+                const stats = await cache.getCacheStats();
                 console.log('=== Cache Statistics ===');
                 console.log(`Total books: ${stats.total_books}`);
                 console.log(`Recent books (last 7 days): ${stats.recent_books}`);
                 console.log(`Cache size: ${stats.cache_size_mb} MB`);
             } else if (options.show) {
-                const stats = cache.getCacheStats();
+                const stats = await cache.getCacheStats();
                 console.log('=== Cache Contents ===');
                 console.log(`Total books: ${stats.total_books}`);
                 console.log('');
+                
+                // Initialize the cache to access the database directly
+                await cache.init();
                 
                 // Get all books ordered by most recent
                 const stmt = cache.db.prepare('SELECT * FROM books ORDER BY updated_at DESC');
@@ -420,15 +426,17 @@ program
                     });
                 }
             } else if (options.export) {
-                cache.exportToJson(options.export);
+                await cache.exportToJson(options.export);
             } else {
                 console.log('Use --clear, --stats, --show, or --export to manage cache');
             }
-            
-            cache.close();
         } catch (error) {
             logger.error('Cache operation failed', { error: error.message, stack: error.stack });
             process.exit(1);
+        } finally {
+            // Always close the database connection
+            cache.close();
+            unregister(); // Unregister the cleanup function
         }
     });
 
@@ -535,9 +543,12 @@ async function syncUser(user, globalConfig) {
     }
     
     const startTime = Date.now();
+    const syncManager = new SyncManager(user, globalConfig, globalConfig.dry_run);
+    
+    // Register cleanup for unexpected termination
+    const unregister = registerCleanup(() => syncManager.cleanup());
     
     try {
-        const syncManager = new SyncManager(user, globalConfig, globalConfig.dry_run);
         const result = await syncManager.syncProgress();
         
         // Log summary
@@ -632,28 +643,6 @@ async function syncUser(user, globalConfig) {
             console.log('='.repeat(30));
         }
 
-        // Show status breakdown
-        if (result.book_details && result.book_details.length > 0) {
-            const statusCounts = {};
-            result.book_details.forEach(book => {
-                statusCounts[book.status] = (statusCounts[book.status] || 0) + 1;
-            });
-            
-            console.log('\n📊 STATUS BREAKDOWN');
-            console.log('='.repeat(30));
-            Object.entries(statusCounts).forEach(([status, count]) => {
-                const statusIcon = {
-                    'synced': '✅',
-                    'completed': '🎯',
-                    'auto_added': '➕',
-                    'skipped': '⏭️',
-                    'error': '❌'
-                }[status] || '❓';
-                console.log(`${statusIcon} ${status.toUpperCase()}: ${count}`);
-            });
-            console.log('='.repeat(30));
-        }
-
         console.log('\n🏁 Sync completed successfully!');
         
     } catch (error) {
@@ -663,6 +652,10 @@ async function syncUser(user, globalConfig) {
             stack: error.stack 
         });
         throw error;
+    } finally {
+        // Ensure the SyncManager's database connection is closed
+        syncManager.cleanup();
+        unregister(); // Unregister the cleanup function
     }
 }
 
@@ -808,28 +801,67 @@ async function runInteractiveMode() {
 // Parse command line arguments
 program.parse();
 
-// If no command is provided, show help
-if (!process.argv.slice(2).length) {
-    program.outputHelp();
+// Global cleanup handlers for unexpected termination
+const cleanupHandlers = new Set();
+
+/**
+ * Register a cleanup function to be called on process termination
+ * @param {Function} cleanupFn - Function to call for cleanup
+ * @returns {Function} - Unregister function
+ */
+function registerCleanup(cleanupFn) {
+    cleanupHandlers.add(cleanupFn);
+    
+    // Return unregister function
+    return () => {
+        cleanupHandlers.delete(cleanupFn);
+    };
 }
 
-// Graceful shutdown handler
+/**
+ * Execute all registered cleanup functions
+ */
+function executeCleanup() {
+    logger.debug('Executing cleanup handlers', { count: cleanupHandlers.size });
+    for (const cleanup of cleanupHandlers) {
+        try {
+            cleanup();
+        } catch (error) {
+            logger.error('Error during cleanup', { error: error.message });
+        }
+    }
+}
+
+// Register process termination handlers
 process.on('SIGINT', () => {
-    logger.info('Received SIGINT, shutting down gracefully');
+    logger.info('Received SIGINT, cleaning up...');
+    executeCleanup();
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-    logger.info('Received SIGTERM, shutting down gracefully');
+    logger.info('Received SIGTERM, cleaning up...');
+    executeCleanup();
     process.exit(0);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    logger.error('Uncaught exception, cleaning up...', { 
+        error: error.message, 
+        stack: error.stack 
+    });
+    executeCleanup();
     process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled promise rejection, cleaning up...', { 
+        reason: reason?.toString(),
+        promise: promise?.toString()
+    });
+    executeCleanup();
     process.exit(1);
-}); 
+});
+
+// Export cleanup registration for use by other modules
+export { registerCleanup }; 
