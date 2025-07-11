@@ -71,8 +71,6 @@ ShelfBridge uses named volumes for truly zero-setup deployment - no cloning requ
    ```bash
    # Access the auto-created config in the Docker volume
    docker exec -it shelfbridge nano /app/config/config.yaml
-   
-   # The container will automatically restart when you save changes
    ```
 
 3. **View logs and verify:**
@@ -103,7 +101,7 @@ When you run `docker-compose up -d`, the container automatically:
 - ✅ **Provides template**: `config.yaml.example` is copied to the config volume
 - ✅ **Creates config**: `config.yaml` is auto-created from the template with placeholder values
 - ✅ **Intelligent validation**: Container detects placeholder values and guides you through setup
-- ✅ **Ready to edit**: Edit config using `docker exec` and the container restarts automatically
+- ✅ **Ready to edit**: Edit config using `docker exec` - restart container if needed with `docker-compose restart`
 
 **Truly zero-setup!** No local directories or files needed.
 
@@ -161,23 +159,7 @@ nano config/config.yaml
 
 #### 3. Configure Your Credentials
 
-Edit `config/config.yaml` with your actual API tokens:
-
-```yaml
-global:
-  min_progress_threshold: 5.0
-  parallel: true
-  workers: 3
-  dry_run: false
-  sync_schedule: "0 3 * * *"  # Every day at 3am
-  timezone: "Etc/UTC"
-
-users:
-  - id: your_username  # Replace with your preferred identifier
-    abs_url: https://your-audiobookshelf-server.com  # Your Audiobookshelf URL
-    abs_token: your_audiobookshelf_api_token_here     # From ABS Settings > Users > API Token
-    hardcover_token: your_hardcover_api_token_here    # From hardcover.app/account/developer
-```
+Edit `config/config.yaml` with your actual API tokens. See the [Configuration](#%EF%B8%8F-configuration) section below for detailed configuration options and examples.
 
 #### 4. Test Your Setup
 
