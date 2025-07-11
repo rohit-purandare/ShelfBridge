@@ -713,6 +713,225 @@ async function testUser(user) {
     return allSuccessful;
 }
 
+async function debugUser(user) {
+    console.log('\n' + '='.repeat(60));
+    console.log('🐛 DEBUG INFORMATION FOR USER');
+    console.log('='.repeat(60));
+    console.log(`User ID: ${user.id}`);
+    console.log(`Timestamp: ${new Date().toISOString()}`);
+    console.log('='.repeat(60));
+    
+    const userLogger = logger.forUser(user.id);
+    userLogger.info('Starting debug session');
+    
+    try {
+        // 1. User Configuration
+        console.log('\n📋 USER CONFIGURATION');
+        console.log('-'.repeat(30));
+        console.log(`User ID: ${user.id}`);
+        console.log(`Audiobookshelf URL: ${user.abs_url}`);
+        console.log(`Audiobookshelf Token: ${user.abs_token ? `${user.abs_token.substring(0, 8)}...` : 'NOT SET'}`);
+        console.log(`Hardcover Token: ${user.hardcover_token ? `${user.hardcover_token.substring(0, 8)}...` : 'NOT SET'}`);
+        
+        // Validate required fields
+        const requiredFields = ['id', 'abs_url', 'abs_token', 'hardcover_token'];
+        const missingFields = requiredFields.filter(field => !user[field]);
+        
+        if (missingFields.length > 0) {
+            console.log(`❌ Missing required fields: ${missingFields.join(', ')}`);
+        } else {
+            console.log('✅ All required fields present');
+        }
+        
+        // 2. Connection Testing
+        console.log('\n🔌 CONNECTION TESTING');
+        console.log('-'.repeat(30));
+        
+        let absClient, hcClient;
+        let absStatus = false, hcStatus = false;
+        
+        try {
+            console.log('Testing Audiobookshelf connection...');
+            absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
+            absStatus = await absClient.testConnection();
+            console.log(`Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}`);
+            
+            if (absStatus) {
+                // Get additional ABS info
+                try {
+                    const userInfo = await absClient._getCurrentUser();
+                    console.log(`  - ABS User: ${userInfo.username || 'Unknown'}`);
+                    console.log(`  - ABS User ID: ${userInfo.id || 'Unknown'}`);
+                    console.log(`  - ABS Libraries: ${userInfo.librariesAccessible?.length || 'Unknown'}`);
+                } catch (error) {
+                    console.log(`  - Additional info unavailable: ${error.message}`);
+                }
+            }
+        } catch (error) {
+            console.log(`Audiobookshelf: ❌ Error - ${error.message}`);
+        }
+        
+        try {
+            console.log('Testing Hardcover connection...');
+            hcClient = new HardcoverClient(user.hardcover_token);
+            hcStatus = await hcClient.testConnection();
+            console.log(`Hardcover: ${hcStatus ? '✅ Connected' : '❌ Failed'}`);
+            
+            if (hcStatus) {
+                // Get additional HC info
+                try {
+                    const query = `
+                        query {
+                            me {
+                                id
+                                username
+                                user_books_aggregate {
+                                    aggregate {
+                                        count
+                                    }
+                                }
+                            }
+                        }
+                    `;
+                    const result = await hcClient._executeQuery(query);
+                    if (result && result.me) {
+                        console.log(`  - HC User: ${result.me.username || 'Unknown'}`);
+                        console.log(`  - HC User ID: ${result.me.id || 'Unknown'}`);
+                        console.log(`  - HC Library Size: ${result.me.user_books_aggregate?.aggregate?.count || 'Unknown'}`);
+                    }
+                } catch (error) {
+                    console.log(`  - Additional info unavailable: ${error.message}`);
+                }
+            }
+        } catch (error) {
+            console.log(`Hardcover: ❌ Error - ${error.message}`);
+        }
+        
+        // 3. Cache Information
+        console.log('\n💾 CACHE INFORMATION');
+        console.log('-'.repeat(30));
+        
+        const cache = new BookCache();
+        const unregisterCache = registerCleanup(() => cache.close());
+        
+        try {
+            await cache.init();
+            const stats = await cache.getCacheStats();
+            console.log(`Total books in cache: ${stats.total_books}`);
+            console.log(`Cache size: ${stats.cache_size_mb} MB`);
+            console.log(`Recent books (last 7 days): ${stats.recent_books}`);
+            
+            // Get user-specific cache data
+            const userBooksStmt = cache.db.prepare('SELECT * FROM books WHERE user_id = ? ORDER BY updated_at DESC');
+            const userBooks = userBooksStmt.all(user.id);
+            console.log(`Books for user ${user.id}: ${userBooks.length}`);
+            
+            if (userBooks.length > 0) {
+                console.log('\nRecent books for this user:');
+                userBooks.slice(0, 5).forEach((book, index) => {
+                    console.log(`  ${index + 1}. ${book.title}`);
+                    console.log(`     Progress: ${book.progress_percent}%`);
+                    console.log(`     Last sync: ${book.last_sync}`);
+                    console.log(`     Identifier: ${book.identifier_type.toUpperCase()}=${book.identifier}`);
+                });
+                
+                if (userBooks.length > 5) {
+                    console.log(`     ... and ${userBooks.length - 5} more books`);
+                }
+            }
+        } catch (error) {
+            console.log(`Cache error: ${error.message}`);
+        } finally {
+            unregisterCache();
+        }
+        
+        // 4. Sample API Calls (if connections are working)
+        if (absStatus && hcStatus) {
+            console.log('\n🔍 SAMPLE API CALLS');
+            console.log('-'.repeat(30));
+            
+            try {
+                console.log('Fetching sample books from Audiobookshelf...');
+                const books = await absClient.getReadingProgress();
+                console.log(`Found ${books.length} books in ABS`);
+                
+                if (books.length > 0) {
+                    const sampleBook = books[0];
+                    console.log(`Sample book: "${sampleBook.title}"`);
+                    console.log(`  Author: ${sampleBook.author || 'Unknown'}`);
+                    console.log(`  Progress: ${sampleBook.progress ? sampleBook.progress.progress : 'No progress'}`);
+                    console.log(`  ASIN: ${sampleBook.metadata?.asin || 'None'}`);
+                    console.log(`  ISBN: ${sampleBook.metadata?.isbn || 'None'}`);
+                    
+                    // Test book matching
+                    if (sampleBook.metadata?.asin || sampleBook.metadata?.isbn) {
+                        console.log('Testing book matching with Hardcover...');
+                        const identifier = sampleBook.metadata?.asin || sampleBook.metadata?.isbn;
+                        const identifierType = sampleBook.metadata?.asin ? 'asin' : 'isbn';
+                        
+                        try {
+                            const searchMethod = identifierType === 'asin' ? 'searchBooksByAsin' : 'searchBooksByIsbn';
+                            const matchedBooks = await hcClient[searchMethod](identifier);
+                            if (matchedBooks && matchedBooks.length > 0) {
+                                const matchedBook = matchedBooks[0];
+                                console.log(`  ✅ Found match: "${matchedBook.book.title}"`);
+                                console.log(`  HC Book ID: ${matchedBook.book.id}`);
+                                console.log(`  HC Edition ID: ${matchedBook.id}`);
+                            } else {
+                                console.log(`  ❌ No match found in Hardcover`);
+                            }
+                        } catch (error) {
+                            console.log(`  ❌ Error matching book: ${error.message}`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log(`Sample API call error: ${error.message}`);
+            }
+        }
+        
+        // 5. System Information
+        console.log('\n🖥️  SYSTEM INFORMATION');
+        console.log('-'.repeat(30));
+        console.log(`Node.js version: ${process.version}`);
+        console.log(`Platform: ${process.platform}`);
+        console.log(`Architecture: ${process.arch}`);
+        console.log(`Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+        console.log(`Process uptime: ${Math.round(process.uptime())}s`);
+        
+        // 6. Configuration Check
+        console.log('\n⚙️  CONFIGURATION CHECK');
+        console.log('-'.repeat(30));
+        
+        const config = new Config();
+        const globalConfig = config.getGlobal();
+        
+        console.log(`Dry run mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}`);
+        console.log(`Min progress threshold: ${globalConfig.min_progress_threshold}%`);
+        console.log(`Auto-add books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}`);
+        console.log(`Progress regression protection: ${globalConfig.progress_regression_protection ? 'ON' : 'OFF'}`);
+        
+        if (globalConfig.cron?.enabled) {
+            console.log(`Cron schedule: ${globalConfig.cron.schedule}`);
+            console.log(`Cron timezone: ${globalConfig.cron.timezone}`);
+        }
+        
+        console.log('\n' + '='.repeat(60));
+        console.log('🐛 DEBUG COMPLETED');
+        console.log('='.repeat(60));
+        
+        userLogger.info('Debug session completed successfully');
+        
+    } catch (error) {
+        console.log(`\n❌ Debug session failed: ${error.message}`);
+        userLogger.error('Debug session failed', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        throw error;
+    }
+}
+
 function showConfig(config) {
     logger.info('Showing configuration status');
     

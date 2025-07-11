@@ -186,9 +186,9 @@ Cache size: 2.1 MB
 
 ## 🐛 Debug Commands
 
-### `debug` - Debug Information
+### `debug` - Comprehensive Debug Information
 
-Show detailed information about your setup and data for troubleshooting.
+Show detailed diagnostic information about your ShelfBridge setup for troubleshooting and validation.
 
 ```bash
 node src/main.js debug [options]
@@ -210,15 +210,126 @@ node src/main.js debug
 node src/main.js debug --user alice
 ```
 
-#### Debug Output
+#### Debug Output Sections
 
-Shows detailed information including:
-- Audiobookshelf connection status
-- Available books and their metadata
-- Progress information
-- Book identifiers (ISBN/ASIN)
-- Cache status
-- Configuration validation
+The debug command provides comprehensive information organized into these sections:
+
+##### 📋 User Configuration
+- Validates all required fields (ID, URLs, tokens)
+- Shows masked API tokens for security
+- Identifies missing configuration
+
+##### 🔌 Connection Testing
+- Tests both Audiobookshelf and Hardcover APIs
+- Shows server information and user details
+- Displays library statistics
+
+##### 💾 Cache Information
+- Cache statistics (total books, size, recent activity)
+- User-specific cached books
+- Recent sync activity
+
+##### 🔍 Sample API Calls
+- Fetches sample books from Audiobookshelf
+- Tests book matching between services
+- Validates identifier matching (ISBN/ASIN)
+
+##### 🖥️ System Information
+- Node.js version and platform details
+- Memory usage and process uptime
+- Runtime environment information
+
+##### ⚙️ Configuration Check
+- Global settings overview
+- Sync behavior configurations
+- Scheduling and automation settings
+
+#### Sample Debug Output
+
+```
+============================================================
+🐛 DEBUG INFORMATION FOR USER
+============================================================
+User ID: alice
+Timestamp: 2024-01-15T10:30:00.000Z
+============================================================
+
+📋 USER CONFIGURATION
+------------------------------
+User ID: alice
+Audiobookshelf URL: https://abs.example.com
+Audiobookshelf Token: abcd1234...
+Hardcover Token: wxyz5678...
+✅ All required fields present
+
+🔌 CONNECTION TESTING
+------------------------------
+Testing Audiobookshelf connection...
+Audiobookshelf: ✅ Connected
+  - ABS User: alice
+  - ABS User ID: abc123
+  - ABS Libraries: 2
+Testing Hardcover connection...
+Hardcover: ✅ Connected
+  - HC User: alice_reader
+  - HC User ID: 456789
+  - HC Library Size: 127
+
+💾 CACHE INFORMATION
+------------------------------
+Total books in cache: 127
+Cache size: 2.1 MB
+Recent books (last 7 days): 8
+Books for user alice: 89
+
+Recent books for this user:
+  1. The Great Gatsby
+     Progress: 75%
+     Last sync: 2024-01-15T09:15:00.000Z
+     Identifier: ISBN=9780123456789
+
+🔍 SAMPLE API CALLS
+------------------------------
+Fetching sample books from Audiobookshelf...
+Found 15 books in ABS
+Sample book: "The Great Gatsby"
+  Author: F. Scott Fitzgerald
+  Progress: 75%
+  ASIN: B08ABCDEFG
+  ISBN: 9780123456789
+Testing book matching with Hardcover...
+  ✅ Found match: "The Great Gatsby"
+  HC Book ID: 12345
+  HC Edition ID: 67890
+
+🖥️ SYSTEM INFORMATION
+------------------------------
+Node.js version: v18.17.0
+Platform: darwin
+Architecture: x64
+Memory usage: 45MB
+Process uptime: 127s
+
+⚙️ CONFIGURATION CHECK
+------------------------------
+Dry run mode: OFF
+Min progress threshold: 5%
+Auto-add books: ON
+Progress regression protection: ON
+Cron schedule: 0 3 * * *
+Cron timezone: UTC
+
+============================================================
+🐛 DEBUG COMPLETED
+============================================================
+```
+
+#### When to Use Debug
+
+- **Initial Setup**: Verify your configuration is correct
+- **Troubleshooting**: Diagnose sync issues or API problems
+- **Performance**: Check cache usage and system resources
+- **Support**: Gather information for bug reports or help requests
 
 ## 🔍 Schema Commands
 
