@@ -242,16 +242,23 @@ node src/main.js cache --stats
 
 The repository includes a `docker-compose.yml` file that pulls the latest image from GitHub Container Registry:
 
-1. **Ensure your config file exists:**
+1. **Start the service:**
    ```bash
-   # Make sure you've completed the configuration setup above
-   ls config/config.yaml
+   # This will pull the latest image, auto-create config template, and start the container
+   docker-compose up -d
    ```
 
-2. **Start the service:**
+2. **Set up your configuration:**
    ```bash
-   # This will pull the latest image from GHCR and start the container
-   docker-compose up -d
+   # The sample config is automatically created on first run
+   # Copy it to create your actual config
+   cp config/config.yaml.example config/config.yaml
+   
+   # Edit with your actual credentials
+   nano config/config.yaml
+   
+   # Restart to use your config
+   docker-compose restart
    ```
 
 3. **View logs:**
@@ -284,7 +291,12 @@ docker-compose -f docker-compose.dev.yml up -d
 #### Pre-built Image (Recommended)
 
 ```bash
-# Pull and run the latest pre-built image
+# The container automatically provides config.yaml.example on first run
+# Just create your config directory and run
+mkdir -p config data
+
+# Run the container (it will auto-create config.yaml.example)
+# Then copy and edit your config
 docker run -d \
   --name shelfbridge \
   -v $(pwd)/config/config.yaml:/app/config/config.yaml:ro \
