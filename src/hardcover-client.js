@@ -2,7 +2,7 @@ import axios from 'axios';
 import { RateLimiter } from './utils.js';
 import logger from './logger.js';
 
-const RATE_LIMIT_PER_MINUTE = 60;
+const RATE_LIMIT_PER_MINUTE = 55;
 const MAX_PARALLEL_WORKERS = 5;
 
 export class HardcoverClient {
@@ -740,10 +740,14 @@ export class HardcoverClient {
     }
 
     async _executeQuery(query, variables = null) {
-        await this.rateLimiter.waitIfNeeded();
+        // Determine request type for better rate limiting tracking
+        const requestType = query.trim().startsWith('mutation') ? 'mutation' : 'query';
+        const identifier = `hardcover-${requestType}`;
+        
+        await this.rateLimiter.waitIfNeeded(identifier);
 
         // Debug logging for mutations
-        if (query.trim().startsWith('mutation')) {
+        if (requestType === 'mutation') {
             logger.debug('🔍 [DEBUG] Hardcover Mutation:');
             logger.debug('Query:', query);
             logger.debug('Variables:', JSON.stringify(variables, null, 2));

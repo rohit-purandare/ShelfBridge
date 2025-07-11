@@ -30,12 +30,13 @@
     "js-yaml": "^4.1.0",
     "luxon": "^3.4.4",
     "node-cron": "^3.0.3",
+    "rate-limiter-flexible": "^7.1.1",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
-    "husky": "^8.0.3"
+    "husky": "^8.0.3",
+    "nodemon": "^3.0.1"
   },
   "engines": {
     "node": ">=18.0.0"

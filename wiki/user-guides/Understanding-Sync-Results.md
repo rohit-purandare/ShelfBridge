@@ -91,6 +91,26 @@ During sync, you'll see real-time progress:
 - **🔄 Created**: New reading session for re-read
 - **❌ Failed**: Action failed (see error details)
 
+### 🚦 Rate Limiting Messages
+
+ShelfBridge respects Hardcover's API limits (55 requests per minute). You may see these messages:
+
+```
+⚠️  Rate limit warning: 44/55 requests used in the current minute
+⚠️  Rate limit exceeded. Waiting 60s before next request
+```
+
+**Rate limit message types:**
+- **⚠️ Warning**: When approaching 80% of the rate limit (44+ requests)
+- **⚠️ Exceeded**: When the limit is reached, requests are automatically queued
+- **🔄 Waiting**: Shows delay time before next request can be made
+
+**What this means:**
+- **Normal behavior**: Rate limiting prevents API errors
+- **Automatic handling**: Requests are queued, not dropped
+- **Sync continues**: The sync will complete, just takes longer
+- **Large libraries**: More likely to see rate limiting with 100+ books
+
 ## 📊 Sync Summary
 
 ```
@@ -160,6 +180,18 @@ Books auto-added: 0
 Books skipped: 15
 Errors: 3
 ```
+
+### 🚦 Rate Limiting Impact on Sync Time
+
+**Normal rate limiting behavior:**
+- **Large libraries**: May take 2-5 minutes for 100+ books
+- **Rate limit warnings**: Expected with frequent API calls
+- **Automatic delays**: Sync pauses to respect API limits
+
+**When rate limiting indicates issues:**
+- **Single book taking >60s**: May indicate API problems
+- **Excessive warnings**: Could suggest inefficient batching
+- **Sync failing**: Rate limiting should never cause complete failure
 
 ## 🔍 Common Scenarios
 

@@ -1,6 +1,8 @@
 /**
  * Utility functions for the sync tool
  */
+import { RateLimiterMemory } from 'rate-limiter-flexible';
+import logger from './logger.js';
 
 /**
  * Normalize ISBN by removing hyphens and spaces
@@ -310,24 +312,143 @@ export async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
 }
 
 /**
- * Rate limiter class for API requests
+ * Rate limiter class for API requests using rate-limiter-flexible
  */
 export class RateLimiter {
-    constructor(maxRequestsPerMinute = 60) {
+    constructor(maxRequestsPerMinute = 55, keyPrefix = 'rate-limiter') {
         this.maxRequests = maxRequestsPerMinute;
-        this.delay = 60000 / maxRequestsPerMinute; // Convert to milliseconds
-        this.lastRequestTime = 0;
+        this.keyPrefix = keyPrefix;
+        this.warningThreshold = Math.ceil(maxRequestsPerMinute * 0.8); // 80% of max requests
+        this.requestCounts = new Map(); // Track request counts per minute for logging
+        
+        // Create rate limiter with specified requests per minute
+        this.rateLimiter = new RateLimiterMemory({
+            points: maxRequestsPerMinute, // Number of requests
+            duration: 60, // Per 60 seconds (1 minute)
+            blockDuration: 60, // Block for 60 seconds if limit exceeded
+            execEvenly: true // Spread requests evenly across the duration
+        });
+        
+        // Clean up old request counts every minute
+        setInterval(() => {
+            this._cleanupOldCounts();
+        }, 60000);
     }
 
-    async waitIfNeeded() {
-        const currentTime = Date.now();
-        const timeSinceLast = currentTime - this.lastRequestTime;
-
-        if (timeSinceLast < this.delay) {
-            const sleepTime = this.delay - timeSinceLast;
-            await sleep(sleepTime);
+    /**
+     * Wait for rate limit if needed, with logging
+     * @param {string} identifier - Unique identifier for this request (optional)
+     * @returns {Promise<void>}
+     */
+    async waitIfNeeded(identifier = 'default') {
+        const key = `${this.keyPrefix}:${identifier}`;
+        
+        try {
+            // Check if we can make the request
+            const resRateLimiter = await this.rateLimiter.get(key);
+            
+            // Log warning if approaching rate limit
+            if (resRateLimiter && resRateLimiter.consumedPoints >= this.warningThreshold) {
+                logger.warn(`Rate limit warning: ${resRateLimiter.consumedPoints}/${this.maxRequests} requests used in the current minute`, {
+                    identifier,
+                    remainingRequests: resRateLimiter.remainingPoints,
+                    resetTime: new Date(Date.now() + resRateLimiter.msBeforeNext)
+                });
+            }
+            
+            // Consume a point (make a request)
+            await this.rateLimiter.consume(key);
+            
+            // Track request count for logging
+            this._trackRequest(identifier);
+            
+        } catch (rejRes) {
+            // Rate limit exceeded, wait for reset
+            const waitTime = rejRes.msBeforeNext || 60000;
+            logger.warn(`Rate limit exceeded. Waiting ${Math.round(waitTime / 1000)}s before next request`, {
+                identifier,
+                remainingRequests: rejRes.remainingPoints || 0,
+                resetTime: new Date(Date.now() + waitTime)
+            });
+            
+            // Wait for the specified time
+            await sleep(waitTime);
+            
+            // Retry the request after waiting
+            return this.waitIfNeeded(identifier);
         }
+    }
 
-        this.lastRequestTime = Date.now();
+    /**
+     * Get current rate limit status
+     * @param {string} identifier - Unique identifier for this request
+     * @returns {Promise<Object>} Rate limit status
+     */
+    async getStatus(identifier = 'default') {
+        const key = `${this.keyPrefix}:${identifier}`;
+        
+        try {
+            const resRateLimiter = await this.rateLimiter.get(key);
+            return {
+                requestsUsed: resRateLimiter ? resRateLimiter.consumedPoints : 0,
+                maxRequests: this.maxRequests,
+                remainingRequests: resRateLimiter ? resRateLimiter.remainingPoints : this.maxRequests,
+                resetTime: resRateLimiter ? new Date(Date.now() + resRateLimiter.msBeforeNext) : null,
+                isNearLimit: resRateLimiter ? resRateLimiter.consumedPoints >= this.warningThreshold : false
+            };
+        } catch (error) {
+            logger.error('Error getting rate limit status', { error: error.message, identifier });
+            return {
+                requestsUsed: 0,
+                maxRequests: this.maxRequests,
+                remainingRequests: this.maxRequests,
+                resetTime: null,
+                isNearLimit: false
+            };
+        }
+    }
+
+    /**
+     * Reset rate limit for a specific identifier
+     * @param {string} identifier - Unique identifier to reset
+     * @returns {Promise<void>}
+     */
+    async reset(identifier = 'default') {
+        const key = `${this.keyPrefix}:${identifier}`;
+        await this.rateLimiter.delete(key);
+        logger.debug(`Rate limit reset for identifier: ${identifier}`);
+    }
+
+    /**
+     * Track request count for logging purposes
+     * @private
+     */
+    _trackRequest(identifier) {
+        const minute = Math.floor(Date.now() / 60000);
+        const key = `${identifier}:${minute}`;
+        
+        if (!this.requestCounts.has(key)) {
+            this.requestCounts.set(key, 0);
+        }
+        
+        this.requestCounts.set(key, this.requestCounts.get(key) + 1);
+    }
+
+    /**
+     * Clean up old request counts (older than 2 minutes)
+     * @private
+     */
+    _cleanupOldCounts() {
+        const currentMinute = Math.floor(Date.now() / 60000);
+        const cutoff = currentMinute - 2; // Keep last 2 minutes
+        
+        for (const [key, value] of this.requestCounts.entries()) {
+            const [, minuteStr] = key.split(':');
+            const minute = parseInt(minuteStr, 10);
+            
+            if (minute < cutoff) {
+                this.requestCounts.delete(key);
+            }
+        }
     }
 } 

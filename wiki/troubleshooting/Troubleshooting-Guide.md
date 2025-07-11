@@ -223,6 +223,28 @@ node src/main.js cache --clear
 - Try different times of day
 - Verify server accessibility
 
+#### Rate Limiting (Normal Behavior)
+Rate limiting is **expected behavior** and not a problem to fix:
+
+**Rate limiting messages you might see:**
+```
+⚠️  Rate limit warning: 44/55 requests used in the current minute
+⚠️  Rate limit exceeded. Waiting 60s before next request
+```
+
+**What this means:**
+- **Normal operation**: ShelfBridge respects Hardcover's 55 requests/minute limit
+- **Automatic handling**: Requests are queued, not dropped
+- **Slower sync**: Large libraries may take 2-5 minutes instead of seconds
+- **No data loss**: All books will be processed, just more slowly
+
+**When rate limiting is expected:**
+- **Large libraries**: 100+ books with reading progress  
+- **Initial syncs**: First sync processes all books
+- **Books with metadata**: Each book requires 1-2 API calls
+
+**This is NOT a problem to fix** - it's protective behavior that prevents API errors.
+
 ## 🐳 Docker-Specific Issues
 
 ### Container Won't Start

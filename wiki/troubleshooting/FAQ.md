@@ -208,6 +208,21 @@ Try:
 3. **Clear cache**: If cache is corrupted
 4. **Check logs**: Look for timeout errors
 
+### Why am I seeing rate limiting messages?
+ShelfBridge respects Hardcover's API limits (55 requests per minute). You'll see:
+- **⚠️ Rate limit warning**: When approaching 44+ requests/minute (normal)
+- **⚠️ Rate limit exceeded**: When limit reached, requests are queued (normal)
+
+**This is expected behavior** for:
+- **Large libraries**: 100+ books may hit rate limits
+- **Initial syncs**: First sync processes all books
+- **Bulk operations**: Many books syncing at once
+
+**Rate limiting means:**
+- **Sync takes longer**: But completes successfully
+- **No data loss**: Requests are queued, not dropped
+- **API protection**: Prevents errors from exceeding limits
+
 ### Progress isn't updating
 Possible causes:
 - **Below threshold**: Progress change is too small

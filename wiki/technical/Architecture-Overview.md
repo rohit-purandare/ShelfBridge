@@ -18,6 +18,7 @@ graph TB
         SM[Sync Manager]
         BC[Book Cache]
         CV[Config Validator]
+        RL[Rate Limiter]
     end
     
     subgraph "API Clients"
@@ -37,9 +38,11 @@ graph TB
     SM --> BC
     BC --> SQLite
     ABSC --> ABS
-    HCC --> HC
+    HCC --> RL
+    RL --> HC
     CV --> Config
     SM --> Logs
+    RL --> Logs
 ```
 
 ## 📦 Core Components
@@ -119,6 +122,7 @@ testConnection()        // Verify API access
 - Mutation operations for progress updates
 - Pagination handling for large libraries
 - Schema introspection capabilities
+- **Rate limiting**: 55 requests/minute with intelligent queuing
 
 **Key Operations**:
 ```javascript
@@ -126,6 +130,17 @@ getUserBooks()          // Fetch user's library
 updateProgress()        // Update reading progress
 markCompleted()         // Mark book as finished
 addBookToLibrary()      // Auto-add new books
+```
+
+**Rate Limiting Architecture**:
+```javascript
+// Uses rate-limiter-flexible library
+const rateLimiter = new RateLimiter(55); // 55 requests/minute
+
+async _executeQuery(query, variables) {
+    await this.rateLimiter.waitIfNeeded();  // Queue if needed
+    return await this.graphqlRequest(query, variables);
+}
 ```
 
 ### 4. Book Cache (`src/book-cache.js`)
@@ -159,7 +174,43 @@ CREATE TABLE books (
 - **Multi-user**: Isolated data per user
 - **Migration**: Automatic schema updates
 
-### 5. Configuration System (`src/config.js`, `src/config-validator.js`)
+### 5. Rate Limiting System (`src/utils.js`)
+
+**Purpose**: Intelligent API rate limiting to prevent exceeding service limits
+
+**Implementation**:
+```javascript
+class RateLimiter {
+    constructor(maxRequestsPerMinute = 55) {
+        this.rateLimiter = new RateLimiterMemory({
+            points: maxRequestsPerMinute,
+            duration: 60,  // per 60 seconds
+        });
+    }
+    
+    async waitIfNeeded(identifier = 'default') {
+        // Queue request if rate limit would be exceeded
+        await this.rateLimiter.consume(identifier);
+    }
+}
+```
+
+**Features**:
+- **Intelligent queuing**: Requests are delayed, not dropped
+- **Per-service limits**: Different limits for different APIs
+- **Warning system**: Logs warnings at 80% capacity
+- **Multi-identifier support**: Separate limits for different request types
+
+**Rate Limits**:
+- **Hardcover API**: 55 requests/minute (respects their published limits)
+- **Audiobookshelf**: 10 requests/second (more lenient for local servers)
+
+**Impact on Sync Performance**:
+- **Small libraries** (< 50 books): No noticeable impact
+- **Large libraries** (100+ books): May extend sync time to 2-5 minutes
+- **Automatic handling**: No user intervention required
+
+### 6. Configuration System (`src/config.js`, `src/config-validator.js`)
 
 **Purpose**: YAML-based configuration with comprehensive validation
 
@@ -179,6 +230,7 @@ CREATE TABLE books (
 sequenceDiagram
     participant CLI
     participant SM as Sync Manager
+    participant RL as Rate Limiter
     participant ABS as Audiobookshelf
     participant HC as Hardcover
     participant Cache
@@ -187,6 +239,8 @@ sequenceDiagram
     SM->>Cache: initialize connection
     SM->>ABS: getReadingProgress()
     ABS-->>SM: book list with progress
+    SM->>RL: waitIfNeeded()
+    RL-->>SM: proceed/wait
     SM->>HC: getUserBooks()
     HC-->>SM: user library
     SM->>SM: create identifier lookup
@@ -196,9 +250,13 @@ sequenceDiagram
         Cache-->>SM: cached data
         SM->>SM: calculate progress change
         alt Book found in Hardcover
+            SM->>RL: waitIfNeeded()
+            RL-->>SM: proceed/wait
             SM->>HC: updateProgress()
             HC-->>SM: success/failure
         else Book not found + auto_add_books
+            SM->>RL: waitIfNeeded()
+            RL-->>SM: proceed/wait
             SM->>HC: addBookToLibrary()
             HC-->>SM: success/failure
         end
@@ -371,6 +429,12 @@ async function processBooks(books, workers = 3) {
 - API calls: ~20-50 requests (only changed books)
 - Database updates: 5-10 records typically
 
+**Rate Limiting Impact**:
+- **Small libraries** (< 50 books): Minimal impact (~5-15 seconds)
+- **Large libraries** (100+ books): May extend to 2-5 minutes
+- **Initial syncs**: Higher impact due to more API calls
+- **Automatic handling**: No manual intervention required
+
 ### Memory Usage
 
 **Typical Memory Footprint**:
@@ -386,6 +450,12 @@ async function processBooks(books, workers = 3) {
   - Library fetch: 1-5 requests (paginated)
   - Updates: 1 request per changed book
   - Total: typically 10-50 requests
+
+**Rate Limiting Considerations**:
+- **Hardcover limit**: 55 requests/minute maximum
+- **Request queuing**: Automatic delay when approaching limits
+- **Burst handling**: Initial requests may queue more than steady-state
+- **Logging**: Warns at 80% capacity (44+ requests/minute)
 
 ## 🛡️ Error Handling Strategy
 
