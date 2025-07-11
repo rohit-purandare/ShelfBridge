@@ -3,7 +3,6 @@ import { RateLimiter } from './utils.js';
 import logger from './logger.js';
 
 const RATE_LIMIT_PER_MINUTE = 55;
-const MAX_PARALLEL_WORKERS = 5;
 
 export class HardcoverClient {
     constructor(token) {

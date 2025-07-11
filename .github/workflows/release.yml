@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'package.json' ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'version')
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Get version from package.json
+      id: package_version
+      run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+    
+    - name: Check if tag already exists
+      id: check_tag
+      run: |
+        if git rev-parse "v${{ steps.package_version.outputs.version }}" >/dev/null 2>&1; then
+          echo "Tag v${{ steps.package_version.outputs.version }} already exists"
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Generate changelog
+      id: changelog
+      if: steps.check_tag.outputs.skip == 'false'
+      run: |
+        echo "Generating changelog..."
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          echo "No previous tags found, generating changelog from first commit"
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+        else
+          echo "Generating changelog since $LAST_TAG"
+          CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        fi
+        
+        # Save changelog to file for multi-line output
+        echo "## 📋 Changes" > changelog.md
+        echo "" >> changelog.md
+        echo "$CHANGELOG" >> changelog.md
+        echo "" >> changelog.md
+        echo "## 🐳 Docker Images" >> changelog.md
+        echo "" >> changelog.md
+        echo "- \`ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}\`" >> changelog.md
+        echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> changelog.md
+        echo "" >> changelog.md
+        echo "## 🚀 Installation" >> changelog.md
+        echo "" >> changelog.md
+        echo "\`\`\`bash" >> changelog.md
+        echo "# Docker" >> changelog.md
+        echo "docker pull ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}" >> changelog.md
+        echo "" >> changelog.md
+        echo "# Node.js" >> changelog.md
+        echo "npm install -g shelfbridge@${{ steps.package_version.outputs.version }}" >> changelog.md
+        echo "\`\`\`" >> changelog.md
+        
+        echo "changelog_file=changelog.md" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      if: steps.check_tag.outputs.skip == 'false'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.package_version.outputs.version }}
+        release_name: 🚀 ShelfBridge v${{ steps.package_version.outputs.version }}
+        body_path: ${{ steps.changelog.outputs.changelog_file }}
+        draft: false
+        prerelease: false
+    
+    - name: Update package README badge
+      if: steps.check_tag.outputs.skip == 'false'
+      run: |
+        echo "✅ Release v${{ steps.package_version.outputs.version }} created successfully"
+        echo "🐳 Docker images will be available after the docker-build workflow completes"
+        echo "📦 Release available at: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.package_version.outputs.version }}" 

@@ -1,6 +1,5 @@
 import cron from 'node-cron';
 import { DateTime } from 'luxon';
-import logger from './logger.js';
 
 export class ConfigValidator {
     constructor() {
@@ -532,7 +531,7 @@ export class ConfigValidator {
             // Test timezone by creating a DateTime object
             DateTime.now().setZone(timezone);
             return null;
-        } catch (error) {
+        } catch (_error) {
             return `'${fieldName}' must be a valid timezone (got: '${timezone}')`;
         }
     }

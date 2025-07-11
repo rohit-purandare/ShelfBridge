@@ -1,6 +1,5 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
-import path from 'path';
 import logger from './logger.js';
 
 export class Config {

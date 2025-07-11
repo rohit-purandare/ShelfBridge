@@ -5,12 +5,11 @@ import {
     normalizeIsbn, 
     normalizeAsin, 
     extractIsbn, 
-    extractAsin,
-    extractTitle,
+    extractAsin, 
+    extractTitle, 
     extractAuthor,
     calculateCurrentPage,
-    calculateCurrentSeconds,
-    formatDuration
+    calculateCurrentSeconds
 } from './utils.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
@@ -123,7 +122,7 @@ export class SyncManager {
                     // Extract identifiers
                     const identifiers = this._extractBookIdentifier(absBook);
                     bookDetail.identifiers = identifiers;
-                    bookDetail.actions.push(`Found identifiers: ${Object.entries(identifiers).filter(([k,v]) => v).map(([k,v]) => `${k.toUpperCase()}=${v}`).join(', ') || 'none'}`);
+                    bookDetail.actions.push(`Found identifiers: ${Object.entries(identifiers).filter(([_k,v]) => v).map(([k,v]) => `${k.toUpperCase()}=${v}`).join(', ') || 'none'}`);
 
                     // Check cache for this book
                     const cacheIdentifier = identifiers.asin || identifiers.isbn;
@@ -842,7 +841,7 @@ export class SyncManager {
 
             // Prepare rollback callback in case API fails
             const rollbackCallbacks = [];
-            let apiRollbackNeeded = false;
+            const _apiRollbackNeeded = false;
 
             logger.debug(`Adding ${title} to Hardcover library`, {
                 bookId: bookId,
@@ -863,7 +862,7 @@ export class SyncManager {
                 const author = this._extractAuthorFromData(absBook, { userBook: null, edition });
                 
                 // Add API rollback callback
-                apiRollbackNeeded = true;
+                const _apiRollbackNeeded = true;
                 rollbackCallbacks.push(async () => {
                     logger.info(`Rolling back auto-add for ${title}`);
                     // Note: Hardcover doesn't have a remove from library API, so we log the issue
@@ -902,7 +901,7 @@ export class SyncManager {
                         
                         try {
                             // Create hardcover match object for progress sync
-                            const hardcoverMatch = { 
+                            const _hardcoverMatch = { 
                                 userBook: { id: addResult.id, book: edition.book }, 
                                 edition: edition 
                             };
@@ -959,7 +958,7 @@ export class SyncManager {
         }
     }
 
-    async _syncExistingBook(absBook, hardcoverMatch, identifierType, identifier) {
+    async _syncExistingBook(absBook, hardcoverMatch, _identifierType, _identifier) {
         const title = extractTitle(absBook) || 'Unknown Title';
         const progressPercent = absBook.progress_percentage || 0;
         const { userBook, edition } = hardcoverMatch;
@@ -1215,7 +1214,7 @@ export class SyncManager {
 
             // Prepare rollback callback for API failure
             const rollbackCallbacks = [];
-            let apiSuccess = false;
+            const _apiSuccess = false;
 
             const success = await this.hardcover.markBookCompleted(userBookId, edition.id, totalValue, useSeconds, finishedAt, startedAt);
             
@@ -1225,7 +1224,7 @@ export class SyncManager {
                     totalValue: totalValue,
                     useSeconds: useSeconds
                 });
-                apiSuccess = true;
+                const _apiSuccess = true;
 
                 // Add API rollback callback
                 rollbackCallbacks.push(async () => {

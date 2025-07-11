@@ -2,8 +2,6 @@ import axios from 'axios';
 import { RateLimiter } from './utils.js';
 import logger from './logger.js';
 
-const MAX_PARALLEL_WORKERS = 8;
-
 export class AudiobookshelfClient {
     constructor(baseUrl, token, maxWorkers = 3) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
@@ -287,7 +285,7 @@ export class AudiobookshelfClient {
             // This endpoint can return 404 if there's no progress, which is normal
             const response = await this._makeRequest('GET', `/api/me/progress/${itemId}`, null, [404]);
             return response;
-        } catch (error) {
+        } catch (_error) {
             // Not an error, just means no progress data
             return null;
         }
@@ -299,7 +297,7 @@ export class AudiobookshelfClient {
             let page = 0;
             let allSessions = [];
             let total = 0;
-            let itemsPerPage = 10;
+            let _itemsPerPage = 10;
 
             while (true) {
                 const response = await this._makeRequest('GET', `/api/sessions?page=${page}`, null, [404]);
@@ -307,7 +305,7 @@ export class AudiobookshelfClient {
                 
                 if (page === 0) {
                     total = response.total;
-                    itemsPerPage = response.itemsPerPage;
+                    _itemsPerPage = response.itemsPerPage;
                 }
                 
                 allSessions = allSessions.concat(response.sessions || []);

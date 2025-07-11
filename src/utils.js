@@ -442,7 +442,7 @@ export class RateLimiter {
         const currentMinute = Math.floor(Date.now() / 60000);
         const cutoff = currentMinute - 2; // Keep last 2 minutes
         
-        for (const [key, value] of this.requestCounts.entries()) {
+        for (const [key, _value] of this.requestCounts.entries()) {
             const [, minuteStr] = key.split(':');
             const minute = parseInt(minuteStr, 10);
             

@@ -603,7 +603,7 @@ async function syncUser(user, globalConfig) {
                 
                 if (book.identifiers && Object.keys(book.identifiers).length > 0) {
                     const identifierStr = Object.entries(book.identifiers)
-                        .filter(([k, v]) => v)
+                        .filter(([_k, v]) => v)
                         .map(([k, v]) => `${k.toUpperCase()}=${v}`)
                         .join(', ');
                     if (identifierStr) {
