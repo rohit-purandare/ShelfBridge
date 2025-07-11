@@ -81,8 +81,10 @@ Choose the setup method that best fits your needs:
 For development or customization:
 
 ```bash
-# Use the development compose file to build locally
-docker-compose -f docker-compose.dev.yml up -d
+# Edit docker-compose.yml to build locally instead of pulling image
+# Comment out the 'image:' line and uncomment the 'build: .' line
+# Then run:
+docker-compose up -d
 ```
 
 ---
