@@ -24,9 +24,7 @@ updates:
     # Allow up to 5 minor version updates at once
     allow:
       - dependency-type: "direct"
-        update-type: "minor"
       - dependency-type: "indirect"
-        update-type: "minor"
     # Ignore major version updates for now (can be enabled later)
     ignore:
       - dependency-name: "*"
