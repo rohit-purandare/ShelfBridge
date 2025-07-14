@@ -6,7 +6,8 @@ const RATE_LIMIT_PER_MINUTE = 55;
 
 export class HardcoverClient {
     constructor(token) {
-        this.token = token;
+        // Normalize token by stripping "Bearer" prefix if present
+        this.token = this.normalizeToken(token);
         this.baseUrl = 'https://api.hardcover.app/v1/graphql';
         this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
         
@@ -21,6 +22,35 @@ export class HardcoverClient {
         });
         
         logger.debug('HardcoverClient initialized');
+    }
+
+    /**
+     * Normalize token by stripping "Bearer" prefix if present
+     * This handles cases where users accidentally include "Bearer" in their token
+     */
+    normalizeToken(token) {
+        if (!token || typeof token !== 'string') {
+            return token;
+        }
+
+        const trimmedToken = token.trim();
+        
+        // Check if token starts with "Bearer " (case-insensitive)
+        if (trimmedToken.toLowerCase().startsWith('bearer ')) {
+            const originalToken = trimmedToken;
+            const normalizedToken = trimmedToken.substring(7); // Remove "Bearer "
+            
+            logger.warn('Hardcover token contained "Bearer" prefix - automatically removed', {
+                originalLength: originalToken.length,
+                normalizedLength: normalizedToken.length,
+                originalPrefix: originalToken.substring(0, 15) + '...',
+                normalizedPrefix: normalizedToken.substring(0, 15) + '...'
+            });
+            
+            return normalizedToken;
+        }
+        
+        return trimmedToken;
     }
 
     async testConnection() {

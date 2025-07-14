@@ -164,12 +164,16 @@ abs_url: https://example.com/path        # Additional path
 4. Generate API Token
 5. Copy the complete token
 
+**Important**: Use only the raw token value (without "Bearer " prefix). ShelfBridge automatically adds the "Bearer " prefix.
+
 ### Hardcover API Token
 
 1. Go to [hardcover.app/account/developer](https://hardcover.app/account/developer)
 2. Enable API access if needed
 3. Generate API token
 4. Copy the complete token
+
+**Important**: Use only the raw token value (without "Bearer " prefix). ShelfBridge automatically adds the "Bearer " prefix.
 
 ## 📝 Configuration Examples
 

@@ -2,6 +2,16 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get the version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJsonPath = join(__dirname, '..', 'package.json');
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+const version = packageJson.version;
 
 // Create logs directory if it doesn't exist
 const logsDir = 'logs';
@@ -41,7 +51,7 @@ const logger = winston.createLogger({
     format: logFormat,
     defaultMeta: { 
         service: 'shelfbridge',
-        version: '1.0.0'
+        version: version
     },
     transports: [
         // Console transport

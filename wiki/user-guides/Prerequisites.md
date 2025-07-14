@@ -72,6 +72,8 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "YOUR_SERVER_URL/api/me"
 
 If successful, you'll see your user information in JSON format.
 
+**Important**: When adding your token to ShelfBridge configuration, use only the raw token value (without "Bearer " prefix). ShelfBridge will automatically add the "Bearer " prefix when making API requests.
+
 ## 📚 Hardcover Setup
 
 ### Account Requirements
@@ -107,6 +109,8 @@ curl -X POST \
 ```
 
 If successful, you'll see your Hardcover user information.
+
+**Important**: When adding your token to ShelfBridge configuration, use only the raw token value (without "Bearer " prefix). ShelfBridge will automatically add the "Bearer " prefix when making API requests.
 
 ## 🌐 Network Requirements
 
@@ -188,6 +192,8 @@ Once you have all prerequisites ready:
 ### "Token authentication failed"
 - Double-check you copied the complete token
 - Tokens are case-sensitive and may contain special characters
+- **Do not include "Bearer " prefix** - use only the raw token value
+- If you accidentally included "Bearer ", ShelfBridge will automatically remove it and log a warning
 - Generate a new token if you're unsure
 
 ---

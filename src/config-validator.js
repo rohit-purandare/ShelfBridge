@@ -26,7 +26,13 @@ export class ConfigValidator {
                 'token123',
                 'api_token_here',
                 'your_api_key',
-                'your_api_token'
+                'your_api_token',
+                'bearer your_audiobookshelf_api_token',
+                'bearer your_hardcover_api_token',
+                'bearer your_token_here',
+                'Bearer your_audiobookshelf_api_token',
+                'Bearer your_hardcover_api_token',
+                'Bearer your_token_here'
             ],
             userIds: [
                 'your_username',
@@ -178,7 +184,8 @@ export class ConfigValidator {
             // Validate users configuration
             const users = config.getUsers();
             const userErrors = this.validateUsers(users);
-            errors.push(...userErrors);
+            errors.push(...userErrors.errors);
+            warnings.push(...userErrors.warnings);
 
             // Check for duplicate user IDs
             const duplicateErrors = this.checkDuplicateUserIds(users);
@@ -272,12 +279,13 @@ export class ConfigValidator {
      */
     validateUsers(users) {
         const errors = [];
+        const warnings = [];
         const schema = this.schema.users;
 
         // Check if users is an array
         if (!Array.isArray(users)) {
             errors.push("Users configuration must be an array");
-            return errors;
+            return { errors, warnings };
         }
 
         // Check minimum items
@@ -287,11 +295,12 @@ export class ConfigValidator {
 
         // Validate each user
         users.forEach((user, index) => {
-            const userErrors = this.validateUser(user, index);
-            errors.push(...userErrors);
+            const userResult = this.validateUser(user, index);
+            errors.push(...userResult.errors);
+            warnings.push(...userResult.warnings);
         });
 
-        return errors;
+        return { errors, warnings };
     }
 
     /**
@@ -299,11 +308,12 @@ export class ConfigValidator {
      */
     validateUser(user, index) {
         const errors = [];
+        const warnings = [];
         const schema = this.schema.users.items;
 
         if (typeof user !== 'object' || user === null) {
             errors.push(`User ${index}: Must be an object`);
-            return errors;
+            return { errors, warnings };
         }
 
         for (const [key, rules] of Object.entries(schema)) {
@@ -331,13 +341,18 @@ export class ConfigValidator {
                     errors.push(`User ${index}: '${key}' contains placeholder value '${value}' - please replace with your actual ${this.getFieldDescription(key)}`);
                     continue;
                 }
+
+                // Check for "Bearer" prefix in tokens
+                if ((key === 'abs_token' || key === 'hardcover_token') && this.hasBearerPrefix(value)) {
+                    warnings.push(`User ${index}: '${key}' contains "Bearer" prefix - this will be automatically removed, but you should use the raw token value`);
+                }
             }
 
             // Type validation
             if (rules.type && value !== undefined) {
                 const typeError = this.validateType(`User ${index}.${key}`, value, rules.type);
                 if (typeError) {
-                    errors.push(typeError);
+                    errors.push(`User ${index}: ${typeError}`);
                     continue;
                 }
             }
@@ -353,12 +368,12 @@ export class ConfigValidator {
             if (rules.validate && value !== undefined) {
                 const customError = this.validateCustom(`User ${index}.${key}`, value, rules.validate);
                 if (customError) {
-                    errors.push(customError);
+                    errors.push(`User ${index}: ${customError}`);
                 }
             }
         }
 
-        return errors;
+        return { errors, warnings };
     }
 
     /**
@@ -715,5 +730,15 @@ export class ConfigValidator {
             lowerValue.includes(pattern.toLowerCase()) ||
             value === pattern
         );
+    }
+
+    /**
+     * Check if a string value has a "Bearer" prefix.
+     */
+    hasBearerPrefix(value) {
+        if (!value || typeof value !== 'string') {
+            return false;
+        }
+        return value.startsWith('Bearer ') || value.startsWith('bearer ');
     }
 } 

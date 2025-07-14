@@ -5,7 +5,7 @@ import logger from './logger.js';
 export class AudiobookshelfClient {
     constructor(baseUrl, token, maxWorkers = 3) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
-        this.token = token;
+        this.token = this.normalizeToken(token);
         this.maxWorkers = maxWorkers;
         this.rateLimiter = new RateLimiter(600); // 10 requests per second = 600 per minute
 
@@ -42,6 +42,35 @@ export class AudiobookshelfClient {
             baseUrl: this.baseUrl, 
             maxWorkers: this.maxWorkers 
         });
+    }
+
+    /**
+     * Normalize token by stripping "Bearer" prefix if present
+     * This handles cases where users accidentally include "Bearer" in their token
+     */
+    normalizeToken(token) {
+        if (!token || typeof token !== 'string') {
+            return token;
+        }
+
+        const trimmedToken = token.trim();
+        
+        // Check if token starts with "Bearer " (case-insensitive)
+        if (trimmedToken.toLowerCase().startsWith('bearer ')) {
+            const originalToken = trimmedToken;
+            const normalizedToken = trimmedToken.substring(7); // Remove "Bearer "
+            
+            logger.warn('Audiobookshelf token contained "Bearer" prefix - automatically removed', {
+                originalLength: originalToken.length,
+                normalizedLength: normalizedToken.length,
+                originalPrefix: originalToken.substring(0, 15) + '...',
+                normalizedPrefix: normalizedToken.substring(0, 15) + '...'
+            });
+            
+            return normalizedToken;
+        }
+        
+        return trimmedToken;
     }
 
     async testConnection() {
