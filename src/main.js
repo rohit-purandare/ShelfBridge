@@ -1219,7 +1219,7 @@ async function runInteractiveMode() {
                         },
                     ]);
                     switch (cacheAction) {
-                        case 'stats':
+                        case 'stats': {
                             const cache = new BookCache();
                             const unregisterCache = registerCleanup(() => cache.close());
                             try {
@@ -1233,7 +1233,8 @@ async function runInteractiveMode() {
                                 unregisterCache();
                             }
                             break;
-                        case 'show':
+                        }
+                        case 'show': {
                             const cache2 = new BookCache();
                             const unregisterCache2 = registerCleanup(() => cache2.close());
                             try {
@@ -1263,7 +1264,8 @@ async function runInteractiveMode() {
                                 unregisterCache2();
                             }
                             break;
-                        case 'clear':
+                        }
+                        case 'clear': {
                             const cache3 = new BookCache();
                             const unregisterCache3 = registerCleanup(() => cache3.close());
                             try {
@@ -1273,6 +1275,7 @@ async function runInteractiveMode() {
                                 unregisterCache3();
                             }
                             break;
+                        }
                         case 'export': {
                             const { filename } = await inquirer.prompt([
                                 {
