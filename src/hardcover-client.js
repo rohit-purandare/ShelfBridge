@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { RateLimiter } from './utils.js';
 import logger from './logger.js';
+import { IdentifierLookupService } from './identifier-lookup.js';
 
 const RATE_LIMIT_PER_MINUTE = 55;
 
@@ -10,6 +11,7 @@ export class HardcoverClient {
         this.token = this.normalizeToken(token);
         this.baseUrl = 'https://api.hardcover.app/v1/graphql';
         this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
+        this.identifierLookup = new IdentifierLookupService();
         
         // Create axios instance with default config
         this.client = axios.create({
@@ -863,5 +865,361 @@ export class HardcoverClient {
             logger.error('Error getting current user:', error.message);
             return null;
         }
+    }
+
+    async searchBooksByTitle(title, authorName = null) {
+        logger.info(`Searching Hardcover by title: "${title}"${authorName ? ` by ${authorName}` : ''}`);
+        
+        // Start with slug search since it's most reliable and fast
+        const slug = title.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        
+        const queries = [
+            // Try slug search first (fastest and most reliable)
+            {
+                name: 'slug',
+                query: `
+                    query searchBooksBySlug($slug: String!) {
+                        books(where: { slug: { _eq: $slug } }, limit: 10) {
+                            id
+                            title
+                            slug
+                            contributions(where: {contributable_type: {_eq: "Book"}}) {
+                                author {
+                                    id
+                                    name
+                                }
+                            }
+                            editions {
+                                id
+                                isbn_10
+                                isbn_13
+                                asin
+                                pages
+                                audio_seconds
+                                physical_format
+                                reading_format { format }
+                            }
+                        }
+                    }
+                `,
+                variables: { slug: slug }
+            },
+            // Fallback to exact title search
+            {
+                name: 'exact',
+                query: `
+                    query searchBooksByTitleExact($title: String!) {
+                        books(where: { title: { _eq: $title } }, limit: 10) {
+                            id
+                            title
+                            slug
+                            contributions(where: {contributable_type: {_eq: "Book"}}) {
+                                author {
+                                    id
+                                    name
+                                }
+                            }
+                            editions {
+                                id
+                                isbn_10
+                                isbn_13
+                                asin
+                                pages
+                                audio_seconds
+                                physical_format
+                                reading_format { format }
+                            }
+                        }
+                    }
+                `,
+                variables: { title: title }
+            }
+        ];
+
+        let allBooks = [];
+
+        for (const queryInfo of queries) {
+            try {
+                logger.info(`  Trying ${queryInfo.name} title search...`);
+                const result = await this._executeQuery(queryInfo.query, queryInfo.variables);
+                
+                if (result && result.books && result.books.length > 0) {
+                    logger.info(`  ${queryInfo.name} search found ${result.books.length} results`);
+                    allBooks.push(...result.books);
+                    
+                    // If slug search succeeded, no need to try other methods
+                    if (queryInfo.name === 'slug') {
+                        logger.info(`  Slug search successful, skipping other search methods`);
+                        break;
+                    }
+                } else {
+                    logger.info(`  ${queryInfo.name} search found no results`);
+                }
+            } catch (error) {
+                logger.error(`Error in ${queryInfo.name} title search:`, error.message);
+                // Continue to next search strategy
+            }
+        }
+
+        if (allBooks.length === 0) {
+            logger.info('No books found with any title search strategy');
+            return [];
+        }
+
+        // Remove duplicates
+        const uniqueBooks = allBooks.filter((book, index, self) => 
+            index === self.findIndex(b => b.id === book.id)
+        );
+        
+        logger.info(`Found ${uniqueBooks.length} unique books from title searches`);
+
+        // If author name is provided, filter results by author
+        let books = uniqueBooks;
+        if (authorName && books.length > 0) {
+            logger.info(`Filtering ${books.length} results by author: ${authorName}`);
+            
+            const normalizedSearchAuthor = authorName.toLowerCase().trim();
+            const searchAuthorParts = this._extractAuthorParts(normalizedSearchAuthor);
+            
+            books = books.filter(book => {
+                if (!book.contributions || book.contributions.length === 0) {
+                    logger.debug(`Book "${book.title}" has no contributions, skipping`);
+                    return false;
+                }
+                
+                // Check if any author matches
+                const authorMatch = book.contributions.some(contrib => {
+                    if (!contrib.author || !contrib.author.name) return false;
+                    const bookAuthor = contrib.author.name.toLowerCase().trim();
+                    const bookAuthorParts = this._extractAuthorParts(bookAuthor);
+                    
+                    logger.debug(`Comparing authors: "${authorName}" vs "${contrib.author.name}"`);
+                    
+                    // Multiple matching strategies
+                    const exactMatch = bookAuthor === normalizedSearchAuthor;
+                    const containsMatch = bookAuthor.includes(normalizedSearchAuthor) || 
+                                        normalizedSearchAuthor.includes(bookAuthor);
+                    
+                    // Check if last names match (most reliable for author matching)
+                    const lastNameMatch = searchAuthorParts.lastName && bookAuthorParts.lastName &&
+                                         searchAuthorParts.lastName === bookAuthorParts.lastName;
+                    
+                    // Check if initials match (e.g., "J.K." matches "J. K." or "Joanne Kathleen")
+                    const initialsMatch = this._checkInitialsMatch(searchAuthorParts, bookAuthorParts);
+                    
+                    const isMatch = exactMatch || containsMatch || lastNameMatch || initialsMatch;
+                    
+                    if (isMatch) {
+                        logger.debug(`✅ Author match found: "${normalizedSearchAuthor}" matches "${bookAuthor}"`);
+                    }
+                    
+                    return isMatch;
+                });
+                
+                if (!authorMatch) {
+                    const bookAuthors = book.contributions.map(c => c.author?.name).filter(Boolean).join(', ');
+                    logger.debug(`❌ No author match for "${book.title}" by ${bookAuthors}`);
+                }
+                
+                return authorMatch;
+            });
+            
+            logger.info(`Found ${books.length} books matching both title and author`);
+        }
+
+        // Convert to the same format as ISBN/ASIN search (return editions with book info)
+        const editions = [];
+        for (const book of books) {
+            if (book.editions && book.editions.length > 0) {
+                for (const edition of book.editions) {
+                    editions.push({
+                        ...edition,
+                        book: {
+                            id: book.id,
+                            title: book.title,
+                            slug: book.slug,
+                            contributions: book.contributions
+                        }
+                    });
+                }
+            }
+        }
+
+        logger.info(`Title search returned ${editions.length} editions from ${books.length} books`);
+        return editions;
+    }
+
+    /**
+     * Enhanced search that tries alternative identifiers when original search fails
+     * @param {string} asin - Original ASIN
+     * @param {string} title - Book title
+     * @param {string} author - Author name
+     * @returns {Array} Array of book editions found
+     */
+    async searchWithAlternativeIdentifiers(asin, title, author) {
+        logger.info(`🔄 Enhanced search for "${title}" by ${author}`);
+        logger.info(`🎯 Priority: Identifier-based search first, then title fallback`);
+        
+        let results = [];
+        
+        // === PHASE 1: EXHAUSTIVE IDENTIFIER SEARCH ===
+        logger.info(`\n📋 PHASE 1: IDENTIFIER-BASED SEARCH`);
+        
+        // Step 1: Try original ASIN
+        if (asin) {
+            logger.info(`🔍 Step 1: Trying original audiobook ASIN: ${asin}`);
+            results = await this.searchBooksByAsin(asin);
+            if (results.length > 0) {
+                logger.info(`✅ Found ${results.length} results with original ASIN`);
+                return results;
+            }
+            logger.info(`❌ No results with original ASIN`);
+        } else {
+            logger.info(`⚠️  No ASIN available for identifier search`);
+        }
+
+        // Step 2: Get alternative identifiers using external APIs
+        let alternatives = { alternative_asins: [], isbns: [], sources: [] };
+        if (title && author) {
+            logger.info(`🔍 Step 2: Looking up identifiers using external APIs (title + author)...`);
+            
+            try {
+                // Even without an original ASIN, we can still find identifiers from title/author
+                alternatives = await this.identifierLookup.findAlternativeIdentifiers(asin, title, author);
+                logger.info(`📊 External API results:`);
+                logger.info(`  - ${alternatives.alternative_asins.length} ASINs found`);
+                logger.info(`  - ${alternatives.isbns.length} ISBNs found`);
+                logger.info(`  - Sources: ${alternatives.sources.join(', ') || 'None'}`);
+                
+                if (alternatives.alternative_asins.length === 0 && alternatives.isbns.length === 0) {
+                    logger.warn(`❌ External APIs found no identifiers for "${title}" by ${author}`);
+                }
+            } catch (error) {
+                logger.warn('Error during alternative identifier lookup:', error.message);
+            }
+        } else {
+            logger.warn(`⚠️  Cannot lookup identifiers - missing title or author`);
+        }
+
+        // Step 3: Try ALL alternative ASINs (print/ebook versions)
+        if (alternatives.alternative_asins.length > 0) {
+            logger.info(`🔍 Step 3: Trying ${alternatives.alternative_asins.length} alternative ASINs (print/ebook versions)...`);
+            for (const altAsin of alternatives.alternative_asins) {
+                logger.debug(`  🔍 Trying alternative ASIN: ${altAsin}`);
+                results = await this.searchBooksByAsin(altAsin);
+                if (results.length > 0) {
+                    logger.info(`✅ Found ${results.length} results with alternative ASIN: ${altAsin}`);
+                    return results;
+                }
+            }
+            logger.info(`❌ No results with any alternative ASINs`);
+        }
+
+        // Step 4: Try ALL ISBNs
+        if (alternatives.isbns.length > 0) {
+            logger.info(`🔍 Step 4: Trying ${alternatives.isbns.length} ISBNs...`);
+            for (const isbn of alternatives.isbns) {
+                logger.debug(`  🔍 Trying ISBN: ${isbn}`);
+                results = await this.searchBooksByIsbn(isbn);
+                if (results.length > 0) {
+                    logger.info(`✅ Found ${results.length} results with ISBN: ${isbn}`);
+                    return results;
+                }
+            }
+            logger.info(`❌ No results with any ISBNs`);
+        }
+
+        // === PHASE 2: TITLE-BASED SEARCH (FALLBACK) ===
+        logger.info(`\n📋 PHASE 2: TITLE-BASED SEARCH (FALLBACK)`);
+        logger.warn(`⚠️  All identifier searches failed, falling back to title matching...`);
+        
+        if (title && author) {
+            // Step 5: Try cleaned title (removes "06 " prefixes etc.)
+            logger.info(`🔍 Step 5: Trying title search with cleaned title...`);
+            const cleanedTitle = IdentifierLookupService.cleanTitle(title);
+            if (cleanedTitle !== title) {
+                logger.info(`  📖 Cleaned title: "${title}" → "${cleanedTitle}"`);
+                results = await this.searchBooksByTitle(cleanedTitle, author);
+                if (results.length > 0) {
+                    logger.info(`✅ Found ${results.length} results with cleaned title`);
+                    return results;
+                }
+                logger.info(`❌ No results with cleaned title`);
+            }
+
+            // Step 6: Try original title as last resort
+            logger.info(`🔍 Step 6: Trying original title search as final fallback...`);
+            results = await this.searchBooksByTitle(title, author);
+            if (results.length > 0) {
+                logger.info(`✅ Found ${results.length} results with original title`);
+                return results;
+            }
+            logger.info(`❌ No results with original title`);
+        } else {
+            logger.warn(`⚠️  Cannot do title search - missing title or author`);
+        }
+
+        logger.warn(`❌ SEARCH EXHAUSTED: No results found with any method`);
+        logger.warn(`   - Tried original ASIN: ${asin ? 'Yes' : 'No'}`);
+        logger.warn(`   - Tried ${alternatives.alternative_asins.length} alternative ASINs`);
+        logger.warn(`   - Tried ${alternatives.isbns.length} ISBNs`);
+        logger.warn(`   - Tried title searches: ${title && author ? 'Yes' : 'No'}`);
+        
+        return [];
+    }
+
+    /**
+     * Extract author name parts for better matching
+     * @param {string} authorName - Full author name
+     * @returns {Object} Object with firstName, lastName, initials
+     */
+    _extractAuthorParts(authorName) {
+        if (!authorName) return {};
+        
+        const parts = authorName.split(/\s+/).filter(Boolean);
+        const result = {
+            firstName: '',
+            lastName: '',
+            initials: []
+        };
+        
+        if (parts.length === 0) return result;
+        
+        // Extract last name (usually the last part)
+        result.lastName = parts[parts.length - 1].replace(/[.,]/g, '');
+        
+        // Extract first name and initials
+        if (parts.length > 1) {
+            result.firstName = parts[0].replace(/[.,]/g, '');
+            
+            // Extract initials from all parts except last
+            result.initials = parts.slice(0, -1).map(part => {
+                const clean = part.replace(/[.,]/g, '');
+                return clean.length === 1 ? clean : clean.charAt(0);
+            });
+        }
+        
+        return result;
+    }
+
+    /**
+     * Check if initials match between two author name parts
+     * @param {Object} searchParts - Parsed search author
+     * @param {Object} bookParts - Parsed book author
+     * @returns {boolean} True if initials match
+     */
+    _checkInitialsMatch(searchParts, bookParts) {
+        if (!searchParts.initials || !bookParts.initials) return false;
+        if (searchParts.initials.length === 0 || bookParts.initials.length === 0) return false;
+        
+        // Check if search initials match the beginning of book initials
+        // e.g., "J.K." should match "J.K.R." or "Joanne K."
+        const searchInitials = searchParts.initials.map(i => i.toLowerCase());
+        const bookInitials = bookParts.initials.map(i => i.toLowerCase());
+        
+        // All search initials should be found in book initials
+        return searchInitials.every((initial, index) => 
+            index < bookInitials.length && bookInitials[index] === initial
+        );
     }
 } 
