@@ -93,6 +93,41 @@ node src/main.js sync --user bob --dry-run
 ==================================================
 ```
 
+### `test` - Test API Connections
+
+Test API connections for all configured users or a specific user. Useful for verifying that your Audiobookshelf and Hardcover tokens are valid and that the services are reachable.
+
+```bash
+node src/main.js test [options]
+```
+
+#### Options
+
+| Option                | Short | Description                | Example         |
+|-----------------------|-------|----------------------------|-----------------|
+| `--user <userId>`     | `-u`  | Test specific user only    | `-u alice`      |
+
+#### Examples
+
+```bash
+# Test API connections for all users
+node src/main.js test
+
+# Test API connections for a specific user
+node src/main.js test --user alice
+```
+
+#### Output
+
+```
+=== Testing connections for user: alice ===
+✅ Audiobookshelf connection successful
+✅ Hardcover connection successful
+=== Testing connections for user: bob ===
+✅ Audiobookshelf connection successful
+✅ Hardcover connection successful
+```
+
 ### `start` - Scheduled Sync Service (Default)
 
 Start ShelfBridge in scheduled sync mode (default behavior).
