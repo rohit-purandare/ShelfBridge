@@ -1,20 +1,30 @@
 docs:
-  - "docs/**"
-  - "wiki/**"
-  - "*.md"
+  - changed-files:
+    - any-glob-to-any-file: 
+      - "docs/**"
+      - "wiki/**"
+      - "*.md"
 
 config:
-  - "config/**"
-  - "docker-compose.yml"
-  - "Dockerfile"
+  - changed-files:
+    - any-glob-to-any-file:
+      - "config/**"
+      - "docker-compose.yml"
+      - "Dockerfile"
 
 code:
-  - "src/**"
+  - changed-files:
+    - any-glob-to-any-file:
+      - "src/**"
 
 tests:
-  - "test/**"
-  - "*test*.js"
+  - changed-files:
+    - any-glob-to-any-file:
+      - "test/**"
+      - "*test*.js"
 
 ci:
-  - ".github/workflows/**"
-  - ".github/**" 
+  - changed-files:
+    - any-glob-to-any-file:
+      - ".github/workflows/**"
+      - ".github/**" 
