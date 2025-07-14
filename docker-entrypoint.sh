@@ -9,16 +9,16 @@ check_native_modules() {
     if find /app/node_modules -name "*.node" -type f 2>/dev/null | grep -q .; then
         echo "🔍 Found native modules, testing compatibility..."
         # Try to require all .node files to check for issues
+        native_module_count=0
         for node_file in $(find /app/node_modules -name "*.node" -type f 2>/dev/null); do
-            module_name=$(basename "$node_file" .node)
             if node -e "require('$node_file')" 2>/dev/null; then
-                echo "✅ $module_name native module is working"
+                native_module_count=$((native_module_count + 1))
             else
-                echo "❌ $module_name native module is not working"
+                echo "❌ Native module compatibility issue detected"
                 return 1
             fi
         done
-        echo "✅ All native modules are working correctly"
+        echo "✅ All native modules ($native_module_count) are working correctly"
     else
         echo "ℹ️  No native modules found"
     fi
