@@ -1,20 +1,20 @@
 docs:
-  - 'docs/**'
-  - 'wiki/**'
-  - '*.md'
+  - "docs/**"
+  - "wiki/**"
+  - "*.md"
 
 config:
-  - 'config/**'
-  - 'docker-compose.yml'
-  - 'Dockerfile'
+  - "config/**"
+  - "docker-compose.yml"
+  - "Dockerfile"
 
 code:
-  - 'src/**'
+  - "src/**"
 
 tests:
-  - 'test/**'
-  - '*test*.js'
+  - "test/**"
+  - "*test*.js"
 
 ci:
-  - '.github/workflows/**'
-  - '.github/**' 
+  - ".github/workflows/**"
+  - ".github/**" 
