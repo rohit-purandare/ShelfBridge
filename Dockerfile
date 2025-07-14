@@ -10,10 +10,10 @@ COPY package*.json ./
 
 # Install dependencies with comprehensive native module compilation
 # Skip prepare script to avoid husky install issues
-RUN npm ci --omit=dev --ignore-scripts && \
-    # Rebuild all native modules to ensure they're compiled for this environment
+# Use BuildKit cache mounts for better performance
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --ignore-scripts --prefer-offline && \
     npm rebuild && \
-    # Clean up npm cache to reduce image size
     npm cache clean --force
 
 # Copy source code (includes config/config.yaml.example for reference)
