@@ -1,0 +1,20 @@
+docs:
+  - 'docs/**'
+  - 'wiki/**'
+  - '*.md'
+
+config:
+  - 'config/**'
+  - 'docker-compose.yml'
+  - 'Dockerfile'
+
+code:
+  - 'src/**'
+
+tests:
+  - 'test/**'
+  - '*test*.js'
+
+ci:
+  - '.github/workflows/**'
+  - '.github/**' 
