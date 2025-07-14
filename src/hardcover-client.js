@@ -665,17 +665,15 @@ export class HardcoverClient {
     }
 
     async addBookToLibrary(bookId, statusId = 2, editionId = null) {
+        console.log('DEBUG: Running addBookToLibrary with insert_user_book mutation');
         const mutation = `
             mutation addBookToLibrary($bookId: Int!, $statusId: Int!, $editionId: Int) {
-                insert_user_book_one(object: {
+                insert_user_book(object: {
                     book_id: $bookId,
                     status_id: $statusId,
                     edition_id: $editionId
                 }) {
                     id
-                    book {
-                        title
-                    }
                 }
             }
         `;
@@ -688,7 +686,11 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(mutation, variables);
-            return result && result.insert_user_book_one ? result.insert_user_book_one : null;
+            if (result && result.insert_user_book && result.insert_user_book.id) {
+                // Return a minimal object with just the id since that's all we get
+                return { id: result.insert_user_book.id };
+            }
+            return null;
         } catch (error) {
             logger.error('Error adding book to library:', error.message);
             return null;
