@@ -4,9 +4,9 @@ services:
     # Uncomment the line below and comment the image line above to build locally
     # build: .
     container_name: shelfbridge
-    # Restart policy: "no" prevents restart loops during configuration setup
-    # Change to "unless-stopped" after initial configuration is complete
-    restart: "no"
+    # Restart policy: "on-failure" prevents restart loops during configuration setup
+    # but auto-restarts on sync failures
+    restart: "on-failure"
     volumes:
       # Named volumes for zero-setup - no local directories required
       - shelfbridge-config:/app/config
