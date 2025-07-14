@@ -273,12 +273,78 @@ docker exec -it shelfbridge cp /app/config/config.yaml.example /app/config/confi
 ```
 
 #### Permission Issues
+
+**Common Error:** `permission denied when docker tries to copy the example file`
+
+**Note:** This issue has been automatically resolved in recent versions of ShelfBridge. The container now automatically fixes volume permissions on startup.
+
+**If you're still experiencing this issue:**
+
+**Symptoms:**
+- Container fails to start with permission errors
+- "permission denied" when copying config.yaml.example
+- Container exits immediately after startup
+
+**Diagnostic Steps:**
 ```bash
-# Check file permissions
+# Check container logs for permission errors
+docker-compose logs shelfbridge
+
+# Check file permissions inside container
 docker exec -it shelfbridge ls -la /app/config/
 
-# Fix ownership if needed (run as root)
-docker exec -u root -it shelfbridge chown -R node:node /app/config/
+# Check volume ownership
+docker exec -it shelfbridge ls -la /app/
+```
+
+**Solutions:**
+
+**Option 1: Update to Latest Version (Recommended)**
+```bash
+# Pull the latest image
+docker-compose pull
+
+# Restart with new image
+docker-compose up -d
+```
+
+**Option 2: Manual Fix (Legacy Versions)**
+```bash
+# Fix ownership of config directory (run as root)
+docker exec -u root -it shelfbridge chown -R node:node /app/config
+
+# Fix ownership of data directory
+docker exec -u root -it shelfbridge chown -R node:node /app/data
+
+# Restart container
+docker-compose restart shelfbridge
+```
+
+**Option 3: Recreate Volumes (If above doesn't work)**
+```bash
+# Stop container
+docker-compose down
+
+# Remove volumes (WARNING: This will delete your config and cache)
+docker volume rm shelfbridge-config shelfbridge-data
+
+# Start container (will recreate config from template)
+docker-compose up -d
+```
+
+**Option 4: Use Bind Mounts with Correct Permissions**
+```bash
+# Create local directories with correct ownership
+mkdir -p ./config ./data
+sudo chown -R 1000:1000 ./config ./data
+
+# Update docker-compose.yml to use bind mounts
+volumes:
+  - ./config:/app/config
+  - ./data:/app/data
+
+# Restart container
+docker-compose up -d
 ```
 
 ### Container Keeps Restarting

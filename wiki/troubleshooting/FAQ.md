@@ -122,6 +122,35 @@ No, ShelfBridge only syncs **from** Audiobookshelf **to** Hardcover. This is bec
 **Cache/Data**: `shelfbridge-data` volume (`/app/data/`)
 **Logs**: Inside container at `/app/logs/`
 
+### I get "permission denied" when Docker tries to copy the example config file
+This issue has been automatically resolved in recent versions of ShelfBridge. The container now automatically fixes volume permissions on startup.
+
+**If you're still experiencing this issue:**
+
+**Quick Fix:**
+```bash
+# Update to latest version
+docker-compose pull
+docker-compose up -d
+```
+
+**If that doesn't work:**
+```bash
+# Manual fix for legacy versions
+docker exec -u root -it shelfbridge chown -R node:node /app/config
+docker-compose restart shelfbridge
+```
+
+**Last resort:**
+```bash
+# Recreate volumes (WARNING: deletes your config)
+docker-compose down
+docker volume rm shelfbridge-config shelfbridge-data
+docker-compose up -d
+```
+
+See the [Troubleshooting Guide](Troubleshooting-Guide.md#permission-issues) for detailed solutions.
+
 ### How do I update ShelfBridge?
 **Docker Compose**:
 ```bash

@@ -1,7 +1,7 @@
 FROM node:18-alpine
 
-# Install dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+# Install dependencies for better-sqlite3 and su-exec for privilege dropping
+RUN apk add --no-cache python3 make g++ su-exec
 
 WORKDIR /app
 
@@ -24,9 +24,6 @@ RUN mkdir -p /app/.config-template && \
 
 # Change ownership of app directory to node user (already exists in node:18-alpine)
 RUN chown -R node:node /app
-
-# Switch to non-root user
-USER node
 
 # Create necessary directories
 RUN mkdir -p data logs config

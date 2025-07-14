@@ -467,13 +467,38 @@ docker-compose up -d --force-recreate
 
 ### Permission Issues
 
-```bash
-# Fix ownership (run as root)
-docker exec -u root -it shelfbridge chown -R node:node /app/config /app/data
+**Common Error:** `permission denied when docker tries to copy the example file`
 
+**Note:** This issue has been automatically resolved in recent versions of ShelfBridge. The container now automatically fixes volume permissions on startup.
+
+**If you're still experiencing this issue:**
+
+**Quick Fix:**
+```bash
+# Update to latest version
+docker-compose pull
+docker-compose up -d
+```
+
+**If that doesn't work:**
+```bash
+# Manual fix for legacy versions
+docker exec -u root -it shelfbridge chown -R node:node /app/config /app/data
+docker-compose restart shelfbridge
+```
+
+**Last resort:**
+```bash
 # Check current permissions
 docker exec -it shelfbridge ls -la /app/config/
+
+# Recreate volumes (WARNING: deletes your config)
+docker-compose down
+docker volume rm shelfbridge-config shelfbridge-data
+docker-compose up -d
 ```
+
+**For detailed solutions:** See [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md#permission-issues)
 
 ### Configuration Issues
 

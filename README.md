@@ -56,12 +56,13 @@ ShelfBridge uses named volumes for truly zero-setup deployment - no cloning requ
 When you run `docker-compose up -d`, the container automatically:
 
 - ✅ **Creates volumes**: Docker manages `shelfbridge-config` and `shelfbridge-data` volumes
+- ✅ **Fixes permissions**: Automatically resolves any volume permission issues
 - ✅ **Provides template**: `config.yaml.example` is copied to the config volume
 - ✅ **Creates config**: `config.yaml` is auto-created from the template with placeholder values
 - ✅ **Intelligent validation**: Container detects placeholder values and guides you through setup
 - ✅ **Ready to edit**: Edit config using `docker exec` - restart container if needed with `docker-compose restart`
 
-**Truly zero-setup!** No local directories or files needed.
+**Truly zero-setup!** No local directories, files, or manual permission fixes needed.
 
 ### Available Images
 
