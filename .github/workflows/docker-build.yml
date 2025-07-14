@@ -56,10 +56,10 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: |
           type=gha,scope=build
-          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          type=registry,ref=ghcr.io/rohit-purandare/shelfbridge:buildcache
         cache-to: |
           type=gha,mode=max,scope=build
-          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          type=registry,ref=ghcr.io/rohit-purandare/shelfbridge:buildcache,mode=max
         platforms: linux/amd64,linux/arm64
         build-args: |
           BUILDKIT_INLINE_CACHE=1 
