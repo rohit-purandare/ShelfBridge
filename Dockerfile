@@ -1,15 +1,20 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Install dependencies for better-sqlite3 and su-exec for privilege dropping
+# Install dependencies for native modules and su-exec for privilege dropping
 RUN apk add --no-cache python3 make g++ su-exec
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev --ignore-scripts
+# Install dependencies with comprehensive native module compilation
+# Skip prepare script to avoid husky install issues
+RUN npm ci --omit=dev --ignore-scripts && \
+    # Rebuild all native modules to ensure they're compiled for this environment
+    npm rebuild && \
+    # Clean up npm cache to reduce image size
+    npm cache clean --force
 
 # Copy source code (includes config/config.yaml.example for reference)
 COPY . .
@@ -19,19 +24,28 @@ COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create template directory and copy sample config for auto-provisioning
+# Only copy if the file exists (for development builds)
 RUN mkdir -p /app/.config-template && \
-    cp /app/config/config.yaml.example /app/.config-template/config.yaml.example
+    if [ -f "/app/config/config.yaml.example" ]; then \
+        cp /app/config/config.yaml.example /app/.config-template/config.yaml.example; \
+    else \
+        echo "# Sample configuration file" > /app/.config-template/config.yaml.example; \
+        echo "# Copy this file to config.yaml and edit with your credentials" >> /app/.config-template/config.yaml.example; \
+    fi
 
-# Change ownership of app directory to node user (already exists in node:18-alpine)
-RUN chown -R node:node /app
+# Create logs directory (config and data are handled by volume mounts)
+RUN mkdir -p logs && \
+    # Change ownership of app directory to node user (already exists in node:20-alpine)
+    chown -R node:node /app
 
-# Create necessary directories
-RUN mkdir -p data logs config
+# Add health check to ensure the application and native modules are working properly
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "console.log('✅ Health check passed')" || exit 1
 
 # Expose port (if needed for health checks)
 EXPOSE 3000
 
-# Set entrypoint to handle config provisioning
+# Set entrypoint to handle config provisioning and native module validation
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Default command

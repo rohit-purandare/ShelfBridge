@@ -414,6 +414,48 @@ docker exec -it shelfbridge node src/main.js cache --clear
 docker-compose logs -f shelfbridge
 ```
 
+### 🚨 Docker Troubleshooting: Native Module Errors
+
+If you see errors like:
+```
+Error: Could not locate the bindings file. Tried:
+ → .../better_sqlite3.node
+```
+or any other native module binding errors.
+
+**The container will automatically attempt to fix all native module issues on startup.** If the automatic fix fails:
+
+1. **Rebuild the Docker image:**
+   ```bash
+   docker-compose build --no-cache
+   ```
+
+2. **Or pull the latest image:**
+   ```bash
+   docker pull ghcr.io/rohit-purandare/shelfbridge:latest
+   ```
+
+3. **For manual Docker builds:**
+   ```bash
+   docker build --no-cache -t shelfbridge .
+   ```
+
+**Why this happens:**
+- Native modules are compiled for specific OS/architecture combinations
+- Moving between different machines or architectures can cause mismatches
+- The container automatically detects and rebuilds all native modules during startup if needed
+
+**What the container does automatically:**
+- Checks all native modules (.node files) for compatibility
+- Rebuilds any broken native modules for the current environment
+- Provides detailed feedback about which modules are working or broken
+- Falls back to helpful error messages if automatic fixes don't work
+
+**Prevention:**
+- Always use the official Docker image when possible
+- If building locally, ensure you build on the same architecture you'll run on
+- The container includes comprehensive native module detection and repair
+
 ### Accessing the Interactive CLI Menu in Docker
 
 You can use the interactive menu from within your Docker container. There are two main ways:

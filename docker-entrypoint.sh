@@ -1,6 +1,89 @@
 #!/bin/sh
 set -e
 
+# Function to check if all native modules are working
+check_native_modules() {
+    echo "🔍 Checking native modules..."
+    
+    # Check for any native modules in node_modules
+    if find /app/node_modules -name "*.node" -type f 2>/dev/null | grep -q .; then
+        echo "🔍 Found native modules, testing compatibility..."
+        # Try to require all .node files to check for issues
+        for node_file in $(find /app/node_modules -name "*.node" -type f 2>/dev/null); do
+            module_name=$(basename "$node_file" .node)
+            if node -e "require('$node_file')" 2>/dev/null; then
+                echo "✅ $module_name native module is working"
+            else
+                echo "❌ $module_name native module is not working"
+                return 1
+            fi
+        done
+        echo "✅ All native modules are working correctly"
+    else
+        echo "ℹ️  No native modules found"
+    fi
+    
+    return 0
+}
+
+# Function to rebuild all native modules
+rebuild_native_modules() {
+    echo "🔧 Rebuilding all native modules..."
+    
+    # Rebuild all native modules
+    if npm rebuild; then
+        echo "✅ Native module rebuild successful"
+        return 0
+    else
+        echo "❌ Native module rebuild failed"
+        return 1
+    fi
+}
+
+# Check native modules on startup
+if ! check_native_modules; then
+    echo ""
+    echo "🚨 NATIVE MODULE ERROR DETECTED"
+    echo ""
+    echo "One or more native modules are not working properly."
+    echo "This usually happens when:"
+    echo "  • The container was built on a different architecture"
+    echo "  • Dependencies weren't installed correctly"
+    echo "  • Node.js version mismatch"
+    echo "  • Missing system dependencies"
+    echo ""
+    echo "🔧 ATTEMPTING TO FIX..."
+    echo ""
+    
+    # Try to rebuild all native modules
+    if rebuild_native_modules; then
+        echo "✅ Rebuild successful"
+        if check_native_modules; then
+            echo "✅ All native modules are now working"
+        else
+            echo "❌ Rebuild failed to fix the issue"
+            echo ""
+            echo "Please try:"
+            echo "  1. Rebuild the Docker image: docker-compose build --no-cache"
+            echo "  2. Or pull the latest image: docker pull ghcr.io/rohit-purandare/shelfbridge:latest"
+            echo "  3. Check if your system has the required build tools"
+            echo ""
+            exit 1
+        fi
+    else
+        echo "❌ Failed to rebuild native modules"
+        echo ""
+        echo "Please rebuild the Docker image:"
+        echo "  docker-compose build --no-cache"
+        echo ""
+        echo "Or check your system for required build dependencies:"
+        echo "  - python3, make, g++ (for Alpine Linux)"
+        echo "  - build-essential (for Ubuntu/Debian)"
+        echo ""
+        exit 1
+    fi
+fi
+
 # Always ensure config directory exists
 mkdir -p /app/config
 
