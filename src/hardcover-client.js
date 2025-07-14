@@ -65,7 +65,17 @@ export class HardcoverClient {
 
         try {
             const result = await this._executeQuery(query);
-            return result && result.me;
+            // Accept both array and object for 'me'
+            if (result && result.me) {
+                if (Array.isArray(result.me)) {
+                    // Accept if array is non-empty and has id/username
+                    return result.me.length > 0 && result.me[0].id && result.me[0].username;
+                } else {
+                    // Accept if object has id/username
+                    return result.me.id && result.me.username;
+                }
+            }
+            return false;
         } catch (error) {
             logger.error('Connection test failed:', error.message);
             return false;
@@ -771,11 +781,13 @@ export class HardcoverClient {
     }
 
     async _executeQuery(query, variables = null) {
-        // Determine request type for better rate limiting tracking
-        const requestType = query.trim().startsWith('mutation') ? 'mutation' : 'query';
-        const identifier = `hardcover-${requestType}`;
+        // Use single identifier for all Hardcover requests to respect 55/minute total limit
+        const identifier = 'hardcover-api';
         
         await this.rateLimiter.waitIfNeeded(identifier);
+
+        // Restore requestType for logging
+        const requestType = query.trim().startsWith('mutation') ? 'mutation' : 'query';
 
         // Debug logging for mutations
         if (requestType === 'mutation') {

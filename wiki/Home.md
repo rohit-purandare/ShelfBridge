@@ -46,6 +46,7 @@ New to ShelfBridge? Start here:
 
 ### Architecture & APIs
 - **[Architecture Overview](technical/Architecture-Overview.md)** - How ShelfBridge works internally
+- **[Rate Limiting](technical/Rate-Limiting.md)** - API rate limiting implementation
 - **[Audiobookshelf API](technical/Audiobookshelf-API.md)** - Integration details
 - **[Hardcover API](technical/Hardcover-API.md)** - GraphQL integration
 - **[Book Caching System](technical/Book-Caching-System.md)** - SQLite cache implementation
@@ -64,6 +65,7 @@ New to ShelfBridge? Start here:
 - **[Error Messages](troubleshooting/Error-Messages.md)** - Understanding error output
 
 ### Specific Issues
+- **[Bearer Token Handling](troubleshooting/Bearer-Token-Handling.md)** - Automatic token normalization
 - **[Connection Issues](troubleshooting/Connection-Issues.md)** - API and network problems
 - **[Book Matching Issues](troubleshooting/Book-Matching-Issues.md)** - When books aren't found
 - **[Progress Sync Issues](troubleshooting/Progress-Sync-Issues.md)** - Progress not updating correctly

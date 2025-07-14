@@ -54,7 +54,7 @@ The `RateLimiter` class in `src/utils.js` provides:
 The primary method for rate limiting. Call this before making any API request.
 
 ```javascript
-await this.rateLimiter.waitIfNeeded('hardcover-query');
+await this.rateLimiter.waitIfNeeded('hardcover-api');
 // Your API request here
 ```
 
@@ -92,11 +92,12 @@ warningThreshold = Math.ceil(55 * 0.8) = 44 requests
 
 ### Request Identification
 
-Requests are tracked using identifiers that help distinguish between different types of operations:
+Requests are tracked using identifiers that help distinguish between different services:
 
-- `hardcover-query`: Hardcover GraphQL queries
-- `hardcover-mutation`: Hardcover GraphQL mutations
+- `hardcover-api`: All Hardcover GraphQL requests (queries + mutations combined)
 - `audiobookshelf-*`: Audiobookshelf API calls
+
+**Important**: Hardcover uses a single identifier (`hardcover-api`) to ensure the combined total of queries and mutations never exceeds 55 requests per minute.
 
 ## Configuration Options
 
@@ -135,14 +136,14 @@ The underlying rate limiter is configured with:
 ```javascript
 // Warning when approaching limit
 logger.warn('Rate limit warning: 44/55 requests used in the current minute', {
-    identifier: 'hardcover-query',
+    identifier: 'hardcover-api',
     remainingRequests: 11,
     resetTime: '2024-01-01T12:01:00.000Z'
 });
 
 // When limit is exceeded
 logger.warn('Rate limit exceeded. Waiting 15s before next request', {
-    identifier: 'hardcover-mutation',
+    identifier: 'hardcover-api',
     remainingRequests: 0,
     resetTime: '2024-01-01T12:01:00.000Z'
 });
@@ -152,12 +153,12 @@ logger.warn('Rate limit exceeded. Waiting 15s before next request', {
 
 ### 1. Use Appropriate Identifiers
 
-Use descriptive identifiers to track different types of requests:
+Use descriptive identifiers to track different services:
 
 ```javascript
-// Good - specific identifiers
-await this.rateLimiter.waitIfNeeded('hardcover-user-books');
-await this.rateLimiter.waitIfNeeded('hardcover-update-progress');
+// Good - service-specific identifiers
+await this.rateLimiter.waitIfNeeded('hardcover-api');
+await this.rateLimiter.waitIfNeeded('audiobookshelf-progress');
 
 // Avoid - generic identifiers
 await this.rateLimiter.waitIfNeeded('default');
@@ -170,7 +171,7 @@ The rate limiter automatically handles queuing, but be aware that operations may
 ```javascript
 // This may take longer if rate limit is approached
 const startTime = Date.now();
-await this.rateLimiter.waitIfNeeded('hardcover-query');
+await this.rateLimiter.waitIfNeeded('hardcover-api');
 const result = await this.executeQuery(query);
 const duration = Date.now() - startTime;
 ```
@@ -180,7 +181,7 @@ const duration = Date.now() - startTime;
 Check status periodically in long-running operations:
 
 ```javascript
-const status = await this.rateLimiter.getStatus('hardcover-query');
+const status = await this.rateLimiter.getStatus('hardcover-api');
 if (status.isNearLimit) {
     logger.info('Approaching rate limit, slowing down operations');
 }
@@ -269,8 +270,8 @@ Consider adding these options in future versions:
 
 - [Hardcover API Documentation](https://docs.hardcover.app/)
 - [rate-limiter-flexible Documentation](https://github.com/animir/node-rate-limiter-flexible)
-- [ShelfBridge Configuration Guide](../config/README.md)
-- [API Client Documentation](../api-clients/README.md)
+- [ShelfBridge Configuration Guide](../admin/Configuration-Overview.md)
+- [API Client Documentation](../technical/Architecture-Overview.md)
 
 ---
 

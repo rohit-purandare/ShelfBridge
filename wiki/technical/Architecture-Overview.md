@@ -135,10 +135,10 @@ addBookToLibrary()      // Auto-add new books
 **Rate Limiting Architecture**:
 ```javascript
 // Uses rate-limiter-flexible library
-const rateLimiter = new RateLimiter(55); // 55 requests/minute
+const rateLimiter = new RateLimiter(55); // 55 requests/minute total
 
 async _executeQuery(query, variables) {
-    await this.rateLimiter.waitIfNeeded();  // Queue if needed
+    await this.rateLimiter.waitIfNeeded('hardcover-api');  // Single identifier for all requests
     return await this.graphqlRequest(query, variables);
 }
 ```
