@@ -20,6 +20,7 @@ program
 
 program.option('--dry-run', 'Run without making changes');
 program.option('--skip-validation', 'Skip configuration validation on startup');
+program.option('--verbose', 'Show detailed logging output');
 
 /**
  * Validate configuration on startup
@@ -167,14 +168,28 @@ program
             const config = new Config();
             const users = config.getUsers();
             
-            if (options.user) {
-                const user = config.getUser(options.user);
-                await testUser(user);
-            } else {
-                for (const user of users) {
-                    logger.info('Starting test for user', { userId: user.id });
-                    await testUser(user);
+            // Control logging verbosity based on --verbose flag
+            const originalLevel = logger.level;
+            if (!program.opts().verbose) {
+                logger.level = 'error';
+            }
+            
+            try {
+                if (options.user) {
+                    const user = config.getUser(options.user);
+                    console.log(`\n=== Testing connections for user: ${user.id} ===`);
+                    const success = await testUser(user);
+                    console.log(success ? '✅ All connections successful!' : '❌ One or more connections failed.');
+                } else {
+                    for (const user of users) {
+                        console.log(`\n=== Testing connections for user: ${user.id} ===`);
+                        const success = await testUser(user);
+                        console.log(success ? '✅ All connections successful!' : '❌ One or more connections failed.');
+                    }
                 }
+            } finally {
+                // Restore original logger level
+                logger.level = originalLevel;
             }
             
             // Exit successfully after test completion
@@ -736,54 +751,83 @@ async function syncUser(user, globalConfig) {
 
 async function testUser(user) {
     const userLogger = logger.forUser(user.id);
-    userLogger.info('Testing API connections');
+    const isVerbose = program.opts().verbose;
+    
+    if (isVerbose) {
+        userLogger.info('Testing API connections');
+    }
     
     let absStatus = false;
     let hcStatus = false;
     
     try {
-        userLogger.info('Testing Audiobookshelf connection');
+        if (isVerbose) {
+            userLogger.info('Testing Audiobookshelf connection');
+        }
         const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
         absStatus = await absClient.testConnection();
         
         if (absStatus) {
-            userLogger.info('Audiobookshelf connection successful');
+            if (isVerbose) {
+                userLogger.info('Audiobookshelf connection successful');
+            }
+            console.log('Audiobookshelf: ✅ Connected');
         } else {
-            userLogger.error('Audiobookshelf connection failed');
+            if (isVerbose) {
+                userLogger.error('Audiobookshelf connection failed');
+            }
+            console.log('Audiobookshelf: ❌ Failed');
         }
     } catch (error) {
-        userLogger.error('Audiobookshelf connection failed', { 
-            error: error.message, 
-            stack: error.stack 
-        });
+        if (isVerbose) {
+            userLogger.error('Audiobookshelf connection failed', { 
+                error: error.message, 
+                stack: error.stack 
+            });
+        }
+        console.log('Audiobookshelf: ❌ Error - ' + error.message);
         absStatus = false;
     }
     
     try {
-        userLogger.info('Testing Hardcover connection');
+        if (isVerbose) {
+            userLogger.info('Testing Hardcover connection');
+        }
         const hcClient = new HardcoverClient(user.hardcover_token);
         hcStatus = await hcClient.testConnection();
         
         if (hcStatus) {
-            userLogger.info('Hardcover connection successful');
+            if (isVerbose) {
+                userLogger.info('Hardcover connection successful');
+            }
+            console.log('Hardcover: ✅ Connected');
         } else {
-            userLogger.error('Hardcover connection failed');
+            if (isVerbose) {
+                userLogger.error('Hardcover connection failed');
+            }
+            console.log('Hardcover: ❌ Failed');
         }
     } catch (error) {
-        userLogger.error('Hardcover connection failed', { 
-            error: error.message, 
-            stack: error.stack 
-        });
+        if (isVerbose) {
+            userLogger.error('Hardcover connection failed', { 
+                error: error.message, 
+                stack: error.stack 
+            });
+        }
+        console.log('Hardcover: ❌ Error - ' + error.message);
         hcStatus = false;
     }
     
     // Summary
     const allSuccessful = absStatus && hcStatus;
-    userLogger.info('Connection test completed', { 
-        audiobookshelf: absStatus, 
-        hardcover: hcStatus, 
-        allSuccessful 
-    });
+    
+    if (isVerbose) {
+        userLogger.info('Connection test completed', { 
+            audiobookshelf: absStatus, 
+            hardcover: hcStatus, 
+            allSuccessful 
+        });
+    }
     
     return allSuccessful;
 }

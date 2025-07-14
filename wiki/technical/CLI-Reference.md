@@ -6,9 +6,6 @@ ShelfBridge provides a comprehensive command-line interface for all operations. 
 
 ```bash
 node src/main.js <command> [options]
-
-# Or with npm scripts
-npm run <script>
 ```
 
 ### Global Options
@@ -19,6 +16,7 @@ These options can be used with any command:
 |--------|-------------|---------|
 | `--dry-run` | Run without making any changes | `false` |
 | `--skip-validation` | Skip configuration validation on startup | `false` |
+| `--verbose` | Show detailed logging output | `false` |
 | `--help` | Show help for a command | - |
 
 ### Command Behavior
@@ -46,7 +44,6 @@ The main command to sync your reading progress from Audiobookshelf to Hardcover.
 
 ```bash
 node src/main.js sync [options]
-npm run sync  # Shortcut
 ```
 
 #### Options
@@ -110,11 +107,17 @@ node src/main.js test [options]
 #### Examples
 
 ```bash
-# Test API connections for all users
+# Test API connections for all users (clean output)
 node src/main.js test
 
-# Test API connections for a specific user
+# Test API connections for a specific user (clean output)
 node src/main.js test --user alice
+
+# Test with detailed logging output
+node src/main.js test --verbose
+
+# Test specific user with verbose output
+node src/main.js test --user alice --verbose
 ```
 
 #### Output
@@ -135,7 +138,6 @@ Start ShelfBridge in scheduled sync mode (default behavior).
 ```bash
 node src/main.js start
 node src/main.js  # Same as start (default command)
-npm start         # Shortcut
 ```
 
 This command runs the scheduled sync service based on your `sync_schedule` configuration.
@@ -146,7 +148,6 @@ Start ShelfBridge in interactive mode for manual operations.
 
 ```bash
 node src/main.js interactive
-npm run interactive  # Shortcut
 ```
 
 - Provides menu-driven interface
@@ -160,7 +161,6 @@ Alias for the start command - runs the same scheduled sync service.
 
 ```bash
 node src/main.js cron
-npm run cron  # Shortcut
 ```
 
 - Runs an initial sync immediately
@@ -428,13 +428,15 @@ node src/main.js schema-inputs
 
 ## 📜 npm Scripts
 
-For convenience, several npm scripts are available:
+For convenience, several npm scripts are available as shortcuts:
 
 | Script | Command | Description |
 |--------|---------|-------------|
 | `npm start` | `node src/main.js` | Start background service |
 | `npm run sync` | `node src/main.js sync` | One-time sync |
 | `npm run dev` | `node --watch src/main.js` | Development mode with auto-restart |
+
+**Note**: All commands can be run directly with `node src/main.js <command>` for more control over options.
 
 ## 🐳 Docker Commands
 
@@ -452,7 +454,7 @@ docker exec -it shelfbridge-container <command>
 
 ```bash
 # Sync in Docker
-docker exec -it shelfbridge npm run sync
+docker exec -it shelfbridge node src/main.js sync
 
 # Debug in Docker
 docker exec -it shelfbridge node src/main.js debug
@@ -528,8 +530,6 @@ docker exec -it shelfbridge /bin/sh
 node src/main.js
 # or
 node src/main.js start
-# or
-npm start
 ```
 This is useful if you want to run multiple commands or explore the container environment.
 

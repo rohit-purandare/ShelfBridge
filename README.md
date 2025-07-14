@@ -23,7 +23,7 @@ cd ShelfBridge && npm install
 # Configure and start
 cp config/config.yaml.example config/config.yaml
 # Edit config/config.yaml with your tokens
-npm start
+node src/main.js start
 ```
 
 ## 📖 Documentation
@@ -35,7 +35,7 @@ npm start
 
 ## 🔄 Recent Changes
 
-**v1.5.0**: Default behavior now runs scheduled sync automatically. For interactive mode, use `npm run interactive` or `node src/main.js interactive`.
+**v1.5.3**: Improved CLI interface with clean output and `--verbose` option. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
 
 ## 📋 Features
 
