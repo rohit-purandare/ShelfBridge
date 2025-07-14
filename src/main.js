@@ -509,9 +509,9 @@ program
         }
     });
 
-// Default command (interactive mode)
+// Interactive command
 program
-    .command('start', { isDefault: true })
+    .command('interactive')
     .description('Start in interactive mode')
     .action(async () => {
         try {
@@ -524,6 +524,54 @@ program
             process.exit(0);
         } catch (error) {
             logger.error('Interactive mode failed', { error: error.message, stack: error.stack });
+            process.exit(1);
+        }
+    });
+
+// Default command (scheduled sync mode)
+program
+    .command('start', { isDefault: true })
+    .description('Start scheduled sync (default behavior)')
+    .action(async () => {
+        try {
+            // Validate configuration first
+            await validateConfigurationOnStartup(program.opts().skipValidation);
+            
+            const config = new Config();
+            const cronConfig = config.getCronConfig();
+            
+            logger.info('Starting scheduled sync', { 
+                schedule: cronConfig.schedule, 
+                timezone: cronConfig.timezone 
+            });
+            
+            // Run initial sync
+            logger.info('Running initial sync...');
+            await runScheduledSync(config);
+            
+            // Schedule recurring sync
+            cron.schedule(cronConfig.schedule, () => {
+                logger.info('Scheduled sync triggered');
+                runScheduledSync(config);
+            }, {
+                timezone: cronConfig.timezone
+            });
+            
+            logger.info('Scheduled sync started. Press Ctrl+C to stop.');
+            
+            // Keep the process running
+            process.on('SIGINT', () => {
+                logger.info('Stopping scheduled sync...');
+                process.exit(0);
+            });
+            
+            // Keep alive
+            setInterval(() => {
+                // Do nothing, just keep the process alive
+            }, 60000);
+            
+        } catch (error) {
+            logger.error('Scheduled sync failed', { error: error.message, stack: error.stack });
             process.exit(1);
         }
     });

@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/main.js",
+    "interactive": "node src/main.js interactive",
+    "cron": "node src/main.js cron",
     "sync": "node src/main.js sync",
     "test": "node src/main.js test",
     "config": "node src/main.js config",

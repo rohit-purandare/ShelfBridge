@@ -75,11 +75,15 @@ docker-compose start shelfbridge
 ShelfBridge has a built-in background scheduler:
 
 ```bash
-# Start background service
+# Start background service (scheduled sync)
 npm start
 
 # Or directly
 node src/main.js start
+
+# For interactive mode instead
+npm run interactive
+node src/main.js interactive
 ```
 
 **What it does:**

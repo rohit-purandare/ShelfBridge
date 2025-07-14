@@ -93,9 +93,9 @@ node src/main.js sync --user bob --dry-run
 ==================================================
 ```
 
-### `start` - Background Service (Default)
+### `start` - Scheduled Sync Service (Default)
 
-Start ShelfBridge in interactive mode or as the default command.
+Start ShelfBridge in scheduled sync mode (default behavior).
 
 ```bash
 node src/main.js start
@@ -105,12 +105,27 @@ npm start         # Shortcut
 
 This command runs the scheduled sync service based on your `sync_schedule` configuration.
 
-### `cron` - Scheduled Sync Service
+### `interactive` - Interactive Mode
 
-Start the background sync service that runs on your configured schedule.
+Start ShelfBridge in interactive mode for manual operations.
+
+```bash
+node src/main.js interactive
+npm run interactive  # Shortcut
+```
+
+- Provides menu-driven interface
+- Manual sync operations
+- Configuration management
+- Cache management
+
+### `cron` - Scheduled Sync Service (Alias)
+
+Alias for the start command - runs the same scheduled sync service.
 
 ```bash
 node src/main.js cron
+npm run cron  # Shortcut
 ```
 
 - Runs an initial sync immediately
