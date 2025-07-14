@@ -59,7 +59,6 @@ docker run -d \
 docker run -d \
   --name shelfbridge \
   --restart unless-stopped \
-  --user "1000:1000" \
   -v shelfbridge-config:/app/config \
   -v shelfbridge-data:/app/data \
   ghcr.io/rohit-purandare/shelfbridge:latest
@@ -283,7 +282,6 @@ spec:
 docker run -d \
   --name shelfbridge \
   --restart unless-stopped \
-  --user "1000:1000" \
   --read-only \
   --tmpfs /tmp \
   -v shelfbridge-config:/app/config \
@@ -300,7 +298,6 @@ docker run -d \
   --restart unless-stopped \
   --security-opt no-new-privileges \
   --cap-drop ALL \
-  --user "1000:1000" \
   -v shelfbridge-config:/app/config \
   -v shelfbridge-data:/app/data \
   ghcr.io/rohit-purandare/shelfbridge:latest

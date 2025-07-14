@@ -166,7 +166,7 @@ services:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
     container_name: shelfbridge
     restart: unless-stopped                    # Auto-restart on failure
-    user: "1000:1000"                         # Run as non-root user
+    # Note: No user specification needed - container runs as 'node' user (UID 1000) by default
     volumes:
       - shelfbridge-config:/app/config        # Configuration persistence
       - shelfbridge-data:/app/data            # Cache persistence
@@ -234,7 +234,6 @@ nano config/config.yaml
 docker run -d \
   --name shelfbridge \
   --restart unless-stopped \
-  --user 1000:1000 \
   --memory 512m \
   --cpus 1.0 \
   -v shelfbridge-config:/app/config \
@@ -535,7 +534,7 @@ docker inspect shelfbridge
 ## 💡 Docker Best Practices
 
 ### Security
-- **Run as non-root**: Use `user: "1000:1000"`
+- **Run as non-root**: Container runs as `node` user (UID 1000) by default
 - **Read-only filesystem**: Add `read_only: true` with tmpfs for writable areas
 - **Resource limits**: Set memory and CPU limits
 - **Keep updated**: Regularly update base images
