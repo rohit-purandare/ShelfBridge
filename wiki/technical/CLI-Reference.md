@@ -414,6 +414,33 @@ docker exec -it shelfbridge node src/main.js cache --clear
 docker-compose logs -f shelfbridge
 ```
 
+### Accessing the Interactive CLI Menu in Docker
+
+You can use the interactive menu from within your Docker container. There are two main ways:
+
+#### 1. One-liner (directly from your host):
+```bash
+docker exec -it shelfbridge node src/main.js
+```
+This will launch the interactive menu immediately in your terminal.
+
+#### 2. Open a shell in the container, then run the CLI:
+```bash
+# Enter the container shell
+# (use /bin/bash or /bin/sh depending on your image)
+docker exec -it shelfbridge /bin/bash
+# or
+docker exec -it shelfbridge /bin/sh
+
+# Then, inside the container, run:
+node src/main.js
+# or
+node src/main.js start
+# or
+npm start
+```
+This is useful if you want to run multiple commands or explore the container environment.
+
 ## 🔧 Configuration File Options
 
 Many CLI behaviors can be controlled through your `config.yaml` file:
