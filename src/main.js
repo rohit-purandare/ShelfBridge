@@ -9,6 +9,7 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import cron from 'node-cron';
 import logger from './logger.js';
+import inquirer from 'inquirer';
 
 const program = new Command();
 
@@ -1020,26 +1021,105 @@ async function runScheduledSync(config) {
 }
 
 async function runInteractiveMode() {
-    console.log('=== Audiobookshelf to Hardcover Sync Tool ===');
-    console.log('Interactive mode - choose an option:');
-    console.log('1. Sync all users');
-    console.log('2. Sync specific user');
-    console.log('3. Test connections');
-    console.log('4. Show configuration');
-    console.log('5. Manage cache');
-    console.log('6. Exit');
-    
-    // For now, just run sync all users
-    // In a full implementation, you'd use a library like readline or inquirer
-    console.log('\nRunning sync for all users...');
-    
     const config = new Config();
     const globalConfig = config.getGlobal();
     const users = config.getUsers();
-    
-    for (const user of users) {
-        console.log(`\n=== Syncing user: ${user.id} ===`);
-        await syncUser(user, globalConfig);
+    let exit = false;
+    while (!exit) {
+        const { action } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'action',
+                message: 'Interactive mode - choose an option:',
+                choices: [
+                    { name: 'Sync all users', value: 'sync_all' },
+                    { name: 'Sync specific user', value: 'sync_user' },
+                    { name: 'Test connections', value: 'test_connections' },
+                    { name: 'Show configuration', value: 'show_config' },
+                    { name: 'Manage cache', value: 'cache' },
+                    { name: 'Exit', value: 'exit' },
+                ],
+            },
+        ]);
+        switch (action) {
+            case 'sync_all':
+                for (const user of users) {
+                    console.log(`\n=== Syncing user: ${user.id} ===`);
+                    await syncUser(user, globalConfig);
+                }
+                break;
+            case 'sync_user': {
+                const { userId } = await inquirer.prompt([
+                    {
+                        type: 'list',
+                        name: 'userId',
+                        message: 'Select user to sync:',
+                        choices: users.map(u => ({ name: u.id, value: u.id })),
+                    },
+                ]);
+                const user = config.getUser(userId);
+                await syncUser(user, globalConfig);
+                break;
+            }
+            case 'test_connections':
+                for (const user of users) {
+                    console.log(`\n=== Testing connections for user: ${user.id} ===`);
+                    await testUser(user);
+                }
+                break;
+            case 'show_config':
+                showConfig(config);
+                break;
+            case 'cache': {
+                let cacheExit = false;
+                while (!cacheExit) {
+                    const { cacheAction } = await inquirer.prompt([
+                        {
+                            type: 'list',
+                            name: 'cacheAction',
+                            message: 'Cache management - choose an option:',
+                            choices: [
+                                { name: 'Show cache stats', value: 'stats' },
+                                { name: 'Show cache contents', value: 'show' },
+                                { name: 'Clear cache', value: 'clear' },
+                                { name: 'Export cache to JSON', value: 'export' },
+                                { name: 'Back', value: 'back' },
+                            ],
+                        },
+                    ]);
+                    switch (cacheAction) {
+                        case 'stats':
+                            await BookCache.showStats();
+                            break;
+                        case 'show':
+                            await BookCache.showCache();
+                            break;
+                        case 'clear':
+                            await BookCache.clearCache();
+                            break;
+                        case 'export': {
+                            const { filename } = await inquirer.prompt([
+                                {
+                                    type: 'input',
+                                    name: 'filename',
+                                    message: 'Enter filename for export:',
+                                    default: `backup-${new Date().toISOString().slice(0,10)}.json`,
+                                },
+                            ]);
+                            await BookCache.exportCache(filename);
+                            break;
+                        }
+                        case 'back':
+                            cacheExit = true;
+                            break;
+                    }
+                }
+                break;
+            }
+            case 'exit':
+                exit = true;
+                break;
+        }
     }
 }
 
