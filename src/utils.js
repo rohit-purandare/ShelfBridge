@@ -452,3 +452,121 @@ export class RateLimiter {
         }
     }
 } 
+
+/**
+ * Dumps failed sync books and their details into a text file
+ * @param {Object} result - The sync result object containing book_details and errors
+ * @param {string} userId - The user ID for the sync
+ * @param {string} dataFolder - The data folder path (defaults to './data')
+ * @returns {Promise<string>} - The path to the created error dump file
+ */
+export async function dumpFailedSyncBooks(result, userId, dataFolder = './data') {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    // Create timestamp for filename
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5); // Remove milliseconds
+    const filename = `failed-sync-${userId}-${timestamp}.txt`;
+    const filepath = path.join(dataFolder, filename);
+    
+    let content = '';
+    
+    // Header
+    content += '='.repeat(80) + '\n';
+    content += `FAILED SYNC BOOKS DUMP\n`;
+    content += `Generated: ${now.toLocaleString()}\n`;
+    content += `User ID: ${userId}\n`;
+    content += `Total Books Processed: ${result.books_processed || 0}\n`;
+    content += `Total Errors: ${result.errors?.length || 0}\n`;
+    content += '='.repeat(80) + '\n\n';
+    
+    // Summary statistics
+    content += '📊 SYNC SUMMARY\n';
+    content += '-'.repeat(40) + '\n';
+    content += `Books processed: ${result.books_processed || 0}\n`;
+    content += `Books synced: ${result.books_synced || 0}\n`;
+    content += `Books completed: ${result.books_completed || 0}\n`;
+    content += `Books auto-added: ${result.books_auto_added || 0}\n`;
+    content += `Books skipped: ${result.books_skipped || 0}\n`;
+    content += `Books with errors: ${result.book_details?.filter(book => book.status === 'error').length || 0}\n`;
+    content += `Total errors: ${result.errors?.length || 0}\n\n`;
+    
+    // Detailed book information for failed books
+    if (result.book_details && result.book_details.length > 0) {
+        const failedBooks = result.book_details.filter(book => book.status === 'error');
+        
+        if (failedBooks.length > 0) {
+            content += '❌ FAILED BOOKS DETAILS\n';
+            content += '='.repeat(80) + '\n\n';
+            
+            failedBooks.forEach((book, index) => {
+                content += `${index + 1}. BOOK: ${book.title}\n`;
+                content += `   Status: ${book.status.toUpperCase()}\n`;
+                
+                if (book.progress && book.progress.before !== null) {
+                    content += `   Progress: ${book.progress.before.toFixed(1)}%\n`;
+                }
+                
+                if (book.identifiers && Object.keys(book.identifiers).length > 0) {
+                    const identifierStr = Object.entries(book.identifiers)
+                        .filter(([_k, v]) => v)
+                        .map(([k, v]) => `${k.toUpperCase()}=${v}`)
+                        .join(', ');
+                    if (identifierStr) {
+                        content += `   Identifiers: ${identifierStr}\n`;
+                    }
+                }
+                
+                if (book.actions && book.actions.length > 0) {
+                    content += `   Actions taken:\n`;
+                    book.actions.forEach(action => {
+                        content += `     • ${action}\n`;
+                    });
+                }
+                
+                if (book.errors && book.errors.length > 0) {
+                    content += `   Errors encountered:\n`;
+                    book.errors.forEach(error => {
+                        content += `     ❌ ${error}\n`;
+                    });
+                }
+                
+                if (book.timing) {
+                    content += `   Processing time: ${book.timing}ms\n`;
+                }
+                
+                content += '\n';
+            });
+        }
+    }
+    
+    // General error summary
+    if (result.errors && result.errors.length > 0) {
+        content += '🚨 GENERAL ERROR SUMMARY\n';
+        content += '='.repeat(80) + '\n\n';
+        
+        result.errors.forEach((error, index) => {
+            content += `${index + 1}. ${error}\n`;
+        });
+        
+        content += '\n';
+    }
+    
+    // Footer
+    content += '='.repeat(80) + '\n';
+    content += 'End of failed sync dump\n';
+    content += '='.repeat(80) + '\n';
+    
+    try {
+        // Ensure data folder exists
+        await fs.mkdir(dataFolder, { recursive: true });
+        
+        // Write the file
+        await fs.writeFile(filepath, content, 'utf8');
+        
+        return filepath;
+    } catch (error) {
+        throw new Error(`Failed to write error dump file: ${error.message}`);
+    }
+} 

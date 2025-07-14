@@ -257,6 +257,92 @@ min_progress_threshold: 10.0
 - You're reading it again
 - ShelfBridge creates a new reading session
 
+## 🚨 Error Handling and Debugging
+
+### Error Dump Files
+
+When sync errors occur, ShelfBridge can automatically create detailed error reports in the `data/` folder. These files contain:
+
+- **Complete sync summary** with statistics
+- **Detailed information** for each failed book
+- **Specific error messages** and actions taken
+- **Book identifiers** and progress information
+- **Processing timings** for debugging
+
+**File naming format:**
+```
+failed-sync-{user_id}-{timestamp}.txt
+```
+
+**Example:**
+```
+failed-sync-john_doe-2024-01-15T10-30-45.txt
+```
+
+**Configuration:**
+```yaml
+global:
+  # Enable/disable error dump files (default: true)
+  dump_failed_books: true
+```
+
+**Sample error dump content:**
+```
+================================================================================
+FAILED SYNC BOOKS DUMP
+Generated: 1/15/2024, 10:30:45 AM
+User ID: john_doe
+Total Books Processed: 25
+Total Errors: 3
+================================================================================
+
+📊 SYNC SUMMARY
+----------------------------------------
+Books processed: 25
+Books synced: 20
+Books completed: 1
+Books auto-added: 1
+Books skipped: 2
+Books with errors: 3
+Total errors: 3
+
+❌ FAILED BOOKS DETAILS
+================================================================================
+
+1. BOOK: The Great Gatsby
+   Status: ERROR
+   Progress: 45.2%
+   Identifiers: ASIN=B08N5WRWNW
+   Actions taken:
+     • Found identifiers: ASIN=B08N5WRWNW
+     • Cache: No cached data found
+     • Current progress: 45.2%
+     • Found in Hardcover library: The Great Gatsby
+   Errors encountered:
+     • API rate limit exceeded
+```
+
+### Using Error Dumps for Troubleshooting
+
+1. **Review the error summary** to understand the scope of issues
+2. **Check specific book details** to identify patterns
+3. **Look for common error types** (rate limiting, missing identifiers, etc.)
+4. **Use the information** to adjust configuration or fix underlying issues
+
+### Common Error Patterns
+
+**Rate Limiting:**
+- Multiple "API rate limit exceeded" errors
+- Solution: Reduce `workers` setting or enable `parallel: false`
+
+**Missing Identifiers:**
+- Books with "no identifier" in actions
+- Solution: Add ISBN/ASIN metadata to books in Audiobookshelf
+
+**Connection Issues:**
+- "Failed to connect" or timeout errors
+- Solution: Check network connectivity and API tokens
+
 ## 🛠️ Debugging with Debug Mode
 
 For detailed troubleshooting:

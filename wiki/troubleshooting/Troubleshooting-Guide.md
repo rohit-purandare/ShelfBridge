@@ -2,6 +2,31 @@
 
 This guide helps you diagnose and solve common ShelfBridge issues. Start with the most common problems and work your way through the diagnostic steps.
 
+## 📄 Error Dump Files
+
+When sync errors occur, ShelfBridge automatically creates detailed error reports in the `data/` folder. These files are invaluable for troubleshooting:
+
+**File location:** `data/failed-sync-{user_id}-{timestamp}.txt`
+
+**What they contain:**
+- Complete sync summary with statistics
+- Detailed information for each failed book
+- Specific error messages and actions taken
+- Book identifiers and progress information
+- Processing timings for debugging
+
+**To use error dumps:**
+1. Look for files in the `data/` folder after a failed sync
+2. Open the most recent file with your text editor
+3. Review the error patterns and book details
+4. Use the information to adjust your configuration
+
+**Disable error dumps:**
+```yaml
+global:
+  dump_failed_books: false
+```
+
 ## 🚀 Quick Diagnostics
 
 Before diving into specific issues, run these commands to get a quick overview:

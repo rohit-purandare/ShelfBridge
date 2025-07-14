@@ -7,6 +7,7 @@ import { SyncManager } from './sync-manager.js';
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
+import { dumpFailedSyncBooks } from './utils.js';
 import cron from 'node-cron';
 import logger from './logger.js';
 import inquirer from 'inquirer';
@@ -731,6 +732,20 @@ async function syncUser(user, globalConfig) {
                 console.log(`${index + 1}. ${error}`);
             });
             console.log('='.repeat(30));
+            
+            // Dump failed sync books to file if enabled
+            if (globalConfig.dump_failed_books !== false) {
+                try {
+                    const dumpFilePath = await dumpFailedSyncBooks(result, user.id);
+                    console.log(`\n📄 Error details saved to: ${dumpFilePath}`);
+                } catch (dumpError) {
+                    console.log(`\n⚠️  Failed to save error details: ${dumpError.message}`);
+                    logger.error('Failed to dump error details', { 
+                        error: dumpError.message, 
+                        userId: user.id 
+                    });
+                }
+            }
         }
 
         console.log('\n🏁 Sync completed successfully!');

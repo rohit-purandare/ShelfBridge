@@ -54,6 +54,11 @@ global:
   # Useful for recovering from sync errors or cache issues
   # Default: false
   force_sync: false
+  
+  # Dump failed sync books to text file (optional)
+  # When enabled, creates a detailed error report in the data/ folder
+  # Default: true
+  dump_failed_books: true
 
 # User Configurations
 # Each user represents a connection between an Audiobookshelf server and Hardcover account
