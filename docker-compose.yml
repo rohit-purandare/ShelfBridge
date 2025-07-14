@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   shelfbridge:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
