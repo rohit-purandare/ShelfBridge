@@ -61,6 +61,7 @@ export class SyncManager {
     async syncProgress() {
         const startTime = Date.now();
         logger.debug(`Starting sync for user: ${this.userId}`);
+        console.log(`\n🔄 Sync started for user: ${this.userId}`);
         
         const result = {
             books_processed: 0,
@@ -78,6 +79,7 @@ export class SyncManager {
             const absBooks = await this.audiobookshelf.getReadingProgress();
             if (!absBooks || absBooks.length === 0) {
                 logger.debug('No books found in Audiobookshelf');
+                console.log('No books found in Audiobookshelf.');
                 return result;
             }
 
@@ -91,6 +93,7 @@ export class SyncManager {
             const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
 
             logger.debug(`Processing ${absBooks.length} books from Audiobookshelf`);
+            console.log(`Processing ${absBooks.length} books from Audiobookshelf...`);
 
             // Process each book
             for (const absBook of absBooks) {
@@ -118,6 +121,8 @@ export class SyncManager {
                         totalBooks: absBooks.length,
                         title: bookDetail.title
                     });
+                    // User-facing progress message
+                    console.log(`  → [${result.books_processed}/${absBooks.length}] ${bookDetail.title}`);
 
                     // Extract identifiers
                     const identifiers = this._extractBookIdentifier(absBook);
@@ -335,7 +340,7 @@ export class SyncManager {
                 },
                 book_breakdown: this._generateBookBreakdown(result.book_details)
             });
-
+            console.log(`\n✅ Sync complete for user: ${this.userId} in ${duration.toFixed(1)}s`);
             return result;
 
         } catch (error) {
@@ -345,6 +350,7 @@ export class SyncManager {
                 userId: this.userId 
             });
             result.errors.push(error.message);
+            console.log(`\n❌ Sync failed for user: ${this.userId}: ${error.message}`);
             return result;
         }
     }

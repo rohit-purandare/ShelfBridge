@@ -397,10 +397,12 @@ export class RateLimiter {
                 remainingRequests: rejRes.remainingPoints || 0,
                 resetTime: new Date(Date.now() + waitTime)
             });
-            
+            // User-facing message
+            console.log(`⏳ Rate limit reached. Waiting ${Math.round(waitTime / 1000)}s before continuing...`);
             // Wait for the specified time
             await sleep(waitTime);
-            
+            // User-facing resume message
+            console.log('✅ Resuming sync after rate limit pause.');
             // Retry the request after waiting
             return this.waitIfNeeded(identifier);
         }
