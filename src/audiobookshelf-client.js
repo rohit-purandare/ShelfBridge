@@ -86,8 +86,8 @@ export class AudiobookshelfClient {
         }
     }
 
-    async getReadingProgress() {
-        logger.debug('Fetching reading progress from Audiobookshelf');
+    async getReadingProgress(limit = null, offset = 0, syncMode = 'all_books') {
+        logger.debug('Fetching reading progress from Audiobookshelf', { limit, offset, syncMode });
 
         try {
             // Get user info first
@@ -96,6 +96,139 @@ export class AudiobookshelfClient {
                 throw new Error('Could not get current user data, aborting sync.');
             }
 
+            // If limit is specified and is 1, use a more efficient approach
+            if (limit === 1) {
+                logger.info('📚 Fetching only ONE book for testing...');
+                
+                // First try to get items in progress
+                const progressItems = await this._getItemsInProgress();
+                if (progressItems.length > 0) {
+                    logger.info(`✅ Found ${progressItems.length} books in progress, returning first one`);
+                    const bookDetails = await this._getLibraryItemDetails(progressItems[0].id);
+                    if (bookDetails) {
+                        // Ensure progress_percentage is set
+                        if (!bookDetails.progress_percentage && bookDetails.progress_percentage !== 0) {
+                            bookDetails.progress_percentage = 0.0;
+                        }
+                        return [bookDetails];
+                    }
+                }
+                
+                // If no progress items, get first book from first library
+                const allLibraries = await this.getLibraries();
+                if (allLibraries.length > 0) {
+                    logger.info(`📚 No books in progress, fetching first book from library: ${allLibraries[0].name}`);
+                    const libraryBooks = await this.getLibraryItems(allLibraries[0].id, 1);
+                    if (libraryBooks.length > 0) {
+                        const bookDetails = await this._getLibraryItemDetails(libraryBooks[0].id);
+                        if (bookDetails) {
+                            // Ensure progress_percentage is set
+                            if (!bookDetails.progress_percentage && bookDetails.progress_percentage !== 0) {
+                                bookDetails.progress_percentage = 0.0;
+                            }
+                            return [bookDetails];
+                        }
+                    }
+                }
+                
+                logger.warn('No books found in any library');
+                return [];
+            }
+            
+            // For processing multiple books with offset/limit pagination
+            if (limit && limit > 1) {
+                logger.info(`📚 Fetching ${limit} books starting from offset ${offset} (mode: ${syncMode})...`);
+                
+                let filteredBooks = [];
+                
+                if (syncMode === 'progress_only') {
+                    // Only get books currently in progress
+                    logger.info('🔄 Sync mode: Progress only - fetching in-progress books');
+                    const progressItems = await this._getItemsInProgress();
+                    filteredBooks = progressItems;
+                    logger.info(`✅ Found ${filteredBooks.length} books in progress`);
+                    
+                } else if (syncMode === 'completed_only') {
+                    // Get all books and filter for completed ones (100% progress)
+                    logger.info('✅ Sync mode: Completed only - fetching completed books');
+                    const allLibraries = await this.getLibraries();
+                    const allBooks = [];
+
+                    // Collect all books from all libraries
+                    for (const library of allLibraries) {
+                        logger.debug(`Fetching books from library: ${library.name}`);
+                        const libraryBooks = await this.getLibraryItems(library.id, 1000);
+                        allBooks.push(...libraryBooks);
+                    }
+                    
+                    // Filter for completed books by checking progress
+                    const completedBooks = [];
+                    for (const book of allBooks) {
+                        try {
+                            const bookDetails = await this._getLibraryItemDetails(book.id);
+                            if (bookDetails && bookDetails.progress_percentage >= 100) {
+                                completedBooks.push(book);
+                            }
+                        } catch (error) {
+                            logger.debug(`Failed to check completion status for book ${book.id}: ${error.message}`);
+                        }
+                    }
+                    
+                    filteredBooks = completedBooks;
+                    logger.info(`✅ Found ${filteredBooks.length} completed books out of ${allBooks.length} total`);
+                    
+                } else {
+                    // Default: Get ALL books from all libraries
+                    logger.info('📚 Sync mode: All books - fetching all books');
+                    const allLibraries = await this.getLibraries();
+                    const allBooks = [];
+
+                    // Collect all books from all libraries
+                    for (const library of allLibraries) {
+                        logger.debug(`Fetching books from library: ${library.name}`);
+                        const libraryBooks = await this.getLibraryItems(library.id, 1000);
+                        allBooks.push(...libraryBooks);
+                    }
+                    
+                    filteredBooks = allBooks;
+                    logger.info(`✅ Found ${filteredBooks.length} total books across all libraries`);
+                }
+                
+                if (filteredBooks.length === 0) {
+                    logger.warn(`No books found for sync mode: ${syncMode}`);
+                    return [];
+                }
+                
+                // Apply offset and limit to filtered books
+                const paginatedBooks = filteredBooks.slice(offset, offset + limit);
+                logger.info(`📚 Processing ${paginatedBooks.length} books (offset: ${offset}, limit: ${limit})`);
+                
+                if (paginatedBooks.length === 0) {
+                    logger.info('No more books to process at this offset');
+                    return [];
+                }
+                
+                // Fetch details for the paginated set
+                const books = [];
+                for (const book of paginatedBooks) {
+                    try {
+                        const bookDetails = await this._getLibraryItemDetails(book.id);
+                        if (bookDetails) {
+                            // Ensure progress_percentage is set
+                            if (!bookDetails.progress_percentage && bookDetails.progress_percentage !== 0) {
+                                bookDetails.progress_percentage = 0.0;
+                            }
+                            books.push(bookDetails);
+                        }
+                    } catch (error) {
+                        logger.warn(`Failed to get details for book ${book.id}: ${error.message}`);
+                    }
+                }
+                
+                return books;
+            }
+
+            // Original logic for fetching all books
             // Get library items in progress (these have some progress)
             const progressItems = await this._getItemsInProgress();
             logger.debug('Found items in progress', { count: progressItems.length });

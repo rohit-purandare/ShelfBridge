@@ -58,9 +58,31 @@ export class SyncManager {
         return true;
     }
 
+    /**
+     * Generate a stable identifier for books without ASIN/ISBN
+     * @param {string} title - Book title
+     * @returns {string} A stable identifier based on the title
+     */
+    _generateTitleBasedIdentifier(title) {
+        if (!title) return 'unknown-book';
+        
+        // Create a stable hash-like identifier from the title
+        // Remove numbers, punctuation, normalize spaces, and make lowercase
+        const normalized = title
+            .toLowerCase()
+            .replace(/^[\d\s\-\.]+/, '') // Remove leading numbers like "01 ", "06 "
+            .replace(/[^\w\s]/g, '') // Remove punctuation
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .trim();
+        
+        return `title-${normalized}` || 'title-unknown';
+    }
+
     async syncProgress() {
         const startTime = Date.now();
-        logger.debug(`Starting sync for user: ${this.userId}`);
+        const syncMode = this.globalConfig.sync_mode || 'all_books';
+        logger.info(`🚀 Starting sync for user: ${this.userId}`);
+        logger.info(`Configuration: dryRun=${this.dryRun}, timezone=${this.timezone}, syncMode=${syncMode}`);
         
         const result = {
             books_processed: 0,
@@ -74,26 +96,46 @@ export class SyncManager {
         };
 
         try {
-            // Get books from Audiobookshelf
-            const absBooks = await this.audiobookshelf.getReadingProgress();
-            if (!absBooks || absBooks.length === 0) {
-                logger.debug('No books found in Audiobookshelf');
-                return result;
-            }
+            // TESTING OPTIMIZATION: Skip fetching all Hardcover books for now
+            // This avoids the 30+ second timeout when fetching 6000+ editions
+            logger.warn('⚠️  TESTING MODE: Skipping Hardcover library fetch to avoid timeouts');
+            logger.info('📚 Will use direct search instead of identifier lookup');
+            const hardcoverBooks = [];
+            const identifierLookup = {};
 
-            // Get books from Hardcover
-            const hardcoverBooks = await this.hardcover.getUserBooks();
-            if (!hardcoverBooks || hardcoverBooks.length === 0) {
-                logger.warn('No books found in Hardcover library');
-            }
+            // Batch processing setup - fetch books in batches from the start
+            const BATCH_SIZE = 5;
+            
+            logger.info(`🔄 Processing ALL books in batches of ${BATCH_SIZE} (fetching each batch separately)`);
 
-            // Create identifier lookup
-            const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
+            // Process books in batches by fetching them directly with offset/limit
+            let totalBooksProcessed = 0;
+            let batchNumber = 1;
+            
+            // Continue processing until no more books are found
+            for (let offset = 0; ; offset += BATCH_SIZE) {
+                
+                logger.info(`\n${'='.repeat(100)}`);
+                logger.info(`📦 BATCH ${batchNumber}: Fetching ${BATCH_SIZE} books (offset: ${offset})`);
+                logger.info(`${'='.repeat(100)}`);
+                
+                // Fetch this batch of books directly from Audiobookshelf
+                const syncMode = this.globalConfig.sync_mode || 'all_books';
+                const currentBatch = await this.audiobookshelf.getReadingProgress(BATCH_SIZE, offset, syncMode);
+                
+                if (!currentBatch || currentBatch.length === 0) {
+                    logger.info('No more books found, ending batch processing');
+                    break;
+                }
+                
+                logger.info(`✅ Fetched ${currentBatch.length} books for this batch`);
+                
+                logger.info(`\n${'='.repeat(100)}`);
+                logger.info(`📦 BATCH ${batchNumber}: Processing ${currentBatch.length} books (offset: ${offset})`);
+                logger.info(`${'='.repeat(100)}`);
 
-            logger.debug(`Processing ${absBooks.length} books from Audiobookshelf`);
-
-            // Process each book
-            for (const absBook of absBooks) {
+                // Process each book in this batch
+                for (const absBook of currentBatch) {
                 const bookStartTime = Date.now();
                 const bookDetail = {
                     title: extractTitle(absBook) || 'Unknown Title',
@@ -112,66 +154,98 @@ export class SyncManager {
                 try {
                     result.books_processed++;
                     
-                    // Log book processing start (debug level)
-                    logger.debug(`Processing book: ${bookDetail.title}`, {
-                        bookIndex: result.books_processed,
-                        totalBooks: absBooks.length,
-                        title: bookDetail.title
+                    // Log detailed book information
+                    logger.info(`\n${'='.repeat(80)}`);
+                    logger.info(`📖 PROCESSING BOOK ${result.books_processed}: ${bookDetail.title}`);
+                    logger.info(`${'='.repeat(80)}`);
+                    
+                    // Log raw book data for debugging
+                    logger.debug('Raw Audiobookshelf book data:', {
+                        id: absBook.id,
+                        title: absBook.media?.metadata?.title,
+                        author: absBook.media?.metadata?.authors,
+                        isbn: absBook.media?.metadata?.isbn,
+                        asin: absBook.media?.metadata?.asin,
+                        progress: absBook.progress,
+                        progressPercent: absBook.progress_percentage,
+                        isFinished: absBook.is_finished,
+                        lastListened: absBook.last_listened_at,
+                        startedAt: absBook.started_at,
+                        finishedAt: absBook.finished_at
                     });
 
                     // Extract identifiers
+                    logger.info('🔍 Extracting identifiers...');
                     const identifiers = this._extractBookIdentifier(absBook);
                     bookDetail.identifiers = identifiers;
+                    logger.info(`✅ Identifiers found: ISBN=${identifiers.isbn || 'none'}, ASIN=${identifiers.asin || 'none'}`);
                     bookDetail.actions.push(`Found identifiers: ${Object.entries(identifiers).filter(([_k,v]) => v).map(([k,v]) => `${k.toUpperCase()}=${v}`).join(', ') || 'none'}`);
 
                     // Check cache for this book
-                    const cacheIdentifier = identifiers.asin || identifiers.isbn;
-                    const cacheIdentifierType = identifiers.asin ? 'asin' : 'isbn';
+                    logger.info('💾 Checking cache...');
+                    const cacheIdentifier = identifiers.asin || identifiers.isbn || this._generateTitleBasedIdentifier(bookDetail.title);
+                    const cacheIdentifierType = identifiers.asin ? 'asin' : (identifiers.isbn ? 'isbn' : 'title');
                     let cachedInfo = null;
                     
                     if (cacheIdentifier) {
                         cachedInfo = await this.cache.getCachedBookInfo(this.userId, cacheIdentifier, bookDetail.title, cacheIdentifierType);
+                        logger.info(`Cache lookup using ${cacheIdentifierType}: ${cacheIdentifier}`);
+                        
                         if (cachedInfo.exists) {
+                            logger.info('✅ Found cached data:');
                             bookDetail.actions.push(`Cache data:`);
                             
                             if (cachedInfo.edition_id) {
+                                logger.info(`  - Edition ID: ${cachedInfo.edition_id}`);
                                 bookDetail.actions.push(`  - Edition: ${cachedInfo.edition_id}`);
                             }
                             if (cachedInfo.author) {
+                                logger.info(`  - Author: ${cachedInfo.author}`);
                                 bookDetail.actions.push(`  - Author: ${cachedInfo.author}`);
                             }
                             if (cachedInfo.progress_percent !== null) {
+                                logger.info(`  - Cached progress: ${cachedInfo.progress_percent}%`);
                                 bookDetail.actions.push(`  - Progress: ${cachedInfo.progress_percent}%`);
                             }
                             if (cachedInfo.last_sync) {
                                 const lastSyncedDate = this._formatTimestampForDisplay(cachedInfo.last_sync);
+                                logger.info(`  - Last synced: ${lastSyncedDate}`);
                                 bookDetail.actions.push(`  - Last synced: ${lastSyncedDate}`);
                             }
                             
                             // Convert timestamps to readable dates using timezone
                             if (cachedInfo.started_at) {
                                 const startedDate = this._formatTimestampForDisplay(cachedInfo.started_at);
+                                logger.info(`  - Started at: ${startedDate}`);
                                 bookDetail.actions.push(`  - Started: ${startedDate}`);
                             }
                             if (cachedInfo.finished_at) {
                                 const finishedDate = this._formatTimestampForDisplay(cachedInfo.finished_at);
+                                logger.info(`  - Finished at: ${finishedDate}`);
                                 bookDetail.actions.push(`  - Finished: ${finishedDate}`);
                             }
                         } else {
+                            logger.info('❌ No cached data found');
                             bookDetail.actions.push(`Cache: No cached data found`);
                         }
                     } else {
+                        logger.warn('⚠️  Cannot check cache - no identifier available');
                         bookDetail.actions.push(`Cache: Cannot check (no identifier)`);
                     }
 
                     // Get current progress
                     const currentProgress = absBook.progress_percentage || 0;
                     bookDetail.progress.before = currentProgress;
+                    logger.info(`📊 Current progress: ${currentProgress.toFixed(1)}%`);
                     bookDetail.actions.push(`Current progress: ${currentProgress.toFixed(1)}%`);
 
                     // Check if book should be skipped due to low progress
+                    logger.info(`🔍 Checking progress threshold...`);
+                    logger.info(`  - Current progress: ${currentProgress}%`);
+                    logger.info(`  - Min threshold: ${this.globalConfig.min_progress_threshold || 5.0}%`);
+                    
                     if (this._isZeroProgress(currentProgress)) {
-                        logger.debug(`Skipping ${bookDetail.title} - progress below threshold`, {
+                        logger.warn(`⚠️  Skipping book - progress below threshold`, {
                             progress: currentProgress,
                             threshold: this.globalConfig.min_progress_threshold || 5.0
                         });
@@ -180,10 +254,12 @@ export class SyncManager {
                         result.books_skipped++;
                         continue;
                     }
+                    logger.info(`✅ Progress above threshold - continuing with sync`);
+                    
 
                     // Check cache for progress changes
-                    const identifier = identifiers.asin || identifiers.isbn;
-                    const identifierType = identifiers.asin ? 'asin' : 'isbn';
+                    const identifier = identifiers.asin || identifiers.isbn || this._generateTitleBasedIdentifier(bookDetail.title);
+                    const identifierType = identifiers.asin ? 'asin' : (identifiers.isbn ? 'isbn' : 'title');
                     
                     if (!this.globalConfig.force_sync) {
                         let hasChanged = false;
@@ -228,10 +304,18 @@ export class SyncManager {
                     }
 
                     // Try to find book in Hardcover
+                    logger.info(`\n🔍 SEARCHING FOR BOOK IN HARDCOVER LIBRARY...`);
                     const hardcoverMatch = this._findBookInHardcover(absBook, identifierLookup);
                     
                     if (hardcoverMatch) {
+                        logger.info(`✅ BOOK FOUND IN HARDCOVER!`);
+                        logger.info(`  - Hardcover title: ${hardcoverMatch.userBook.book.title}`);
+                        logger.info(`  - User book ID: ${hardcoverMatch.userBook.id}`);
+                        logger.info(`  - Edition ID: ${hardcoverMatch.edition?.id}`);
+                        
                         bookDetail.actions.push(`Found in Hardcover library: ${hardcoverMatch.userBook.book.title}`);
+                        
+                        logger.info(`\n📤 SYNCING EXISTING BOOK...`);
                         const syncResult = await this._syncExistingBook(absBook, hardcoverMatch, identifierType, identifier);
                         
                         // Update book detail with sync result
@@ -251,22 +335,32 @@ export class SyncManager {
                         }
                         
                     } else {
+                        logger.warn(`❌ BOOK NOT FOUND IN HARDCOVER LIBRARY`);
                         bookDetail.actions.push('Not found in Hardcover library');
                         
                         // Check if we should try to auto-add this book
+                        logger.info(`\n🤔 CHECKING AUTO-ADD CONDITIONS...`);
                         const hasSignificantProgress = !this._isZeroProgress(currentProgress);
                         const shouldAutoAdd = this.globalConfig.auto_add_books === true || hasSignificantProgress;
+                        
+                        logger.info(`  - Auto-add enabled: ${this.globalConfig.auto_add_books}`);
+                        logger.info(`  - Has significant progress: ${hasSignificantProgress} (${currentProgress}%)`);
+                        logger.info(`  - Should auto-add: ${shouldAutoAdd}`);
                         
                         if (shouldAutoAdd) {
                             // Determine reason for auto-add attempt
                             if (this.globalConfig.auto_add_books === true && hasSignificantProgress) {
+                                logger.info(`📚 Auto-add reason: Setting enabled + book has progress`);
                                 bookDetail.actions.push('Attempting to auto-add to Hardcover (enabled + has progress)');
                             } else if (this.globalConfig.auto_add_books === true) {
+                                logger.info(`📚 Auto-add reason: Setting enabled`);
                                 bookDetail.actions.push('Attempting to auto-add to Hardcover (auto-add enabled)');
                             } else {
+                                logger.info(`📚 Auto-add reason: Book has ${currentProgress.toFixed(1)}% progress`);
                                 bookDetail.actions.push(`Attempting to auto-add to Hardcover (has ${currentProgress.toFixed(1)}% progress)`);
                             }
                             
+                            logger.info(`\n🚀 ATTEMPTING TO AUTO-ADD BOOK TO HARDCOVER...`);
                             const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
                             
                             bookDetail.status = autoAddResult.status;
@@ -317,24 +411,59 @@ export class SyncManager {
                         timing: `${bookDetail.timing}ms`
                     });
                 }
+                
+                totalBooksProcessed += currentBatch.length;
+                logger.info(`\n📊 Batch ${batchNumber} complete: ${currentBatch.length} books processed`);
+                logger.info(`📈 Total progress: ${totalBooksProcessed} books processed so far`);
+                
+                batchNumber++;
             }
+
+            logger.info(`\n🎉 BATCH PROCESSING COMPLETE!`);
+            logger.info(`📊 Final stats: ${totalBooksProcessed} books processed across ${batchNumber - 1} batches`);
 
             // Log final summary with book details
             const duration = (Date.now() - startTime) / 1000;
             result.timing.total = duration;
             
-            logger.debug('Sync completed', {
-                summary: {
-                    books_processed: result.books_processed,
-                    books_synced: result.books_synced,
-                    books_completed: result.books_completed,
-                    books_auto_added: result.books_auto_added,
-                    books_skipped: result.books_skipped,
-                    errors: result.errors.length,
-                    duration: `${duration.toFixed(1)}s`
-                },
-                book_breakdown: this._generateBookBreakdown(result.book_details)
-            });
+            logger.info(`\n${'='.repeat(80)}`);
+            logger.info('📊 SYNC SUMMARY');
+            logger.info(`${'='.repeat(80)}`);
+            logger.info(`✅ Sync completed in ${duration.toFixed(1)}s`);
+            logger.info(`📚 Books processed: ${result.books_processed}`);
+            logger.info(`🔄 Books synced: ${result.books_synced}`);
+            logger.info(`✅ Books completed: ${result.books_completed}`);
+            logger.info(`➕ Books auto-added: ${result.books_auto_added}`);
+            logger.info(`⏭️  Books skipped: ${result.books_skipped}`);
+            logger.info(`❌ Errors: ${result.errors.length}`);
+            
+            if (result.errors.length > 0) {
+                logger.error('Errors encountered:');
+                result.errors.forEach((error, idx) => {
+                    logger.error(`  ${idx + 1}. ${error}`);
+                });
+            }
+            
+            // Log detailed book results
+            if (result.book_details.length > 0) {
+                logger.info(`\n📖 DETAILED BOOK RESULTS:`);
+                result.book_details.forEach((book, idx) => {
+                    logger.info(`\n${idx + 1}. "${book.title}"`);
+                    logger.info(`   Status: ${book.status}`);
+                    if (book.progress.changed) {
+                        logger.info(`   Progress: ${book.progress.before}% → ${book.progress.after}%`);
+                    }
+                    if (book.actions.length > 0) {
+                        logger.info(`   Actions:`);
+                        book.actions.forEach(action => {
+                            logger.info(`     - ${action}`);
+                        });
+                    }
+                });
+            }
+            
+            // End batch processing
+            }
 
             return result;
 
@@ -351,17 +480,28 @@ export class SyncManager {
 
     _createIdentifierLookup(hardcoverBooks) {
         const lookup = {};
+        let totalEditions = 0;
+        let isbnCount = 0;
+        let asinCount = 0;
+        
+        logger.info(`📚 Building identifier lookup from ${hardcoverBooks.length} Hardcover books...`);
         
         for (const userBook of hardcoverBooks) {
             const book = userBook.book;
             if (!book || !book.editions) continue;
 
+            logger.debug(`  - Processing "${book.title}" with ${book.editions.length} editions`);
+            
             for (const edition of book.editions) {
+                totalEditions++;
+                
                 // Add ISBN-10
                 if (edition.isbn_10) {
                     const normalizedIsbn = normalizeIsbn(edition.isbn_10);
                     if (normalizedIsbn) {
                         lookup[normalizedIsbn] = { userBook, edition };
+                        isbnCount++;
+                        logger.debug(`    + Added ISBN-10: ${normalizedIsbn}`);
                     }
                 }
 
@@ -370,6 +510,8 @@ export class SyncManager {
                     const normalizedIsbn = normalizeIsbn(edition.isbn_13);
                     if (normalizedIsbn) {
                         lookup[normalizedIsbn] = { userBook, edition };
+                        isbnCount++;
+                        logger.debug(`    + Added ISBN-13: ${normalizedIsbn}`);
                     }
                 }
 
@@ -378,10 +520,20 @@ export class SyncManager {
                     const normalizedAsin = normalizeAsin(edition.asin);
                     if (normalizedAsin) {
                         lookup[normalizedAsin] = { userBook, edition };
+                        asinCount++;
+                        logger.debug(`    + Added ASIN: ${normalizedAsin}`);
                     }
                 }
             }
         }
+
+        logger.info(`✅ Identifier lookup complete:`, {
+            totalBooks: hardcoverBooks.length,
+            totalEditions: totalEditions,
+            totalIdentifiers: Object.keys(lookup).length,
+            isbnCount: isbnCount,
+            asinCount: asinCount
+        });
 
         return lookup;
     }
@@ -396,35 +548,52 @@ export class SyncManager {
         const identifiers = this._extractBookIdentifier(absBook);
         const title = extractTitle(absBook) || 'Unknown Title';
         
-        logger.debug(`Searching for ${title} in Hardcover library`, {
+        logger.info(`🔍 Searching for "${title}" in Hardcover library`, {
             identifiers: identifiers
         });
 
+        // Log all available identifiers in the lookup table
+        logger.debug(`📚 Available identifiers in lookup table: ${Object.keys(identifierLookup).length}`);
+        
         // Try ASIN first (for audiobooks)
-        if (identifiers.asin && identifierLookup[identifiers.asin]) {
-            const match = identifierLookup[identifiers.asin];
-            logger.debug(`Found ASIN match for ${title}`, {
-                asin: identifiers.asin,
-                hardcoverTitle: match.userBook.book.title,
-                userBookId: match.userBook.id,
-                editionId: match.edition.id
-            });
-            return match;
+        if (identifiers.asin) {
+            logger.info(`  - Checking ASIN: ${identifiers.asin}`);
+            if (identifierLookup[identifiers.asin]) {
+                const match = identifierLookup[identifiers.asin];
+                logger.info(`  ✅ FOUND ASIN MATCH!`, {
+                    asin: identifiers.asin,
+                    hardcoverTitle: match.userBook.book.title,
+                    userBookId: match.userBook.id,
+                    editionId: match.edition.id
+                });
+                return match;
+            } else {
+                logger.info(`  ❌ No match for ASIN ${identifiers.asin}`);
+            }
+        } else {
+            logger.info(`  - No ASIN available for this book`);
         }
 
         // Fall back to ISBN
-        if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
-            const match = identifierLookup[identifiers.isbn];
-            logger.debug(`Found ISBN match for ${title}`, {
-                isbn: identifiers.isbn,
-                hardcoverTitle: match.userBook.book.title,
-                userBookId: match.userBook.id,
-                editionId: match.edition.id
-            });
-            return match;
+        if (identifiers.isbn) {
+            logger.info(`  - Checking ISBN: ${identifiers.isbn}`);
+            if (identifierLookup[identifiers.isbn]) {
+                const match = identifierLookup[identifiers.isbn];
+                logger.info(`  ✅ FOUND ISBN MATCH!`, {
+                    isbn: identifiers.isbn,
+                    hardcoverTitle: match.userBook.book.title,
+                    userBookId: match.userBook.id,
+                    editionId: match.edition.id
+                });
+                return match;
+            } else {
+                logger.info(`  ❌ No match for ISBN ${identifiers.isbn}`);
+            }
+        } else {
+            logger.info(`  - No ISBN available for this book`);
         }
 
-        logger.debug(`No match found for ${title} in Hardcover library`, {
+        logger.warn(`❌ No match found for "${title}" in Hardcover library`, {
             searchedIdentifiers: identifiers
         });
         return null;
@@ -793,30 +962,38 @@ export class SyncManager {
 
     async _tryAutoAddBook(absBook, identifiers) {
         const title = extractTitle(absBook) || 'Unknown Title';
-        logger.info(`Attempting to auto-add ${title} to Hardcover`, {
+        logger.info(`\n🔎 AUTO-ADD: Attempting to auto-add "${title}" to Hardcover`, {
             identifiers: identifiers,
             title: title
         });
 
         try {
-            // Search for the book by ISBN or ASIN
-            let searchResults = [];
+            // Use enhanced search with alternative identifiers
+            const authorName = this._extractAuthorFromData(absBook);
+            logger.info(`📖 Book title: "${title}"`);
+            logger.info(`👤 Author: ${authorName || 'Unknown'}`);
             
-            if (identifiers.asin) {
-                logger.debug(`Searching Hardcover by ASIN: ${identifiers.asin}`);
-                searchResults = await this.hardcover.searchBooksByAsin(identifiers.asin);
-                logger.debug(`ASIN search returned ${searchResults.length} results`);
-            }
+            // Try enhanced search that includes alternative identifiers
+            const searchResults = await this.hardcover.searchWithAlternativeIdentifiers(
+                identifiers.asin, 
+                title, 
+                authorName
+            );
             
-            if (searchResults.length === 0 && identifiers.isbn) {
-                logger.debug(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
-                searchResults = await this.hardcover.searchBooksByIsbn(identifiers.isbn);
-                logger.debug(`ISBN search returned ${searchResults.length} results`);
+            if (searchResults.length > 0) {
+                logger.info(`✅ Enhanced search found ${searchResults.length} matches:`);
+                searchResults.slice(0, 3).forEach((result, idx) => {
+                    const authors = result.book.contributions?.map(c => c.author?.name).filter(Boolean).join(', ') || 'Unknown';
+                    const format = result.reading_format?.format || result.physical_format || 'Unknown';
+                    logger.info(`  ${idx + 1}. "${result.book.title}" by ${authors} - Edition ID: ${result.id}, Format: ${format}`);
+                });
             }
 
             if (searchResults.length === 0) {
-                logger.info(`Could not find ${title} in Hardcover database`, {
-                    searchedIdentifiers: identifiers
+                logger.warn(`❌ Could not find "${title}" in Hardcover database using any search method`, {
+                    searchedIdentifiers: identifiers,
+                    searchedTitle: title,
+                    searchedAuthor: this._extractAuthorFromData(absBook)
                 });
                 return { status: 'skipped', reason: 'Book not found in Hardcover', title };
             }
@@ -826,16 +1003,32 @@ export class SyncManager {
             const bookId = edition.book.id;
             const editionId = edition.id;
 
-            logger.debug(`Found match in Hardcover`, {
+            // Determine which search method found the book
+            let searchMethod = 'Unknown';
+            if (identifiers.asin && edition.asin === identifiers.asin) {
+                searchMethod = 'ASIN';
+            } else if (identifiers.isbn && (edition.isbn_10 === identifiers.isbn || edition.isbn_13 === identifiers.isbn)) {
+                searchMethod = 'ISBN';
+            } else {
+                searchMethod = 'Title + Author';
+            }
+
+            const selectedFormat = edition.reading_format?.format || edition.physical_format || 'Unknown';
+            logger.info(`\n📚 SELECTED EDITION FOR AUTO-ADD:`, {
                 title: title,
                 hardcoverTitle: edition.book.title,
                 bookId: bookId,
                 editionId: editionId,
-                format: edition.format
+                format: selectedFormat,
+                foundBy: searchMethod
             });
 
+            const authors = edition.book.contributions?.map(c => c.author?.name).filter(Boolean).join(', ') || 'Unknown';
+            logger.info(`👤 Authors: ${authors}`);
+            logger.info(`🔍 Found using: ${searchMethod} search`);
+
             if (this.dryRun) {
-                logger.debug(`[DRY RUN] Would add ${title} to library (book_id: ${bookId}, edition_id: ${editionId})`);
+                logger.info(`🏃 [DRY RUN] Would add "${title}" to library (book_id: ${bookId}, edition_id: ${editionId})`);
                 return { status: 'auto_added', title, bookId, editionId };
             }
 
@@ -857,8 +1050,8 @@ export class SyncManager {
                 });
                 
                 // Store cache data in transaction
-                const identifier = identifiers.asin || identifiers.isbn;
-                const identifierType = identifiers.asin ? 'asin' : 'isbn';
+                const identifier = identifiers.asin || identifiers.isbn || this._generateTitleBasedIdentifier(title);
+                const identifierType = identifiers.asin ? 'asin' : (identifiers.isbn ? 'isbn' : 'title');
                 const author = this._extractAuthorFromData(absBook, { userBook: null, edition });
                 
                 // Add API rollback callback
@@ -1120,8 +1313,8 @@ export class SyncManager {
         
         // Check cache first
         const identifier = this._extractBookIdentifier(absBook);
-        const identifierType = identifier.asin ? 'asin' : 'isbn';
-        const identifierValue = identifier.asin || identifier.isbn;
+        const identifierType = identifier.asin ? 'asin' : (identifier.isbn ? 'isbn' : 'title');
+        const identifierValue = identifier.asin || identifier.isbn || this._generateTitleBasedIdentifier(title);
         
         const cachedEditionId = await this.cache.getEditionForBook(
             this.userId, 
@@ -1241,8 +1434,8 @@ export class SyncManager {
 
                 // Store completion data in transaction
                 const identifier = this._extractBookIdentifier(absBook);
-                const identifierType = identifier.asin ? 'asin' : 'isbn';
-                const identifierValue = identifier.asin || identifier.isbn;
+                const identifierType = identifier.asin ? 'asin' : (identifier.isbn ? 'isbn' : 'title');
+                const identifierValue = identifier.asin || identifier.isbn || this._generateTitleBasedIdentifier(title);
 
                 try {
                     logger.debug(`Caching completion data for ${title}`, {
@@ -1327,8 +1520,8 @@ export class SyncManager {
 
             // Get previous progress for rollback
             const identifier = this._extractBookIdentifier(absBook);
-            const identifierType = identifier.asin ? 'asin' : 'isbn';
-            const identifierValue = identifier.asin || identifier.isbn;
+            const identifierType = identifier.asin ? 'asin' : (identifier.isbn ? 'isbn' : 'title');
+            const identifierValue = identifier.asin || identifier.isbn || this._generateTitleBasedIdentifier(title);
             
             previousProgress = await this.cache.getLastProgress(this.userId, identifierValue, title, identifierType);
 

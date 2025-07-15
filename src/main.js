@@ -22,6 +22,9 @@ program
 program.option('--dry-run', 'Run without making changes');
 program.option('--skip-validation', 'Skip configuration validation on startup');
 program.option('--verbose', 'Show detailed logging output');
+program.option('--progress-only', 'Sync only books currently in progress');
+program.option('--completed-only', 'Sync only completed books');
+program.option('--all-books', 'Sync all books (in progress and completed) - default behavior');
 
 /**
  * Validate configuration on startup
@@ -128,6 +131,16 @@ program
             // Add force flag to global config
             if (options.force) {
                 globalConfig.force_sync = true;
+            }
+            
+            // Add sync mode flags to global config  
+            const programOpts = program.opts();
+            if (programOpts.progressOnly) {
+                globalConfig.sync_mode = 'progress_only';
+            } else if (programOpts.completedOnly) {
+                globalConfig.sync_mode = 'completed_only';
+            } else {
+                globalConfig.sync_mode = 'all_books'; // default
             }
             
             // Show startup information
