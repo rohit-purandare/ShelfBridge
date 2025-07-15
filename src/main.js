@@ -12,6 +12,7 @@ import cron from 'node-cron';
 import { CronJob } from 'cron'; // Add this import for next run time calculation
 import logger from './logger.js';
 import inquirer from 'inquirer';
+import cronstrue from 'cronstrue';
 
 const program = new Command();
 
@@ -1048,7 +1049,7 @@ async function debugUser(user) {
         console.log(`Dry run mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}`);
         console.log(`Min progress threshold: ${globalConfig.min_progress_threshold}%`);
         console.log(`Auto-add books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}`);
-        console.log(`Progress regression protection: ${globalConfig.progress_regression_protection ? 'ON' : 'OFF'}`);
+        console.log(`Progress regression protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}`);
         
         if (globalConfig.cron?.enabled) {
             console.log(`Cron schedule: ${globalConfig.cron.schedule}`);
@@ -1207,12 +1208,23 @@ async function runInteractiveMode() {
                 process.stdout.write(`  Min Progress Threshold: ${globalConfig.min_progress_threshold}%\n`);
                 process.stdout.write(`  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}\n`);
                 process.stdout.write(`  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Progress Regression Protection: ${globalConfig.progress_regression_protection ? 'ON' : 'OFF'}\n`);
+                process.stdout.write(`  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}\n`);
                 process.stdout.write(`  Workers: ${globalConfig.workers}\n`);
                 process.stdout.write(`  Timezone: ${globalConfig.timezone}\n`);
-                if (globalConfig.cron?.enabled) {
-                    process.stdout.write(`  Sync Schedule: ${globalConfig.cron.schedule}\n`);
+                // Remove raw cron string, only show human-readable
+                if (globalConfig.sync_schedule) {
+                    try {
+                        const human = cronstrue.toString(globalConfig.sync_schedule, { use24HourTimeFormat: false });
+                        process.stdout.write(`  Sync Schedule: ${human}\n`);
+                    } catch (e) {
+                        process.stdout.write(`  Sync Schedule: Invalid cron expression\n`);
+                    }
+                } else {
+                    process.stdout.write(`  Sync Schedule: Not set\n`);
                 }
+                process.stdout.write(`  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}\n`);
+                process.stdout.write(`  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}\n`);
+                process.stdout.write(`  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}\n`);
                 process.stdout.write(`\nUsers (${users.length}):\n`);
                 for (const user of users) {
                     process.stdout.write(`  ${user.id}:\n`);

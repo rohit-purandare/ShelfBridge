@@ -29,6 +29,7 @@
     "better-sqlite3": "^12.2.0",
     "commander": "^11.1.0",
     "cron": "^3.1.6",
+    "cronstrue": "^3.1.0",
     "inquirer": "^12.7.0",
     "js-yaml": "^4.1.0",
     "luxon": "^3.4.4",
