@@ -1,7 +1,24 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-echo "🔒 Running pre-commit security checks..."
+echo "🔒 Running pre-commit checks..."
+
+# Run ESLint on staged JavaScript files in src/ directory
+echo "🔍 Running ESLint..."
+STAGED_JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^src/.*\.js$' || true)
+if [ -n "$STAGED_JS_FILES" ]; then
+    echo "Checking staged JavaScript files..."
+    echo "$STAGED_JS_FILES" | xargs npx eslint --max-warnings 0 || {
+        echo ""
+        echo "❌ ESLint found issues!"
+        echo "💡 Fix the linting errors above before committing"
+        echo "💡 Run 'npx eslint src/ --ext .js --max-warnings 0' to check all files"
+        exit 1
+    }
+    echo "✅ ESLint passed"
+else
+    echo "No JavaScript files staged in src/, skipping ESLint"
+fi
 
 # Run gitleaks to scan for secrets
 echo "Scanning for secrets with gitleaks..."
@@ -27,4 +44,4 @@ if echo "$STAGED_FILES" | grep -q "package.json\|package-lock.json"; then
     }
 fi
 
-echo "🔒 Pre-commit security checks completed" 
+echo "🔒 Pre-commit checks completed" 
