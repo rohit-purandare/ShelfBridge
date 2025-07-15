@@ -27,9 +27,9 @@ export class SyncManager {
         this.audiobookshelf = new AudiobookshelfClient(
             user.abs_url, 
             user.abs_token, 
-            globalConfig.workers || 3
+            globalConfig.audiobookshelf_semaphore || 1
         );
-        this.hardcover = new HardcoverClient(user.hardcover_token);
+        this.hardcover = new HardcoverClient(user.hardcover_token, globalConfig.hardcover_semaphore || 1);
         
         // Initialize cache
         this.cache = new BookCache();

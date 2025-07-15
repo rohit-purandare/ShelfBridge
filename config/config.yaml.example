@@ -60,6 +60,9 @@ global:
   # Default: true
   dump_failed_books: true
 
+  audiobookshelf_semaphore: 1  # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
+  hardcover_semaphore: 1  # Max concurrent Hardcover API requests (default: 1, increase with caution)
+
 # User Configurations
 # Each user represents a connection between an Audiobookshelf server and Hardcover account
 users:

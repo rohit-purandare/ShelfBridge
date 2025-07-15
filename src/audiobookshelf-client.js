@@ -2,14 +2,13 @@ import axios from 'axios';
 import { RateLimiter, Semaphore } from './utils.js';
 import logger from './logger.js';
 
-// Global semaphore for all Audiobookshelf requests (1 at a time to prevent rate limit conflicts)
-const audiobookshelfSemaphore = new Semaphore(1);
+// Remove the global semaphore, make it per-instance
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, maxWorkers = 3) {
+    constructor(baseUrl, token, semaphoreConcurrency = 1) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.token = this.normalizeToken(token);
-        this.maxWorkers = maxWorkers;
+        this.semaphore = new Semaphore(semaphoreConcurrency);
         this.rateLimiter = new RateLimiter(600); // 10 requests per second = 600 per minute
 
         // Create axios instance with default config
@@ -43,7 +42,7 @@ export class AudiobookshelfClient {
 
         logger.debug('AudiobookshelfClient initialized', { 
             baseUrl: this.baseUrl, 
-            maxWorkers: this.maxWorkers 
+            semaphoreConcurrency 
         });
     }
 
@@ -444,7 +443,7 @@ export class AudiobookshelfClient {
     }
 
     async _makeRequest(method, endpoint, data = null, suppressErrors = []) {
-        await audiobookshelfSemaphore.acquire();
+        await this.semaphore.acquire();
         try {
             await this.rateLimiter.waitIfNeeded('audiobookshelf');
 
@@ -500,7 +499,7 @@ export class AudiobookshelfClient {
                 }
             }
         } finally {
-            audiobookshelfSemaphore.release();
+            this.semaphore.release();
         }
     }
 } 

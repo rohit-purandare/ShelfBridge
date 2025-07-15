@@ -1225,6 +1225,8 @@ async function runInteractiveMode() {
                 process.stdout.write(`  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}\n`);
                 process.stdout.write(`  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}\n`);
                 process.stdout.write(`  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}\n`);
+                process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore || 1}\n`);
+                process.stdout.write(`  Hardcover Semaphore: ${globalConfig.hardcover_semaphore || 1}\n`);
                 process.stdout.write(`\nUsers (${users.length}):\n`);
                 for (const user of users) {
                     process.stdout.write(`  ${user.id}:\n`);

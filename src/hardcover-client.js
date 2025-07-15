@@ -1,15 +1,18 @@
 import axios from 'axios';
-import { RateLimiter } from './utils.js';
+import { RateLimiter, Semaphore } from './utils.js';
 import logger from './logger.js';
+
+// Remove the global semaphore, make it per-instance
 
 const RATE_LIMIT_PER_MINUTE = 55;
 
 export class HardcoverClient {
-    constructor(token) {
+    constructor(token, semaphoreConcurrency = 1) {
         // Normalize token by stripping "Bearer" prefix if present
         this.token = this.normalizeToken(token);
         this.baseUrl = 'https://api.hardcover.app/v1/graphql';
         this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
+        this.semaphore = new Semaphore(semaphoreConcurrency);
         
         // Create axios instance with default config
         this.client = axios.create({
@@ -21,7 +24,7 @@ export class HardcoverClient {
             timeout: 30000 // 30 second timeout
         });
         
-        logger.debug('HardcoverClient initialized');
+        logger.debug('HardcoverClient initialized', { semaphoreConcurrency });
     }
 
     /**
@@ -783,65 +786,69 @@ export class HardcoverClient {
     async _executeQuery(query, variables = null) {
         // Use single identifier for all Hardcover requests to respect 55/minute total limit
         const identifier = 'hardcover-api';
-        
-        await this.rateLimiter.waitIfNeeded(identifier);
-
-        // Restore requestType for logging
-        const requestType = query.trim().startsWith('mutation') ? 'mutation' : 'query';
-
-        // Debug logging for mutations
-        if (requestType === 'mutation') {
-            logger.debug('🔍 [DEBUG] Hardcover Mutation:');
-            logger.debug('Query:', query);
-            logger.debug('Variables:', JSON.stringify(variables, null, 2));
-        }
-
+        await this.semaphore.acquire();
         try {
-            const requestData = {
-                query,
-                variables
-            };
+            await this.rateLimiter.waitIfNeeded(identifier);
 
-            const response = await this.client.post('', requestData);
-            
-            // Validate response
-            if (!response || !response.data) {
-                throw new Error('Invalid response from GraphQL API');
+            // Restore requestType for logging
+            const requestType = query.trim().startsWith('mutation') ? 'mutation' : 'query';
+
+            // Debug logging for mutations
+            if (requestType === 'mutation') {
+                logger.debug('🔍 [DEBUG] Hardcover Mutation:');
+                logger.debug('Query:', query);
+                logger.debug('Variables:', JSON.stringify(variables, null, 2));
             }
-            
-            if (response.status < 200 || response.status >= 300) {
-                throw new Error(`GraphQL API request failed with status ${response.status}: ${response.statusText}`);
+
+            try {
+                const requestData = {
+                    query,
+                    variables
+                };
+
+                const response = await this.client.post('', requestData);
+                
+                // Validate response
+                if (!response || !response.data) {
+                    throw new Error('Invalid response from GraphQL API');
+                }
+                
+                if (response.status < 200 || response.status >= 300) {
+                    throw new Error(`GraphQL API request failed with status ${response.status}: ${response.statusText}`);
+                }
+                
+                logger.debug(`GraphQL query executed successfully`);
+                
+                if (response.data.errors) {
+                    logger.error('GraphQL errors:', response.data.errors);
+                    throw new Error(`GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`);
+                }
+                
+                if (!response.data.data) {
+                    throw new Error('GraphQL response contains no data');
+                }
+                
+                // Debug logging for mutation responses
+                if (query.trim().startsWith('mutation')) {
+                    logger.debug('🔍 [DEBUG] Hardcover Response:');
+                    logger.debug(JSON.stringify(response.data, null, 2));
+                }
+                
+                return response.data.data;
+            } catch (error) {
+                if (error.response) {
+                    logger.error(`HTTP ${error.response.status} error:`, error.response.data);
+                    throw new Error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
+                } else if (error.request) {
+                    logger.error('Network error:', error.message);
+                    throw new Error(`Network error: ${error.message}`);
+                } else {
+                    logger.error('Request error:', error.message);
+                    throw error;
+                }
             }
-            
-            logger.debug(`GraphQL query executed successfully`);
-            
-            if (response.data.errors) {
-                logger.error('GraphQL errors:', response.data.errors);
-                throw new Error(`GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`);
-            }
-            
-            if (!response.data.data) {
-                throw new Error('GraphQL response contains no data');
-            }
-            
-            // Debug logging for mutation responses
-            if (query.trim().startsWith('mutation')) {
-                logger.debug('🔍 [DEBUG] Hardcover Response:');
-                logger.debug(JSON.stringify(response.data, null, 2));
-            }
-            
-            return response.data.data;
-        } catch (error) {
-            if (error.response) {
-                logger.error(`HTTP ${error.response.status} error:`, error.response.data);
-                throw new Error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
-            } else if (error.request) {
-                logger.error('Network error:', error.message);
-                throw new Error(`Network error: ${error.message}`);
-            } else {
-                logger.error('Request error:', error.message);
-                throw error;
-            }
+        } finally {
+            this.semaphore.release();
         }
     }
 

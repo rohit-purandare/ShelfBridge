@@ -132,6 +132,20 @@ export class ConfigValidator {
                             description: 'Warn about progress drops larger than this % from high progress (0-100)'
                         }
                     }
+                },
+                hardcover_semaphore: {
+                    type: 'number',
+                    min: 1,
+                    max: 10,
+                    default: 1,
+                    description: 'Max concurrent Hardcover API requests (1-10, default: 1)'
+                },
+                audiobookshelf_semaphore: {
+                    type: 'number',
+                    min: 1,
+                    max: 10,
+                    default: 1,
+                    description: 'Max concurrent Audiobookshelf API requests (1-10, default: 1)'
                 }
             },
             users: {
