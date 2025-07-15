@@ -141,7 +141,45 @@ If this fails:
 - Progress must be above your `min_progress_threshold`
 - Try temporarily lowering the threshold to 0.1
 
-### 3. "GraphQL errors" or Hardcover API Issues
+### 3. Application Hangs or Memory Issues on Large Libraries
+
+**Symptoms:**
+- Application freezes after "Sync started..."
+- High memory usage on resource-constrained devices (Raspberry Pi, etc.)
+- Large JSON responses (2+ MB) from Audiobookshelf API
+- Timeout errors when fetching library items
+
+**Root Cause:**
+The application was fetching all library items at once without pagination, which could overwhelm devices with limited resources.
+
+**Solution:**
+ShelfBridge now implements proper pagination for large libraries. You can also configure the maximum number of books fetched per library:
+
+```yaml
+global:
+  # Reduce this if you experience memory issues (default: no limit)
+  max_books_to_fetch: 250
+```
+
+**For Raspberry Pi or low-resource devices:**
+```yaml
+global:
+  max_books_to_fetch: 100  # Conservative setting
+  page_size: 25           # Small responses for low memory
+  workers: 1              # Reduce parallel processing
+  parallel: false         # Disable parallel processing
+```
+
+**Testing with limited books:**
+```yaml
+global:
+  max_books_to_process: 10  # Test with just 10 books
+  max_books_to_fetch: 50    # Fetch max 50 books from Audiobookshelf
+  page_size: 25            # Small responses for testing
+  dry_run: true            # Don't make actual changes
+```
+
+### 4. "GraphQL errors" or Hardcover API Issues
 
 **Symptoms:**
 - Books found but sync fails

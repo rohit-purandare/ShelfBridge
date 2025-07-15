@@ -41,6 +41,9 @@ docker-compose up -d
 global:
   min_progress_threshold: 5.0
   auto_add_books: false
+  # Optional: Adjust for large libraries or resource-constrained devices
+  # max_books_to_fetch: 250  # Optional: limit total books fetched
+  # page_size: 50           # Reduce from default 100
 
 users:
   - id: your_username

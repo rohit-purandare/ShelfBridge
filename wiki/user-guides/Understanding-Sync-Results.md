@@ -105,6 +105,10 @@ ShelfBridge respects Hardcover's API limits (55 requests per minute). You may se
 - **⚠️ Exceeded**: When the limit is reached, requests are automatically queued
 - **🔄 Waiting**: Shows delay time before next request can be made
 
+**Pagination messages:**
+- **📄 Page X**: Shows pagination progress when fetching large libraries
+- **📚 Fetched X books**: Shows total books fetched across all pages
+
 **What this means:**
 - **Normal behavior**: Rate limiting prevents API errors
 - **Automatic handling**: Requests are queued, not dropped

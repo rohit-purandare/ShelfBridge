@@ -143,6 +143,45 @@ global:
 
 **Purpose**: Controls concurrent requests to Hardcover API. Keep at `1` to respect their rate limits, or increase carefully if you have a high rate limit allowance.
 
+#### `max_books_to_fetch`
+**Type**: Number or null  
+**Default**: `null` (no limit)  
+**Optional**: Yes  
+**Description**: Maximum number of books to fetch from Audiobookshelf
+
+```yaml
+global:
+  max_books_to_fetch: null  # Fetch all books (no limit)
+  # OR
+  max_books_to_fetch: 250   # Conservative for large libraries
+```
+
+**Purpose**: Controls how many books are fetched from Audiobookshelf libraries. Set to `null` for no limit, or a number to limit total books fetched.
+
+**When to adjust**:
+- **Large libraries**: Set to a number (e.g., 500-1000) if you have 1000+ books per library
+- **Resource-constrained devices**: Use 100-250 for Raspberry Pi or low-memory systems
+- **Memory issues**: Set to a number if you experience application hangs or high memory usage
+- **No limit**: Use `null` to fetch all books (default behavior)
+
+#### `page_size`
+**Type**: Number (25-200)  
+**Default**: `100`  
+**Optional**: Yes  
+**Description**: Number of books to fetch per API call
+
+```yaml
+global:
+  page_size: 50  # Smaller responses, more API calls
+```
+
+**Purpose**: Controls the granularity of API calls. Smaller values create more API calls but smaller responses.
+
+**When to adjust**:
+- **Slow connections**: Use 25-50 for better reliability
+- **Fast connections**: Use 100-200 for fewer API calls
+- **Memory-constrained devices**: Use 25-50 to reduce memory usage per request
+
 #### `max_books_to_process`
 **Type**: Number (1-10000)  
 **Default**: No limit  

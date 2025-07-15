@@ -109,9 +109,16 @@ async syncProgress() {
 **Key Methods**:
 ```javascript
 getReadingProgress()     // Fetch user's reading progress
+getLibraryItems()       // Fetch library items with pagination
 getUserInfo()           // Get user details
 testConnection()        // Verify API access
 ```
+
+**Pagination Features**:
+- **Configurable page size**: Default 100 items per API call
+- **Automatic pagination**: Handles large libraries efficiently
+- **Memory optimization**: Prevents large single responses
+- **Rate limiting integration**: Respects API limits during pagination
 
 #### Hardcover Client (`src/hardcover-client.js`)
 
@@ -445,7 +452,10 @@ async function processBooks(books, workers = 3) {
 ### Network Usage
 
 **API Calls per Sync**:
-- **Audiobookshelf**: 1-2 requests (bulk progress fetch)
+- **Audiobookshelf**: 
+  - Library fetch: 1-10 requests (configurable pagination)
+  - Progress fetch: 1-2 requests
+  - Total: typically 5-20 requests
 - **Hardcover**: 
   - Library fetch: 1-5 requests (paginated)
   - Updates: 1 request per changed book

@@ -153,6 +153,27 @@ export class ConfigValidator {
                     max: 10,
                     default: 1,
                     description: 'Max concurrent Audiobookshelf API requests (1-10, default: 1)'
+                },
+                max_books_to_fetch: {
+                    type: 'number',
+                    min: 1,
+                    max: 10000,
+                    optional: true,
+                    description: 'Maximum number of books to fetch from Audiobookshelf (null for no limit)'
+                },
+                page_size: {
+                    type: 'number',
+                    min: 25,
+                    max: 200,
+                    default: 100,
+                    optional: true,
+                    description: 'Number of books to fetch per API call (25-200)'
+                },
+                dump_failed_books: {
+                    type: 'boolean',
+                    default: true,
+                    optional: true,
+                    description: 'Dump failed sync books to text file for debugging'
                 }
             },
             users: {
@@ -600,7 +621,7 @@ export class ConfigValidator {
             try {
                 // Test Audiobookshelf connection
                 const { AudiobookshelfClient } = await import('./audiobookshelf-client.js');
-                const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
+                const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
                 const absConnected = await absClient.testConnection();
                 
                 if (!absConnected) {

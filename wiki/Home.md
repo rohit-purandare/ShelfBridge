@@ -46,6 +46,7 @@ New to ShelfBridge? Start here:
 
 ### Architecture & APIs
 - **[Architecture Overview](technical/Architecture-Overview.md)** - How ShelfBridge works internally
+- **[Pagination System](technical/Pagination-System.md)** - Configurable pagination for large libraries
 - **[Rate Limiting](technical/Rate-Limiting.md)** - API rate limiting implementation
 - **[Audiobookshelf API](technical/Audiobookshelf-API.md)** - Integration details
 - **[Hardcover API](technical/Hardcover-API.md)** - GraphQL integration
@@ -118,6 +119,9 @@ global:
   min_progress_threshold: 5.0
   auto_add_books: false
   prevent_progress_regression: true
+  # Optional: Adjust for large libraries or resource-constrained devices
+  # max_books_to_fetch: 250  # Optional: limit total books fetched
+  # page_size: 50           # Reduce from default 100
   
 users:
   - id: your_username

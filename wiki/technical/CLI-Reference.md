@@ -174,6 +174,27 @@ node src/main.js cron
 
 Check your configuration file for errors and test API connections.
 
+#### Configuration Options
+
+The following global configuration options are available:
+
+**Library Fetching Options:**
+- **`max_books_to_fetch`** (default: no limit): Maximum number of books to fetch from Audiobookshelf libraries
+- **`page_size`** (default: 100): Number of books to fetch per API call (configurable pagination)
+- **`max_books_to_process`** (optional): Maximum number of books to process during sync (for testing)
+
+**Performance Options:**
+- **`workers`** (default: 3): Number of parallel workers for API requests
+- **`parallel`** (default: true): Enable parallel processing
+- **`audiobookshelf_semaphore`** (default: 1): Max concurrent Audiobookshelf API requests
+- **`hardcover_semaphore`** (default: 1): Max concurrent Hardcover API requests
+
+**Sync Behavior Options:**
+- **`min_progress_threshold`** (default: 5.0): Minimum progress percentage required to sync
+- **`auto_add_books`** (default: false): Automatically add books to Hardcover
+- **`prevent_progress_regression`** (default: true): Protect against progress loss
+- **`sync_schedule`** (default: "0 3 * * *"): Cron schedule for automatic sync
+
 ```bash
 node src/main.js validate [options]
 ```

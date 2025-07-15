@@ -103,6 +103,21 @@ users:
 #   hardcover_semaphore: 1
 #   
 #   # =============================================================================
+#   # LIBRARY FETCHING SETTINGS (Optional - for large libraries)
+#   # =============================================================================
+#   
+#   # Maximum number of books to fetch from Audiobookshelf (default: no limit)
+#   # Set to a number to limit books fetched, or null/undefined for no limit
+#   # Reduce this if you experience memory issues or timeouts on resource-constrained devices
+#   # This setting helps prevent the application from hanging when fetching large libraries
+#   max_books_to_fetch: null
+#   
+#   # Number of books to fetch per API call (default: 100)
+#   # Smaller values = more API calls but smaller responses (better for slow connections)
+#   # Larger values = fewer API calls but larger responses (better for fast connections)
+#   page_size: 100
+#   
+#   # =============================================================================
 #   # DEBUGGING AND LOGGING (Optional)
 #   # =============================================================================
 #   

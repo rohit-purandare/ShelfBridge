@@ -5,11 +5,13 @@ import logger from './logger.js';
 // Remove the global semaphore, make it per-instance
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1) {
+    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.token = this.normalizeToken(token);
         this.semaphore = new Semaphore(semaphoreConcurrency);
         this.rateLimiter = new RateLimiter(600); // 10 requests per second = 600 per minute
+        this.maxBooksToFetch = maxBooksToFetch;
+        this.pageSize = pageSize;
 
         // Create axios instance with default config
         this.axios = axios.create({
@@ -114,7 +116,7 @@ export class AudiobookshelfClient {
                     libraryName: library.name, 
                     libraryId: library.id 
                 });
-                const libraryBooks = await this.getLibraryItems(library.id, 1000);
+                const libraryBooks = await this.getLibraryItems(library.id, this.maxBooksToFetch);
                 logger.debug('Library books count', { 
                     libraryName: library.name, 
                     count: libraryBooks.length 
@@ -376,12 +378,65 @@ export class AudiobookshelfClient {
         }
     }
 
-    async getLibraryItems(libraryId, limit = 50) {
+    async getLibraryItems(libraryId, limit = null) {
         try {
-            const response = await this._makeRequest('GET', `/api/libraries/${libraryId}/items?limit=${limit}`);
-            logger.debug('Full library items API response', { libraryId, response: JSON.stringify(response, null, 2) });
-            logger.debug('Library items API response', { libraryId, response });
-            return response.results || response.libraryItems || [];
+            const allItems = [];
+            let page = 0;
+            let total = 0;
+            // Use the instance's maxBooksToFetch if no limit is provided
+            const effectiveLimit = limit !== null ? limit : this.maxBooksToFetch;
+            const itemsPerPage = this.pageSize; // Use configurable page size
+
+            while (true) {
+                const response = await this._makeRequest('GET', `/api/libraries/${libraryId}/items?limit=${itemsPerPage}&page=${page}`);
+                
+                if (!response) {
+                    logger.debug('No response from library items API', { libraryId, page });
+                    break;
+                }
+
+                // Extract items from response
+                const items = response.results || response.libraryItems || [];
+                if (!items || items.length === 0) {
+                    logger.debug('No more items in library', { libraryId, page });
+                    break;
+                }
+
+                // Get total count from first page
+                if (page === 0) {
+                    total = response.total || items.length;
+                    logger.debug('Library items pagination info', { 
+                        libraryId, 
+                        total, 
+                        itemsPerPage,
+                        firstPageCount: items.length,
+                        effectiveLimit: effectiveLimit
+                    });
+                }
+
+                allItems.push(...items);
+                logger.debug('Fetched library items page', { 
+                    libraryId, 
+                    page, 
+                    itemsInPage: items.length, 
+                    totalFetched: allItems.length 
+                });
+
+                // Check if we've reached the limit or end of data
+                if ((effectiveLimit !== null && allItems.length >= effectiveLimit) || items.length < itemsPerPage) {
+                    break;
+                }
+
+                page++;
+            }
+
+            logger.debug('Completed library items fetch', { 
+                libraryId, 
+                totalItems: allItems.length, 
+                pages: page + 1 
+            });
+
+            return allItems;
         } catch (error) {
             // Check if this is a recoverable error (library not found)
             if (this._isRecoverableError(error)) {

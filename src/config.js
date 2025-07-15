@@ -48,12 +48,33 @@ export class Config {
             dump_failed_books: true
         };
 
+        // Track which values were explicitly set vs using defaults
+        this.explicitlySet = new Set();
+
         // Apply defaults only for undefined values
         for (const [key, defaultValue] of Object.entries(defaults)) {
             if (this.globalConfig[key] === undefined) {
                 this.globalConfig[key] = defaultValue;
                 logger.debug(`Applied default for ${key}: ${defaultValue}`);
+            } else {
+                // Mark as explicitly set
+                this.explicitlySet.add(key);
+                logger.debug(`Using explicit value for ${key}: ${this.globalConfig[key]}`);
             }
+        }
+        
+        // Handle special cases for settings not in defaults
+        if (this.globalConfig.max_books_to_process !== undefined) {
+            this.explicitlySet.add('max_books_to_process');
+            logger.debug(`Using explicit value for max_books_to_process: ${this.globalConfig.max_books_to_process}`);
+        }
+        if (this.globalConfig.max_books_to_fetch !== undefined) {
+            this.explicitlySet.add('max_books_to_fetch');
+            logger.debug(`Using explicit value for max_books_to_fetch: ${this.globalConfig.max_books_to_fetch}`);
+        }
+        if (this.globalConfig.page_size !== undefined) {
+            this.explicitlySet.add('page_size');
+            logger.debug(`Using explicit value for page_size: ${this.globalConfig.page_size}`);
         }
     }
 
@@ -85,6 +106,10 @@ export class Config {
 
     getGlobal() {
         return this.globalConfig;
+    }
+
+    isExplicitlySet(key) {
+        return this.explicitlySet.has(key);
     }
 
     getUsers() {

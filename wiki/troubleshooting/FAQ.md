@@ -237,6 +237,25 @@ Try:
 3. **Clear cache**: If cache is corrupted
 4. **Check logs**: Look for timeout errors
 
+### Application hangs or freezes during sync
+This usually happens with large libraries on resource-constrained devices (like Raspberry Pi):
+
+**Quick fix:**
+```yaml
+global:
+  max_books_to_fetch: 100  # Optional: limit total books fetched
+  page_size: 25           # Small responses for low memory
+  workers: 1              # Reduce parallel processing
+  parallel: false         # Disable parallel processing
+```
+
+**Why this happens:**
+- Large libraries can generate 2+ MB JSON responses
+- Resource-constrained devices may run out of memory
+- The application was fetching all books at once
+
+**Recent fix (v1.10.2+)**: Added pagination support to prevent hanging on large libraries.
+
 ### Why am I seeing rate limiting messages?
 ShelfBridge respects API limits for both services:
 - **Hardcover**: 55 requests per minute

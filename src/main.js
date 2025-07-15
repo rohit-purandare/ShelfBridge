@@ -9,7 +9,6 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import { dumpFailedSyncBooks } from './utils.js';
 import cron from 'node-cron';
-import { CronJob } from 'cron'; // Add this import for next run time calculation
 import logger from './logger.js';
 import inquirer from 'inquirer';
 import cronstrue from 'cronstrue';
@@ -785,7 +784,7 @@ async function testUser(user) {
         if (isVerbose) {
             userLogger.info('Testing Audiobookshelf connection');
         }
-        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
+        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
         absStatus = await absClient.testConnection();
         
         if (absStatus) {
@@ -892,7 +891,7 @@ async function debugUser(user) {
         
         try {
             console.log('Testing Audiobookshelf connection...');
-            absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
+            absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, 500, 100);
             absStatus = await absClient.testConnection();
             console.log(`Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}`);
             
@@ -1181,7 +1180,7 @@ async function runInteractiveMode() {
                     let absStatus = false;
                     let hcStatus = false;
                     try {
-                        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
+                        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
                         absStatus = await absClient.testConnection();
                         process.stdout.write(`Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}\n`);
                     } catch (e) {
@@ -1205,28 +1204,55 @@ async function runInteractiveMode() {
                 // Clean, user-friendly output for interactive mode
                 process.stdout.write('\n=== Configuration Status ===\n');
                 process.stdout.write(`\nGlobal Settings:\n`);
-                process.stdout.write(`  Min Progress Threshold: ${globalConfig.min_progress_threshold}%\n`);
-                process.stdout.write(`  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Workers: ${globalConfig.workers}\n`);
-                process.stdout.write(`  Timezone: ${globalConfig.timezone}\n`);
-                // Remove raw cron string, only show human-readable
+                
+                // CORE SYNC SETTINGS (in order from config.yaml.example)
+                process.stdout.write(`  Min Progress Threshold: ${globalConfig.min_progress_threshold}%${config.isExplicitlySet('min_progress_threshold') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Workers: ${globalConfig.workers}${config.isExplicitlySet('workers') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}${config.isExplicitlySet('parallel') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Timezone: ${globalConfig.timezone}${config.isExplicitlySet('timezone') ? '' : ' (default)'}\n`);
+                
+                // SAFETY AND TESTING SETTINGS
+                process.stdout.write(`  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}${config.isExplicitlySet('dry_run') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}${config.isExplicitlySet('force_sync') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Max Books to Process: ${globalConfig.max_books_to_process !== undefined ? globalConfig.max_books_to_process : 'no limit'}${config.isExplicitlySet('max_books_to_process') ? '' : ' (default)'}\n`);
+                
+                // AUTOMATION SETTINGS
                 if (globalConfig.sync_schedule) {
                     try {
                         const human = cronstrue.toString(globalConfig.sync_schedule, { use24HourTimeFormat: false });
-                        process.stdout.write(`  Sync Schedule: ${human}\n`);
-                    } catch (e) {
+                        process.stdout.write(`  Sync Schedule: ${human}${config.isExplicitlySet('sync_schedule') ? '' : ' (default)'}\n`);
+                    } catch (_e) {
                         process.stdout.write(`  Sync Schedule: Invalid cron expression\n`);
                     }
                 } else {
-                    process.stdout.write(`  Sync Schedule: Not set\n`);
+                    process.stdout.write(`  Sync Schedule: 0 3 * * * (default - daily at 3 AM)\n`);
                 }
-                process.stdout.write(`  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}\n`);
-                process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore || 1}\n`);
-                process.stdout.write(`  Hardcover Semaphore: ${globalConfig.hardcover_semaphore || 1}\n`);
+                process.stdout.write(`  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}${config.isExplicitlySet('auto_add_books') ? '' : ' (default)'}\n`);
+                
+                // PROGRESS PROTECTION SETTINGS
+                process.stdout.write(`  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}${config.isExplicitlySet('prevent_progress_regression') ? '' : ' (default)'}\n`);
+                
+                // REREAD DETECTION SETTINGS
+                if (globalConfig.reread_detection) {
+                    process.stdout.write(`  Re-read Detection:\n`);
+                    process.stdout.write(`    Re-read Threshold: ${globalConfig.reread_detection.reread_threshold || 30}%${globalConfig.reread_detection.reread_threshold !== undefined ? '' : ' (default)'}\n`);
+                    process.stdout.write(`    High Progress Threshold: ${globalConfig.reread_detection.high_progress_threshold || 85}%${globalConfig.reread_detection.high_progress_threshold !== undefined ? '' : ' (default)'}\n`);
+                    process.stdout.write(`    Regression Block Threshold: ${globalConfig.reread_detection.regression_block_threshold || 50}%${globalConfig.reread_detection.regression_block_threshold !== undefined ? '' : ' (default)'}\n`);
+                    process.stdout.write(`    Regression Warn Threshold: ${globalConfig.reread_detection.regression_warn_threshold || 15}%${globalConfig.reread_detection.regression_warn_threshold !== undefined ? '' : ' (default)'}\n`);
+                } else {
+                    process.stdout.write(`  Re-read Detection: using defaults (not configured)\n`);
+                }
+                
+                // RATE LIMITING AND PERFORMANCE
+                process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Hardcover Semaphore: ${globalConfig.hardcover_semaphore}${config.isExplicitlySet('hardcover_semaphore') ? '' : ' (default)'}\n`);
+                
+                // LIBRARY FETCHING SETTINGS
+                process.stdout.write(`  Max Books to Fetch: ${globalConfig.max_books_to_fetch === null ? 'no limit' : (globalConfig.max_books_to_fetch || 'no limit')}${config.isExplicitlySet('max_books_to_fetch') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Page Size: ${globalConfig.page_size || 100}${config.isExplicitlySet('page_size') ? '' : ' (default)'}\n`);
+                
+                // DEBUGGING AND LOGGING
+                process.stdout.write(`  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}${config.isExplicitlySet('dump_failed_books') ? '' : ' (default)'}\n`);
                 process.stdout.write(`\nUsers (${users.length}):\n`);
                 for (const user of users) {
                     process.stdout.write(`  ${user.id}:\n`);

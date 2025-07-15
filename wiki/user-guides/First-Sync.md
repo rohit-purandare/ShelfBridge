@@ -259,6 +259,28 @@ global:
   prevent_progress_regression: true  # Prevent accidental overwrites
 ```
 
+### If Sync Is Slow or Hanging
+
+**For large libraries or resource-constrained devices:**
+
+```yaml
+global:
+  max_books_to_fetch: 250  # Reduce total books fetched
+  page_size: 50           # Smaller API responses
+  workers: 1              # Reduce parallel processing
+  parallel: false         # Disable parallel processing
+```
+
+**For testing with limited books:**
+
+```yaml
+global:
+  max_books_to_process: 10  # Test with just 10 books
+  max_books_to_fetch: 50    # Fetch max 50 books
+  page_size: 25            # Small responses for testing
+  dry_run: true            # Don't make actual changes
+```
+
 ## 📊 Understanding Sync Results
 
 ### Sync Actions Explained
