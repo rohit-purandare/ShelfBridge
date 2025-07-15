@@ -1,6 +1,9 @@
 import axios from 'axios';
-import { RateLimiter } from './utils.js';
+import { RateLimiter, Semaphore } from './utils.js';
 import logger from './logger.js';
+
+// Global semaphore for all Audiobookshelf requests (1 at a time to prevent rate limit conflicts)
+const audiobookshelfSemaphore = new Semaphore(1);
 
 export class AudiobookshelfClient {
     constructor(baseUrl, token, maxWorkers = 3) {
@@ -377,6 +380,7 @@ export class AudiobookshelfClient {
     async getLibraryItems(libraryId, limit = 50) {
         try {
             const response = await this._makeRequest('GET', `/api/libraries/${libraryId}/items?limit=${limit}`);
+            logger.debug('Full library items API response', { libraryId, response: JSON.stringify(response, null, 2) });
             logger.debug('Library items API response', { libraryId, response });
             return response.results || response.libraryItems || [];
         } catch (error) {
@@ -440,58 +444,63 @@ export class AudiobookshelfClient {
     }
 
     async _makeRequest(method, endpoint, data = null, suppressErrors = []) {
-        await this.rateLimiter.waitIfNeeded('audiobookshelf');
-
+        await audiobookshelfSemaphore.acquire();
         try {
-            const config = {
-                method,
-                url: endpoint,
-                headers: {
-                    'Authorization': `Bearer ${this.token}`,
-                    'Content-Type': 'application/json'
+            await this.rateLimiter.waitIfNeeded('audiobookshelf');
+
+            try {
+                const config = {
+                    method,
+                    url: endpoint,
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`,
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                if (data) {
+                    config.data = data;
                 }
-            };
 
-            if (data) {
-                config.data = data;
-            }
-
-            const response = await this.axios.request(config);
-            
-            // Validate response
-            if (!response || response.status < 200 || response.status >= 300) {
-                throw new Error(`API request failed with status ${response?.status}: ${response?.statusText}`);
-            }
-            
-            if (!response.data) {
-                throw new Error('API response contains no data');
-            }
-            
-            return response.data;
-        } catch (error) {
-            if (error.response) {
-                const status = error.response.status;
+                const response = await this.axios.request(config);
                 
-                if (suppressErrors.includes(status)) {
-                    return null;
+                // Validate response
+                if (!response || response.status < 200 || response.status >= 300) {
+                    throw new Error(`API request failed with status ${response?.status}: ${response?.statusText}`);
                 }
                 
-                logger.error(`HTTP ${status} error for ${method} ${endpoint}`, { 
-                    status, 
-                    data: error.response.data 
-                });
-                throw new Error(`HTTP ${status}: ${error.response.data?.message || error.message}`);
-            } else if (error.request) {
-                logger.error(`Network error for ${method} ${endpoint}`, { 
-                    error: error.message 
-                });
-                throw new Error(`Network error: ${error.message}`);
-            } else {
-                logger.error(`Request error for ${method} ${endpoint}`, { 
-                    error: error.message 
-                });
-                throw error;
+                if (!response.data) {
+                    throw new Error('API response contains no data');
+                }
+                
+                return response.data;
+            } catch (error) {
+                if (error.response) {
+                    const status = error.response.status;
+                    
+                    if (suppressErrors.includes(status)) {
+                        return null;
+                    }
+                    
+                    logger.error(`HTTP ${status} error for ${method} ${endpoint}`, { 
+                        status, 
+                        data: error.response.data 
+                    });
+                    throw new Error(`HTTP ${status}: ${error.response.data?.message || error.message}`);
+                } else if (error.request) {
+                    logger.error(`Network error for ${method} ${endpoint}`, { 
+                        error: error.message 
+                    });
+                    throw new Error(`Network error: ${error.message}`);
+                } else {
+                    logger.error(`Request error for ${method} ${endpoint}`, { 
+                        error: error.message 
+                    });
+                    throw error;
+                }
             }
+        } finally {
+            audiobookshelfSemaphore.release();
         }
     }
 } 

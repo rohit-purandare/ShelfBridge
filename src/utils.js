@@ -21,6 +21,36 @@ try {
 }
 
 /**
+ * Semaphore class for managing concurrent access to shared resources
+ */
+export class Semaphore {
+    constructor(maxConcurrency = 1) {
+        this.maxConcurrency = maxConcurrency;
+        this.current = 0;
+        this.queue = [];
+    }
+
+    async acquire() {
+        if (this.current < this.maxConcurrency) {
+            this.current++;
+            return;
+        }
+        return new Promise(resolve => {
+            this.queue.push(resolve);
+        });
+    }
+
+    release() {
+        if (this.queue.length > 0) {
+            const next = this.queue.shift();
+            next();
+        } else {
+            this.current--;
+        }
+    }
+}
+
+/**
  * Normalize ISBN by removing hyphens and spaces
  * @param {string} isbn - The ISBN to normalize
  * @returns {string|null} - Normalized ISBN or null if invalid
@@ -428,7 +458,7 @@ export class RateLimiter {
                 action: 'delayed',
             });
             // User-facing message
-            console.log(`⏳ Rate limit reached. Waiting ${Math.round(waitTime / 1000)}s before continuing...`);
+            console.log(`⏳ Rate limit reached for '${identifier}' (${this.maxRequests}/min). Waiting ${Math.round(waitTime / 1000)}s before continuing...`);
             // Wait for the specified time
             await sleep(waitTime);
             // User-facing resume message
