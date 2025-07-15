@@ -29,7 +29,11 @@ docker-compose up -d
 ### 2. Configure Your Settings
 ```bash
 # Edit the configuration file
-docker exec -it shelfbridge nano /app/config/config.yaml
+# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
+# Once you have updated and saved the configuration, (re)start the container:
+docker-compose up -d
+
+> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
 ```
 
 **Replace the placeholder values with your actual tokens:**

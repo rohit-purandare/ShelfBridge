@@ -56,7 +56,11 @@ curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docke
 docker-compose up -d
 
 # Edit configuration
-docker exec -it shelfbridge nano /app/config/config.yaml
+# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
+# Once you have updated and saved the configuration, (re)start the container:
+docker-compose up -d
+
+> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
 
 # Restart to apply config
 docker-compose restart
@@ -113,8 +117,11 @@ docker-compose ps
 **Step 3: Configure**
 ```bash
 # Edit configuration (auto-created from template)
-docker exec -it shelfbridge nano /app/config/config.yaml
-```
+# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
+# Once you have updated and saved the configuration, (re)start the container:
+docker-compose up -d
+
+> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
 
 Replace placeholder values:
 ```yaml
@@ -203,7 +210,11 @@ docker run -d \
   ghcr.io/rohit-purandare/shelfbridge:latest
 
 # Configure
-docker exec -it shelfbridge nano /app/config/config.yaml
+# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
+# Once you have updated and saved the configuration, (re)start the container:
+docker-compose up -d
+
+> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
 
 # Restart to apply config
 docker restart shelfbridge
@@ -320,7 +331,11 @@ docker run --rm \
 
 ```bash
 # Edit config file
-docker exec -it shelfbridge nano /app/config/config.yaml
+# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
+# Once you have updated and saved the configuration, (re)start the container:
+docker-compose up -d
+
+> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
 
 # View current config
 docker exec -it shelfbridge cat /app/config/config.yaml
