@@ -278,6 +278,58 @@ Rate limiting is **expected behavior** and not a problem to fix:
 **Advanced troubleshooting:**
 - Enable verbose logging (`LOG_LEVEL=verbose`) to see every rate limiter decision, including which identifiers are used, when requests are allowed, and when they are delayed. This is helpful for diagnosing persistent or unexpected rate limiting issues.
 
+#### Testing with Limited Books (New Feature)
+
+**Use Case**: You're experiencing rate limiting issues and want to test with a small subset of books first.
+
+**Solution**: Use the `max_books_to_process` setting to limit how many books are processed:
+
+```yaml
+global:
+  # Test with just 5 books first
+  max_books_to_process: 5
+  
+  # Conservative settings for testing
+  workers: 1
+  parallel: false
+  audiobookshelf_semaphore: 1
+  hardcover_semaphore: 1
+```
+
+**Benefits**:
+- **Quick testing**: Process only 5-10 books instead of your entire library
+- **Rate limit testing**: Verify your configuration works without hitting limits
+- **Debugging**: Isolate issues to a small set of books
+- **Incremental testing**: Start with 5, then 10, then 20 books
+
+**Example Testing Progression**:
+```yaml
+# Step 1: Test with 5 books
+global:
+  max_books_to_process: 5
+  dry_run: true
+
+# Step 2: Test with 10 books (if step 1 works)
+global:
+  max_books_to_process: 10
+  dry_run: true
+
+# Step 3: Test with 20 books (if step 2 works)
+global:
+  max_books_to_process: 20
+  dry_run: false  # Real sync
+
+# Step 4: Remove limit for full sync
+global:
+  # max_books_to_process: 20  # Comment out or remove this line
+```
+
+**When to use this feature**:
+- **Rate limiting issues**: Test configuration without overwhelming APIs
+- **Large libraries**: Process in batches to avoid timeouts
+- **Debugging**: Focus on problematic books
+- **New setups**: Verify everything works before full sync
+
 #### Container Restart Rate Limiting Issues (Fixed in v1.7.1+)
 
 **Symptoms:**

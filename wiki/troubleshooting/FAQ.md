@@ -258,6 +258,33 @@ You'll see:
 
 **Recent Fix (v1.7.1+)**: Fixed shared rate limit buckets that were causing incorrect request counts. Each service now has its own separate rate limit tracking.
 
+### How can I test with just a few books to avoid rate limiting?
+Use the new `max_books_to_process` setting to limit how many books are processed:
+
+```yaml
+global:
+  # Test with just 5 books first
+  max_books_to_process: 5
+  
+  # Conservative settings for testing
+  workers: 1
+  parallel: false
+  audiobookshelf_semaphore: 1
+  hardcover_semaphore: 1
+```
+
+**Testing progression**:
+1. **Start small**: `max_books_to_process: 5` with `dry_run: true`
+2. **Increase gradually**: Try 10, then 20 books
+3. **Go live**: Remove `dry_run` when confident
+4. **Full sync**: Remove `max_books_to_process` for complete sync
+
+**Perfect for**:
+- **Rate limiting issues**: Test without overwhelming APIs
+- **New setups**: Verify configuration works
+- **Large libraries**: Process in manageable batches
+- **Debugging**: Focus on problematic books
+
 ### Progress isn't updating
 Possible causes:
 - **Below threshold**: Progress change is too small

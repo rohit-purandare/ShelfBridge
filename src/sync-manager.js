@@ -84,6 +84,21 @@ export class SyncManager {
                 return result;
             }
 
+            // Limit books to process if configured
+            let booksToProcess = absBooks;
+            const maxBooks = this.globalConfig.max_books_to_process;
+            if (maxBooks && maxBooks > 0 && absBooks.length > maxBooks) {
+                booksToProcess = absBooks.slice(0, maxBooks);
+                logger.info(`Limiting sync to first ${maxBooks} books (${absBooks.length} total available)`, {
+                    totalBooks: absBooks.length,
+                    maxBooks: maxBooks,
+                    dryRun: this.dryRun
+                });
+                if (this.verbose) {
+                    console.log(`📚 Limiting sync to first ${maxBooks} books (${absBooks.length} total available)`);
+                }
+            }
+
             // Get books from Hardcover
             const hardcoverBooks = await this.hardcover.getUserBooks();
             if (!hardcoverBooks || hardcoverBooks.length === 0) {
@@ -93,13 +108,13 @@ export class SyncManager {
             // Create identifier lookup
             const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
 
-            logger.debug(`Processing ${absBooks.length} books from Audiobookshelf`);
+            logger.debug(`Processing ${booksToProcess.length} books from Audiobookshelf`);
             if (this.verbose) {
-                console.log(`Processing ${absBooks.length} books from Audiobookshelf...`);
+                console.log(`Processing ${booksToProcess.length} books from Audiobookshelf...`);
             }
 
             // Process each book
-            for (const absBook of absBooks) {
+            for (const absBook of booksToProcess) {
                 const bookStartTime = Date.now();
                 const bookDetail = {
                     title: extractTitle(absBook) || 'Unknown Title',
@@ -265,16 +280,14 @@ export class SyncManager {
                         
                         // Check if we should try to auto-add this book
                         const hasSignificantProgress = !this._isZeroProgress(currentProgress);
-                        const shouldAutoAdd = this.globalConfig.auto_add_books === true || hasSignificantProgress;
+                        const shouldAutoAdd = this.globalConfig.auto_add_books === true;
                         
                         if (shouldAutoAdd) {
                             // Determine reason for auto-add attempt
-                            if (this.globalConfig.auto_add_books === true && hasSignificantProgress) {
+                            if (hasSignificantProgress) {
                                 bookDetail.actions.push('Attempting to auto-add to Hardcover (enabled + has progress)');
-                            } else if (this.globalConfig.auto_add_books === true) {
-                                bookDetail.actions.push('Attempting to auto-add to Hardcover (auto-add enabled)');
                             } else {
-                                bookDetail.actions.push(`Attempting to auto-add to Hardcover (has ${currentProgress.toFixed(1)}% progress)`);
+                                bookDetail.actions.push('Attempting to auto-add to Hardcover (auto-add enabled)');
                             }
                             
                             const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
@@ -298,7 +311,7 @@ export class SyncManager {
                             }
                         } else {
                             bookDetail.status = 'skipped';
-                            bookDetail.actions.push(`Auto-add disabled and no significant progress (${currentProgress.toFixed(1)}%) - skipped`);
+                            bookDetail.actions.push(`Auto-add disabled (${currentProgress.toFixed(1)}% progress) - skipped`);
                             result.books_skipped++;
                         }
                     }
@@ -806,28 +819,44 @@ export class SyncManager {
         const title = extractTitle(absBook) || 'Unknown Title';
         logger.info(`Attempting to auto-add ${title} to Hardcover`, {
             identifiers: identifiers,
-            title: title
+            title: title,
+            dryRun: this.dryRun
         });
 
         try {
-            // Search for the book by ISBN or ASIN
+            // In dry run mode, simulate search results instead of making API calls
             let searchResults = [];
             
-            if (identifiers.asin) {
-                logger.debug(`Searching Hardcover by ASIN: ${identifiers.asin}`);
-                searchResults = await this.hardcover.searchBooksByAsin(identifiers.asin);
-                logger.debug(`ASIN search returned ${searchResults.length} results`);
-            }
-            
-            if (searchResults.length === 0 && identifiers.isbn) {
-                logger.debug(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
-                searchResults = await this.hardcover.searchBooksByIsbn(identifiers.isbn);
-                logger.debug(`ISBN search returned ${searchResults.length} results`);
+            if (this.dryRun) {
+                logger.debug(`[DRY RUN] Simulating search for ${title} instead of making API calls`);
+                // Simulate a successful search result for dry run
+                searchResults = [{
+                    id: 'dry-run-edition-id',
+                    book: {
+                        id: 'dry-run-book-id',
+                        title: title
+                    },
+                    format: 'audiobook'
+                }];
+            } else {
+                // Search for the book by ISBN or ASIN (only in non-dry-run mode)
+                if (identifiers.asin) {
+                    logger.debug(`Searching Hardcover by ASIN: ${identifiers.asin}`);
+                    searchResults = await this.hardcover.searchBooksByAsin(identifiers.asin);
+                    logger.debug(`ASIN search returned ${searchResults.length} results`);
+                }
+                
+                if (searchResults.length === 0 && identifiers.isbn) {
+                    logger.debug(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
+                    searchResults = await this.hardcover.searchBooksByIsbn(identifiers.isbn);
+                    logger.debug(`ISBN search returned ${searchResults.length} results`);
+                }
             }
 
             if (searchResults.length === 0) {
                 logger.info(`Could not find ${title} in Hardcover database`, {
-                    searchedIdentifiers: identifiers
+                    searchedIdentifiers: identifiers,
+                    dryRun: this.dryRun
                 });
                 return { status: 'skipped', reason: 'Book not found in Hardcover', title };
             }
@@ -842,7 +871,8 @@ export class SyncManager {
                 hardcoverTitle: edition.book.title,
                 bookId: bookId,
                 editionId: editionId,
-                format: edition.format
+                format: edition.format,
+                dryRun: this.dryRun
             });
 
             if (this.dryRun) {

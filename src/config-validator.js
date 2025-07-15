@@ -92,6 +92,13 @@ export class ConfigValidator {
                     optional: true,
                     description: 'Automatically add books to Hardcover if not found'
                 },
+                max_books_to_process: {
+                    type: 'number',
+                    min: 1,
+                    max: 10000,
+                    optional: true,
+                    description: 'Maximum number of books to process during sync (useful for testing)'
+                },
                 prevent_progress_regression: {
                     type: 'boolean',
                     default: true,

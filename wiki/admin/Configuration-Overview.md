@@ -119,6 +119,47 @@ global:
 - `5-8` - If you have fast internet and powerful servers
 - `1-2` - If you experience API rate limiting
 
+#### `audiobookshelf_semaphore`
+**Type**: Number (1-10)  
+**Default**: `1`  
+**Description**: Maximum concurrent Audiobookshelf API requests
+
+```yaml
+global:
+  audiobookshelf_semaphore: 2  # Allow 2 concurrent ABS requests
+```
+
+**Purpose**: Controls how many simultaneous requests can be made to your Audiobookshelf server. Higher values can improve performance but may overwhelm slower servers.
+
+#### `hardcover_semaphore`
+**Type**: Number (1-10)  
+**Default**: `1`  
+**Description**: Maximum concurrent Hardcover API requests
+
+```yaml
+global:
+  hardcover_semaphore: 1  # Conservative (respects rate limits)
+```
+
+**Purpose**: Controls concurrent requests to Hardcover API. Keep at `1` to respect their rate limits, or increase carefully if you have a high rate limit allowance.
+
+#### `max_books_to_process`
+**Type**: Number (1-10000)  
+**Default**: No limit  
+**Optional**: Yes  
+**Description**: Maximum number of books to process during sync
+
+```yaml
+global:
+  max_books_to_process: 10  # Test with first 10 books only
+```
+
+**Use Cases**:
+- **Testing**: Limit to 5-10 books for quick testing
+- **Debugging**: Process small subsets to isolate issues
+- **Large libraries**: Process in batches to avoid timeouts
+- **Rate limiting**: Reduce API usage during peak times
+
 ### Scheduling Settings
 
 #### `sync_schedule`

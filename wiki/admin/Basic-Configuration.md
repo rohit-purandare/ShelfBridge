@@ -119,6 +119,35 @@ global:
 - Use: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 - Examples: `"UTC"`, `"America/Los_Angeles"`, `"Europe/London"`
 
+### 6. Performance Settings (Optional)
+
+Control how ShelfBridge uses system resources:
+
+```yaml
+global:
+  # Number of parallel workers (1-10, default: 3)
+  workers: 3
+  
+  # Max concurrent Audiobookshelf requests (1-10, default: 1)
+  audiobookshelf_semaphore: 1
+  
+  # Max concurrent Hardcover requests (1-10, default: 1)
+  hardcover_semaphore: 1
+  
+  # Limit books processed (useful for testing)
+  max_books_to_process: 10
+```
+
+**Semaphore Settings**:
+- `audiobookshelf_semaphore: 1` - Conservative (recommended for most setups)
+- `hardcover_semaphore: 1` - Conservative (respects rate limits)
+- Increase carefully if you have fast servers and high rate limits
+
+**Testing with Limited Books**:
+- `max_books_to_process: 5` - Test with just 5 books
+- `max_books_to_process: 10` - Test with 10 books
+- Remove this setting to process all books
+
 ## 👤 User Configuration
 
 ### Basic User Setup
