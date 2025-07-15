@@ -8,6 +8,7 @@ export class Config {
         this.globalConfig = {};
         this.users = [];
         this._loadConfig();
+        this._applyDefaults();
         this._validateConfig();
     }
 
@@ -29,26 +30,37 @@ export class Config {
         }
     }
 
+    _applyDefaults() {
+        // Apply sensible defaults for optional global settings
+        // These match the defaults defined in config-validator.js
+        const defaults = {
+            min_progress_threshold: 5.0,
+            parallel: true,
+            workers: 3,
+            timezone: "UTC",
+            dry_run: false,
+            sync_schedule: "0 3 * * *",
+            force_sync: false,
+            auto_add_books: false,
+            prevent_progress_regression: true,
+            audiobookshelf_semaphore: 1,
+            hardcover_semaphore: 1,
+            dump_failed_books: true
+        };
+
+        // Apply defaults only for undefined values
+        for (const [key, defaultValue] of Object.entries(defaults)) {
+            if (this.globalConfig[key] === undefined) {
+                this.globalConfig[key] = defaultValue;
+                logger.debug(`Applied default for ${key}: ${defaultValue}`);
+            }
+        }
+    }
+
     _validateConfig() {
         const errors = [];
         
-        // Validate global config
-        const requiredGlobals = [
-            'min_progress_threshold',
-            'parallel',
-            'workers',
-            'dry_run',
-            'sync_schedule',
-            'timezone'
-        ];
-        
-        for (const key of requiredGlobals) {
-            if (!(key in this.globalConfig)) {
-                errors.push(`Missing global config: ${key}`);
-            }
-        }
-        
-        // Validate users
+        // Validate users (this is the only truly required section)
         if (!this.users || this.users.length === 0) {
             errors.push('No users defined in config');
         }

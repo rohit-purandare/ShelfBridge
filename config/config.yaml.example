@@ -1,101 +1,132 @@
 # ShelfBridge Configuration File
 # This file configures the sync behavior between Audiobookshelf and Hardcover
 
-# Global Configuration
-# These settings apply to all users and the overall sync behavior
-global:
-  # Minimum progress percentage required to sync (default: 5.0)
-  # Books with less than this progress will be skipped
-  min_progress_threshold: 5.0
-  
-  # Whether to run without making actual changes (default: false)
-  dry_run: false
-  
-  # Number of parallel workers for API requests (default: 3)
-  workers: 3
-  
-  # Timezone for logging and date formatting (default: UTC)
-  timezone: "UTC"
-  
-  # Whether to automatically add books to Hardcover that don't exist (default: false)
-  # Set to true only if you want ShelfBridge to manage your Hardcover library automatically
-  auto_add_books: false
+# =============================================================================
+# MINIMAL WORKING CONFIGURATION (Docker Users Start Here)
+# =============================================================================
+# Replace the placeholder values below with your actual credentials
+# This is all you need to get started!
 
-  # Progress regression protection (NEW)
-  # Prevents accidentally overwriting completion status or high progress
-  prevent_progress_regression: true  # Default: true
-  
-  # Re-reading detection thresholds (NEW)
-  # Controls when new reading sessions are created vs updating existing ones
-  reread_detection:
-    # Progress below this % is considered "starting over" (default: 30)
-    reread_threshold: 30
-    # Progress above this % is considered "high progress" (default: 85) 
-    high_progress_threshold: 85
-    # Block progress drops larger than this % from high progress (default: 50)
-    regression_block_threshold: 50
-    # Warn about progress drops larger than this % from high progress (default: 15)
-    regression_warn_threshold: 15
-  
-  # Enable parallel processing for faster sync
-  # Set to false if you encounter rate limiting or want sequential processing
-  parallel: true
-  
-  # Cron schedule for automatic sync (optional)
-  # Format: "minute hour day month day-of-week"
-  # Examples:
-  #   "0 3 * * *"     - Every day at 3:00 AM
-  #   "0 */6 * * *"   - Every 6 hours
-  #   "0 9,21 * * *"  - Twice daily at 9 AM and 9 PM
-  #   "0 3 * * 1"     - Every Monday at 3:00 AM
-  sync_schedule: "0 3 * * *"
-  
-  # Force sync even if progress appears unchanged (optional)
-  # Useful for recovering from sync errors or cache issues
-  # Default: false
-  force_sync: false
-  
-  # Dump failed sync books to text file (optional)
-  # When enabled, creates a detailed error report in the data/ folder
-  # Default: true
-  dump_failed_books: true
-
-  # Maximum number of books to process during sync (optional)
-  # Useful for testing with a small subset of books
-  # Default: no limit (process all books)
-  max_books_to_process: 10
-
-  audiobookshelf_semaphore: 1  # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
-  hardcover_semaphore: 1  # Max concurrent Hardcover API requests (default: 1, increase with caution)
-
-# User Configurations
-# Each user represents a connection between an Audiobookshelf server and Hardcover account
 users:
-  # Example user configuration - replace with your actual details
-  - id: your_username
-    # Your Audiobookshelf server URL (include http:// or https://)
-    abs_url: https://your-audiobookshelf-server.com
-    
-    # Your Audiobookshelf API token
-    # Get this from: Audiobookshelf > Settings > Users > [Your User] > API Token
-    abs_token: your_audiobookshelf_api_token_here
-    
-    # Your Hardcover API token  
-    # Get this from: https://hardcover.app/account/developer
-    hardcover_token: your_hardcover_api_token_here
+  - id: your_username                    # REQUIRED: Choose any unique identifier
+    abs_url: https://your-audiobookshelf-server.com    # REQUIRED: Your Audiobookshelf server URL
+    abs_token: your_audiobookshelf_api_token_here      # REQUIRED: Your Audiobookshelf API token
+    hardcover_token: your_hardcover_api_token_here     # REQUIRED: Your Hardcover API token
 
-  # Example: Multiple users (family setup)
-  # - id: alice
-  #   abs_url: https://audiobookshelf.example.com
-  #   abs_token: alice_audiobookshelf_token
-  #   hardcover_token: alice_hardcover_token
-  #
-  # - id: bob  
-  #   abs_url: https://audiobookshelf.example.com
-  #   abs_token: bob_audiobookshelf_token
-  #   hardcover_token: bob_hardcover_token
+# =============================================================================
+# ADVANCED CONFIGURATION (Optional - All Have Sensible Defaults)
+# =============================================================================
+# The following settings are OPTIONAL and have sensible defaults
+# You can customize these based on your needs
 
-# Configuration Examples for Different Use Cases:
+# global:
+#   # =============================================================================
+#   # CORE SYNC SETTINGS (Optional - all have defaults)
+#   # =============================================================================
+#   
+#   # Minimum progress percentage required to sync (default: 5.0)
+#   # Books with less than this progress will be skipped
+#   min_progress_threshold: 5.0
+#   
+#   # Number of parallel workers for API requests (default: 3)
+#   workers: 3
+#   
+#   # Enable parallel processing for faster sync (default: true)
+#   # Set to false if you encounter rate limiting or want sequential processing
+#   parallel: true
+#   
+#   # Timezone for logging and date formatting (default: UTC)
+#   timezone: "UTC"
+#   
+#   # =============================================================================
+#   # SAFETY AND TESTING SETTINGS (Optional)
+#   # =============================================================================
+#   
+#   # Whether to run without making actual changes (default: false)
+#   # Set to true for testing or to see what would happen without making changes
+#   dry_run: false
+#   
+#   # Force sync even if progress appears unchanged (default: false)
+#   # Useful for recovering from sync errors or cache issues
+#   force_sync: false
+#   
+#   # Maximum number of books to process during sync (default: no limit)
+#   # Useful for testing with a small subset of books
+#   max_books_to_process: 10
+#   
+#   # =============================================================================
+#   # AUTOMATION SETTINGS (Optional)
+#   # =============================================================================
+#   
+#   # Cron schedule for automatic sync (default: "0 3 * * *" - daily at 3 AM)
+#   # Format: "minute hour day month day-of-week"
+#   # Examples:
+#   #   "0 3 * * *"     - Every day at 3:00 AM
+#   #   "0 */6 * * *"   - Every 6 hours
+#   #   "0 9,21 * * *"  - Twice daily at 9 AM and 9 PM
+#   #   "0 3 * * 1"     - Every Monday at 3:00 AM
+#   #   null/undefined  - Disable automatic sync (manual only)
+#   sync_schedule: "0 3 * * *"
+#   
+#   # Whether to automatically add books to Hardcover that don't exist (default: false)
+#   # Set to true only if you want ShelfBridge to manage your Hardcover library automatically
+#   auto_add_books: false
+#   
+#   # =============================================================================
+#   # PROGRESS PROTECTION SETTINGS (Optional - recommended to keep enabled)
+#   # =============================================================================
+#   
+#   # Progress regression protection (default: true)
+#   # Prevents accidentally overwriting completion status or high progress
+#   prevent_progress_regression: true
+#   
+#   # Re-reading detection thresholds (all optional with defaults)
+#   # Controls when new reading sessions are created vs updating existing ones
+#   reread_detection:
+#     # Progress below this % is considered "starting over" (default: 30)
+#     reread_threshold: 30
+#     # Progress above this % is considered "high progress" (default: 85) 
+#     high_progress_threshold: 85
+#     # Block progress drops larger than this % from high progress (default: 50)
+#     regression_block_threshold: 50
+#     # Warn about progress drops larger than this % from high progress (default: 15)
+#     regression_warn_threshold: 15
+#   
+#   # =============================================================================
+#   # RATE LIMITING AND PERFORMANCE (Optional - use with caution)
+#   # =============================================================================
+#   
+#   # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
+#   audiobookshelf_semaphore: 1
+#   
+#   # Max concurrent Hardcover API requests (default: 1, increase with caution)
+#   hardcover_semaphore: 1
+#   
+#   # =============================================================================
+#   # DEBUGGING AND LOGGING (Optional)
+#   # =============================================================================
+#   
+#   # Dump failed sync books to text file (default: true)
+#   # When enabled, creates a detailed error report in the data/ folder
+#   dump_failed_books: true
+
+# =============================================================================
+# MULTIPLE USERS EXAMPLE (Family Setup)
+# =============================================================================
+# Example: Multiple users (family setup)
+# users:
+#   - id: alice
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: alice_audiobookshelf_token
+#     hardcover_token: alice_hardcover_token
+#   - id: bob  
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: bob_audiobookshelf_token
+#     hardcover_token: bob_hardcover_token
+
+# =============================================================================
+# CONFIGURATION EXAMPLES FOR DIFFERENT USE CASES
+# =============================================================================
 
 # High-frequency sync (every 2 hours) with more workers:
 # global:
@@ -114,4 +145,9 @@ users:
 # global:
 #   dry_run: true
 #   force_sync: true
-#   min_progress_threshold: 0.0 
+#   min_progress_threshold: 0.0
+#   max_books_to_process: 5
+
+# Manual sync only (no automatic scheduling):
+# global:
+#   sync_schedule: null  # or remove this line entirely 
