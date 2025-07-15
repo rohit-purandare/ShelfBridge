@@ -365,11 +365,21 @@ export class RateLimiter {
      */
     async waitIfNeeded(identifier = 'default') {
         const key = `${this.keyPrefix}:${identifier}`;
-        
         try {
             // Check if we can make the request
             const resRateLimiter = await this.rateLimiter.get(key);
-            
+
+            // Verbose log for every rate limit check
+            logger.verbose('[RateLimiter] waitIfNeeded check', {
+                identifier,
+                key,
+                requestsUsed: resRateLimiter?.consumedPoints,
+                remainingRequests: resRateLimiter?.remainingPoints,
+                resetTime: resRateLimiter ? new Date(Date.now() + resRateLimiter.msBeforeNext) : null,
+                timestamp: new Date().toISOString(),
+                action: 'check',
+            });
+
             // Log warning if approaching rate limit
             if (resRateLimiter && resRateLimiter.consumedPoints >= this.warningThreshold) {
                 logger.warn(`Rate limit warning: ${resRateLimiter.consumedPoints}/${this.maxRequests} requests used in the current minute`, {
@@ -380,13 +390,23 @@ export class RateLimiter {
                     resetTime: new Date(Date.now() + resRateLimiter.msBeforeNext)
                 });
             }
-            
+
             // Consume a point (make a request)
             await this.rateLimiter.consume(key);
-            
+
             // Track request count for logging
             this._trackRequest(identifier);
-            
+
+            // Verbose log for allowed request
+            logger.verbose('[RateLimiter] request allowed', {
+                identifier,
+                key,
+                requestsUsed: resRateLimiter?.consumedPoints + 1, // +1 for this request
+                remainingRequests: resRateLimiter?.remainingPoints - 1,
+                resetTime: resRateLimiter ? new Date(Date.now() + resRateLimiter.msBeforeNext) : null,
+                timestamp: new Date().toISOString(),
+                action: 'allowed',
+            });
         } catch (rejRes) {
             // Rate limit exceeded, wait for reset
             const waitTime = rejRes.msBeforeNext || 60000;
@@ -396,6 +416,16 @@ export class RateLimiter {
                 identifier,
                 remainingRequests: rejRes.remainingPoints || 0,
                 resetTime: new Date(Date.now() + waitTime)
+            });
+            // Verbose log for delayed request
+            logger.verbose('[RateLimiter] request delayed', {
+                identifier,
+                key,
+                waitTime,
+                remainingRequests: rejRes.remainingPoints || 0,
+                resetTime: new Date(Date.now() + waitTime),
+                timestamp: new Date().toISOString(),
+                action: 'delayed',
             });
             // User-facing message
             console.log(`⏳ Rate limit reached. Waiting ${Math.round(waitTime / 1000)}s before continuing...`);

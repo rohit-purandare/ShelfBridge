@@ -160,6 +160,36 @@ logger.warn('Rate limit exceeded. Waiting 60s before next request', {
 });
 ```
 
+## Verbose Logging for Rate Limiting
+
+ShelfBridge now provides detailed verbose logging for every rate limiting decision made by the `RateLimiter` class. This is especially useful for diagnosing rate limiting issues, tracking all identifiers in use, and understanding when requests are allowed or delayed.
+
+### How to Enable
+
+Set the logger level to `verbose` (e.g., via environment variable or configuration) to see these logs:
+
+```sh
+LOG_LEVEL=verbose node your-script.js
+```
+
+### What Gets Logged
+- Every rate limit check (even if allowed)
+- Every allowed request
+- Every delayed (rate-limited) request
+- Identifier, key, requests used/remaining, reset time, action, and timestamp
+
+### Sample Log Entry
+```
+[verbose]: [RateLimiter] waitIfNeeded check service="shelfbridge" version="1.8.2" identifier="hardcover-api" key="hardcover-api-1752607778730:hardcover-api" requestsUsed=1 remainingRequests=54 resetTime="2025-07-15T19:30:38.731Z" action="check"
+[verbose]: [RateLimiter] request allowed service="shelfbridge" version="1.8.2" identifier="hardcover-api" key="hardcover-api-1752607778730:hardcover-api" requestsUsed=2 remainingRequests=53 resetTime="2025-07-15T19:30:39.824Z" action="allowed"
+```
+
+### When to Use
+Enable verbose logging if you are:
+- Diagnosing unexpected rate limiting
+- Wanting to see all rate limiting decisions
+- Tracking which identifiers are being used
+
 ## Best Practices
 
 ### 1. Use Appropriate Identifiers

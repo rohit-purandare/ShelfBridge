@@ -275,6 +275,9 @@ Rate limiting is **expected behavior** and not a problem to fix:
 
 **This is NOT a problem to fix** - it's protective behavior that prevents API errors.
 
+**Advanced troubleshooting:**
+- Enable verbose logging (`LOG_LEVEL=verbose`) to see every rate limiter decision, including which identifiers are used, when requests are allowed, and when they are delayed. This is helpful for diagnosing persistent or unexpected rate limiting issues.
+
 #### Container Restart Rate Limiting Issues (Fixed in v1.7.1+)
 
 **Symptoms:**
