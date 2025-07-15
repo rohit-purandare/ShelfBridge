@@ -15,11 +15,12 @@ import { DateTime } from 'luxon';
 import logger from './logger.js';
 
 export class SyncManager {
-    constructor(user, globalConfig, dryRun = false) {
+    constructor(user, globalConfig, dryRun = false, verbose = false) {
         this.user = user;
         this.userId = user.id;
         this.globalConfig = globalConfig;
         this.dryRun = dryRun;
+        this.verbose = verbose;
         this.timezone = globalConfig.timezone || 'UTC';
         
         // Initialize clients
@@ -93,7 +94,9 @@ export class SyncManager {
             const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
 
             logger.debug(`Processing ${absBooks.length} books from Audiobookshelf`);
-            console.log(`Processing ${absBooks.length} books from Audiobookshelf...`);
+            if (this.verbose) {
+                console.log(`Processing ${absBooks.length} books from Audiobookshelf...`);
+            }
 
             // Process each book
             for (const absBook of absBooks) {
@@ -122,7 +125,9 @@ export class SyncManager {
                         title: bookDetail.title
                     });
                     // User-facing progress message
-                    console.log(`  → [${result.books_processed}/${absBooks.length}] ${bookDetail.title}`);
+                    if (this.verbose) {
+                        console.log(`  → [${result.books_processed}/${absBooks.length}] ${bookDetail.title}`);
+                    }
 
                     // Extract identifiers
                     const identifiers = this._extractBookIdentifier(absBook);

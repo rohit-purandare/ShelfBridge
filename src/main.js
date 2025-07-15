@@ -9,6 +9,7 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import { dumpFailedSyncBooks } from './utils.js';
 import cron from 'node-cron';
+import { CronJob } from 'cron'; // Add this import for next run time calculation
 import logger from './logger.js';
 import inquirer from 'inquirer';
 
@@ -140,11 +141,11 @@ program
             if (options.user) {
                 // Sync specific user
                 const user = config.getUser(options.user);
-                await syncUser(user, globalConfig);
+                await syncUser(user, globalConfig, program.opts().verbose);
             } else {
                 // Sync all users
                 for (const user of users) {
-                    await syncUser(user, globalConfig);
+                    await syncUser(user, globalConfig, program.opts().verbose);
                 }
             }
             
@@ -497,11 +498,13 @@ program
             // Run initial sync
             logger.info('Running initial sync...');
             await runScheduledSync(config);
+            await showNextScheduledSync(cronConfig);
             
             // Schedule recurring sync
-            cron.schedule(cronConfig.schedule, () => {
+            cron.schedule(cronConfig.schedule, async () => {
                 logger.info('Scheduled sync triggered');
-                runScheduledSync(config);
+                await runScheduledSync(config);
+                await showNextScheduledSync(cronConfig);
             }, {
                 timezone: cronConfig.timezone
             });
@@ -560,15 +563,17 @@ program
                 schedule: cronConfig.schedule, 
                 timezone: cronConfig.timezone 
             });
-            
+
             // Run initial sync
             logger.info('Running initial sync...');
             await runScheduledSync(config);
+            await showNextScheduledSync(cronConfig);
             
             // Schedule recurring sync
-            cron.schedule(cronConfig.schedule, () => {
+            cron.schedule(cronConfig.schedule, async () => {
                 logger.info('Scheduled sync triggered');
-                runScheduledSync(config);
+                await runScheduledSync(config);
+                await showNextScheduledSync(cronConfig);
             }, {
                 timezone: cronConfig.timezone
             });
@@ -623,7 +628,7 @@ program
         }
     });
 
-async function syncUser(user, globalConfig) {
+async function syncUser(user, globalConfig, verbose = false) {
     // Validate user object
     if (!user) {
         throw new Error('User object is required');
@@ -634,7 +639,7 @@ async function syncUser(user, globalConfig) {
     }
     
     const startTime = Date.now();
-    const syncManager = new SyncManager(user, globalConfig, globalConfig.dry_run);
+    const syncManager = new SyncManager(user, globalConfig, globalConfig.dry_run, verbose);
     
     // Register cleanup for unexpected termination
     const unregister = registerCleanup(() => syncManager.cleanup());
@@ -671,8 +676,8 @@ async function syncUser(user, globalConfig) {
         console.log(`❌ Errors: ${result.errors.length}`);
         console.log('='.repeat(50));
 
-        // Show detailed book results if any books were processed
-        if (result.book_details && result.book_details.length > 0) {
+        // Show detailed book results if any books were processed and verbose flag is set
+        if (verbose && result.book_details && result.book_details.length > 0) {
             console.log('\n📋 DETAILED BOOK RESULTS');
             console.log('='.repeat(50));
             
@@ -1115,7 +1120,7 @@ async function runScheduledSync(config) {
         
         for (const user of users) {
             logger.info('Starting scheduled sync for user', { userId: user.id });
-            await syncUser(user, globalConfig);
+            await syncUser(user, globalConfig, program.opts().verbose);
         }
         
         logger.info('Scheduled sync completed', { userCount: users.length });
@@ -1152,7 +1157,7 @@ async function runInteractiveMode() {
             case 'sync_all':
                 for (const user of users) {
                     console.log(`\n=== Syncing user: ${user.id} ===`);
-                    await syncUser(user, globalConfig);
+                    await syncUser(user, globalConfig, program.opts().verbose);
                 }
                 break;
             case 'sync_user': {
@@ -1165,7 +1170,7 @@ async function runInteractiveMode() {
                     },
                 ]);
                 const user = config.getUser(userId);
-                await syncUser(user, globalConfig);
+                await syncUser(user, globalConfig, program.opts().verbose);
                 break;
             }
             case 'test_connections':
@@ -1321,6 +1326,20 @@ async function runInteractiveMode() {
                 exit = true;
                 break;
         }
+    }
+}
+
+// Helper to display next scheduled sync time
+async function showNextScheduledSync(cronConfig) {
+    try {
+        const { CronJob } = await import('cron');
+        const job = new CronJob(cronConfig.schedule, () => {}, null, false, cronConfig.timezone);
+        const nextDate = job.nextDate();
+        const { DateTime } = await import('luxon');
+        const nextSync = DateTime.fromJSDate(nextDate.toJSDate ? nextDate.toJSDate() : nextDate, { zone: cronConfig.timezone });
+        console.log(`\n🕒 Next scheduled sync: ${nextSync.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
+    } catch (err) {
+        console.log('Could not determine next scheduled sync time:', err.message);
     }
 }
 
