@@ -253,12 +253,15 @@ Rate limiting is **expected behavior** and not a problem to fix:
 
 **Rate limiting messages you might see:**
 ```
-⚠️  Rate limit warning: 44/55 requests used in the current minute
-⚠️  Rate limit exceeded. Waiting 60s before next request
+⚠️  Rate limit warning: 44/55 requests used in the current minute (hardcover-api)
+⚠️  Rate limit exceeded. Waiting 60s before next request (hardcover-api)
+⚠️  Rate limit warning: 480/600 requests used in the current minute (audiobookshelf)
 ```
 
 **What this means:**
-- **Normal operation**: ShelfBridge respects Hardcover's 55 requests/minute limit
+- **Normal operation**: ShelfBridge respects API limits for both services
+  - Hardcover: 55 requests/minute
+  - Audiobookshelf: 600 requests/minute
 - **Automatic handling**: Requests are queued, not dropped
 - **Slower sync**: Large libraries may take 2-5 minutes instead of seconds
 - **No data loss**: All books will be processed, just more slowly
@@ -268,7 +271,33 @@ Rate limiting is **expected behavior** and not a problem to fix:
 - **Initial syncs**: First sync processes all books
 - **Books with metadata**: Each book requires 1-2 API calls
 
+**Recent Fix (v1.7.1+)**: Fixed shared rate limit buckets that were causing incorrect request counts. Each service now has its own separate rate limit tracking.
+
 **This is NOT a problem to fix** - it's protective behavior that prevents API errors.
+
+#### Container Restart Rate Limiting Issues (Fixed in v1.7.1+)
+
+**Symptoms:**
+- Rate limit warnings immediately after container restart
+- Incorrect request counts (e.g., "742/600 requests used")
+- Rate limiting persists even after waiting
+
+**Root Cause (Fixed):**
+- Audiobookshelf and Hardcover clients were sharing the same rate limit bucket
+- Both services used the default identifier, causing request count confusion
+- Container restarts could trigger immediate rate limiting
+
+**Solution Applied:**
+- Audiobookshelf client now uses `'audiobookshelf'` identifier
+- Hardcover client uses `'hardcover-api'` identifier
+- Each service has its own separate rate limit bucket
+- Enhanced logging with service and version information
+
+**Expected Behavior After Fix:**
+- Rate limiting warnings show correct counts per service
+- Container restarts should not cause immediate rate limit issues
+- Each service respects its own limits independently
+- Log messages include specific identifiers for clarity
 
 ## 🐳 Docker-Specific Issues
 

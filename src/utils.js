@@ -3,6 +3,22 @@
  */
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import logger from './logger.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get the current version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJsonPath = join(__dirname, '..', 'package.json');
+
+let currentVersion = 'unknown';
+try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    currentVersion = packageJson.version;
+} catch (error) {
+    logger.warn('Could not read version from package.json', { error: error.message });
+}
 
 /**
  * Normalize ISBN by removing hyphens and spaces
@@ -317,7 +333,8 @@ export async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
 export class RateLimiter {
     constructor(maxRequestsPerMinute = 55, keyPrefix = 'rate-limiter') {
         this.maxRequests = maxRequestsPerMinute;
-        this.keyPrefix = keyPrefix;
+        // Make key prefix unique by adding a timestamp to prevent conflicts between instances
+        this.keyPrefix = `${keyPrefix}-${Date.now()}`;
         this.warningThreshold = Math.ceil(maxRequestsPerMinute * 0.8); // 80% of max requests
         this.requestCounts = new Map(); // Track request counts per minute for logging
         
@@ -333,6 +350,12 @@ export class RateLimiter {
         setInterval(() => {
             this._cleanupOldCounts();
         }, 60000);
+        
+        logger.debug('RateLimiter initialized', {
+            maxRequests: this.maxRequests,
+            keyPrefix: this.keyPrefix,
+            warningThreshold: this.warningThreshold
+        });
     }
 
     /**
@@ -350,6 +373,8 @@ export class RateLimiter {
             // Log warning if approaching rate limit
             if (resRateLimiter && resRateLimiter.consumedPoints >= this.warningThreshold) {
                 logger.warn(`Rate limit warning: ${resRateLimiter.consumedPoints}/${this.maxRequests} requests used in the current minute`, {
+                    service: 'shelfbridge',
+                    version: currentVersion,
                     identifier,
                     remainingRequests: resRateLimiter.remainingPoints,
                     resetTime: new Date(Date.now() + resRateLimiter.msBeforeNext)
@@ -366,6 +391,8 @@ export class RateLimiter {
             // Rate limit exceeded, wait for reset
             const waitTime = rejRes.msBeforeNext || 60000;
             logger.warn(`Rate limit exceeded. Waiting ${Math.round(waitTime / 1000)}s before next request`, {
+                service: 'shelfbridge',
+                version: currentVersion,
                 identifier,
                 remainingRequests: rejRes.remainingPoints || 0,
                 resetTime: new Date(Date.now() + waitTime)

@@ -21,7 +21,7 @@ export class AudiobookshelfClient {
 
         // Add request interceptor for rate limiting and logging
         this.axios.interceptors.request.use(async (config) => {
-            await this.rateLimiter.waitIfNeeded();
+            await this.rateLimiter.waitIfNeeded('audiobookshelf');
             return config;
         });
 
@@ -440,7 +440,7 @@ export class AudiobookshelfClient {
     }
 
     async _makeRequest(method, endpoint, data = null, suppressErrors = []) {
-        await this.rateLimiter.waitIfNeeded();
+        await this.rateLimiter.waitIfNeeded('audiobookshelf');
 
         try {
             const config = {

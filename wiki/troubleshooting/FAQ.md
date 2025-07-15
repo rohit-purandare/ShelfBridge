@@ -238,8 +238,12 @@ Try:
 4. **Check logs**: Look for timeout errors
 
 ### Why am I seeing rate limiting messages?
-ShelfBridge respects Hardcover's API limits (55 requests per minute). You'll see:
-- **⚠️ Rate limit warning**: When approaching 44+ requests/minute (normal)
+ShelfBridge respects API limits for both services:
+- **Hardcover**: 55 requests per minute
+- **Audiobookshelf**: 600 requests per minute
+
+You'll see:
+- **⚠️ Rate limit warning**: When approaching 80% of limits (normal)
 - **⚠️ Rate limit exceeded**: When limit reached, requests are queued (normal)
 
 **This is expected behavior** for:
@@ -251,6 +255,8 @@ ShelfBridge respects Hardcover's API limits (55 requests per minute). You'll see
 - **Sync takes longer**: But completes successfully
 - **No data loss**: Requests are queued, not dropped
 - **API protection**: Prevents errors from exceeding limits
+
+**Recent Fix (v1.7.1+)**: Fixed shared rate limit buckets that were causing incorrect request counts. Each service now has its own separate rate limit tracking.
 
 ### Progress isn't updating
 Possible causes:

@@ -34,6 +34,9 @@ export class AudiobookshelfClient {
         // ... rest of constructor
     }
 }
+
+// All Audiobookshelf requests use the 'audiobookshelf' identifier
+await this.rateLimiter.waitIfNeeded('audiobookshelf');
 ```
 
 ## Rate Limiter Implementation
@@ -95,9 +98,13 @@ warningThreshold = Math.ceil(55 * 0.8) = 44 requests
 Requests are tracked using identifiers that help distinguish between different services:
 
 - `hardcover-api`: All Hardcover GraphQL requests (queries + mutations combined)
-- `audiobookshelf-*`: Audiobookshelf API calls
+- `audiobookshelf`: All Audiobookshelf API calls
 
-**Important**: Hardcover uses a single identifier (`hardcover-api`) to ensure the combined total of queries and mutations never exceeds 55 requests per minute.
+**Important**: Each service uses its own identifier to ensure separate rate limit buckets:
+- Hardcover: 55 requests per minute maximum
+- Audiobookshelf: 600 requests per minute maximum
+
+This prevents conflicts between different API services and ensures accurate rate limiting.
 
 ## Configuration Options
 
@@ -136,13 +143,17 @@ The underlying rate limiter is configured with:
 ```javascript
 // Warning when approaching limit
 logger.warn('Rate limit warning: 44/55 requests used in the current minute', {
+    service: 'shelfbridge',
+    version: '1.7.2',  // Dynamically read from package.json
     identifier: 'hardcover-api',
     remainingRequests: 11,
     resetTime: '2024-01-01T12:01:00.000Z'
 });
 
 // When limit is exceeded
-logger.warn('Rate limit exceeded. Waiting 15s before next request', {
+logger.warn('Rate limit exceeded. Waiting 60s before next request', {
+    service: 'shelfbridge',
+    version: '1.7.2',  // Dynamically read from package.json
     identifier: 'hardcover-api',
     remainingRequests: 0,
     resetTime: '2024-01-01T12:01:00.000Z'
@@ -230,6 +241,34 @@ The rate limiter is designed for high performance:
 3. **Memory Usage**
    - The rate limiter automatically cleans up old data
    - Monitor memory usage in long-running processes
+
+### Recent Fixes (v1.7.1+)
+
+**Issue**: Rate limiting warnings showing incorrect request counts (e.g., "742/600 requests used")
+
+**Root Cause**: Audiobookshelf and Hardcover clients were sharing the same rate limit bucket due to using the default identifier.
+
+**Solution**: 
+- Audiobookshelf client now uses `'audiobookshelf'` identifier
+- Hardcover client uses `'hardcover-api'` identifier  
+- Each service has its own separate rate limit bucket
+- Enhanced logging with service and version information
+
+**Result**: Accurate rate limiting with separate 600/minute (Audiobookshelf) and 55/minute (Hardcover) limits.
+
+### Container Restart Issues
+
+If you experience rate limiting warnings immediately after container restart:
+
+1. **Check the logs** for the specific identifier being used
+2. **Verify** that you're not seeing "default" as the identifier
+3. **Wait 1-2 minutes** for rate limit windows to reset
+4. **Monitor** subsequent sync operations for normal behavior
+
+**Expected behavior after fix**:
+- Rate limiting warnings should show correct counts per service
+- Container restarts should not cause immediate rate limit issues
+- Each service should respect its own limits independently
 
 ### Debugging
 
