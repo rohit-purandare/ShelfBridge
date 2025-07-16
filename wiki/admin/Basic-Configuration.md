@@ -128,8 +128,8 @@ global:
   # Number of parallel workers (1-10, default: 3)
   workers: 3
   
-  # Max concurrent Audiobookshelf requests (1-10, default: 1)
-  audiobookshelf_semaphore: 1
+  # Max concurrent Audiobookshelf requests (1-10, default: 5)
+audiobookshelf_semaphore: 5
   
   # Max concurrent Hardcover requests (1-10, default: 1)
   hardcover_semaphore: 1
@@ -139,7 +139,7 @@ global:
 ```
 
 **Semaphore Settings**:
-- `audiobookshelf_semaphore: 1` - Conservative (recommended for most setups)
+- `audiobookshelf_semaphore: 5` - Balanced (recommended for most setups)
 - `hardcover_semaphore: 1` - Conservative (respects rate limits)
 - Increase carefully if you have fast servers and high rate limits
 

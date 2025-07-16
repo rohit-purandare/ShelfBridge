@@ -43,7 +43,7 @@ export class Config {
             force_sync: false,
             auto_add_books: false,
             prevent_progress_regression: true,
-            audiobookshelf_semaphore: 1,
+            audiobookshelf_semaphore: 5,
             hardcover_semaphore: 1,
             dump_failed_books: true
         };

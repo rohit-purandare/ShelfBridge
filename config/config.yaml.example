@@ -97,7 +97,7 @@ users:
 #   # =============================================================================
 #   
 #   # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
-#   audiobookshelf_semaphore: 1
+#   audiobookshelf_semaphore: 5
 #   
 #   # Max concurrent Hardcover API requests (default: 1, increase with caution)
 #   hardcover_semaphore: 1

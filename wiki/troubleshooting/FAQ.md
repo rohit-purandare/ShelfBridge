@@ -288,7 +288,7 @@ global:
   # Conservative settings for testing
   workers: 1
   parallel: false
-  audiobookshelf_semaphore: 1
+  audiobookshelf_semaphore: 5
   hardcover_semaphore: 1
 ```
 

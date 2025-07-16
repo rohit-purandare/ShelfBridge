@@ -1383,9 +1383,6 @@ async function showNextScheduledSync(cronConfig) {
     }
 }
 
-// Parse command line arguments
-program.parse();
-
 // Global cleanup handlers for unexpected termination
 const cleanupHandlers = new Set();
 
@@ -1447,6 +1444,9 @@ process.on('unhandledRejection', (reason, promise) => {
     executeCleanup();
     process.exit(1);
 });
+
+// Parse command line arguments
+program.parse();
 
 // Export cleanup registration for use by other modules
 export { registerCleanup }; 

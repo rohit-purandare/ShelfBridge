@@ -186,7 +186,7 @@ The following global configuration options are available:
 **Performance Options:**
 - **`workers`** (default: 3): Number of parallel workers for API requests
 - **`parallel`** (default: true): Enable parallel processing
-- **`audiobookshelf_semaphore`** (default: 1): Max concurrent Audiobookshelf API requests
+- **`audiobookshelf_semaphore`** (default: 5): Max concurrent Audiobookshelf API requests
 - **`hardcover_semaphore`** (default: 1): Max concurrent Hardcover API requests
 
 **Sync Behavior Options:**

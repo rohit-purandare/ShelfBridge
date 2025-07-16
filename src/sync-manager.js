@@ -27,7 +27,7 @@ export class SyncManager {
         this.audiobookshelf = new AudiobookshelfClient(
             user.abs_url, 
             user.abs_token, 
-            globalConfig.audiobookshelf_semaphore || 1,
+            globalConfig.audiobookshelf_semaphore || 5,
             globalConfig.max_books_to_fetch || 500,
             globalConfig.page_size || 100
         );
