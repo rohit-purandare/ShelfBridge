@@ -99,8 +99,18 @@ users:
 #   # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
 #   audiobookshelf_semaphore: 5
 #   
+#   # Audiobookshelf API rate limit in requests per minute (default: 600, range: 60-1200)
+#   # Higher values = faster syncs (good for local/self-hosted servers)
+#   # Lower values = more conservative (good for slower servers or shared hosting)
+#   audiobookshelf_rate_limit: 600
+#   
 #   # Max concurrent Hardcover API requests (default: 1, increase with caution)
 #   hardcover_semaphore: 1
+#   
+#   # Hardcover API rate limit in requests per minute (default: 55, max: 60)
+#   # Lower values = slower syncs but more conservative API usage
+#   # Higher values = faster syncs but may hit API limits sooner
+#   hardcover_rate_limit: 55
 #   
 #   # =============================================================================
 #   # LIBRARY FETCHING SETTINGS (Optional - for large libraries)

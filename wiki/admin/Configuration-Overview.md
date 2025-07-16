@@ -57,7 +57,7 @@ global:
   min_progress_threshold: 10.0  # Only sync books with 10%+ progress
 ```
 
-**Use Cases**:
+**Usage Guidelines**:
 - `5.0` - Sync most books you've started
 - `25.0` - Only sync books you're seriously reading
 - `0.1` - Sync almost everything (including accidental opens)
@@ -72,7 +72,7 @@ global:
   auto_add_books: true  # Add all books automatically
 ```
 
-**Behavior**:
+**Usage Guidelines**:
 - `false` - Only add books with meaningful progress or already in Hardcover
 - `true` - Add all books regardless of progress level
 
@@ -86,7 +86,7 @@ global:
   prevent_progress_regression: true  # Recommended
 ```
 
-**Features when enabled**:
+**Usage Guidelines**:
 - Prevents overwriting completed books with low progress
 - Creates new reading sessions for re-reads
 - Warns about suspicious progress drops
@@ -114,7 +114,7 @@ global:
   workers: 5  # Increase for faster syncs (if APIs can handle it)
 ```
 
-**Recommendations**:
+**Usage Guidelines**:
 - `3` - Good default for most setups
 - `5-8` - If you have fast internet and powerful servers
 - `1-2` - If you experience API rate limiting
@@ -129,7 +129,27 @@ global:
   audiobookshelf_semaphore: 2  # Allow 2 concurrent ABS requests
 ```
 
-**Purpose**: Controls how many simultaneous requests can be made to your Audiobookshelf server. Higher values can improve performance but may overwhelm slower servers.
+**Usage Guidelines**: Controls how many simultaneous requests can be made to your Audiobookshelf server. Higher values can improve performance but may overwhelm slower servers.
+
+#### `audiobookshelf_rate_limit`
+**Type**: Number (60-1200)  
+**Default**: `600`  
+**Description**: Audiobookshelf API rate limit in requests per minute
+
+```yaml
+global:
+  audiobookshelf_rate_limit: 600  # Default rate limit
+  # OR
+  audiobookshelf_rate_limit: 300  # More conservative for slower servers
+  # OR
+  audiobookshelf_rate_limit: 1200 # Aggressive for powerful local servers
+```
+
+**Usage Guidelines**: Controls the maximum number of requests per minute sent to your Audiobookshelf server. Unlike Hardcover (which has external API limits), Audiobookshelf rate limiting is mainly for protecting your server resources.
+- **Slow/shared servers**: Use 120-300 for Raspberry Pi or shared hosting
+- **Local fast servers**: Use 600-1200 for powerful self-hosted servers
+- **Network issues**: Lower the value if you see timeouts or connection errors
+- **Fast syncs**: Increase carefully if your server can handle more load
 
 #### `hardcover_semaphore`
 **Type**: Number (1-10)  
@@ -141,7 +161,25 @@ global:
   hardcover_semaphore: 1  # Conservative (respects rate limits)
 ```
 
-**Purpose**: Controls concurrent requests to Hardcover API. Keep at `1` to respect their rate limits, or increase carefully if you have a high rate limit allowance.
+**Usage Guidelines**: Controls concurrent requests to Hardcover API. Keep at `1` to respect their rate limits, or increase carefully if you have a high rate limit allowance.
+
+#### `hardcover_rate_limit`
+**Type**: Number (10-60)  
+**Default**: `55`  
+**Description**: Hardcover API rate limit in requests per minute
+
+```yaml
+global:
+  hardcover_rate_limit: 55  # Default rate limit
+  # OR
+  hardcover_rate_limit: 30  # More conservative for shared accounts
+```
+
+**Usage Guidelines**: Controls the maximum number of requests per minute sent to the Hardcover API. Lower values mean slower syncs but more conservative API usage. Higher values mean faster syncs but may hit API limits sooner.
+- **Shared accounts**: Use 30-40 if multiple users share the same Hardcover account
+- **Premium users**: Check if your account has higher limits and adjust accordingly
+- **Rate limiting issues**: Lower the value if you see frequent rate limit warnings
+- **Slow syncs**: Carefully increase if you have confirmed higher API limits
 
 #### `max_books_to_fetch`
 **Type**: Number or null  
@@ -156,9 +194,7 @@ global:
   max_books_to_fetch: 250   # Conservative for large libraries
 ```
 
-**Purpose**: Controls how many books are fetched from Audiobookshelf libraries. Set to `null` for no limit, or a number to limit total books fetched.
-
-**When to adjust**:
+**Usage Guidelines**: Controls how many books are fetched from Audiobookshelf libraries. Set to `null` for no limit, or a number to limit total books fetched.
 - **Large libraries**: Set to a number (e.g., 500-1000) if you have 1000+ books per library
 - **Resource-constrained devices**: Use 100-250 for Raspberry Pi or low-memory systems
 - **Memory issues**: Set to a number if you experience application hangs or high memory usage
@@ -175,9 +211,7 @@ global:
   page_size: 50  # Smaller responses, more API calls
 ```
 
-**Purpose**: Controls the granularity of API calls. Smaller values create more API calls but smaller responses.
-
-**When to adjust**:
+**Usage Guidelines**: Controls the granularity of API calls. Smaller values create more API calls but smaller responses.
 - **Slow connections**: Use 25-50 for better reliability
 - **Fast connections**: Use 100-200 for fewer API calls
 - **Memory-constrained devices**: Use 25-50 to reduce memory usage per request
@@ -193,7 +227,7 @@ global:
   max_books_to_process: 10  # Test with first 10 books only
 ```
 
-**Use Cases**:
+**Usage Guidelines**:
 - **Testing**: Limit to 5-10 books for quick testing
 - **Debugging**: Process small subsets to isolate issues
 - **Large libraries**: Process in batches to avoid timeouts
@@ -211,7 +245,7 @@ global:
   sync_schedule: "0 */6 * * *"  # Every 6 hours
 ```
 
-**Common Schedules**:
+**Usage Guidelines**:
 ```yaml
 sync_schedule: "0 3 * * *"     # Daily at 3 AM
 sync_schedule: "0 */6 * * *"   # Every 6 hours
@@ -230,7 +264,7 @@ global:
   timezone: "America/New_York"  # Use your local timezone
 ```
 
-**Common Timezones**:
+**Usage Guidelines**:
 - `"UTC"` - Coordinated Universal Time
 - `"America/New_York"` - Eastern Time
 - `"America/Los_Angeles"` - Pacific Time
@@ -316,7 +350,7 @@ users:
     abs_url: http://192.168.1.100:13378              # Local IP
 ```
 
-**URL Requirements**:
+**Usage Guidelines**:
 - Must include `http://` or `https://`
 - Should not end with a trailing slash
 - Must be accessible from where ShelfBridge runs
@@ -332,7 +366,7 @@ users:
     abs_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-**Token Requirements**:
+**Usage Guidelines**:
 - Generate from Audiobookshelf user settings
 - Must belong to a user with library access
 - Should be kept secure and not shared
@@ -348,7 +382,7 @@ users:
     hardcover_token: hc_sk_1234567890abcdef...
 ```
 
-**Token Requirements**:
+**Usage Guidelines**:
 - Generate from Hardcover developer settings
 - Must belong to account with API access enabled
 - Should be kept secure and not shared

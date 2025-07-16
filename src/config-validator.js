@@ -147,12 +147,26 @@ export class ConfigValidator {
                     default: 1,
                     description: 'Max concurrent Hardcover API requests (1-10, default: 1)'
                 },
+                hardcover_rate_limit: {
+                    type: 'number',
+                    min: 10,
+                    max: 60,
+                    default: 55,
+                    description: 'Hardcover API rate limit in requests per minute (10-60, default: 55)'
+                },
                 audiobookshelf_semaphore: {
                     type: 'number',
                     min: 1,
                     max: 10,
                     default: 1,
                     description: 'Max concurrent Audiobookshelf API requests (1-10, default: 1)'
+                },
+                audiobookshelf_rate_limit: {
+                    type: 'number',
+                    min: 60,
+                    max: 1200,
+                    default: 600,
+                    description: 'Audiobookshelf API rate limit in requests per minute (60-1200, default: 600)'
                 },
                 max_books_to_fetch: {
                     type: 'number',

@@ -297,9 +297,9 @@ Rate limiting is **expected behavior** and not a problem to fix:
 ```
 
 **What this means:**
-- **Normal operation**: ShelfBridge respects API limits for both services
-  - Hardcover: 55 requests/minute
-  - Audiobookshelf: 600 requests/minute
+- **Normal operation**: ShelfBridge respects API limits for both services (configurable)
+  - Hardcover: Default 55 requests/minute (range: 10-60, configurable)
+  - Audiobookshelf: Default 600 requests/minute (range: 60-1200, configurable)
 - **Automatic handling**: Requests are queued, not dropped
 - **Slower sync**: Large libraries may take 2-5 minutes instead of seconds
 - **No data loss**: All books will be processed, just more slowly
@@ -312,6 +312,20 @@ Rate limiting is **expected behavior** and not a problem to fix:
 **Recent Fix (v1.7.1+)**: Fixed shared rate limit buckets that were causing incorrect request counts. Each service now has its own separate rate limit tracking.
 
 **This is NOT a problem to fix** - it's protective behavior that prevents API errors.
+
+**Adjusting Rate Limits:**
+You can now configure rate limits in your `config.yaml` to better match your needs:
+
+```yaml
+global:
+  # Conservative approach (slower but safer)
+  hardcover_rate_limit: 30        # For shared accounts or frequent rate limiting
+  audiobookshelf_rate_limit: 300  # For slower servers/Raspberry Pi
+  
+  # Aggressive approach (faster but more demanding)
+  hardcover_rate_limit: 55        # Default - works for most users
+  audiobookshelf_rate_limit: 900  # For powerful local servers
+```
 
 **Advanced troubleshooting:**
 - Enable verbose logging (`LOG_LEVEL=verbose`) to see every rate limiter decision, including which identifiers are used, when requests are allowed, and when they are delayed. This is helpful for diagnosing persistent or unexpected rate limiting issues.

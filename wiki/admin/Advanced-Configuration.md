@@ -38,15 +38,20 @@ Control request frequency to avoid overwhelming APIs:
 
 ```yaml
 global:
-  # Delay between API requests (milliseconds)
-  request_delay: 100
+  # Hardcover API rate limit (10-60 requests/minute, default: 55)
+  hardcover_rate_limit: 55
   
-  # Maximum requests per second
-  max_requests_per_second: 10
+  # Audiobookshelf API rate limit (60-1200 requests/minute, default: 600)
+  audiobookshelf_rate_limit: 600
   
   # Timeout for API requests (milliseconds)
   request_timeout: 30000
 ```
+
+**Rate limiting options:**
+- **Conservative**: Lower limits for shared accounts or slower servers
+- **Default**: Balanced performance for most setups
+- **Aggressive**: Higher limits for powerful servers (use with caution)
 
 ## 🔄 Sync Behavior Settings
 

@@ -1245,7 +1245,9 @@ async function runInteractiveMode() {
                 
                 // RATE LIMITING AND PERFORMANCE
                 process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Audiobookshelf Rate Limit: ${globalConfig.audiobookshelf_rate_limit || 600} req/min${config.isExplicitlySet('audiobookshelf_rate_limit') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Hardcover Semaphore: ${globalConfig.hardcover_semaphore}${config.isExplicitlySet('hardcover_semaphore') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Hardcover Rate Limit: ${globalConfig.hardcover_rate_limit || 55} req/min${config.isExplicitlySet('hardcover_rate_limit') ? '' : ' (default)'}\n`);
                 
                 // LIBRARY FETCHING SETTINGS
                 process.stdout.write(`  Max Books to Fetch: ${globalConfig.max_books_to_fetch === null ? 'no limit' : (globalConfig.max_books_to_fetch || 'no limit')}${config.isExplicitlySet('max_books_to_fetch') ? '' : ' (default)'}\n`);

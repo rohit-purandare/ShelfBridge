@@ -13,7 +13,7 @@ ShelfBridge sync output consists of several sections:
 
 ## 📋 Sync Header
 
-```
+```text
 🔍 STARTING SYNC
 ==================================================
 📚 User: alice
@@ -32,7 +32,7 @@ ShelfBridge sync output consists of several sections:
 
 ### Individual Book Entries
 
-```
+```text
 📘 "The Name of the Wind" by Patrick Rothfuss
    🔸 Progress: 45% (3h 24m of 7h 32m)
    🔸 ASIN: B004JHYRG0
@@ -63,7 +63,7 @@ ShelfBridge sync output consists of several sections:
 ### Progress Indicators
 
 **Progress Display Formats:**
-```
+```text
 Progress: 45% (3h 24m of 7h 32m)     # Audiobook with time
 Progress: 67% (201 of 300 pages)     # Ebook with pages
 Progress: 100% (COMPLETED)           # Completed book
@@ -74,7 +74,7 @@ Progress: 8% (below 5% threshold)    # Below sync threshold
 
 During sync, you'll see real-time progress:
 
-```
+```text
 ✅ Updated "The Name of the Wind" progress: 12% → 45%
 ✅ Marked "The Hobbit" as completed
 ✅ Added "Dune" to Hardcover library
@@ -93,16 +93,24 @@ During sync, you'll see real-time progress:
 
 ### 🚦 Rate Limiting Messages
 
-ShelfBridge respects Hardcover's API limits (55 requests per minute). You may see these messages:
+ShelfBridge respects API limits for both services (configurable, with defaults of 55 requests per minute for Hardcover and 600 for Audiobookshelf). You may see these messages:
 
-```
-⚠️  Rate limit warning: 44/55 requests used in the current minute
+```text
+⚠️  Rate limit warning: 44/55 requests used in the current minute (hardcover-api)
+⚠️  Rate limit warning: 480/600 requests used in the current minute (audiobookshelf)
 ⚠️  Rate limit exceeded. Waiting 60s before next request
 ```
 
 **Rate limit message types:**
-- **⚠️ Warning**: When approaching 80% of the rate limit (44+ requests)
+- **⚠️ Warning**: When approaching 80% of the configured rate limit (e.g., 44+ for default 55/minute)
 - **⚠️ Exceeded**: When the limit is reached, requests are automatically queued
+
+**Rate limits are configurable** in your `config.yaml`:
+```yaml
+global:
+  hardcover_rate_limit: 55      # 10-60 requests/minute (default: 55)
+  audiobookshelf_rate_limit: 600 # 60-1200 requests/minute (default: 600)
+```
 - **🔄 Waiting**: Shows delay time before next request can be made
 
 **Pagination messages:**

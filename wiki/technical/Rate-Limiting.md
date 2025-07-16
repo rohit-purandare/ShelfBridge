@@ -8,29 +8,38 @@ ShelfBridge implements intelligent rate limiting to ensure responsible API usage
 
 ### Hardcover API Rate Limiting
 
-The Hardcover client is configured with a rate limit of **55 requests per minute** to ensure we stay within their API limits while maintaining optimal performance.
+The Hardcover client is configured with a **configurable rate limit** (default: 55 requests per minute) to ensure we stay within their API limits while maintaining optimal performance.
 
 ```javascript
 // src/hardcover-client.js
-const RATE_LIMIT_PER_MINUTE = 55;
-
 export class HardcoverClient {
-    constructor(token) {
-        this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
+    constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
+        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         // ... rest of constructor
     }
 }
 ```
 
+**Configuration Options**:
+```yaml
+global:
+  hardcover_rate_limit: 55  # Default: 55 requests/minute (range: 10-60)
+```
+
+**Use Cases**:
+- **Conservative**: Set to 30-40 for shared accounts or frequent rate limiting
+- **Default**: 55 requests/minute works well for most users  
+- **Aggressive**: 60 requests/minute if you have confirmed higher API limits
+
 ### Audiobookshelf API Rate Limiting
 
-The Audiobookshelf client uses a more generous rate limit of **600 requests per minute** (10 requests per second) since it typically communicates with local or self-hosted servers.
+The Audiobookshelf client uses a **configurable rate limit** (default: 600 requests per minute) since it typically communicates with local or self-hosted servers that can handle different loads.
 
 ```javascript
 // src/audiobookshelf-client.js
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, maxWorkers = 3) {
-        this.rateLimiter = new RateLimiter(600); // 10 requests per second
+    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600) {
+        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         // ... rest of constructor
     }
 }
@@ -38,6 +47,18 @@ export class AudiobookshelfClient {
 // All Audiobookshelf requests use the 'audiobookshelf' identifier
 await this.rateLimiter.waitIfNeeded('audiobookshelf');
 ```
+
+**Configuration Options**:
+```yaml
+global:
+  audiobookshelf_rate_limit: 600  # Default: 600 requests/minute (range: 60-1200)
+```
+
+**Use Cases**:
+- **Raspberry Pi/slow servers**: Set to 120-300 for resource-constrained hosts
+- **Default**: 600 requests/minute works well for most self-hosted servers
+- **Powerful servers**: 900-1200 requests/minute for high-performance local setups
+- **Shared hosting**: 200-400 requests/minute to avoid overwhelming shared resources
 
 ## Rate Limiter Implementation
 
@@ -87,10 +108,14 @@ Resets the rate limit counter for a specific identifier.
 The system logs warnings when request usage reaches 80% of the configured limit:
 
 ```javascript
-// For 55 requests/minute limit
+// Examples for different configured limits
+// For 55 requests/minute limit (Hardcover default)
 warningThreshold = Math.ceil(55 * 0.8) = 44 requests
 
-// Warning logged when >= 44 requests used in current minute
+// For 600 requests/minute limit (Audiobookshelf default)  
+warningThreshold = Math.ceil(600 * 0.8) = 480 requests
+
+// Warning logged when >= threshold requests used in current minute
 ```
 
 ### Request Identification
@@ -101,8 +126,8 @@ Requests are tracked using identifiers that help distinguish between different s
 - `audiobookshelf`: All Audiobookshelf API calls
 
 **Important**: Each service uses its own identifier to ensure separate rate limit buckets:
-- Hardcover: 55 requests per minute maximum
-- Audiobookshelf: 600 requests per minute maximum
+- Hardcover: Configurable (default: 55, range: 10-60 requests per minute)
+- Audiobookshelf: Configurable (default: 600, range: 60-1200 requests per minute)
 
 This prevents conflicts between different API services and ensures accurate rate limiting.
 

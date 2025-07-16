@@ -101,7 +101,7 @@ async syncProgress() {
 
 **Features**:
 - JWT token authentication
-- Rate limiting (10 requests/second)
+- Rate limiting (configurable, default: 600 requests/minute)
 - Parallel request processing
 - Automatic retry logic
 - Progress data extraction
@@ -129,7 +129,7 @@ testConnection()        // Verify API access
 - Mutation operations for progress updates
 - Pagination handling for large libraries
 - Schema introspection capabilities
-- **Rate limiting**: 55 requests/minute with intelligent queuing
+- **Rate limiting**: Configurable (default: 55 requests/minute) with intelligent queuing
 
 **Key Operations**:
 ```javascript
@@ -142,7 +142,8 @@ addBookToLibrary()      // Auto-add new books
 **Rate Limiting Architecture**:
 ```javascript
 // Uses rate-limiter-flexible library
-const rateLimiter = new RateLimiter(55); // 55 requests/minute total
+// Rate limit is now configurable (default: 55 requests/minute)
+const rateLimiter = new RateLimiter(rateLimitPerMinute); 
 
 async _executeQuery(query, variables) {
     await this.rateLimiter.waitIfNeeded('hardcover-api');  // Single identifier for all requests
@@ -209,8 +210,8 @@ class RateLimiter {
 - **Multi-identifier support**: Separate limits for different request types
 
 **Rate Limits**:
-- **Hardcover API**: 55 requests/minute (respects their published limits)
-- **Audiobookshelf**: 10 requests/second (more lenient for local servers)
+- **Hardcover API**: Configurable (default: 55, range: 10-60 requests/minute) - respects their published limits
+- **Audiobookshelf**: Configurable (default: 600, range: 60-1200 requests/minute) - optimized for local servers
 
 **Impact on Sync Performance**:
 - **Small libraries** (< 50 books): No noticeable impact
@@ -398,7 +399,7 @@ extractIdentifiers(bookData) {
 - **Simple authentication**: JWT token in header
 - **Predictable URLs**: Standard REST patterns
 - **JSON responses**: Easy to parse
-- **Rate limiting**: 10 requests/second
+- **Rate limiting**: Configurable (default: 600 requests/minute)
 
 ### Parallel Processing Design
 
@@ -462,10 +463,11 @@ async function processBooks(books, workers = 3) {
   - Total: typically 10-50 requests
 
 **Rate Limiting Considerations**:
-- **Hardcover limit**: 55 requests/minute maximum
+- **Hardcover limit**: Configurable requests/minute (default: 55, max recommended: 60)
+- **Audiobookshelf limit**: Configurable requests/minute (default: 600, based on server capacity)
 - **Request queuing**: Automatic delay when approaching limits
 - **Burst handling**: Initial requests may queue more than steady-state
-- **Logging**: Warns at 80% capacity (44+ requests/minute)
+- **Logging**: Warns at 80% capacity (e.g., 44+ for default 55/minute limit)
 
 ## 🛡️ Error Handling Strategy
 

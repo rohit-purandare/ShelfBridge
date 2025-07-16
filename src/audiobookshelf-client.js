@@ -5,11 +5,11 @@ import logger from './logger.js';
 // Remove the global semaphore, make it per-instance
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100) {
+    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.token = this.normalizeToken(token);
         this.semaphore = new Semaphore(semaphoreConcurrency);
-        this.rateLimiter = new RateLimiter(600); // 10 requests per second = 600 per minute
+        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         this.maxBooksToFetch = maxBooksToFetch;
         this.pageSize = pageSize;
 
@@ -44,7 +44,8 @@ export class AudiobookshelfClient {
 
         logger.debug('AudiobookshelfClient initialized', { 
             baseUrl: this.baseUrl, 
-            semaphoreConcurrency 
+            semaphoreConcurrency,
+            rateLimitPerMinute
         });
     }
 

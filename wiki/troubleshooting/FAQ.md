@@ -257,9 +257,9 @@ global:
 **Recent fix (v1.10.2+)**: Added pagination support to prevent hanging on large libraries.
 
 ### Why am I seeing rate limiting messages?
-ShelfBridge respects API limits for both services:
-- **Hardcover**: 55 requests per minute
-- **Audiobookshelf**: 600 requests per minute
+ShelfBridge respects API limits for both services (configurable):
+- **Hardcover**: Default 55 requests per minute (range: 10-60, configurable)
+- **Audiobookshelf**: Default 600 requests per minute (range: 60-1200, configurable)
 
 You'll see:
 - **⚠️ Rate limit warning**: When approaching 80% of limits (normal)
@@ -276,6 +276,22 @@ You'll see:
 - **API protection**: Prevents errors from exceeding limits
 
 **Recent Fix (v1.7.1+)**: Fixed shared rate limit buckets that were causing incorrect request counts. Each service now has its own separate rate limit tracking.
+
+**Can I adjust the rate limits?** Yes! Configure them in your `config.yaml`:
+```yaml
+global:
+  # Conservative settings (slower but safer)
+  hardcover_rate_limit: 30        # Reduce if sharing accounts
+  audiobookshelf_rate_limit: 300  # Reduce for slower servers
+  
+  # Default settings
+  hardcover_rate_limit: 55        # Default for most users
+  audiobookshelf_rate_limit: 600  # Default for most servers
+  
+  # Aggressive settings (faster but more resource intensive)
+  hardcover_rate_limit: 60        # Only if you have higher API limits
+  audiobookshelf_rate_limit: 1200 # Only for powerful local servers
+```
 
 ### How can I test with just a few books to avoid rate limiting?
 Use the new `max_books_to_process` setting to limit how many books are processed:

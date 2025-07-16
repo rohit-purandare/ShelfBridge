@@ -4,14 +4,12 @@ import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
 
-const RATE_LIMIT_PER_MINUTE = 55;
-
 export class HardcoverClient {
-    constructor(token, semaphoreConcurrency = 1) {
+    constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
         // Normalize token by stripping "Bearer" prefix if present
         this.token = this.normalizeToken(token);
         this.baseUrl = 'https://api.hardcover.app/v1/graphql';
-        this.rateLimiter = new RateLimiter(RATE_LIMIT_PER_MINUTE);
+        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         this.semaphore = new Semaphore(semaphoreConcurrency);
         
         // Create axios instance with default config
@@ -24,7 +22,10 @@ export class HardcoverClient {
             timeout: 30000 // 30 second timeout
         });
         
-        logger.debug('HardcoverClient initialized', { semaphoreConcurrency });
+        logger.debug('HardcoverClient initialized', { 
+            semaphoreConcurrency, 
+            rateLimitPerMinute 
+        });
     }
 
     /**

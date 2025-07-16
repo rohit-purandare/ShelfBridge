@@ -29,9 +29,14 @@ export class SyncManager {
             user.abs_token, 
             globalConfig.audiobookshelf_semaphore || 5,
             globalConfig.max_books_to_fetch || 500,
-            globalConfig.page_size || 100
+            globalConfig.page_size || 100,
+            globalConfig.audiobookshelf_rate_limit || 600
         );
-        this.hardcover = new HardcoverClient(user.hardcover_token, globalConfig.hardcover_semaphore || 1);
+        this.hardcover = new HardcoverClient(
+            user.hardcover_token, 
+            globalConfig.hardcover_semaphore || 1,
+            globalConfig.hardcover_rate_limit || 55
+        );
         
         // Initialize cache
         this.cache = new BookCache();
