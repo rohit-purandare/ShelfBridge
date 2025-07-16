@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Agent } from 'https';
 import { RateLimiter, Semaphore } from './utils.js';
 import logger from './logger.js';
 
@@ -12,6 +13,15 @@ export class HardcoverClient {
         this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         this.semaphore = new Semaphore(semaphoreConcurrency);
         
+        // Create HTTPS agent with keep-alive for connection reuse (Hardcover is always HTTPS)
+        this._httpsAgent = new Agent({ 
+            keepAlive: true, 
+            maxSockets: 5,
+            maxFreeSockets: 2,
+            timeout: 60000,
+            freeSocketTimeout: 30000 // Keep connections alive for 30s
+        });
+        
         // Create axios instance with default config
         this.client = axios.create({
             baseURL: this.baseUrl,
@@ -19,12 +29,17 @@ export class HardcoverClient {
                 'Authorization': `Bearer ${this.token}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 30000, // 30 second timeout
+            httpsAgent: this._httpsAgent,
+            // Optimize for GraphQL requests
+            maxRedirects: 3,
+            validateStatus: (status) => status < 500 // Don't retry 4xx errors
         });
         
         logger.debug('HardcoverClient initialized', { 
             semaphoreConcurrency, 
-            rateLimitPerMinute 
+            rateLimitPerMinute,
+            keepAlive: true
         });
     }
 
@@ -870,6 +885,16 @@ export class HardcoverClient {
         } catch (error) {
             logger.error('Error getting current user:', error.message);
             return null;
+        }
+    }
+
+    /**
+     * Clean up HTTPS connections and resources
+     */
+    cleanup() {
+        if (this._httpsAgent) {
+            this._httpsAgent.destroy();
+            logger.debug('HardcoverClient HTTPS agent cleaned up');
         }
     }
 } 

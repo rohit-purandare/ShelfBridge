@@ -39,10 +39,12 @@ New to ShelfBridge? Start here:
 
 ## 🔧 Technical Documentation
 
-### CLI Reference
+### CLI Reference & Performance Tools
 - **[Command Line Interface](technical/CLI-Reference.md)** - Complete command reference
 - **[Configuration Validation](technical/Configuration-Validation.md)** - Validating your setup
 - **[Debug Commands](technical/Debug-Commands.md)** - Troubleshooting tools
+- **[Performance Timing Profiler](technical/TIMING-PROFILER.md)** - Measure and analyze sync performance
+- **[Performance Optimization](technical/consolidation-improvements.md)** - HTTP keep-alive and sync improvements
 
 ### Architecture & APIs
 - **[Architecture Overview](technical/Architecture-Overview.md)** - How ShelfBridge works internally
@@ -111,6 +113,13 @@ node src/main.js validate
 
 # Clear cache
 node src/main.js cache --clear
+
+# Performance profiling
+npm run profile
+npm run profile -- sync alice
+
+# Test performance improvements
+npm run test-performance
 ```
 
 ### Configuration Template

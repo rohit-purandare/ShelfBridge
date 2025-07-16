@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { Agent } from 'https';
+import { Agent as HttpAgent } from 'http';
 import { RateLimiter, Semaphore } from './utils.js';
 import logger from './logger.js';
 
@@ -13,6 +15,24 @@ export class AudiobookshelfClient {
         this.maxBooksToFetch = maxBooksToFetch;
         this.pageSize = pageSize;
 
+        // Create HTTP agents with keep-alive for connection reuse
+        const isHttps = this.baseUrl.startsWith('https');
+        const agent = isHttps ? 
+            new Agent({ 
+                keepAlive: true, 
+                maxSockets: 10,
+                maxFreeSockets: 5,
+                timeout: 60000,
+                freeSocketTimeout: 30000 // Keep connections alive for 30s
+            }) :
+            new HttpAgent({ 
+                keepAlive: true, 
+                maxSockets: 10,
+                maxFreeSockets: 5,
+                timeout: 60000,
+                freeSocketTimeout: 30000
+            });
+
         // Create axios instance with default config
         this.axios = axios.create({
             baseURL: this.baseUrl,
@@ -20,8 +40,16 @@ export class AudiobookshelfClient {
                 'Authorization': `Bearer ${this.token}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 30000, // 30 second timeout
+            httpsAgent: isHttps ? agent : undefined,
+            httpAgent: !isHttps ? agent : undefined,
+            // Optimize for multiple requests
+            maxRedirects: 5,
+            validateStatus: (status) => status < 500 // Don't retry 4xx errors
         });
+
+        // Store agent for cleanup
+        this._httpAgent = agent;
 
         // Add request interceptor for rate limiting and logging
         this.axios.interceptors.request.use(async (config) => {
@@ -45,8 +73,19 @@ export class AudiobookshelfClient {
         logger.debug('AudiobookshelfClient initialized', { 
             baseUrl: this.baseUrl, 
             semaphoreConcurrency,
-            rateLimitPerMinute
+            rateLimitPerMinute,
+            keepAlive: true
         });
+    }
+
+    /**
+     * Clean up HTTP connections and resources
+     */
+    cleanup() {
+        if (this._httpAgent) {
+            this._httpAgent.destroy();
+            logger.debug('AudiobookshelfClient HTTP agent cleaned up');
+        }
     }
 
     /**
@@ -519,9 +558,14 @@ export class AudiobookshelfClient {
 
                 const response = await this.axios.request(config);
                 
-                // Validate response
-                if (!response || response.status < 200 || response.status >= 300) {
+                // Validate response (but allow suppressed error codes)
+                if (!response || (response.status < 200 || response.status >= 300) && !suppressErrors.includes(response.status)) {
                     throw new Error(`API request failed with status ${response?.status}: ${response?.statusText}`);
+                }
+                
+                // If this was a suppressed error status, return null
+                if (response.status >= 300 && suppressErrors.includes(response.status)) {
+                    return null;
                 }
                 
                 if (!response.data) {

@@ -50,6 +50,16 @@ node src/main.js start
 - ✅ **Docker support** - Easy deployment with containers
 - ✅ **Comprehensive logging** - Detailed sync reports and error tracking
 
+## ⚡ Performance & Debugging
+
+ShelfBridge includes specialized tools for performance analysis and optimization:
+
+- **[Performance Timing Profiler](tools/)** - Analyze sync performance and identify bottlenecks
+- **HTTP Keep-Alive Optimization** - Improved connection reuse for faster API calls
+- **Performance Testing Tools** - Validate and measure optimization improvements
+
+For detailed usage, see the [Performance Tools Documentation](tools/README.md).
+
 ## 🤝 Contributing
 
 See [Contributing Guide](wiki/developer/Contributing.md) for development setup and guidelines.

@@ -1534,6 +1534,15 @@ export class SyncManager {
      */
     cleanup() {
         try {
+            // Clean up API client connections
+            if (this.audiobookshelf && this.audiobookshelf.cleanup) {
+                this.audiobookshelf.cleanup();
+            }
+            if (this.hardcover && this.hardcover.cleanup) {
+                this.hardcover.cleanup();
+            }
+            
+            // Clean up database connection
             if (this.cache) {
                 this.cache.close();
                 logger.debug('SyncManager: Database connection closed');
