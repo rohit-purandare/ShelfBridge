@@ -668,6 +668,14 @@ async function syncUser(user, globalConfig, verbose = false) {
     try {
         const result = await syncManager.syncProgress();
         
+        // Get sync tracking information for next deep scan display
+        try {
+            const cache = syncManager.cache;
+            result.sync_tracking = await cache.getSyncTracking(user.id);
+        } catch (trackingError) {
+            logger.debug('Could not get sync tracking info for display', { error: trackingError.message });
+        }
+        
         // Log summary
         const duration = (Date.now() - startTime) / 1000;
         
@@ -697,7 +705,6 @@ async function syncUser(user, globalConfig, verbose = false) {
         leftColumn.push('📚 Library Status');
         if (result.total_books_in_library !== undefined) {
             leftColumn.push(`├─ ${result.total_books_in_library} total books`);
-            leftColumn.push(`├─ ${result.books_with_progress || 0} with progress`);
             if (result.books_in_progress) {
                 leftColumn.push(`├─ ${result.books_in_progress} currently reading`);
             }
@@ -716,24 +723,16 @@ async function syncUser(user, globalConfig, verbose = false) {
                 
                 leftColumn.push(completedText);
             }
-            // Calculate actual never started (exclude books with any progress)
-            const actualNeverStarted = result.total_books_in_library - (result.books_with_progress || 0);
+            // Calculate actual never started (exclude currently reading and completed books)
+            const actualNeverStarted = result.total_books_in_library - (result.books_in_progress || 0) - (result.all_completed_books || 0);
             if (actualNeverStarted > 0) {
                 leftColumn.push(`└─ ${actualNeverStarted} never started`);
             } else {
                 leftColumn[leftColumn.length - 1] = leftColumn[leftColumn.length - 1].replace('├─', '└─');
             }
             
-            // Add cache status message for fast syncs
-            if (result.stats_source === 'cached') {
-                leftColumn.push('');
-                leftColumn.push('💾 Library stats from cache');
-                leftColumn.push('└─ Next deep scan will update');
-            } else if (result.stats_source === 'mixed') {
-                leftColumn.push('');
-                leftColumn.push('💾 Completed books from cache');
-                leftColumn.push('└─ Next deep scan will update');
-            } else if (result.stats_source === 'none') {
+            // Add cache status message only when information is limited
+            if (result.stats_source === 'none') {
                 leftColumn.push('');
                 leftColumn.push('⚡ Limited library info');
                 leftColumn.push('└─ Deep scan needed for full stats');
@@ -775,7 +774,30 @@ async function syncUser(user, globalConfig, verbose = false) {
         } else {
             rightColumn.push(`├─ ${result.errors.length} error${result.errors.length === 1 ? '' : 's'} occurred`);
         }
-        rightColumn.push('├─ Cache updated');
+        
+        // Only show cache updated if books were actually processed (meaning cache was touched)
+        const cacheUpdated = result.books_synced > 0 || result.books_completed > 0 || result.books_auto_added > 0 || result.deep_scan_performed;
+        if (cacheUpdated) {
+            rightColumn.push('├─ Cache updated');
+        }
+        
+        // Show next deep scan information
+        if (result.sync_tracking) {
+            const currentCount = result.sync_tracking.sync_count;
+            const interval = globalConfig.deep_scan_interval || 10;
+            const syncsUntilDeepScan = interval - currentCount;
+            
+            if (result.deep_scan_performed) {
+                rightColumn.push('├─ Deep scan completed');
+            } else if (syncsUntilDeepScan <= 0) {
+                rightColumn.push('├─ Deep scan due next sync');
+            } else if (syncsUntilDeepScan === 1) {
+                rightColumn.push('├─ Next deep scan: 1 sync away');
+            } else {
+                rightColumn.push(`├─ Next deep scan: ${syncsUntilDeepScan} syncs away`);
+            }
+        }
+        
         rightColumn.push('└─ Ready for next sync');
         
         // Print two columns side by side
