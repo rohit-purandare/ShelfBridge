@@ -9,7 +9,7 @@ export class Config {
         this.users = [];
         this._loadConfig();
         this._applyDefaults();
-        this._validateConfig();
+        // Validation is now handled by ConfigValidator class
     }
 
     _loadConfig() {
@@ -78,31 +78,7 @@ export class Config {
         }
     }
 
-    _validateConfig() {
-        const errors = [];
-        
-        // Validate users (this is the only truly required section)
-        if (!this.users || this.users.length === 0) {
-            errors.push('No users defined in config');
-        }
-        
-        for (const user of this.users) {
-            const requiredUserFields = ['id', 'abs_url', 'abs_token', 'hardcover_token'];
-            for (const key of requiredUserFields) {
-                if (!user[key]) {
-                    errors.push(`Missing user config: ${key} for user ${user.id || '[unknown]'}`);
-                }
-            }
-        }
-        
-        if (errors.length > 0) {
-            const errorMsg = 'Configuration validation failed:\n' + errors.map(error => `- ${error}`).join('\n');
-            logger.error(errorMsg);
-            throw new Error(errorMsg);
-        }
-        
-        logger.debug('Configuration validation passed');
-    }
+
 
     getGlobal() {
         return this.globalConfig;

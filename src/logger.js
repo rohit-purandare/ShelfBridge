@@ -2,16 +2,10 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { currentVersion } from './version.js';
 
-// Get the version from package.json
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageJsonPath = join(__dirname, '..', 'package.json');
-const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-const version = packageJson.version;
+// Get the version from shared utility
+const version = currentVersion;
 
 // Create logs directory if it doesn't exist
 const logsDir = 'logs';

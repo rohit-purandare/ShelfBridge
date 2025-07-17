@@ -13,9 +13,6 @@
     "config": "node src/main.js config",
     "cache": "node src/main.js cache",
     "dev": "node --watch src/main.js",
-    "profile": "node tools/timing-profiler.js",
-    "profile-cache": "node tools/timing-profiler.js cache",
-    "test-performance": "node tools/test-performance-improvement.js",
     "prepare": "husky install"
   },
   "keywords": [

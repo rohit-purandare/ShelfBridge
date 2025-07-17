@@ -69,7 +69,24 @@ export class SyncManager {
     async syncProgress() {
         const startTime = Date.now();
         logger.debug(`Starting sync for user: ${this.userId}`);
-        console.log(`\n🔄 Sync started for user: ${this.userId}`);
+        console.log(`🔄 Starting sync for ${this.userId}`);
+        
+        // Increment sync count and check if deep scan is needed
+        const syncTracking = await this.cache.incrementSyncCount(this.userId);
+        const shouldDeepScan = this.globalConfig.force_sync || 
+                              await this.cache.shouldPerformDeepScan(this.userId, this.globalConfig.deep_scan_interval || 10);
+        
+        if (shouldDeepScan) {
+            if (syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)) {
+                console.log(`🔍 Performing deep scan (periodic sync #${syncTracking.sync_count})`);
+            } else if (this.globalConfig.force_sync) {
+                console.log(`🔍 Performing deep scan (forced)`);
+            } else {
+                console.log(`🔍 Performing deep scan (initial sync)`);
+            }
+        } else {
+            console.log(`⚡ Performing fast sync`);
+        }
         
         const result = {
             books_processed: 0,
@@ -79,30 +96,96 @@ export class SyncManager {
             books_skipped: 0,
             errors: [],
             timing: {},
-            book_details: [] // Add detailed book results
+            book_details: [], // Add detailed book results
+            deep_scan_performed: shouldDeepScan
         };
 
         try {
             // Get books from Audiobookshelf
-            const absBooks = await this.audiobookshelf.getReadingProgress();
+            const absBooks = await this.audiobookshelf.getReadingProgress(shouldDeepScan);
+            
+            // Record the deep scan to reset counter if one was performed
+            if (shouldDeepScan) {
+                await this.cache.recordDeepScan(this.userId);
+            }
+            
             if (!absBooks || absBooks.length === 0) {
                 logger.debug('No books found in Audiobookshelf');
                 console.log('No books found in Audiobookshelf.');
                 return result;
             }
 
-            // Limit books to process if configured
-            let booksToProcess = absBooks;
+            // Extract filtering statistics if available
+            const filteringStats = absBooks.length > 0 && absBooks[0]._filteringStats ? absBooks[0]._filteringStats : null;
+            if (filteringStats) {
+                result.total_books_in_library = filteringStats.totalBooksInLibrary;
+                result.books_with_progress = filteringStats.totalWithProgress;
+                result.books_in_progress = filteringStats.inProgressBooks; // Currently reading
+                result.all_completed_books = filteringStats.allCompletedBooks;
+                result.books_completed_filtered = filteringStats.completedBooksFiltered;
+                result.books_never_started = filteringStats.booksNeverStarted; // Actually never started
+                result.books_passed_filter = filteringStats.booksPassingFilter;
+                
+                // Store stats in cache if this was a deep scan
+                if (shouldDeepScan) {
+                    await this.cache.storeLibraryStats(this.userId, filteringStats);
+                    result.stats_source = 'deep_scan';
+                } else {
+                    result.stats_source = 'realtime';
+                }
+            } else {
+                // Fast scan - try to get cached library stats
+                if (!shouldDeepScan) {
+                    const cachedStats = await this.cache.getLibraryStats(this.userId);
+                    if (cachedStats) {
+                        result.total_books_in_library = cachedStats.totalBooksInLibrary;
+                        result.books_with_progress = cachedStats.totalWithProgress;
+                        result.books_in_progress = cachedStats.inProgressBooks;
+                        result.all_completed_books = cachedStats.allCompletedBooks;
+                        result.books_never_started = cachedStats.booksNeverStarted;
+                        result.stats_source = 'cached';
+                        result.stats_last_updated = cachedStats.lastUpdated;
+                        
+                        logger.debug(`Using cached library stats for user ${this.userId}`, cachedStats);
+                    } else {
+                        result.stats_source = 'none';
+                    }
+                }
+            }
+            
+            // For fast scans, enhance realtime data with cached completed book counts
+            if (!shouldDeepScan && filteringStats) {
+                const cachedStats = await this.cache.getLibraryStats(this.userId);
+                if (cachedStats && cachedStats.allCompletedBooks > 0) {
+                    // Update the completed books count from cache since fast scan doesn't find them
+                    result.all_completed_books = cachedStats.allCompletedBooks;
+                    result.stats_source = 'mixed'; // Indicate mixed data source
+                    result.stats_last_updated = cachedStats.lastUpdated;
+                    
+                    logger.debug(`Enhanced fast scan with cached completed books: ${cachedStats.allCompletedBooks}`);
+                }
+            }
+
+            // Filter out metadata-only entries for actual processing
+            const realBooks = absBooks.filter(book => !book._isMetadataOnly);
+            if (realBooks.length === 0 && !filteringStats) {
+                logger.debug('No books found that need syncing');
+                console.log('No books found that need syncing.');
+                return result;
+            }
+
+            // Limit books to process if configured  
+            let booksToProcess = realBooks;
             const maxBooks = this.globalConfig.max_books_to_process;
-            if (maxBooks && maxBooks > 0 && absBooks.length > maxBooks) {
-                booksToProcess = absBooks.slice(0, maxBooks);
-                logger.info(`Limiting sync to first ${maxBooks} books (${absBooks.length} total available)`, {
-                    totalBooks: absBooks.length,
+            if (maxBooks && maxBooks > 0 && realBooks.length > maxBooks) {
+                booksToProcess = realBooks.slice(0, maxBooks);
+                logger.info(`Limiting sync to first ${maxBooks} books (${realBooks.length} total available)`, {
+                    totalBooks: realBooks.length,
                     maxBooks: maxBooks,
                     dryRun: this.dryRun
                 });
                 if (this.verbose) {
-                    console.log(`📚 Limiting sync to first ${maxBooks} books (${absBooks.length} total available)`);
+                    console.log(`📚 Limiting sync to first ${maxBooks} books (${realBooks.length} total available)`);
                 }
             }
 
@@ -120,233 +203,13 @@ export class SyncManager {
                 console.log(`Processing ${booksToProcess.length} books from Audiobookshelf...`);
             }
 
-            // Process each book
-            for (const absBook of booksToProcess) {
-                const bookStartTime = Date.now();
-                const bookDetail = {
-                    title: extractTitle(absBook) || 'Unknown Title',
-                    status: 'pending',
-                    actions: [],
-                    progress: {
-                        before: null,
-                        after: null,
-                        changed: false
-                    },
-                    identifiers: {},
-                    errors: [],
-                    timing: 0
-                };
-
-                try {
-                    result.books_processed++;
-                    
-                    // Log book processing start (debug level)
-                    logger.debug(`Processing book: ${bookDetail.title}`, {
-                        bookIndex: result.books_processed,
-                        totalBooks: absBooks.length,
-                        title: bookDetail.title
-                    });
-                    // User-facing progress message
-                    if (this.verbose) {
-                        console.log(`  → [${result.books_processed}/${absBooks.length}] ${bookDetail.title}`);
-                    }
-
-                    // Extract identifiers
-                    const identifiers = this._extractBookIdentifier(absBook);
-                    bookDetail.identifiers = identifiers;
-                    bookDetail.actions.push(`Found identifiers: ${Object.entries(identifiers).filter(([_k,v]) => v).map(([k,v]) => `${k.toUpperCase()}=${v}`).join(', ') || 'none'}`);
-
-                    // Check cache for this book
-                    const cacheIdentifier = identifiers.asin || identifiers.isbn;
-                    const cacheIdentifierType = identifiers.asin ? 'asin' : 'isbn';
-                    let cachedInfo = null;
-                    
-                    if (cacheIdentifier) {
-                        cachedInfo = await this.cache.getCachedBookInfo(this.userId, cacheIdentifier, bookDetail.title, cacheIdentifierType);
-                        if (cachedInfo.exists) {
-                            bookDetail.actions.push(`Cache data:`);
-                            
-                            if (cachedInfo.edition_id) {
-                                bookDetail.actions.push(`  - Edition: ${cachedInfo.edition_id}`);
-                            }
-                            if (cachedInfo.author) {
-                                bookDetail.actions.push(`  - Author: ${cachedInfo.author}`);
-                            }
-                            if (cachedInfo.progress_percent !== null) {
-                                bookDetail.actions.push(`  - Progress: ${cachedInfo.progress_percent}%`);
-                            }
-                            if (cachedInfo.last_sync) {
-                                const lastSyncedDate = this._formatTimestampForDisplay(cachedInfo.last_sync);
-                                bookDetail.actions.push(`  - Last synced: ${lastSyncedDate}`);
-                            }
-                            
-                            // Convert timestamps to readable dates using timezone
-                            if (cachedInfo.started_at) {
-                                const startedDate = this._formatTimestampForDisplay(cachedInfo.started_at);
-                                bookDetail.actions.push(`  - Started: ${startedDate}`);
-                            }
-                            if (cachedInfo.finished_at) {
-                                const finishedDate = this._formatTimestampForDisplay(cachedInfo.finished_at);
-                                bookDetail.actions.push(`  - Finished: ${finishedDate}`);
-                            }
-                        } else {
-                            bookDetail.actions.push(`Cache: No cached data found`);
-                        }
-                    } else {
-                        bookDetail.actions.push(`Cache: Cannot check (no identifier)`);
-                    }
-
-                    // Get current progress
-                    const currentProgress = absBook.progress_percentage || 0;
-                    bookDetail.progress.before = currentProgress;
-                    bookDetail.actions.push(`Current progress: ${currentProgress.toFixed(1)}%`);
-
-                    // Check if book should be skipped due to low progress
-                    if (this._isZeroProgress(currentProgress)) {
-                        logger.debug(`Skipping ${bookDetail.title} - progress below threshold`, {
-                            progress: currentProgress,
-                            threshold: this.globalConfig.min_progress_threshold || 5.0
-                        });
-                        bookDetail.status = 'skipped';
-                        bookDetail.actions.push(`Skipped: Progress ${currentProgress}% below threshold ${this.globalConfig.min_progress_threshold || 5.0}%`);
-                        result.books_skipped++;
-                        continue;
-                    }
-
-                    // Check cache for progress changes
-                    const identifier = identifiers.asin || identifiers.isbn;
-                    const identifierType = identifiers.asin ? 'asin' : 'isbn';
-                    
-                    if (!this.globalConfig.force_sync) {
-                        let hasChanged = false;
-                        
-                        if (identifier) {
-                            // Use identifier-based caching (preferred)
-                            hasChanged = await this.cache.hasProgressChanged(
-                                this.userId, 
-                                identifier, 
-                                bookDetail.title, 
-                                currentProgress, 
-                                identifierType
-                            );
-                        } else {
-                            // Fallback to title-based caching for books without identifiers
-                            logger.debug(`No identifier found for ${bookDetail.title}, using title-based progress tracking`);
-                            hasChanged = await this.cache.hasProgressChanged(
-                                this.userId, 
-                                bookDetail.title, // Use title as identifier
-                                bookDetail.title, 
-                                currentProgress, 
-                                'title' // Use 'title' as identifier type
-                            );
-                        }
-                        
-                        if (!hasChanged) {
-                            logger.debug(`Skipping ${bookDetail.title} - no progress change`, {
-                                progress: currentProgress,
-                                identifierUsed: identifier || 'title'
-                            });
-                            bookDetail.status = 'skipped';
-                            bookDetail.actions.push(`Skipped: No progress change (${currentProgress}%)`);
-                            result.books_skipped++;
-                            continue;
-                        } else {
-                            const fallbackIdentifier = identifier || bookDetail.title;
-                            const fallbackIdentifierType = identifier ? identifierType : 'title';
-                            const cachedProgress = await this.cache.getLastProgress(this.userId, fallbackIdentifier, bookDetail.title, fallbackIdentifierType);
-                            bookDetail.actions.push(`Progress changed: ${cachedProgress}% → ${currentProgress}%`);
-                            bookDetail.progress.changed = true;
-                        }
-                    }
-
-                    // Try to find book in Hardcover
-                    const hardcoverMatch = this._findBookInHardcover(absBook, identifierLookup);
-                    
-                    if (hardcoverMatch) {
-                        bookDetail.actions.push(`Found in Hardcover library: ${hardcoverMatch.userBook.book.title}`);
-                        const syncResult = await this._syncExistingBook(absBook, hardcoverMatch, identifierType, identifier);
-                        
-                        // Update book detail with sync result
-                        bookDetail.status = syncResult.status;
-                        bookDetail.progress.after = currentProgress;
-                        
-                        if (syncResult.status === 'completed') {
-                            bookDetail.actions.push(`Marked as completed (${currentProgress.toFixed(1)}%)`);
-                            result.books_completed++;
-                        } else if (syncResult.status === 'synced') {
-                            bookDetail.actions.push(`Progress updated to ${currentProgress.toFixed(1)}%`);
-                            result.books_synced++;
-                        } else if (syncResult.status === 'error') {
-                            bookDetail.errors.push(syncResult.reason || 'Unknown error');
-                            bookDetail.actions.push(`Error: ${syncResult.reason || 'Unknown error'}`);
-                            result.errors.push(`${bookDetail.title}: ${syncResult.reason}`);
-                        }
-                        
-                    } else {
-                        bookDetail.actions.push('Not found in Hardcover library');
-                        
-                        // Check if we should try to auto-add this book
-                        const hasSignificantProgress = !this._isZeroProgress(currentProgress);
-                        const shouldAutoAdd = this.globalConfig.auto_add_books === true;
-                        
-                        if (shouldAutoAdd) {
-                            // Determine reason for auto-add attempt
-                            if (hasSignificantProgress) {
-                                bookDetail.actions.push('Attempting to auto-add to Hardcover (enabled + has progress)');
-                            } else {
-                                bookDetail.actions.push('Attempting to auto-add to Hardcover (auto-add enabled)');
-                            }
-                            
-                            const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
-                            
-                            bookDetail.status = autoAddResult.status;
-                            
-                            if (autoAddResult.status === 'auto_added') {
-                                if (this.dryRun) {
-                                    bookDetail.actions.push(`[DRY RUN] Would auto-add to Hardcover`);
-                                } else {
-                                    bookDetail.actions.push(`Successfully auto-added to Hardcover`);
-                                }
-                                result.books_auto_added++;
-                            } else if (autoAddResult.status === 'skipped') {
-                                bookDetail.actions.push(`Auto-add skipped: ${autoAddResult.reason}`);
-                                result.books_skipped++;
-                            } else if (autoAddResult.status === 'error') {
-                                bookDetail.errors.push(autoAddResult.reason || 'Auto-add failed');
-                                bookDetail.actions.push(`Auto-add failed: ${autoAddResult.reason}`);
-                                result.errors.push(`${bookDetail.title}: ${autoAddResult.reason}`);
-                            }
-                        } else {
-                            bookDetail.status = 'skipped';
-                            bookDetail.actions.push(`Auto-add disabled (${currentProgress.toFixed(1)}% progress) - skipped`);
-                            result.books_skipped++;
-                        }
-                    }
-
-                } catch (error) {
-                    logger.error(`Error processing book ${bookDetail.title}`, {
-                        error: error.message,
-                        stack: error.stack
-                    });
-                    bookDetail.status = 'error';
-                    bookDetail.errors.push(error.message);
-                    bookDetail.actions.push(`Processing error: ${error.message}`);
-                    result.errors.push(`${bookDetail.title}: ${error.message}`);
-                } finally {
-                    // Calculate timing and log book completion
-                    bookDetail.timing = Date.now() - bookStartTime;
-                    result.book_details.push(bookDetail);
-                    
-                    // Log detailed book result
-                    logger.debug(`Book processed: ${bookDetail.title}`, {
-                        status: bookDetail.status,
-                        actions: bookDetail.actions,
-                        progress: bookDetail.progress,
-                        identifiers: bookDetail.identifiers,
-                        errors: bookDetail.errors,
-                        timing: `${bookDetail.timing}ms`
-                    });
-                }
+            // Process books in parallel or sequential based on configuration
+            if (this.globalConfig.parallel) {
+                logger.debug('Using parallel processing', { workers: this.globalConfig.workers || 3 });
+                await this._syncBooksParallel(booksToProcess, identifierLookup, result, null);
+            } else {
+                logger.debug('Using sequential processing');
+                await this._syncBooksSequential(booksToProcess, identifierLookup, result, null);
             }
 
             // Log final summary with book details
@@ -679,41 +542,39 @@ export class SyncManager {
         }
     }
 
-    async _syncBooksSequential(syncableBooks, identifierLookup, result, sessionData) {
-        for (const absBook of syncableBooks) {
-            try {
-                const syncResult = await this._syncSingleBook(absBook, identifierLookup, sessionData);
+    async _syncBooksParallel(booksToProcess, identifierLookup, result, sessionData) {
+        const workers = this.globalConfig.workers || 3;
+        const chunks = [];
+        
+        // Split books into chunks for parallel processing
+        for (let i = 0; i < booksToProcess.length; i += workers) {
+            chunks.push(booksToProcess.slice(i, i + workers));
+        }
+        
+        // Process chunks sequentially, books within chunks in parallel
+        for (const chunk of chunks) {
+            const promises = chunk.map(book => this._syncSingleBook(book, identifierLookup, sessionData));
+            const chunkResults = await Promise.all(promises);
+            
+            // Update results with all chunk results
+            chunkResults.forEach(syncResult => {
                 this._updateResult(result, syncResult);
-            } catch (error) {
-                logger.error(`Error syncing book ${absBook.title}:`, error.message);
-                result.errors.push(`Error syncing ${absBook.title}: ${error.message}`);
-            }
+            });
         }
     }
 
-    async _syncBooksParallel(syncableBooks, identifierLookup, result, sessionData) {
-        const workers = this.globalConfig.workers || 3;
-        const chunks = this._chunkArray(syncableBooks, workers);
-
-        for (const chunk of chunks) {
-            const promises = chunk.map(async (absBook) => {
-                try {
-                    return await this._syncSingleBook(absBook, identifierLookup, sessionData);
-                } catch (error) {
-                    logger.error(`Error syncing book ${absBook.title || 'Unknown'}:`, error.message);
-                    return { 
-                        status: 'error', 
-                        reason: error.message, 
-                        title: absBook.title || 'Unknown Title' 
-                    };
-                }
-            });
-
-            const results = await Promise.all(promises);
+    async _syncBooksSequential(booksToProcess, identifierLookup, result, sessionData) {
+        for (const book of booksToProcess) {
+            result.books_processed++;
             
-            for (const syncResult of results) {
-                this._updateResult(result, syncResult);
+            // Show progress for verbose output
+            if (this.verbose) {
+                const title = extractTitle(book) || 'Unknown Title';
+                console.log(`  → [${result.books_processed}/${booksToProcess.length}] ${title}`);
             }
+            
+            const syncResult = await this._syncSingleBook(book, identifierLookup, sessionData);
+            this._updateResult(result, syncResult);
         }
     }
 
@@ -726,10 +587,32 @@ export class SyncManager {
     }
 
     async _syncSingleBook(absBook, identifierLookup, sessionData) {
+        const startTime = performance.now();
         const title = extractTitle(absBook) || 'Unknown Title';
         const progressPercent = absBook.progress_percentage || 0;
         
         logger.debug(`Processing: ${title} (${progressPercent.toFixed(1)}%)`);
+
+        // Initialize detailed result tracking
+        const syncResult = {
+            title: title,
+            author: this._extractAuthorFromData(absBook, null),
+            status: 'unknown',
+            reason: null,
+            progress_before: progressPercent,
+            progress_after: progressPercent,
+            progress_changed: false,
+            identifiers: {},
+            cache_found: false,
+            cache_last_sync: null,
+            hardcover_info: null,
+            api_response: null,
+            last_listened_at: absBook.last_listened_at,
+            completed_at: null,
+            actions: [],
+            errors: [],
+            timing: null
+        };
 
         // Add last listened timestamp from playback sessions
         let usedSessionData = false;
@@ -750,11 +633,12 @@ export class SyncManager {
                     const lastListenedAtUTC = DateTime.fromMillis(latestSession.updatedAt, { zone: 'utc' });
                     const lastListenedAtLocal = lastListenedAtUTC.setZone(this.timezone);
                     absBook.last_listened_at = lastListenedAtLocal.toISO();
+                    syncResult.last_listened_at = absBook.last_listened_at;
                     usedSessionData = true;
                     logger.debug(`[DEBUG] Found session updatedAt for ${title}: ${latestSession.updatedAt} (${lastListenedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')})`);
                 }
             } else {
-                logger.debug(`[DEBUG] No playback sessions found for ${title}`);
+                logger.debug(`[DEBUG] No playbook sessions found for ${title}`);
             }
         }
         
@@ -763,6 +647,7 @@ export class SyncManager {
             const lastListenedAtUTC = DateTime.fromMillis(absBook.last_listened_at, { zone: 'utc' });
             const lastListenedAtLocal = lastListenedAtUTC.setZone(this.timezone);
             absBook.last_listened_at = lastListenedAtLocal.toISO();
+            syncResult.last_listened_at = absBook.last_listened_at;
             logger.debug(`[DEBUG] Converted lastUpdate for ${title}: ${lastListenedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
         }
         
@@ -778,48 +663,107 @@ export class SyncManager {
             const finishedAtUTC = DateTime.fromMillis(absBook.finished_at, { zone: 'utc' });
             const finishedAtLocal = finishedAtUTC.setZone(this.timezone);
             absBook.finished_at = finishedAtLocal.toISO();
+            syncResult.completed_at = absBook.finished_at;
             logger.debug(`[DEBUG] finishedAt for ${title}: ${finishedAtLocal.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ')}`);
         }
 
         // Extract identifiers
         const identifiers = this._extractBookIdentifier(absBook);
+        syncResult.identifiers = identifiers;
         logger.debug(`[DEBUG] Extracted identifiers for '${title}': ISBN='${identifiers.isbn}', ASIN='${identifiers.asin}'`);
         if (!identifiers.isbn && !identifiers.asin) {
             logger.info(`Skipping ${title}: No ISBN or ASIN found`);
-            return { status: 'skipped', reason: 'No ISBN or ASIN', title };
+            syncResult.status = 'skipped';
+            syncResult.reason = 'No ISBN or ASIN';
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+        }
+
+        // Check cache for existing sync data
+        const identifier = identifiers.asin || identifiers.isbn;
+        const identifierType = identifiers.asin ? 'asin' : 'isbn';
+        
+        try {
+            const cachedInfo = await this.cache.getCachedBookInfo(this.userId, identifier, title, identifierType);
+            if (cachedInfo.exists) {
+                syncResult.cache_found = true;
+                syncResult.cache_last_sync = cachedInfo.last_sync;
+                syncResult.actions.push(`Found in cache (last synced: ${new Date(cachedInfo.last_sync).toLocaleDateString()})`);
+            }
+        } catch (cacheError) {
+            logger.warn(`Cache lookup failed for ${title}`, { error: cacheError.message });
         }
 
         // Try to find match in Hardcover
         let hardcoverMatch = null;
-        let identifierType = null;
+        let matchedIdentifierType = null;
 
         // First try ASIN (for audiobooks)
         if (identifiers.asin && identifierLookup[identifiers.asin]) {
             hardcoverMatch = identifierLookup[identifiers.asin];
-            identifierType = 'asin';
-            logger.info(`Found ASIN match for ${title}: ${identifiers.asin}`);
+            matchedIdentifierType = 'asin';
+            // Remove the verbose console log - keep only debug logging
+            logger.debug(`Found ASIN match for ${title}: ${identifiers.asin}`);
+            syncResult.actions.push(`Found in Hardcover by ASIN: ${identifiers.asin}`);
         }
         // Fall back to ISBN
         else if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
             hardcoverMatch = identifierLookup[identifiers.isbn];
-            identifierType = 'isbn';
-            logger.info(`Found ISBN match for ${title}: ${identifiers.isbn}`);
+            matchedIdentifierType = 'isbn';
+            // Remove the verbose console log - keep only debug logging
+            logger.debug(`Found ISBN match for ${title}: ${identifiers.isbn}`);
+            syncResult.actions.push(`Found in Hardcover by ISBN: ${identifiers.isbn}`);
         }
 
         if (!hardcoverMatch) {
             // Try to auto-add the book
-            return await this._tryAutoAddBook(absBook, identifiers);
+            syncResult.actions.push(`Not found in Hardcover library`);
+            const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
+            syncResult.status = autoAddResult.status;
+            syncResult.reason = autoAddResult.reason;
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+        }
+
+        // Store Hardcover edition info
+        if (hardcoverMatch.edition) {
+            syncResult.hardcover_info = {
+                edition_id: hardcoverMatch.edition.id,
+                format: hardcoverMatch.edition.format,
+                pages: hardcoverMatch.edition.pages,
+                duration: hardcoverMatch.edition.audio_seconds ? 
+                    `${Math.floor(hardcoverMatch.edition.audio_seconds / 3600)}h ${Math.floor((hardcoverMatch.edition.audio_seconds % 3600) / 60)}m` : 
+                    null
+            };
         }
 
         // Check if progress has changed (unless force sync is enabled)
-        const identifier = identifierType === 'asin' ? identifiers.asin : identifiers.isbn;
         if (!this.globalConfig.force_sync && !(await this.cache.hasProgressChanged(this.userId, identifier, title, progressPercent, identifierType))) {
-            logger.info(`Skipping ${title}: Progress unchanged`);
-            return { status: 'skipped', reason: 'Progress unchanged', title };
+            // Remove the verbose console log - keep only debug logging
+            logger.debug(`Skipping ${title}: Progress unchanged`);
+            syncResult.status = 'skipped';
+            syncResult.reason = 'Progress unchanged';
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+        } else {
+            syncResult.progress_changed = true;
         }
 
         // Sync the existing book
-        return await this._syncExistingBook(absBook, hardcoverMatch, identifierType, identifier);
+        const existingSyncResult = await this._syncExistingBook(absBook, hardcoverMatch, matchedIdentifierType, identifier);
+        
+        // Merge results
+        syncResult.status = existingSyncResult.status;
+        syncResult.reason = existingSyncResult.reason;
+        syncResult.progress_after = progressPercent;
+        
+        // Add API response info if available
+        if (existingSyncResult.api_response) {
+            syncResult.api_response = existingSyncResult.api_response;
+        }
+        
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
     }
 
     async _tryAutoAddBook(absBook, identifiers) {
@@ -1481,6 +1425,35 @@ export class SyncManager {
 
     _updateResult(result, syncResult) {
         result.books_processed++;
+        
+        // Create detailed book info for verbose output
+        const bookDetail = {
+            title: syncResult.title || 'Unknown Title',
+            author: syncResult.author || null,
+            status: syncResult.status,
+            reason: syncResult.reason || null,
+            progress: {
+                before: syncResult.progress_before !== undefined ? syncResult.progress_before : null,
+                after: syncResult.progress_after !== undefined ? syncResult.progress_after : null,
+                changed: syncResult.progress_changed || false
+            },
+            identifiers: syncResult.identifiers || {},
+            cache_status: {
+                found: syncResult.cache_found || false,
+                last_sync: syncResult.cache_last_sync || null
+            },
+            hardcover_info: syncResult.hardcover_info || null,
+            api_response: syncResult.api_response || null,
+            timestamps: {
+                last_listened_at: syncResult.last_listened_at || null,
+                completed_at: syncResult.completed_at || null
+            },
+            actions: syncResult.actions || [],
+            errors: syncResult.errors || [],
+            timing: syncResult.timing || null
+        };
+        
+        result.book_details.push(bookDetail);
         
         switch (syncResult.status) {
             case 'synced':

@@ -84,6 +84,31 @@ export class BookCache {
                 )
             `);
 
+            // Create sync tracking table
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS sync_tracking (
+                    user_id TEXT PRIMARY KEY,
+                    sync_count INTEGER DEFAULT 0,
+                    last_deep_scan_date TIMESTAMP,
+                    total_syncs INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
+            // Create library stats table
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS library_stats (
+                    user_id TEXT PRIMARY KEY,
+                    total_books INTEGER DEFAULT 0,
+                    books_with_progress INTEGER DEFAULT 0,
+                    in_progress_books INTEGER DEFAULT 0,
+                    completed_books INTEGER DEFAULT 0,
+                    never_started_books INTEGER DEFAULT 0,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+
             // Perform migration operations for existing databases
             this._performMigrations();
 
@@ -362,6 +387,43 @@ export class BookCache {
     }
 
     /**
+     * Validate input data before storing
+     */
+    _validateBookData(userId, identifier, title, identifierType, progressPercent = null) {
+        const errors = [];
+
+        // Validate required fields
+        if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+            errors.push('userId must be a non-empty string');
+        }
+        if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
+            errors.push('identifier must be a non-empty string');
+        }
+        if (!title || typeof title !== 'string' || title.trim() === '') {
+            errors.push('title must be a non-empty string');
+        }
+        if (!identifierType || typeof identifierType !== 'string' || identifierType.trim() === '') {
+            errors.push('identifierType must be a non-empty string');
+        }
+
+        // Validate identifier type
+        if (identifierType && !['isbn', 'asin'].includes(identifierType.toLowerCase())) {
+            errors.push('identifierType must be either "isbn" or "asin"');
+        }
+
+        // Validate progress if provided
+        if (progressPercent !== null && progressPercent !== undefined) {
+            if (typeof progressPercent !== 'number' || isNaN(progressPercent) || !isFinite(progressPercent)) {
+                errors.push('progressPercent must be a valid number');
+            } else if (progressPercent < 0 || progressPercent > 100) {
+                errors.push('progressPercent must be between 0 and 100');
+            }
+        }
+
+        return errors;
+    }
+
+    /**
      * Store book sync data (edition mapping + progress) in a transaction
      * @param {string} userId - User ID
      * @param {string} identifier - Book identifier (ISBN/ASIN)
@@ -374,6 +436,12 @@ export class BookCache {
      * @param {string} startedAt - Started reading timestamp
      */
     async storeBookSyncData(userId, identifier, title, editionId, identifierType, author, progressPercent, lastListenedAt = null, startedAt = null) {
+        // Validate input data
+        const validationErrors = this._validateBookData(userId, identifier, title, identifierType, progressPercent);
+        if (validationErrors.length > 0) {
+            throw new Error(`Invalid input data: ${validationErrors.join(', ')}`);
+        }
+
         const operations = [
             () => this._storeEditionMappingOperation(userId, identifier, title, editionId, identifierType, author),
             () => this._storeProgressOperation(userId, identifier, title, progressPercent, identifierType, lastListenedAt, startedAt)
@@ -396,6 +464,12 @@ export class BookCache {
      * @param {string} finishedAt - Finished reading timestamp
      */
     async storeBookCompletionData(userId, identifier, title, identifierType, lastListenedAt = null, startedAt = null, finishedAt = null) {
+        // Validate input data
+        const validationErrors = this._validateBookData(userId, identifier, title, identifierType, 100);
+        if (validationErrors.length > 0) {
+            throw new Error(`Invalid input data: ${validationErrors.join(', ')}`);
+        }
+
         const operations = [
             () => this._storeProgressOperation(userId, identifier, title, 100, identifierType, lastListenedAt, startedAt),
             () => this._storeCompletionTimestamp(userId, identifier, title, identifierType, finishedAt)
@@ -541,10 +615,17 @@ export class BookCache {
     async storeProgress(userId, identifier, title, progressPercent, identifierType = 'isbn', lastListenedAt = null, startedAt = null) {
         await this.init();
         
+        // Validate input data
+        const validationErrors = this._validateBookData(userId, identifier, title, identifierType, progressPercent);
+        if (validationErrors.length > 0) {
+            throw new Error(`Invalid input data: ${validationErrors.join(', ')}`);
+        }
+        
         try {
             return this._storeProgressOperation(userId, identifier, title, progressPercent, identifierType, lastListenedAt, startedAt);
         } catch (err) {
             logger.error(`Error storing progress for ${title}: ${err.message}`);
+            throw err; // Re-throw the error so callers can handle validation failures
         }
     }
 
@@ -700,6 +781,209 @@ export class BookCache {
                 exists: false,
                 error: err.message
             };
+        }
+    }
+
+    /**
+     * Increment sync count for a user
+     * @param {string} userId - User ID
+     * @returns {Object} Updated sync tracking info
+     */
+    async incrementSyncCount(userId) {
+        await this.init();
+        
+        try {
+            const currentTime = new Date().toISOString();
+            
+            const upsertStmt = this.db.prepare(`
+                INSERT INTO sync_tracking (user_id, sync_count, total_syncs, updated_at)
+                VALUES (?, 1, 1, ?)
+                ON CONFLICT(user_id) 
+                DO UPDATE SET 
+                    sync_count = sync_count + 1,
+                    total_syncs = total_syncs + 1,
+                    updated_at = excluded.updated_at
+            `);
+            
+            upsertStmt.run(userId, currentTime);
+            
+            // Get updated tracking info
+            return await this.getSyncTracking(userId);
+        } catch (err) {
+            logger.error(`Error incrementing sync count for user ${userId}: ${err.message}`);
+            return { sync_count: 1, total_syncs: 1, last_deep_scan_date: null };
+        }
+    }
+
+    /**
+     * Get sync tracking info for a user
+     * @param {string} userId - User ID
+     * @returns {Object} Sync tracking info
+     */
+    async getSyncTracking(userId) {
+        await this.init();
+        
+        try {
+            const stmt = this.db.prepare(`
+                SELECT * FROM sync_tracking WHERE user_id = ?
+            `);
+            
+            const result = stmt.get(userId);
+            
+            if (result) {
+                return {
+                    sync_count: result.sync_count,
+                    total_syncs: result.total_syncs,
+                    last_deep_scan_date: result.last_deep_scan_date,
+                    created_at: result.created_at,
+                    updated_at: result.updated_at
+                };
+            } else {
+                return {
+                    sync_count: 0,
+                    total_syncs: 0,
+                    last_deep_scan_date: null,
+                    created_at: null,
+                    updated_at: null
+                };
+            }
+        } catch (err) {
+            logger.error(`Error getting sync tracking for user ${userId}: ${err.message}`);
+            return { sync_count: 0, total_syncs: 0, last_deep_scan_date: null };
+        }
+    }
+
+    /**
+     * Record that a deep scan was performed
+     * @param {string} userId - User ID
+     */
+    async recordDeepScan(userId) {
+        await this.init();
+        
+        try {
+            const currentTime = new Date().toISOString();
+            
+            const updateStmt = this.db.prepare(`
+                UPDATE sync_tracking 
+                SET last_deep_scan_date = ?, sync_count = 0, updated_at = ?
+                WHERE user_id = ?
+            `);
+            
+            const result = updateStmt.run(currentTime, currentTime, userId);
+            
+            if (result.changes === 0) {
+                // No existing record, create one
+                const insertStmt = this.db.prepare(`
+                    INSERT INTO sync_tracking (user_id, sync_count, total_syncs, last_deep_scan_date, updated_at)
+                    VALUES (?, 0, 1, ?, ?)
+                `);
+                insertStmt.run(userId, currentTime, currentTime);
+            }
+            
+            logger.debug(`Recorded deep scan for user ${userId}`);
+        } catch (err) {
+            logger.error(`Error recording deep scan for user ${userId}: ${err.message}`);
+        }
+    }
+
+    /**
+     * Check if a deep scan is needed based on sync count
+     * @param {string} userId - User ID
+     * @param {number} deepScanInterval - Number of syncs between deep scans (default: 10)
+     * @returns {boolean} Whether deep scan is needed
+     */
+    async shouldPerformDeepScan(userId, deepScanInterval = 10) {
+        const tracking = await this.getSyncTracking(userId);
+        
+        // Deep scan needed if:
+        // 1. Never done a deep scan (cache is empty)
+        // 2. Sync count reaches the interval
+        const neverDeepScanned = !tracking.last_deep_scan_date;
+        const intervalReached = tracking.sync_count >= deepScanInterval;
+        
+        logger.debug(`Deep scan check for user ${userId}`, {
+            sync_count: tracking.sync_count,
+            deep_scan_interval: deepScanInterval,
+            never_deep_scanned: neverDeepScanned,
+            interval_reached: intervalReached,
+            should_deep_scan: neverDeepScanned || intervalReached
+        });
+        
+        return neverDeepScanned || intervalReached;
+    }
+
+    /**
+     * Store library statistics from deep scan for use during fast syncs
+     * @param {string} userId - User ID
+     * @param {Object} stats - Library statistics object
+     */
+    async storeLibraryStats(userId, stats) {
+        await this.init();
+        
+        try {
+            const currentTime = new Date().toISOString();
+            
+            const upsertStmt = this.db.prepare(`
+                INSERT INTO library_stats (user_id, total_books, books_with_progress, in_progress_books, 
+                                         completed_books, never_started_books, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) 
+                DO UPDATE SET 
+                    total_books = excluded.total_books,
+                    books_with_progress = excluded.books_with_progress,
+                    in_progress_books = excluded.in_progress_books,
+                    completed_books = excluded.completed_books,
+                    never_started_books = excluded.never_started_books,
+                    last_updated = excluded.last_updated
+            `);
+            
+            upsertStmt.run(
+                userId, 
+                stats.totalBooksInLibrary || 0,
+                stats.totalWithProgress || 0,
+                stats.inProgressBooks || 0,
+                stats.allCompletedBooks || 0,
+                stats.booksNeverStarted || 0,
+                currentTime
+            );
+            
+            logger.debug(`Stored library stats for user ${userId}`, stats);
+        } catch (err) {
+            logger.error(`Error storing library stats for user ${userId}: ${err.message}`);
+        }
+    }
+
+    /**
+     * Get cached library statistics
+     * @param {string} userId - User ID
+     * @returns {Object} Library statistics or null if not found
+     */
+    async getLibraryStats(userId) {
+        await this.init();
+        
+        try {
+            const stmt = this.db.prepare(`
+                SELECT * FROM library_stats 
+                WHERE user_id = ?
+            `);
+            
+            const result = stmt.get(userId);
+            
+            if (result) {
+                return {
+                    totalBooksInLibrary: result.total_books,
+                    totalWithProgress: result.books_with_progress,
+                    inProgressBooks: result.in_progress_books,
+                    allCompletedBooks: result.completed_books,
+                    booksNeverStarted: result.never_started_books,
+                    lastUpdated: result.last_updated
+                };
+            }
+            
+            return null;
+        } catch (err) {
+            logger.error(`Error getting library stats for user ${userId}: ${err.message}`);
+            return null;
         }
     }
 

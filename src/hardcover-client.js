@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Agent } from 'https';
-import { RateLimiter, Semaphore } from './utils.js';
+import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
@@ -8,7 +8,7 @@ import logger from './logger.js';
 export class HardcoverClient {
     constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
         // Normalize token by stripping "Bearer" prefix if present
-        this.token = this.normalizeToken(token);
+        this.token = normalizeApiToken(token, 'Hardcover');
         this.baseUrl = 'https://api.hardcover.app/v1/graphql';
         this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         this.semaphore = new Semaphore(semaphoreConcurrency);
@@ -43,34 +43,7 @@ export class HardcoverClient {
         });
     }
 
-    /**
-     * Normalize token by stripping "Bearer" prefix if present
-     * This handles cases where users accidentally include "Bearer" in their token
-     */
-    normalizeToken(token) {
-        if (!token || typeof token !== 'string') {
-            return token;
-        }
 
-        const trimmedToken = token.trim();
-        
-        // Check if token starts with "Bearer " (case-insensitive)
-        if (trimmedToken.toLowerCase().startsWith('bearer ')) {
-            const originalToken = trimmedToken;
-            const normalizedToken = trimmedToken.substring(7); // Remove "Bearer "
-            
-            logger.warn('Hardcover token contained "Bearer" prefix - automatically removed', {
-                originalLength: originalToken.length,
-                normalizedLength: normalizedToken.length,
-                originalPrefix: originalToken.substring(0, 15) + '...',
-                normalizedPrefix: normalizedToken.substring(0, 15) + '...'
-            });
-            
-            return normalizedToken;
-        }
-        
-        return trimmedToken;
-    }
 
     async testConnection() {
         const query = `

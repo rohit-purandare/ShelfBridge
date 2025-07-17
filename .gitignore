@@ -70,6 +70,8 @@ docker-compose.dev.yml
 data/*
 !data/.gitkeep
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -88,6 +90,12 @@ schema-detail.out
 
 # Test files
 test/
+
+# Performance analysis reports (can be large)
+reports/
+
+# Performance analysis tools (development/debugging)
+tools/
 
 # Security and audit files
 npm-audit-report.json

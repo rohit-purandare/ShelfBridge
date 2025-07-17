@@ -2,23 +2,10 @@
  * Utility functions for the sync tool
  */
 import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { Agent } from 'https';
+import { Agent as HttpAgent } from 'http';
 import logger from './logger.js';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-// Get the current version from package.json
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageJsonPath = join(__dirname, '..', 'package.json');
-
-let currentVersion = 'unknown';
-try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-    currentVersion = packageJson.version;
-} catch (error) {
-    logger.warn('Could not read version from package.json', { error: error.message });
-}
+import { currentVersion } from './version.js';
 
 /**
  * Semaphore class for managing concurrent access to shared resources
@@ -82,8 +69,9 @@ export function normalizeAsin(asin) {
     // Remove spaces and convert to uppercase
     const normalized = asin.replace(/\s/g, '').toUpperCase();
     
-    // ASIN should be 10 characters
-    if (normalized.length === 10) {
+    // ASIN should be 10 characters and start with a letter (typically 'B')
+    // Real ASINs are not purely numeric
+    if (normalized.length === 10 && /^[A-Z]/.test(normalized) && !/^\d+$/.test(normalized)) {
         return normalized;
     }
     
@@ -327,6 +315,96 @@ export function formatDuration(seconds) {
  */
 export function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Normalize API token by stripping "Bearer" prefix if present
+ * This handles cases where users accidentally include "Bearer" in their token
+ * @param {string} token - The API token to normalize
+ * @param {string} serviceName - Name of the service for logging (default: "API")
+ * @returns {string} - The normalized token
+ */
+export function normalizeApiToken(token, serviceName = 'API') {
+    if (!token || typeof token !== 'string') {
+        return token;
+    }
+
+    const trimmedToken = token.trim();
+    
+    // Check if token starts with "Bearer " (case-insensitive)
+    if (trimmedToken.toLowerCase().startsWith('bearer ')) {
+        const originalToken = trimmedToken;
+        const normalizedToken = trimmedToken.substring(7).trim(); // Remove "Bearer " and trim remaining whitespace
+        
+        logger.warn(`${serviceName} token contained "Bearer" prefix - automatically removed`, {
+            originalLength: originalToken.length,
+            normalizedLength: normalizedToken.length,
+            originalPrefix: originalToken.substring(0, 15) + '...',
+            normalizedPrefix: normalizedToken.substring(0, 15) + '...'
+        });
+        
+        return normalizedToken;
+    }
+    
+    return trimmedToken;
+}
+
+/**
+ * Create an HTTP agent with keep-alive configuration
+ * @param {boolean} isHttps - Whether to create an HTTPS agent (default: true)
+ * @param {Object} options - Additional agent options
+ * @returns {Agent} - HTTP or HTTPS agent instance
+ */
+export function createHttpAgent(isHttps = true, options = {}) {
+    const AgentClass = isHttps ? Agent : HttpAgent;
+    
+    const defaultOptions = {
+        keepAlive: true,
+        maxSockets: options.maxSockets || (isHttps ? 5 : 10),
+        maxFreeSockets: options.maxFreeSockets || (isHttps ? 2 : 5),
+        timeout: 60000,
+        freeSocketTimeout: 30000,
+        ...options
+    };
+    
+    return new AgentClass(defaultOptions);
+}
+
+/**
+ * Test API connections for a user
+ * @param {Object} user - User configuration object
+ * @returns {Promise<Object>} - Connection test results
+ */
+export async function testApiConnections(user) {
+    const results = { abs: false, hardcover: false, errors: [] };
+    
+    try {
+        // Dynamic import to avoid circular dependencies
+        const { AudiobookshelfClient } = await import('./audiobookshelf-client.js');
+        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
+        results.abs = await absClient.testConnection();
+        
+        if (!results.abs) {
+            results.errors.push('Audiobookshelf connection failed');
+        }
+    } catch (error) {
+        results.errors.push(`Audiobookshelf: ${error.message}`);
+    }
+    
+    try {
+        // Dynamic import to avoid circular dependencies
+        const { HardcoverClient } = await import('./hardcover-client.js');
+        const hcClient = new HardcoverClient(user.hardcover_token, 1);
+        results.hardcover = await hcClient.testConnection();
+        
+        if (!results.hardcover) {
+            results.errors.push('Hardcover connection failed');
+        }
+    } catch (error) {
+        results.errors.push(`Hardcover: ${error.message}`);
+    }
+    
+    return results;
 }
 
 /**

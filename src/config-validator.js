@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { DateTime } from 'luxon';
+import { testApiConnections } from './utils.js';
 
 export class ConfigValidator {
     constructor() {
@@ -599,11 +600,14 @@ export class ConfigValidator {
      */
     validateTimezone(fieldName, timezone) {
         try {
-            // Test timezone by creating a DateTime object
-            DateTime.now().setZone(timezone);
+            // Test timezone by creating a DateTime object and checking if it's valid
+            const dt = DateTime.now().setZone(timezone);
+            if (!dt.isValid) {
+                return `'${fieldName}' must be a valid timezone (got: '${timezone}')`;
+            }
             return null;
-        } catch (_error) {
-            return `'${fieldName}' must be a valid timezone (got: '${timezone}')`;
+        } catch (error) {
+            return `'${fieldName}' must be a valid timezone (${error.message})`;
         }
     }
 
@@ -632,31 +636,21 @@ export class ConfigValidator {
                 continue; // Skip users with missing required fields (already validated)
             }
 
-            try {
-                // Test Audiobookshelf connection
-                const { AudiobookshelfClient } = await import('./audiobookshelf-client.js');
-                const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
-                const absConnected = await absClient.testConnection();
-                
-                if (!absConnected) {
-                    errors.push(`User ${index} (${user.id}): Audiobookshelf connection failed`);
-                }
-            } catch (error) {
-                errors.push(`User ${index} (${user.id}): Audiobookshelf connection error - ${error.message}`);
+            // Use shared utility for connection testing
+            const results = await testApiConnections(user);
+            
+            if (!results.abs) {
+                errors.push(`User ${index} (${user.id}): Audiobookshelf connection failed`);
             }
-
-            try {
-                // Test Hardcover connection
-                const { HardcoverClient } = await import('./hardcover-client.js');
-                const hcClient = new HardcoverClient(user.hardcover_token);
-                const hcConnected = await hcClient.testConnection();
-                
-                if (!hcConnected) {
-                    errors.push(`User ${index} (${user.id}): Hardcover connection failed`);
-                }
-            } catch (error) {
-                errors.push(`User ${index} (${user.id}): Hardcover connection error - ${error.message}`);
+            
+            if (!results.hardcover) {
+                errors.push(`User ${index} (${user.id}): Hardcover connection failed`);
             }
+            
+            // Add specific error messages
+            results.errors.forEach(error => {
+                errors.push(`User ${index} (${user.id}): ${error}`);
+            });
         }
 
         return errors;

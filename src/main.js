@@ -7,7 +7,7 @@ import { SyncManager } from './sync-manager.js';
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
-import { dumpFailedSyncBooks } from './utils.js';
+import { dumpFailedSyncBooks, testApiConnections } from './utils.js';
 import cron from 'node-cron';
 import logger from './logger.js';
 import inquirer from 'inquirer';
@@ -79,15 +79,35 @@ async function testAllConnections() {
         logger.info('Testing API connections...');
         
         const config = new Config();
-        const validator = new ConfigValidator();
         const users = config.getUsers();
         
-        const connectionErrors = await validator.testConnections(users);
+        const allErrors = [];
         
-        if (connectionErrors.length > 0) {
+        for (const [index, user] of users.entries()) {
+            if (!user.id || !user.abs_url || !user.abs_token || !user.hardcover_token) {
+                continue; // Skip users with missing required fields (already validated)
+            }
+
+            const results = await testApiConnections(user);
+            
+            if (!results.abs) {
+                allErrors.push(`User ${index} (${user.id}): Audiobookshelf connection failed`);
+            }
+            
+            if (!results.hardcover) {
+                allErrors.push(`User ${index} (${user.id}): Hardcover connection failed`);
+            }
+            
+            // Add specific error messages
+            results.errors.forEach(error => {
+                allErrors.push(`User ${index} (${user.id}): ${error}`);
+            });
+        }
+        
+        if (allErrors.length > 0) {
             logger.error('API connection tests failed');
             console.error('\n❌ API Connection Tests Failed:');
-            connectionErrors.forEach(error => {
+            allErrors.forEach(error => {
                 console.error(`   ✗ ${error}`);
             });
             console.error('\nPlease check your API tokens and server URLs.');
@@ -664,39 +684,169 @@ async function syncUser(user, globalConfig, verbose = false) {
         });
 
         // Display detailed console summary
-        console.log('='.repeat(50));
-        console.log('📚 SYNC SUMMARY');
-        console.log('='.repeat(50));
-        console.log(`⏱️  Duration: ${duration.toFixed(1)}s`);
-        console.log(`📖 Books processed: ${result.books_processed}`);
-        console.log(`✅ Books synced: ${result.books_synced}`);
-        console.log(`🎯 Books completed: ${result.books_completed}`);
-        console.log(`➕ Books auto-added: ${result.books_auto_added}`);
-        console.log(`⏭️  Books skipped: ${result.books_skipped}`);
-        console.log(`❌ Errors: ${result.errors.length}`);
-        console.log('='.repeat(50));
+        console.log('═'.repeat(50));
+        console.log('📚 SYNC COMPLETE', `(${duration.toFixed(1)}s)`);
+        console.log('═'.repeat(50));
+        
+        // Two-column layout
+        const leftColumn = [];
+        const rightColumn = [];
+        
+        // Left column - Library Status
+        leftColumn.push('📚 Library Status');
+        if (result.total_books_in_library !== undefined) {
+            leftColumn.push(`├─ ${result.total_books_in_library} total books`);
+            leftColumn.push(`├─ ${result.books_with_progress || 0} with progress`);
+            if (result.books_in_progress) {
+                leftColumn.push(`├─ ${result.books_in_progress} currently reading`);
+            }
+            // Show completed books if we have that data
+            if (result.all_completed_books && result.all_completed_books > 0) {
+                let completedText = `├─ ${result.all_completed_books} completed`;
+                
+                // Add source indicator for completed books
+                if (result.stats_source === 'cached') {
+                    completedText += ' (cached)';
+                } else if (result.stats_source === 'deep_scan') {
+                    completedText += ' (updated)';
+                } else if (result.stats_source === 'mixed') {
+                    completedText += ' (cached)';
+                }
+                
+                leftColumn.push(completedText);
+            }
+            // Calculate actual never started (exclude books with any progress)
+            const actualNeverStarted = result.total_books_in_library - (result.books_with_progress || 0);
+            if (actualNeverStarted > 0) {
+                leftColumn.push(`└─ ${actualNeverStarted} never started`);
+            } else {
+                leftColumn[leftColumn.length - 1] = leftColumn[leftColumn.length - 1].replace('├─', '└─');
+            }
+            
+            // Add cache status message for fast syncs
+            if (result.stats_source === 'cached') {
+                leftColumn.push('');
+                leftColumn.push('💾 Library stats from cache');
+                leftColumn.push('└─ Next deep scan will update');
+            } else if (result.stats_source === 'mixed') {
+                leftColumn.push('');
+                leftColumn.push('💾 Completed books from cache');
+                leftColumn.push('└─ Next deep scan will update');
+            } else if (result.stats_source === 'none') {
+                leftColumn.push('');
+                leftColumn.push('⚡ Limited library info');
+                leftColumn.push('└─ Deep scan needed for full stats');
+            }
+        } else {
+            leftColumn.push(`└─ ${result.books_processed} books processed`);
+        }
+        
+        // Right column - Hardcover Updates
+        rightColumn.push('🌐 Hardcover Updates');
+        const totalApiCalls = result.books_synced + result.books_completed + result.books_auto_added;
+        const skippedCalls = result.books_skipped;
+        
+        rightColumn.push(`├─ ${totalApiCalls} API calls made`);
+        rightColumn.push(`├─ ${totalApiCalls} successful`);
+        rightColumn.push(`├─ ${result.errors.length} failed`);
+        rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
+        
+        // Second row - Processing Results and Sync Status
+        leftColumn.push('');
+        leftColumn.push('📊 Processing Results');
+        if (result.books_synced > 0) leftColumn.push(`├─ ${result.books_synced} progress updated`);
+        if (result.books_completed > 0) leftColumn.push(`├─ ${result.books_completed} marked complete`);
+        if (result.books_auto_added > 0) leftColumn.push(`├─ ${result.books_auto_added} auto-added`);
+        if (result.books_skipped > 0) leftColumn.push(`├─ ${result.books_skipped} skipped (no change)`);
+        
+        // Ensure last item has └─
+        if (leftColumn.length > leftColumn.findIndex(line => line === '📊 Processing Results') + 1) {
+            leftColumn[leftColumn.length - 1] = leftColumn[leftColumn.length - 1].replace('├─', '└─');
+        } else {
+            leftColumn.push('└─ No changes made');
+        }
+        
+        rightColumn.push('');
+        rightColumn.push('✅ Sync Status');
+        if (result.errors.length === 0) {
+            rightColumn.push('├─ All updates successful');
+            rightColumn.push('├─ No errors occurred');
+        } else {
+            rightColumn.push(`├─ ${result.errors.length} error${result.errors.length === 1 ? '' : 's'} occurred`);
+        }
+        rightColumn.push('├─ Cache updated');
+        rightColumn.push('└─ Ready for next sync');
+        
+        // Print two columns side by side
+        const maxLeftWidth = Math.max(...leftColumn.map(line => line.length));
+        const padding = 2;
+        
+        for (let i = 0; i < Math.max(leftColumn.length, rightColumn.length); i++) {
+            const left = (leftColumn[i] || '').padEnd(maxLeftWidth + padding);
+            const right = rightColumn[i] || '';
+            console.log(left + right);
+        }
+        
+        console.log('═'.repeat(50));
+        console.log();
 
         // Show detailed book results if any books were processed and verbose flag is set
         if (verbose && result.book_details && result.book_details.length > 0) {
-            console.log('\n📋 DETAILED BOOK RESULTS');
-            console.log('='.repeat(50));
+            console.log('📖 DETAILED BOOK RESULTS');
+            console.log('═'.repeat(50));
+            console.log();
             
             result.book_details.forEach((book, index) => {
                 const statusIcon = {
-                    'synced': '✅',
-                    'completed': '🎯',
-                    'auto_added': '➕',
-                    'skipped': '⏭️',
-                    'error': '❌'
-                }[book.status] || '❓';
+                    'synced': '📘',
+                    'completed': '📕', 
+                    'auto_added': '📗',
+                    'skipped': '📙',
+                    'error': '📛'
+                }[book.status] || '📓';
                 
-                console.log(`\n${index + 1}. ${statusIcon} ${book.title}`);
-                console.log(`   Status: ${book.status.toUpperCase()}`);
+                // Book header with title and author
+                console.log(`${statusIcon} ${book.title}${book.author ? ` by ${book.author}` : ''}`);
                 
-                if (book.progress.before !== null) {
+                // Progress information
+                if (book.progress.before !== null && book.progress.after !== null) {
+                    const progressChange = book.progress.after - book.progress.before;
+                    if (progressChange !== 0) {
+                        const changeStr = progressChange > 0 ? `(+${progressChange.toFixed(1)}%)` : `(${progressChange.toFixed(1)}%)`;
+                        console.log(`   Progress: ${book.progress.before.toFixed(1)}% → ${book.progress.after.toFixed(1)}% ${changeStr}`);
+                    } else {
+                        console.log(`   Progress: ${book.progress.before.toFixed(1)}% (unchanged since last sync)`);
+                    }
+                } else if (book.progress.before !== null) {
                     console.log(`   Progress: ${book.progress.before.toFixed(1)}%`);
                 }
                 
+                // Cache status
+                if (book.cache_status) {
+                    const cacheIcon = book.cache_status.found ? '✅' : '❌';
+                    let cacheInfo = `Cache: ${cacheIcon}`;
+                    if (book.cache_status.found) {
+                        cacheInfo += ` Found`;
+                        if (book.cache_status.last_sync) {
+                            const daysSinceSync = Math.floor((Date.now() - new Date(book.cache_status.last_sync).getTime()) / (1000 * 60 * 60 * 24));
+                            if (daysSinceSync === 0) {
+                                cacheInfo += ` (synced today)`;
+                            } else if (daysSinceSync === 1) {
+                                cacheInfo += ` (synced yesterday)`;
+                            } else {
+                                cacheInfo += ` (last synced ${daysSinceSync} days ago)`;
+                            }
+                        }
+                        if (book.progress.changed) {
+                            cacheInfo += `, updated with new progress`;
+                        }
+                    } else {
+                        cacheInfo += ` Not found (new book)`;
+                    }
+                    console.log(`   ${cacheInfo}`);
+                }
+                
+                // Identifiers
                 if (book.identifiers && Object.keys(book.identifiers).length > 0) {
                     const identifierStr = Object.entries(book.identifiers)
                         .filter(([_k, v]) => v)
@@ -707,13 +857,67 @@ async function syncUser(user, globalConfig, verbose = false) {
                     }
                 }
                 
-                if (book.actions && book.actions.length > 0) {
-                    console.log(`   Actions:`);
-                    book.actions.forEach(action => {
-                        console.log(`     • ${action}`);
-                    });
+                // Hardcover edition info
+                if (book.hardcover_info) {
+                    const editionInfo = book.hardcover_info;
+                    let editionStr = `Hardcover: Edition ${editionInfo.edition_id}`;
+                    if (editionInfo.format) {
+                        editionStr += ` (${editionInfo.format}`;
+                        if (editionInfo.duration) {
+                            editionStr += `, ${editionInfo.duration}`;
+                        } else if (editionInfo.pages) {
+                            editionStr += `, ${editionInfo.pages} pages`;
+                        }
+                        editionStr += `)`;
+                    }
+                    console.log(`   ${editionStr}`);
                 }
                 
+                // Main action
+                const actionIcon = {
+                    'synced': '✅',
+                    'completed': '🎯',
+                    'auto_added': '➕',
+                    'skipped': '⏭️',
+                    'error': '❌'
+                }[book.status] || '❓';
+                
+                const actionText = {
+                    'synced': 'Sent to Hardcover successfully',
+                    'completed': 'Marked complete in Hardcover', 
+                    'auto_added': 'Added to Hardcover library',
+                    'skipped': 'Skipped - no Hardcover update needed',
+                    'error': 'Failed to update'
+                }[book.status] || 'Unknown action';
+                
+                console.log(`   Action: ${actionIcon} ${actionText}`);
+                
+                // API response info
+                if (book.api_response) {
+                    const response = book.api_response;
+                    if (response.success) {
+                        console.log(`   API Response: ${response.status_code} OK (${response.duration}s)`);
+                    } else {
+                        console.log(`   API Response: ${response.status_code} Error (${response.duration}s)`);
+                    }
+                }
+                
+                // Skip/error reasons
+                if (book.status === 'skipped' && book.reason) {
+                    console.log(`   Reason: ${book.reason}`);
+                }
+                
+                // Timing information
+                if (book.timestamps) {
+                    if (book.timestamps.last_listened_at) {
+                        console.log(`   Last Listened: ${new Date(book.timestamps.last_listened_at).toLocaleString()}`);
+                    }
+                    if (book.timestamps.completed_at) {
+                        console.log(`   Completion Date: ${new Date(book.timestamps.completed_at).toLocaleString()}`);
+                    }
+                }
+                
+                // Error details
                 if (book.errors && book.errors.length > 0) {
                     console.log(`   Errors:`);
                     book.errors.forEach(error => {
@@ -721,12 +925,31 @@ async function syncUser(user, globalConfig, verbose = false) {
                     });
                 }
                 
+                // Processing time for debugging
                 if (book.timing) {
                     console.log(`   Processing time: ${book.timing}ms`);
                 }
+                
+                // Add spacing between books
+                if (index < result.book_details.length - 1) {
+                    console.log();
+                }
             });
             
-            console.log('='.repeat(50));
+            // Performance summary
+            console.log();
+            console.log('📊 PERFORMANCE METRICS');
+            console.log('-'.repeat(25));
+            if (result.memory_usage) {
+                console.log(`🔄 Memory Usage: ${result.memory_usage.current} (${result.memory_usage.delta} during sync)`);
+            }
+            if (result.cache_stats) {
+                console.log(`📊 Cache Performance: ${result.cache_stats.hits} hits, ${result.cache_stats.misses} misses`);
+            }
+            if (result.network_stats) {
+                console.log(`🌐 Network: ${result.network_stats.requests} requests, avg ${result.network_stats.avg_response_time}s response time`);
+            }
+            console.log('═'.repeat(50));
         }
 
         // Show error summary if there were errors
@@ -752,8 +975,6 @@ async function syncUser(user, globalConfig, verbose = false) {
                 }
             }
         }
-
-        console.log('\n🏁 Sync completed successfully!');
         
     } catch (error) {
         logger.error('Sync failed for user', { 
@@ -777,74 +998,26 @@ async function testUser(user) {
         userLogger.info('Testing API connections');
     }
     
-    let absStatus = false;
-    let hcStatus = false;
+    // Use shared utility for connection testing
+    const results = await testApiConnections(user);
     
-    try {
-        if (isVerbose) {
-            userLogger.info('Testing Audiobookshelf connection');
-        }
-        const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, null, 100);
-        absStatus = await absClient.testConnection();
-        
-        if (absStatus) {
-            if (isVerbose) {
-                userLogger.info('Audiobookshelf connection successful');
-            }
-            console.log('Audiobookshelf: ✅ Connected');
-        } else {
-            if (isVerbose) {
-                userLogger.error('Audiobookshelf connection failed');
-            }
-            console.log('Audiobookshelf: ❌ Failed');
-        }
-    } catch (error) {
-        if (isVerbose) {
-            userLogger.error('Audiobookshelf connection failed', { 
-                error: error.message, 
-                stack: error.stack 
-            });
-        }
-        console.log('Audiobookshelf: ❌ Error - ' + error.message);
-        absStatus = false;
+    // Display results
+    console.log(`Audiobookshelf: ${results.abs ? '✅ Connected' : '❌ Failed'}`);
+    console.log(`Hardcover: ${results.hardcover ? '✅ Connected' : '❌ Failed'}`);
+    
+    // Show errors if any
+    if (results.errors.length > 0 && isVerbose) {
+        results.errors.forEach(error => {
+            userLogger.error(error);
+        });
     }
     
-    try {
-        if (isVerbose) {
-            userLogger.info('Testing Hardcover connection');
-        }
-        const hcClient = new HardcoverClient(user.hardcover_token);
-        hcStatus = await hcClient.testConnection();
-        
-        if (hcStatus) {
-            if (isVerbose) {
-                userLogger.info('Hardcover connection successful');
-            }
-            console.log('Hardcover: ✅ Connected');
-        } else {
-            if (isVerbose) {
-                userLogger.error('Hardcover connection failed');
-            }
-            console.log('Hardcover: ❌ Failed');
-        }
-    } catch (error) {
-        if (isVerbose) {
-            userLogger.error('Hardcover connection failed', { 
-                error: error.message, 
-                stack: error.stack 
-            });
-        }
-        console.log('Hardcover: ❌ Error - ' + error.message);
-        hcStatus = false;
-    }
-    
-    // Summary
-    const allSuccessful = absStatus && hcStatus;
+    const allSuccessful = results.abs && results.hardcover;
     
     if (isVerbose) {
         userLogger.info('Connection test completed', { 
-            audiobookshelf: absStatus, 
-            hardcover: hcStatus, 
+            audiobookshelf: results.abs, 
+            hardcover: results.hardcover, 
             allSuccessful 
         });
     }
@@ -886,64 +1059,59 @@ async function debugUser(user) {
         console.log('\n🔌 CONNECTION TESTING');
         console.log('-'.repeat(30));
         
-        let absClient, hcClient;
-        let absStatus = false, hcStatus = false;
+        // Use shared utility for basic connection testing
+        const connectionResults = await testApiConnections(user);
         
-        try {
-            console.log('Testing Audiobookshelf connection...');
-            absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, 500, 100);
-            absStatus = await absClient.testConnection();
-            console.log(`Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}`);
-            
-            if (absStatus) {
-                // Get additional ABS info
-                try {
-                    const userInfo = await absClient._getCurrentUser();
-                    console.log(`  - ABS User: ${userInfo.username || 'Unknown'}`);
-                    console.log(`  - ABS User ID: ${userInfo.id || 'Unknown'}`);
-                    console.log(`  - ABS Libraries: ${userInfo.librariesAccessible?.length || 'Unknown'}`);
-                } catch (error) {
-                    console.log(`  - Additional info unavailable: ${error.message}`);
-                }
-            }
-        } catch (error) {
-            console.log(`Audiobookshelf: ❌ Error - ${error.message}`);
+        console.log(`Audiobookshelf: ${connectionResults.abs ? '✅ Connected' : '❌ Failed'}`);
+        console.log(`Hardcover: ${connectionResults.hardcover ? '✅ Connected' : '❌ Failed'}`);
+        
+        // Show errors if any
+        if (connectionResults.errors.length > 0) {
+            connectionResults.errors.forEach(error => {
+                console.log(`  ❌ ${error}`);
+            });
         }
         
-        try {
-            console.log('Testing Hardcover connection...');
-            hcClient = new HardcoverClient(user.hardcover_token);
-            hcStatus = await hcClient.testConnection();
-            console.log(`Hardcover: ${hcStatus ? '✅ Connected' : '❌ Failed'}`);
-            
-            if (hcStatus) {
-                // Get additional HC info
-                try {
-                    const query = `
-                        query {
-                            me {
-                                id
-                                username
-                                user_books_aggregate {
-                                    aggregate {
-                                        count
-                                    }
+        let absClient, hcClient;
+        
+        // Get additional info for successful connections
+        if (connectionResults.abs) {
+            try {
+                absClient = new AudiobookshelfClient(user.abs_url, user.abs_token, 1, 500, 100);
+                const userInfo = await absClient._getCurrentUser();
+                console.log(`  - ABS User: ${userInfo.username || 'Unknown'}`);
+                console.log(`  - ABS User ID: ${userInfo.id || 'Unknown'}`);
+                console.log(`  - ABS Libraries: ${userInfo.librariesAccessible?.length || 'Unknown'}`);
+            } catch (error) {
+                console.log(`  - Additional ABS info unavailable: ${error.message}`);
+            }
+        }
+        
+        if (connectionResults.hardcover) {
+            try {
+                hcClient = new HardcoverClient(user.hardcover_token);
+                const query = `
+                    query {
+                        me {
+                            id
+                            username
+                            user_books_aggregate {
+                                aggregate {
+                                    count
                                 }
                             }
                         }
-                    `;
-                    const result = await hcClient._executeQuery(query);
-                    if (result && result.me) {
-                        console.log(`  - HC User: ${result.me.username || 'Unknown'}`);
-                        console.log(`  - HC User ID: ${result.me.id || 'Unknown'}`);
-                        console.log(`  - HC Library Size: ${result.me.user_books_aggregate?.aggregate?.count || 'Unknown'}`);
                     }
-                } catch (error) {
-                    console.log(`  - Additional info unavailable: ${error.message}`);
+                `;
+                const result = await hcClient._executeQuery(query);
+                if (result && result.me) {
+                    console.log(`  - HC User: ${result.me.username || 'Unknown'}`);
+                    console.log(`  - HC User ID: ${result.me.id || 'Unknown'}`);
+                    console.log(`  - HC Library Size: ${result.me.user_books_aggregate?.aggregate?.count || 'Unknown'}`);
                 }
+            } catch (error) {
+                console.log(`  - Additional HC info unavailable: ${error.message}`);
             }
-        } catch (error) {
-            console.log(`Hardcover: ❌ Error - ${error.message}`);
         }
         
         // 3. Cache Information
@@ -1077,8 +1245,7 @@ function showConfig(config) {
     // Show global config
     const globalConfig = config.getGlobal();
     logger.info('Global configuration loaded', { 
-        settings: Object.keys(globalConfig),
-        hasAllRequired: true 
+        settings: Object.keys(globalConfig) 
     });
     
     // Show users
@@ -1087,28 +1254,9 @@ function showConfig(config) {
         userCount: users.length 
     });
     
-    // Check for missing user fields
-    const missing = [];
-    for (const user of users) {
-        for (const key of ['id', 'abs_url', 'abs_token', 'hardcover_token']) {
-            if (!user[key]) {
-                missing.push(`User '${user.id || '[unknown]'}' missing: ${key}`);
-            }
-        }
-    }
-    
-    if (missing.length > 0) {
-        logger.warn('Configuration validation failed', { 
-            missingFields: missing,
-            userCount: users.length 
-        });
-        return false;
-    } else {
-        logger.info('Configuration validation passed', { 
-            userCount: users.length 
-        });
-        return true;
-    }
+    // Configuration validation is handled by ConfigValidator class
+    // This function now just displays configuration information
+    return true;
 }
 
 async function runScheduledSync(config) {

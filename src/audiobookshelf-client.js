@@ -1,19 +1,20 @@
 import axios from 'axios';
 import { Agent } from 'https';
 import { Agent as HttpAgent } from 'http';
-import { RateLimiter, Semaphore } from './utils.js';
+import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600) {
+    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600, rereadConfig = {}) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
-        this.token = this.normalizeToken(token);
+        this.token = normalizeApiToken(token, 'Audiobookshelf');
         this.semaphore = new Semaphore(semaphoreConcurrency);
         this.rateLimiter = new RateLimiter(rateLimitPerMinute);
         this.maxBooksToFetch = maxBooksToFetch;
         this.pageSize = pageSize;
+        this.rereadConfig = rereadConfig;
 
         // Create HTTP agents with keep-alive for connection reuse
         const isHttps = this.baseUrl.startsWith('https');
@@ -88,34 +89,7 @@ export class AudiobookshelfClient {
         }
     }
 
-    /**
-     * Normalize token by stripping "Bearer" prefix if present
-     * This handles cases where users accidentally include "Bearer" in their token
-     */
-    normalizeToken(token) {
-        if (!token || typeof token !== 'string') {
-            return token;
-        }
 
-        const trimmedToken = token.trim();
-        
-        // Check if token starts with "Bearer " (case-insensitive)
-        if (trimmedToken.toLowerCase().startsWith('bearer ')) {
-            const originalToken = trimmedToken;
-            const normalizedToken = trimmedToken.substring(7); // Remove "Bearer "
-            
-            logger.warn('Audiobookshelf token contained "Bearer" prefix - automatically removed', {
-                originalLength: originalToken.length,
-                normalizedLength: normalizedToken.length,
-                originalPrefix: originalToken.substring(0, 15) + '...',
-                normalizedPrefix: normalizedToken.substring(0, 15) + '...'
-            });
-            
-            return normalizedToken;
-        }
-        
-        return trimmedToken;
-    }
 
     async testConnection() {
         try {
@@ -130,8 +104,8 @@ export class AudiobookshelfClient {
         }
     }
 
-    async getReadingProgress() {
-        logger.debug('Fetching reading progress from Audiobookshelf');
+    async getReadingProgress(shouldDeepScan = false) {
+        logger.debug('Fetching reading progress from Audiobookshelf', { shouldDeepScan });
 
         try {
             // Get user info first
@@ -140,41 +114,42 @@ export class AudiobookshelfClient {
                 throw new Error('Could not get current user data, aborting sync.');
             }
 
+            // Get total library size for complete filtering stats
+            const allLibraries = await this.getLibraries();
+            let totalBooksInLibrary = 0;
+            for (const library of allLibraries) {
+                const response = await this._makeRequest('GET', `/api/libraries/${library.id}/items?limit=1&page=0`);
+                if (response && response.total !== undefined) {
+                    totalBooksInLibrary += response.total;
+                }
+            }
+            logger.debug('Total books in all libraries', { count: totalBooksInLibrary });
+
             // Get library items in progress (these have some progress)
             const progressItems = await this._getItemsInProgress();
             logger.debug('Found items in progress', { count: progressItems.length });
 
-            // Also get all library items to catch books with 0% progress or unknown status
-            const allLibraries = await this.getLibraries();
-            logger.debug('Found libraries', { count: allLibraries.length });
-            
-            const allBooks = [];
-
-            // Collect all books from all libraries
-            for (const library of allLibraries) {
-                logger.debug('Fetching books from library', { 
-                    libraryName: library.name, 
-                    libraryId: library.id 
-                });
-                const libraryBooks = await this.getLibraryItems(library.id, this.maxBooksToFetch);
-                logger.debug('Library books count', { 
-                    libraryName: library.name, 
-                    count: libraryBooks.length 
-                });
-                allBooks.push(...libraryBooks);
+            // Conditionally get completed books based on deep scan flag
+            let completedBooksList = [];
+            if (shouldDeepScan) {
+                // Deep scan: check library books for completion status
+                logger.debug('Performing deep scan for completed books');
+                completedBooksList = await this._getCompletedBooksFromLibraries(allLibraries);
+                logger.debug('Found additional books with completion status', { count: completedBooksList.length });
+            } else {
+                // Fast scan: skip deep library scanning
+                logger.debug('Skipping deep scan, using fast mode');
             }
 
-            logger.debug('Total books across all libraries', { count: allBooks.length });
+            // Combine progress items with completed books (avoiding duplicates)
+            const allBooksWithAnyProgress = this._combineProgressAndCompletedBooks(progressItems, completedBooksList);
+            logger.debug('Total books with any progress (in-progress + completed)', { count: allBooksWithAnyProgress.length });
 
-            // Create a set of IDs that are already in progress
-            const progressItemIds = new Set(progressItems.map(item => item.id));
-            logger.debug('Progress item IDs', { ids: Array.from(progressItemIds) });
-
-            // Combine progress items with other books that might need syncing
+            // Only process books that actually have reading progress
             const booksToSync = [];
 
-            // Fetch details for progress items in parallel
-            const progressPromises = progressItems.map(item => 
+            // Fetch details for ALL books with any progress (in-progress + completed) in parallel
+            const allProgressPromises = allBooksWithAnyProgress.map(item => 
                 this._getLibraryItemDetails(item.id).catch(error => {
                     // Only catch recoverable errors, let critical ones propagate
                     if (this._isRecoverableError(error)) {
@@ -193,46 +168,94 @@ export class AudiobookshelfClient {
                 })
             );
 
-            const progressResults = await Promise.all(progressPromises);
-            booksToSync.push(...progressResults.filter(Boolean));
-            logger.debug('Added progress items to sync list', { 
-                count: progressResults.filter(Boolean).length 
-            });
-
-            // Fetch details for other books (with 0% or unknown progress) in parallel
-            const otherBooks = allBooks.filter(book => !progressItemIds.has(book.id));
-            logger.debug('Found other books not in progress', { count: otherBooks.length });
+            const progressResults = await Promise.all(allProgressPromises);
             
-            const otherPromises = otherBooks.map(book => 
-                this._getLibraryItemDetails(book.id).catch(error => {
-                    // Only catch recoverable errors, let critical ones propagate
-                    if (this._isRecoverableError(error)) {
-                        logger.debug('Recoverable error fetching details for book', { 
-                            bookId: book.id, 
-                            error: error.message 
-                        });
-                        return null;
-                    } else {
-                        logger.error('Critical error fetching details for book', { 
-                            bookId: book.id, 
-                            error: error.message 
-                        });
-                        throw error; // Re-throw critical errors
-                    }
+            // Debug: Show all books found in progress
+            logger.debug('Books found in items-in-progress API:', {
+                books: progressResults.filter(Boolean).map(book => {
+                    const title = (book && book.media && book.media.metadata && book.media.metadata.title) || book.title || 'Unknown';
+                    const isFinished = book.is_finished === true || book.is_finished === 1;
+                    const progress = book.progress_percentage || 0;
+                    return { title, isFinished, progress: progress.toFixed(1) + '%' };
                 })
-            );
-
-            const otherResults = await Promise.all(otherPromises);
-            const otherBooksWithProgress = otherResults.filter(Boolean).map(book => {
-                if (!book.progress_percentage) {
-                    book.progress_percentage = 0.0;
-                }
-                return book;
             });
-            booksToSync.push(...otherBooksWithProgress);
-            logger.debug('Added other books to sync list', { count: otherBooksWithProgress.length });
 
-            logger.debug('Total books to check for sync', { count: booksToSync.length });
+            // Filter books based on completion status and re-reading detection
+            const booksNeedingSync = progressResults.filter(book => {
+                if (!book) return false;
+                
+                const title = (book.media && book.media.metadata && book.media.metadata.title) || book.title || 'Unknown';
+                const isFinished = book.is_finished === true || book.is_finished === 1;
+                const progress = book.progress_percentage || 0;
+                
+                if (isFinished) {
+                    // For completed books, check if this might be a re-reading scenario
+                    // Low progress on a completed book suggests re-reading
+                    const rereadThreshold = this.rereadConfig.reread_threshold || 30;
+                    
+                    if (progress <= rereadThreshold) {
+                        logger.debug(`Including completed book for re-reading: ${title} (${progress.toFixed(1)}% progress, threshold: ${rereadThreshold}%)`);
+                        return true;
+                    } else {
+                        logger.debug(`Skipping completed book with high progress: ${title} (${progress.toFixed(1)}% complete, threshold: ${rereadThreshold}%)`);
+                        return false;
+                    }
+                }
+                
+                logger.debug(`Including book for sync: ${title} (${progress.toFixed(1)}% progress)`);
+                return true;
+            });
+            
+            booksToSync.push(...booksNeedingSync);
+            // Count filtering statistics
+            const validBooks = progressResults.filter(Boolean);
+            const allCompletedBooks = validBooks.filter(book => {
+                const isFinished = book.is_finished === true || book.is_finished === 1;
+                return isFinished; // Count ALL completed books, regardless of progress
+            });
+            
+            const completedBooksFiltered = validBooks.filter(book => {
+                const isFinished = book.is_finished === true || book.is_finished === 1;
+                const progress = book.progress_percentage || 0;
+                const rereadThreshold = this.rereadConfig.reread_threshold || 30;
+                return isFinished && progress > rereadThreshold; // Only those actually filtered out
+            });
+            
+            logger.debug('Book filtering summary', { 
+                totalWithProgress: validBooks.length,
+                allCompletedBooks: allCompletedBooks.length,
+                completedBooksFiltered: completedBooksFiltered.length,
+                booksNeedingSync: booksNeedingSync.length,
+                filteringDetails: {
+                    rereadThreshold: this.rereadConfig.reread_threshold || 30
+                }
+            });
+            
+            // Calculate accurate book categorization
+            const inProgressBooks = validBooks.filter(book => {
+                const isFinished = book.is_finished === true || book.is_finished === 1;
+                return !isFinished; // Books that are currently being read
+            });
+            
+            const booksNeverStarted = totalBooksInLibrary - validBooks.length;
+            
+            // Store filtering stats for sync summary (attach to first book or create metadata)
+            const filteringStats = {
+                totalBooksInLibrary: totalBooksInLibrary,
+                totalWithProgress: validBooks.length, // All books with ANY progress (in-progress + completed)
+                inProgressBooks: inProgressBooks.length, // Currently reading
+                allCompletedBooks: allCompletedBooks.length, // All completed books
+                completedBooksFiltered: completedBooksFiltered.length, // Completed books filtered out
+                booksNeverStarted: booksNeverStarted, // Books with no progress at all
+                booksPassingFilter: booksNeedingSync.length
+            };
+            
+            if (booksNeedingSync.length > 0) {
+                booksNeedingSync[0]._filteringStats = filteringStats;
+            } else {
+                // Even if no books need syncing, return the stats
+                booksToSync.push({ _isMetadataOnly: true, _filteringStats: filteringStats });
+            }
 
             // Debug: print all book titles and their progress
             booksToSync.forEach(book => {
@@ -285,6 +308,85 @@ export class AudiobookshelfClient {
                 throw error;
             }
         }
+    }
+
+    async _getCompletedBooksFromLibraries(libraries) {
+        const completedBooks = [];
+        
+        try {
+            logger.debug(`Starting deep scan across ${libraries.length} libraries`);
+            
+            // Check each library for books and their progress status
+            for (const library of libraries) {
+                // Get a larger sample of books from each library to check for completed status
+                const sampleSize = Math.min(100, this.maxBooksToFetch || 100);
+                logger.debug(`Scanning library ${library.name} (ID: ${library.id}) with sample size ${sampleSize}`);
+                
+                const libraryItems = await this.getLibraryItems(library.id, sampleSize);
+                
+                if (libraryItems && libraryItems.length > 0) {
+                    logger.debug(`Checking ${libraryItems.length} books from library ${library.name} for completion status`);
+                    
+                    // Check each book's progress to see if it's completed
+                    let completedInLibrary = 0;
+                    for (const item of libraryItems) {
+                        try {
+                            const progress = await this._getUserProgress(item.id);
+                            logger.debug(`Progress for ${item.media?.metadata?.title || item.id}:`, {
+                                isFinished: progress?.isFinished,
+                                progress: progress?.progress,
+                                hasProgress: !!progress
+                            });
+                            
+                            if (progress && progress.isFinished) {
+                                // Found a completed book
+                                completedBooks.push({
+                                    id: item.id,
+                                    libraryId: library.id,
+                                    title: item.media?.metadata?.title || 'Unknown',
+                                    isCompleted: true
+                                });
+                                completedInLibrary++;
+                                logger.debug(`Found completed book: ${item.media?.metadata?.title || item.id}`);
+                            }
+                        } catch (error) {
+                            // Skip books we can't get progress for
+                            logger.debug(`Could not get progress for book ${item.id}: ${error.message}`);
+                        }
+                    }
+                    
+                    logger.debug(`Found ${completedInLibrary} completed books in library ${library.name}`);
+                } else {
+                    logger.debug(`No items found in library ${library.name}`);
+                }
+            }
+            
+            logger.debug(`Deep scan complete: Found ${completedBooks.length} completed books across all libraries`);
+            return completedBooks;
+            
+        } catch (error) {
+            logger.error('Error finding completed books', { 
+                error: error.message 
+            });
+            return [];
+        }
+    }
+
+    _combineProgressAndCompletedBooks(progressItems, completedBooks) {
+        // Create a map of in-progress book IDs for deduplication
+        const progressBookIds = new Set(progressItems.map(item => item.id));
+        
+        // Add completed books that aren't already in progress items
+        const uniqueCompletedBooks = completedBooks.filter(book => !progressBookIds.has(book.id));
+        
+        logger.debug('Combining book lists', {
+            inProgressCount: progressItems.length,
+            completedCount: completedBooks.length,
+            uniqueCompletedCount: uniqueCompletedBooks.length
+        });
+        
+        // Return combined list
+        return [...progressItems, ...uniqueCompletedBooks];
     }
 
     async _getLibraryItemDetails(itemId) {
