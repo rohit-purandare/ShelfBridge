@@ -1153,7 +1153,7 @@ async function debugUser(user) {
         }
         
         // 4. Sample API Calls (if connections are working)
-        if (absStatus && hcStatus) {
+        if (connectionResults.abs && connectionResults.hardcover) {
             console.log('\n🔍 SAMPLE API CALLS');
             console.log('-'.repeat(30));
             
