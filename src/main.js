@@ -8,6 +8,7 @@ import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import { dumpFailedSyncBooks, testApiConnections } from './utils.js';
+import { currentVersion } from './version.js';
 import cron from 'node-cron';
 import logger from './logger.js';
 import inquirer from 'inquirer';
@@ -18,7 +19,7 @@ const program = new Command();
 program
     .name('ShelfBridge')
     .description('Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically')
-    .version('1.0.0');
+    .version(currentVersion);
 
 program.option('--dry-run', 'Run without making changes');
 program.option('--skip-validation', 'Skip configuration validation on startup');

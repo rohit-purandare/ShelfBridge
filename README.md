@@ -39,7 +39,7 @@ node src/main.js start
 
 ## 🔄 Recent Changes
 
-**v1.5.3**: Improved CLI interface with clean output and `--verbose` option. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
+**v1.12.4**: Current stable version with comprehensive CLI interface, multi-user support, and advanced configuration options. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
 
 ## 📋 Features
 
@@ -49,16 +49,6 @@ node src/main.js start
 - ✅ **Smart matching** - Match books using ISBN/ASIN identifiers
 - ✅ **Docker support** - Easy deployment with containers
 - ✅ **Comprehensive logging** - Detailed sync reports and error tracking
-
-## ⚡ Performance & Debugging
-
-ShelfBridge includes specialized tools for performance analysis and optimization:
-
-- **[Performance Timing Profiler](tools/)** - Analyze sync performance and identify bottlenecks
-- **HTTP Keep-Alive Optimization** - Improved connection reuse for faster API calls
-- **Performance Testing Tools** - Validate and measure optimization improvements
-
-For detailed usage, see the [Performance Tools Documentation](tools/README.md).
 
 ## 🤝 Contributing
 
