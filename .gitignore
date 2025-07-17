@@ -97,6 +97,9 @@ reports/
 # Performance analysis tools (development/debugging)
 tools/
 
+# Documentation audit tools and reports (temporary analysis files)
+documentation-audit/
+
 # Security and audit files
 npm-audit-report.json
 results.sarif

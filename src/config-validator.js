@@ -159,8 +159,8 @@ export class ConfigValidator {
                     type: 'number',
                     min: 1,
                     max: 10,
-                    default: 1,
-                    description: 'Max concurrent Audiobookshelf API requests (1-10, default: 1)'
+                    default: 5,
+                    description: 'Max concurrent Audiobookshelf API requests (1-10, default: 5)'
                 },
                 audiobookshelf_rate_limit: {
                     type: 'number',

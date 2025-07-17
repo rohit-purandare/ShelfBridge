@@ -76,7 +76,7 @@ global:
 
 **Situation**: You completed a book and are now re-reading it
 
-```yaml
+```
 # Example book state
 Book: "Foundation" by Isaac Asimov
 Previous: 100% completed on 2024-01-15
@@ -94,7 +94,7 @@ Current: 15% progress on 2024-03-01
 
 **Situation**: You have high progress but it dropped significantly
 
-```yaml
+```
 # Example book state
 Book: "Dune" by Frank Herbert
 Previous: 92% progress
@@ -113,7 +113,7 @@ Current: 35% progress
 
 **Situation**: Moderate progress drop that triggers warning
 
-```yaml
+```
 # Example book state
 Book: "The Martian" by Andy Weir
 Previous: 45% progress

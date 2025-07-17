@@ -183,13 +183,33 @@ users:
 Advanced cron expressions:
 
 ```yaml
+# Weekdays only
 global:
-  # Complex scheduling examples
-  sync_schedule: "0 3 * * 1-5"      # Weekdays only
-  sync_schedule: "0 */4 * * *"      # Every 4 hours
-  sync_schedule: "0 9,13,17,21 * * *"  # 4 times a day
-  sync_schedule: "0 3 1,15 * *"     # Twice a month
-  sync_schedule: "0 3 * * 0"        # Weekly on Sunday
+  sync_schedule: "0 3 * * 1-5"
+```
+
+```yaml
+# Every 4 hours
+global:
+  sync_schedule: "0 */4 * * *"
+```
+
+```yaml
+# 4 times a day (9 AM, 1 PM, 5 PM, 9 PM)
+global:
+  sync_schedule: "0 9,13,17,21 * * *"
+```
+
+```yaml
+# Twice a month (1st and 15th)
+global:
+  sync_schedule: "0 3 1,15 * *"
+```
+
+```yaml
+# Weekly on Sunday
+global:
+  sync_schedule: "0 3 * * 0"
 ```
 
 ## 🏷️ User-Specific Overrides

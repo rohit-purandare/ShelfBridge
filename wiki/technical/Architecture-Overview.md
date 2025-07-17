@@ -1,513 +1,293 @@
 # 🏗️ Architecture Overview
 
-This document explains how ShelfBridge works internally, its components, data flow, and technical decisions. It's intended for developers, contributors, and technically-minded users.
+## System Overview
 
-## 🎯 High-Level Architecture
-
-ShelfBridge is a Node.js application that acts as a bridge between two services:
+ShelfBridge is a Node.js application that synchronizes audiobook reading progress between Audiobookshelf (audiobook server) and Hardcover (social reading platform). The application follows a modular architecture with clear separation of concerns and robust error handling.
 
 ```mermaid
 graph TB
-    subgraph "Data Sources"
-        ABS[Audiobookshelf Server]
-        HC[Hardcover API]
+    subgraph "ShelfBridge Application"
+        CLI[CLI Interface<br/>main.js]
+        CONFIG[Configuration<br/>config.js + validator]
+        SYNC[Sync Manager<br/>sync-manager.js]
+        CACHE[Book Cache<br/>SQLite Database]
+        UTILS[Utilities<br/>Rate Limiting & Helpers]
+        LOG[Logging System<br/>winston]
     end
     
-    subgraph "ShelfBridge Core"
-        CLI[CLI Interface]
-        SM[Sync Manager]
-        BC[Book Cache]
-        CV[Config Validator]
-        RL[Rate Limiter]
+    subgraph "External APIs"
+        ABS[Audiobookshelf<br/>REST API]
+        HC[Hardcover<br/>GraphQL API]
     end
     
-    subgraph "API Clients"
-        ABSC[Audiobookshelf Client]
-        HCC[Hardcover Client]
+    subgraph "Data Storage"
+        DB[(SQLite Cache<br/>Books & Progress)]
+        LOGS[Log Files<br/>Rotated Daily]
     end
     
-    subgraph "Storage"
-        SQLite[(SQLite Cache)]
-        Config[YAML Config]
-        Logs[Log Files]
-    end
-    
-    CLI --> SM
-    SM --> ABSC
-    SM --> HCC
-    SM --> BC
-    BC --> SQLite
-    ABSC --> ABS
-    HCC --> RL
-    RL --> HC
-    CV --> Config
-    SM --> Logs
-    RL --> Logs
+    CLI --> CONFIG
+    CLI --> SYNC
+    SYNC --> ABS
+    SYNC --> HC
+    SYNC --> CACHE
+    CACHE --> DB
+    SYNC --> UTILS
+    SYNC --> LOG
+    LOG --> LOGS
+    CONFIG --> LOG
 ```
 
-## 📦 Core Components
+## Core Components
 
-### 1. Main CLI (`src/main.js`)
+### 1. **Entry Point (main.js)**
+- **Purpose**: CLI interface and application bootstrap
+- **Features**: 11 commands, interactive mode, process management
+- **Commands**:
+  - `sync` - Main synchronization functionality
+  - `test` - API connection testing
+  - `validate` - Configuration validation
+  - `config` - Show current configuration
+  - `cache` - Cache management operations
+  - `cron` - Scheduled background sync
+  - `interactive` - Menu-driven interface
+  - `debug` - Comprehensive debugging information
+  - `schema` - GraphQL schema exploration
+  - `start` - Default scheduled sync mode
 
-**Purpose**: Command-line interface and application entry point
+### 2. **Configuration System**
+#### config.js
+- **Purpose**: YAML configuration loading and management
+- **Features**: Default value application, explicit value tracking
+- **Structure**: Global settings + user-specific configurations
 
-**Responsibilities**:
-- Parse command-line arguments using Commander.js
-- Validate configuration on startup
-- Route commands to appropriate handlers
-- Manage application lifecycle
+#### config-validator.js
+- **Purpose**: Comprehensive configuration validation
+- **Features**: 
+  - Schema-based validation for 25+ configuration options
+  - Placeholder value detection
+  - API connection testing
+  - User-friendly error messages
+  - Configuration help generation
 
-**Key Features**:
-- Multiple command support (sync, debug, cache, validate)
-- Global options (--dry-run, --skip-validation)
-- Error handling and exit codes
-- Background service scheduling
+### 3. **API Client Layer**
+#### audiobookshelf-client.js
+- **Purpose**: REST API integration with Audiobookshelf
+- **Features**:
+  - HTTP connection pooling with keep-alive
+  - Rate limiting (default: 600 requests/minute)
+  - Progress fetching with deep/fast scan modes
+  - Pagination support
+  - Comprehensive error handling
 
-### 2. Sync Manager (`src/sync-manager.js`)
+#### hardcover-client.js
+- **Purpose**: GraphQL API integration with Hardcover
+- **Features**:
+  - GraphQL query/mutation execution
+  - Book searching by ISBN/ASIN
+  - Progress updates and completion marking
+  - Schema introspection capabilities
+  - Connection pooling and rate limiting (default: 55 requests/minute)
 
-**Purpose**: Core synchronization logic and orchestration
+### 4. **Data Persistence (book-cache.js)**
+- **Purpose**: SQLite-based caching system
+- **Features**:
+  - WAL mode for better concurrency
+  - Multi-table schema (books, sync tracking, library stats)
+  - Database migrations
+  - Performance optimizations with indexes
+  - Cache statistics and management
+  - JSON export functionality
 
-**Responsibilities**:
-- Coordinate data flow between Audiobookshelf and Hardcover
-- Implement book matching algorithm
-- Handle progress calculation and conversion
-- Manage re-reading detection and progress regression protection
-- Cache integration and optimization
-
-**Key Algorithms**:
-```javascript
-// High-level sync flow
-async syncProgress() {
-    1. Fetch books from Audiobookshelf
-    2. Fetch user library from Hardcover
-    3. Create identifier lookup table
-    4. For each Audiobookshelf book:
-        a. Extract identifiers (ASIN/ISBN)
-        b. Check cache for existing data
-        c. Calculate current progress
-        d. Find match in Hardcover library
-        e. Decide sync action (update/auto-add/skip)
-        f. Execute sync operation
-        g. Update cache
-    5. Return comprehensive results
-}
-```
-
-### 3. API Clients
-
-#### Audiobookshelf Client (`src/audiobookshelf-client.js`)
-
-**Purpose**: Interface with Audiobookshelf REST API
-
-**Features**:
-- JWT token authentication
-- Rate limiting (configurable, default: 600 requests/minute)
-- Parallel request processing
-- Automatic retry logic
-- Progress data extraction
-
-**Key Methods**:
-```javascript
-getReadingProgress()     // Fetch user's reading progress
-getLibraryItems()       // Fetch library items with pagination
-getUserInfo()           // Get user details
-testConnection()        // Verify API access
-```
-
-**Pagination Features**:
-- **Configurable page size**: Default 100 items per API call
-- **Automatic pagination**: Handles large libraries efficiently
-- **Memory optimization**: Prevents large single responses
-- **Rate limiting integration**: Respects API limits during pagination
-
-#### Hardcover Client (`src/hardcover-client.js`)
-
-**Purpose**: Interface with Hardcover GraphQL API
-
-**Features**:
-- GraphQL query execution
-- Mutation operations for progress updates
-- Pagination handling for large libraries
-- Schema introspection capabilities
-- **Rate limiting**: Configurable (default: 55 requests/minute) with intelligent queuing
-
-**Key Operations**:
-```javascript
-getUserBooks()          // Fetch user's library
-updateProgress()        // Update reading progress
-markCompleted()         // Mark book as finished
-addBookToLibrary()      // Auto-add new books
-```
-
-**Rate Limiting Architecture**:
-```javascript
-// Uses rate-limiter-flexible library
-// Rate limit is now configurable (default: 55 requests/minute)
-const rateLimiter = new RateLimiter(rateLimitPerMinute); 
-
-async _executeQuery(query, variables) {
-    await this.rateLimiter.waitIfNeeded('hardcover-api');  // Single identifier for all requests
-    return await this.graphqlRequest(query, variables);
-}
-```
-
-### 4. Book Cache (`src/book-cache.js`)
-
-**Purpose**: SQLite-based caching system for performance optimization
-
-**Database Schema**:
+#### Database Schema
 ```sql
-CREATE TABLE books (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    identifier TEXT NOT NULL,           -- ISBN or ASIN
-    identifier_type TEXT NOT NULL,      -- 'isbn' or 'asin'
-    title TEXT NOT NULL,
-    edition_id INTEGER,                 -- Hardcover edition ID
-    author TEXT,
-    last_progress REAL DEFAULT 0.0,     -- Previous progress %
-    progress_percent REAL DEFAULT 0.0,  -- Current progress %
-    last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_listened_at TIMESTAMP,
-    started_at TIMESTAMP,
-    finished_at TIMESTAMP,
-    UNIQUE(user_id, identifier, title)
+-- Books table - stores cached book information
+books (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  identifier TEXT NOT NULL,      -- ISBN or ASIN
+  identifier_type TEXT NOT NULL, -- 'isbn' or 'asin'
+  title TEXT NOT NULL,
+  edition_id INTEGER,
+  author TEXT,
+  progress_percent REAL,
+  last_sync TIMESTAMP,
+  updated_at TIMESTAMP,
+  last_listened_at TIMESTAMP,
+  started_at TIMESTAMP,
+  finished_at TIMESTAMP,
+  UNIQUE(user_id, identifier, title)
+);
+
+-- Sync tracking table - tracks sync frequency and deep scan timing
+sync_tracking (
+  user_id TEXT PRIMARY KEY,
+  sync_count INTEGER,
+  last_deep_scan_date TIMESTAMP,
+  total_syncs INTEGER,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+);
+
+-- Library stats table - caches library statistics
+library_stats (
+  user_id TEXT PRIMARY KEY,
+  total_books INTEGER,
+  books_with_progress INTEGER,
+  in_progress_books INTEGER,
+  completed_books INTEGER,
+  never_started_books INTEGER,
+  last_updated TIMESTAMP
 );
 ```
 
-**Cache Benefits**:
-- **Performance**: Only sync changed progress
-- **Persistence**: Survives application restarts
-- **Multi-user**: Isolated data per user
-- **Migration**: Automatic schema updates
+### 5. **Synchronization Engine (sync-manager.js)**
+- **Purpose**: Core business logic for progress synchronization
+- **Architecture**: Class-based with dependency injection
+- **Key Features**:
+  - Deep vs fast scan intelligence
+  - Progress regression protection
+  - Re-reading detection
+  - Auto-add functionality
+  - Parallel/sequential processing modes
+  - Comprehensive result tracking
 
-### 5. Rate Limiting System (`src/utils.js`)
-
-**Purpose**: Intelligent API rate limiting to prevent exceeding service limits
-
-**Implementation**:
-```javascript
-class RateLimiter {
-    constructor(maxRequestsPerMinute = 55) {
-        this.rateLimiter = new RateLimiterMemory({
-            points: maxRequestsPerMinute,
-            duration: 60,  // per 60 seconds
-        });
-    }
-    
-    async waitIfNeeded(identifier = 'default') {
-        // Queue request if rate limit would be exceeded
-        await this.rateLimiter.consume(identifier);
-    }
-}
-```
-
-**Features**:
-- **Intelligent queuing**: Requests are delayed, not dropped
-- **Per-service limits**: Different limits for different APIs
-- **Warning system**: Logs warnings at 80% capacity
-- **Multi-identifier support**: Separate limits for different request types
-
-**Rate Limits**:
-- **Hardcover API**: Configurable (default: 55, range: 10-60 requests/minute) - respects their published limits
-- **Audiobookshelf**: Configurable (default: 600, range: 60-1200 requests/minute) - optimized for local servers
-
-**Impact on Sync Performance**:
-- **Small libraries** (< 50 books): No noticeable impact
-- **Large libraries** (100+ books): May extend sync time to 2-5 minutes
-- **Automatic handling**: No user intervention required
-
-### 6. Configuration System (`src/config.js`, `src/config-validator.js`)
-
-**Purpose**: YAML-based configuration with comprehensive validation
-
-**Validation Features**:
-- Syntax validation (YAML structure)
-- Type checking (string, number, boolean)
-- Range validation (e.g., 0-100 for percentages)
-- Custom validators (URLs, cron schedules, timezones)
-- Placeholder detection
-- API connection testing
-
-## 🔄 Data Flow
-
-### Sync Process Flow
-
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant SM as Sync Manager
-    participant RL as Rate Limiter
-    participant ABS as Audiobookshelf
-    participant HC as Hardcover
-    participant Cache
-    
-    CLI->>SM: sync command
-    SM->>Cache: initialize connection
-    SM->>ABS: getReadingProgress()
-    ABS-->>SM: book list with progress
-    SM->>RL: waitIfNeeded()
-    RL-->>SM: proceed/wait
-    SM->>HC: getUserBooks()
-    HC-->>SM: user library
-    SM->>SM: create identifier lookup
-    
-    loop For each book
-        SM->>Cache: getCachedBookInfo()
-        Cache-->>SM: cached data
-        SM->>SM: calculate progress change
-        alt Book found in Hardcover
-            SM->>RL: waitIfNeeded()
-            RL-->>SM: proceed/wait
-            SM->>HC: updateProgress()
-            HC-->>SM: success/failure
-        else Book not found + auto_add_books
-            SM->>RL: waitIfNeeded()
-            RL-->>SM: proceed/wait
-            SM->>HC: addBookToLibrary()
-            HC-->>SM: success/failure
-        end
-        SM->>Cache: updateBookInfo()
-    end
-    
-    SM-->>CLI: sync results
-```
-
-### Book Matching Algorithm
-
+#### Sync Flow
 ```mermaid
 flowchart TD
-    Start([Book from Audiobookshelf]) --> ExtractID{Extract Identifiers}
-    ExtractID --> HasASIN{Has ASIN?}
-    HasASIN -->|Yes| LookupASIN[Lookup by ASIN]
-    HasASIN -->|No| HasISBN{Has ISBN?}
-    HasISBN -->|Yes| LookupISBN[Lookup by ISBN]
-    HasISBN -->|No| Skip[Skip - No Identifier]
-    
-    LookupASIN --> FoundASIN{Found Match?}
-    FoundASIN -->|Yes| SyncExisting[Sync Existing Book]
-    FoundASIN -->|No| CheckAutoAdd{auto_add_books?}
-    
-    LookupISBN --> FoundISBN{Found Match?}
-    FoundISBN -->|Yes| SyncExisting
-    FoundISBN -->|No| CheckAutoAdd
-    
-    CheckAutoAdd -->|Yes| AutoAdd[Auto-add Book]
-    CheckAutoAdd -->|No| CheckProgress{Has Progress?}
-    CheckProgress -->|Yes| AutoAdd
-    CheckProgress -->|No| Skip
-    
-    SyncExisting --> Cache[Update Cache]
-    AutoAdd --> Cache
-    Skip --> End([Complete])
-    Cache --> End
+    START[Start Sync] --> INIT[Initialize Clients]
+    INIT --> CHECK[Check Scan Type]
+    CHECK --> DEEP{Deep Scan?}
+    DEEP -->|Yes| FETCH_ALL[Fetch All Books]
+    DEEP -->|No| FETCH_CHANGED[Fetch Changed Books Only]
+    FETCH_ALL --> PROCESS[Process Books]
+    FETCH_CHANGED --> PROCESS
+    PROCESS --> MATCH[Match with Hardcover]
+    MATCH --> FOUND{Found in Hardcover?}
+    FOUND -->|Yes| SYNC_EXISTING[Sync Existing Book]
+    FOUND -->|No| AUTO_ADD{Auto-add Enabled?}
+    AUTO_ADD -->|Yes| ADD_BOOK[Add to Hardcover]
+    AUTO_ADD -->|No| SKIP[Skip Book]
+    SYNC_EXISTING --> CACHE[Update Cache]
+    ADD_BOOK --> CACHE
+    SKIP --> CACHE
+    CACHE --> MORE{More Books?}
+    MORE -->|Yes| PROCESS
+    MORE -->|No| COMPLETE[Complete Sync]
 ```
 
-## 🧠 Key Algorithms
+### 6. **Utility Layer (utils.js)**
+- **Purpose**: Shared functionality and helpers
+- **Components**:
+  - **Semaphore**: Concurrency control
+  - **RateLimiter**: API rate limiting using rate-limiter-flexible
+  - **ISBN/ASIN Normalization**: Book identifier standardization
+  - **Data Extraction**: Book metadata parsing
+  - **Connection Testing**: Shared API validation
 
-### Progress Regression Protection
+### 7. **Logging System (logger.js)**
+- **Purpose**: Structured logging with Winston
+- **Features**:
+  - Daily log rotation
+  - Multiple log levels (error, warn, info, debug)
+  - Structured JSON logging
+  - Context-aware logging (user, operation, book)
+  - Performance measurement helpers
+  - Separate error and exception handling
 
-**Purpose**: Prevent accidental overwrites when re-reading books
+## Data Flow
 
-**Algorithm**:
-```javascript
-determineProgressAction(currentProgress, cachedProgress, isCompleted) {
-    if (isCompleted && currentProgress < HIGH_PROGRESS_THRESHOLD) {
-        return 'NEW_SESSION'; // Re-reading completed book
-    }
-    
-    if (cachedProgress >= HIGH_PROGRESS_THRESHOLD) {
-        const drop = cachedProgress - currentProgress;
-        if (drop > REGRESSION_BLOCK_THRESHOLD) {
-            return 'BLOCK'; // Block large drops
-        } else if (drop > REGRESSION_WARN_THRESHOLD) {
-            return 'WARN'; // Warn about moderate drops
-        }
-    }
-    
-    return 'UPDATE'; // Normal update
-}
+### 1. **Configuration Loading**
+```
+config.yaml → Config.js → ConfigValidator.js → Validated Configuration
 ```
 
-### Progress Calculation
-
-**Audiobooks** (time-based):
-```javascript
-calculateAudiobookProgress(progressSeconds, totalSeconds) {
-    return Math.min((progressSeconds / totalSeconds) * 100, 100);
-}
+### 2. **Sync Process**
+```
+User Command → SyncManager → AudiobookshelfClient → Book Data
+                ↓
+Book Data → Book Matching → HardcoverClient → Progress Update
+                ↓
+Progress Update → BookCache → SQLite Database
 ```
 
-**Books** (page-based):
-```javascript
-calculateBookProgress(currentPage, totalPages) {
-    return Math.min((currentPage / totalPages) * 100, 100);
-}
+### 3. **Caching Strategy**
+```
+First Sync: Deep Scan → Cache All Books → Store Library Stats
+Subsequent Syncs: Fast Scan → Check Cache → Update Changed Only
+Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 ```
 
-### Identifier Extraction
+## Performance Optimizations
 
-**Priority Order**:
-1. **ASIN** (Amazon Standard Identification Number) - preferred for audiobooks
-2. **ISBN-13** - modern book standard
-3. **ISBN-10** - legacy book standard
+### 1. **Connection Management**
+- HTTP keep-alive connections
+- Connection pooling for both APIs
+- Proper connection cleanup on exit
 
-**Extraction Logic**:
-```javascript
-extractIdentifiers(bookData) {
-    // Search multiple possible locations in book metadata
-    const searchPaths = [
-        'asin', 'media.asin', 'media.metadata.asin',
-        'isbn', 'isbn_13', 'isbn_10',
-        'media.isbn', 'media.metadata.isbn'
-    ];
-    
-    return {
-        asin: normalizeAsin(findInPaths(bookData, asinPaths)),
-        isbn: normalizeIsbn(findInPaths(bookData, isbnPaths))
-    };
-}
-```
+### 2. **Concurrency Control**
+- Semaphore-based request limiting
+- Configurable parallel processing
+- Rate limiting to respect API limits
 
-## 🔧 Technical Decisions
+### 3. **Caching Strategy**
+- SQLite WAL mode for concurrent access
+- Indexes on frequently queried columns
+- Intelligent deep vs fast scanning
+- Library statistics caching
 
-### Why SQLite for Caching?
+### 4. **Memory Management**
+- Streaming JSON parsing for large responses
+- Cleanup handlers for graceful shutdown
+- Resource cleanup in sync manager
 
-**Pros**:
-- **Zero-configuration**: No separate database server required
-- **ACID compliance**: Reliable data integrity
-- **Cross-platform**: Works on all supported platforms
-- **Lightweight**: Minimal resource usage
-- **SQL interface**: Easy querying and debugging
+## Security Considerations
 
-**Cons**:
-- **Single-writer**: Not suitable for high-concurrency (not needed here)
-- **Size limits**: Not relevant for our use case
+### 1. **API Token Handling**
+- Tokens normalized to remove Bearer prefixes
+- No token logging in production
+- Secure token validation
 
-### Why GraphQL for Hardcover?
+### 2. **Error Handling**
+- Comprehensive error catching
+- Sensitive data filtering in logs
+- Graceful degradation on API failures
 
-**Hardcover provides a GraphQL API**, so this wasn't a choice but a requirement. Benefits:
-- **Precise data fetching**: Request only needed fields
-- **Type safety**: Schema-defined operations
-- **Introspection**: Self-documenting API
-- **Single endpoint**: Simpler URL management
+### 3. **Input Validation**
+- Schema-based configuration validation
+- URL and data sanitization
+- Placeholder value detection
 
-### Why REST for Audiobookshelf?
+## Extensibility Points
 
-**Audiobookshelf provides a REST API**. Characteristics:
-- **Simple authentication**: JWT token in header
-- **Predictable URLs**: Standard REST patterns
-- **JSON responses**: Easy to parse
-- **Rate limiting**: Configurable (default: 600 requests/minute)
+### 1. **Configuration System**
+- New validation rules in ConfigValidator
+- Additional configuration sections
+- Custom validation functions
 
-### Parallel Processing Design
+### 2. **API Clients**
+- Plugin architecture potential
+- Additional API integrations
+- Custom matching algorithms
 
-**Implementation**:
-```javascript
-// Process books in batches with worker limit
-async function processBooks(books, workers = 3) {
-    const queue = [...books];
-    const results = [];
-    const workers = Array(workerCount).fill().map(() => 
-        processWorker(queue, results)
-    );
-    
-    await Promise.all(workers);
-    return results;
-}
-```
+### 3. **Sync Logic**
+- Custom sync strategies
+- Additional book metadata sources
+- Progress calculation customization
 
-**Benefits**:
-- **Performance**: Faster sync times
-- **Rate limiting**: Respects API limits
-- **Resource control**: Configurable worker count
+## Dependencies
 
-## 📊 Performance Characteristics
+### Core Dependencies
+- **axios**: HTTP client for API calls
+- **better-sqlite3**: SQLite database driver
+- **winston**: Logging framework
+- **js-yaml**: YAML configuration parsing
+- **commander**: CLI framework
+- **luxon**: Date/time handling
+- **inquirer**: Interactive prompts
 
-### Cache Performance
+### Performance Dependencies
+- **rate-limiter-flexible**: API rate limiting
+- **node-cron**: Scheduled execution
+- **cronstrue**: Human-readable cron expressions
 
-**First Sync** (no cache):
-- Duration: ~30-60 seconds for 100 books
-- API calls: ~200-300 requests
-- Database writes: 100 book records
-
-**Subsequent Syncs** (with cache):
-- Duration: ~5-10 seconds for 100 books
-- API calls: ~20-50 requests (only changed books)
-- Database updates: 5-10 records typically
-
-**Rate Limiting Impact**:
-- **Small libraries** (< 50 books): Minimal impact (~5-15 seconds)
-- **Large libraries** (100+ books): May extend to 2-5 minutes
-- **Initial syncs**: Higher impact due to more API calls
-- **Automatic handling**: No manual intervention required
-
-### Memory Usage
-
-**Typical Memory Footprint**:
-- **Base application**: ~30-50 MB
-- **Book metadata cache**: ~1-2 MB per 1000 books
-- **API response buffers**: ~5-10 MB during sync
-
-### Network Usage
-
-**API Calls per Sync**:
-- **Audiobookshelf**: 
-  - Library fetch: 1-10 requests (configurable pagination)
-  - Progress fetch: 1-2 requests
-  - Total: typically 5-20 requests
-- **Hardcover**: 
-  - Library fetch: 1-5 requests (paginated)
-  - Updates: 1 request per changed book
-  - Total: typically 10-50 requests
-
-**Rate Limiting Considerations**:
-- **Hardcover limit**: Configurable requests/minute (default: 55, max recommended: 60)
-- **Audiobookshelf limit**: Configurable requests/minute (default: 600, based on server capacity)
-- **Request queuing**: Automatic delay when approaching limits
-- **Burst handling**: Initial requests may queue more than steady-state
-- **Logging**: Warns at 80% capacity (e.g., 44+ for default 55/minute limit)
-
-## 🛡️ Error Handling Strategy
-
-### Graceful Degradation
-
-**API Failures**:
-- Continue with other books if one fails
-- Comprehensive error reporting
-- Cache preserves previous state
-
-**Network Issues**:
-- Automatic retry with exponential backoff
-- Timeout handling (30 seconds)
-- Connection pooling for efficiency
-
-**Data Integrity**:
-- Transaction-based cache updates
-- Validation before API calls
-- Rollback on critical failures
-
-## 🔗 Related Pages
-
-- **[Book Caching System](Book-Caching-System.md)** - Detailed cache implementation
-- **[Audiobookshelf API](Audiobookshelf-API.md)** - API integration details
-- **[Hardcover API](Hardcover-API.md)** - GraphQL integration
-- **[Sync Algorithm](../developer/Sync-Algorithm.md)** - Developer deep-dive
-
-## 🎯 Future Architecture Considerations
-
-### Scalability
-- **Database**: SQLite handles thousands of books efficiently
-- **Memory**: Streaming for very large libraries
-- **Network**: Batch operations for better performance
-
-### Extensibility
-- **Plugin system**: For additional book services
-- **Configuration**: Environment variable support
-- **Monitoring**: Health check endpoints
-- **API**: Potential REST API for external integration
-
----
-
-**For Developers**: See [Code Structure](../developer/Code-Structure.md) for implementation details and [Contributing Guide](../developer/Contributing.md) for development workflow. 
+This architecture provides a robust, scalable foundation for synchronizing reading progress between different platforms while maintaining data integrity and providing excellent user experience through comprehensive CLI tooling. 

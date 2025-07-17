@@ -1,635 +1,576 @@
-# 🖥️ Command Line Interface Reference
+# 🖥️ CLI Reference
 
-ShelfBridge provides a comprehensive command-line interface for all operations. This page documents every command, option, and flag available.
+ShelfBridge provides a comprehensive command-line interface with 11 commands for managing audiobook progress synchronization. This reference covers all commands, options, and usage patterns.
 
-## 📋 General Usage
+## Table of Contents
 
-```bash
-node src/main.js <command> [options]
-```
+- [Global Options](#global-options)
+- [Commands Overview](#commands-overview)
+- [Command Details](#command-details)
+- [Interactive Mode](#interactive-mode)
+- [Common Usage Patterns](#common-usage-patterns)
+- [Exit Codes](#exit-codes)
 
-### Global Options
+## Global Options
 
 These options can be used with any command:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--dry-run` | Run without making any changes | `false` |
+| `--dry-run` | Run without making changes to Hardcover | `false` |
 | `--skip-validation` | Skip configuration validation on startup | `false` |
 | `--verbose` | Show detailed logging output | `false` |
-| `--help` | Show help for a command | - |
 
-### Command Behavior
+## Commands Overview
 
-**Process Exit:**
-- All commands exit automatically after completion
-- Return control to the terminal/shell
-- Exit with code 0 on success, non-zero on error
+| Command | Purpose | Use Case |
+|---------|---------|----------|
+| `sync` | Synchronize reading progress | Main functionality |
+| `test` | Test API connections | Troubleshooting |
+| `validate` | Validate configuration | Setup verification |
+| `config` | Show current configuration | Configuration review |
+| `cache` | Manage local cache | Maintenance |
+| `cron` | Start scheduled sync | Background service |
+| `interactive` | Interactive menu mode | User-friendly interface |
+| `debug` | Show debug information | Troubleshooting |
+| `schema` | Check Hardcover GraphQL schema | API exploration |
+| `schema-detail` | Detailed schema for specific mutations | API development |
+| `schema-inputs` | Show all GraphQL input types | API development |
+| `start` | Default scheduled sync mode | Primary service mode |
 
-**Resource Cleanup:**
-- Database connections are properly closed
-- Temporary resources are cleaned up
-- Safe to run multiple times
+## Command Details
 
-**Interruption:**
-- Commands can be interrupted with Ctrl+C
-- Cleanup procedures attempt to run before exit
-- **Risk of data inconsistency**: Interruption during API calls or cache updates may cause the local cache to become out of sync with Hardcover
+### `sync` - Main Synchronization
 
-## 🔄 Sync Commands
-
-### `sync` - Synchronize Reading Progress
-
-The main command to sync your reading progress from Audiobookshelf to Hardcover.
+Synchronizes reading progress from Audiobookshelf to Hardcover.
 
 ```bash
-node src/main.js sync [options]
+shelfbridge sync [options]
 ```
 
-#### Options
+**Options:**
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--all-users` | Sync all configured users | `sync --all-users` |
+| `-u, --user <userId>` | Sync specific user only | `sync --user alice` |
+| `--force` | Force sync even if progress unchanged | `sync --force` |
 
-| Option | Short | Description | Example |
-|--------|-------|-------------|---------|
-| `--all-users` | - | Sync all configured users | `--all-users` |
-| `--user <userId>` | `-u` | Sync specific user only | `-u alice` |
-| `--force` | - | Force sync even if progress unchanged | `--force` |
-| `--dry-run` | - | Show what would be synced without changes | `--dry-run` |
-
-#### Examples
-
+**Examples:**
 ```bash
 # Sync all users
-node src/main.js sync
+shelfbridge sync
 
 # Sync specific user
-node src/main.js sync --user alice
+shelfbridge sync --user alice
 
-# See what would be synced without making changes
-node src/main.js sync --dry-run
+# Force sync with detailed output
+shelfbridge sync --force --verbose
 
-# Force sync all books (ignore cache)
-node src/main.js sync --force
-
-# Combine options
-node src/main.js sync --user bob --dry-run
+# Dry run to see what would happen
+shelfbridge sync --dry-run
 ```
 
-#### Output
-
+**Output Format:**
 ```
-==================================================
-📚 SYNC SUMMARY
-==================================================
-⏱️  Duration: 2.3s
-📖 Books processed: 15
-✅ Books synced: 3
-🎯 Books completed: 1
-➕ Books auto-added: 0
-⏭️  Books skipped: 11
-❌ Errors: 0
-==================================================
+🔄 Starting sync for alice
+⚡ Performing fast sync
+Processing 150 books from Audiobookshelf...
+
+═══════════════════════════════════════════════════════
+📚 SYNC COMPLETE (12.3s)
+═══════════════════════════════════════════════════════
+📚 Library Status                    🌐 Hardcover Updates
+├─ 847 total books                   ├─ 23 API calls made
+├─ 234 with progress                 ├─ 23 successful
+├─ 18 currently reading              ├─ 0 failed
+└─ 150 never started                 └─ 127 skipped (no changes)
+
+📊 Processing Results                ✅ Sync Status
+├─ 15 progress updated               ├─ All updates successful
+├─ 3 marked complete                 ├─ No errors occurred
+├─ 2 auto-added                      ├─ Cache updated
+└─ 130 skipped (no change)           └─ Ready for next sync
+═══════════════════════════════════════════════════════
 ```
 
-### `test` - Test API Connections
+### `test` - API Connection Testing
 
-Test API connections for all configured users or a specific user. Useful for verifying that your Audiobookshelf and Hardcover tokens are valid and that the services are reachable.
+Tests connectivity to both Audiobookshelf and Hardcover APIs.
 
 ```bash
-node src/main.js test [options]
+shelfbridge test [options]
 ```
 
-#### Options
+**Options:**
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-u, --user <userId>` | Test specific user only | `test --user alice` |
 
-| Option                | Short | Description                | Example         |
-|-----------------------|-------|----------------------------|-----------------|
-| `--user <userId>`     | `-u`  | Test specific user only    | `-u alice`      |
-
-#### Examples
-
+**Examples:**
 ```bash
-# Test API connections for all users (clean output)
-node src/main.js test
-
-# Test API connections for a specific user (clean output)
-node src/main.js test --user alice
-
-# Test with detailed logging output
-node src/main.js test --verbose
+# Test all users
+shelfbridge test
 
 # Test specific user with verbose output
-node src/main.js test --user alice --verbose
+shelfbridge test --user alice --verbose
 ```
 
-#### Output
-
+**Output Format:**
 ```
 === Testing connections for user: alice ===
-✅ Audiobookshelf connection successful
-✅ Hardcover connection successful
-=== Testing connections for user: bob ===
-✅ Audiobookshelf connection successful
-✅ Hardcover connection successful
+Audiobookshelf: ✅ Connected
+Hardcover: ✅ Connected
+✅ All connections successful!
 ```
 
-### `start` - Scheduled Sync Service (Default)
+### `validate` - Configuration Validation
 
-Start ShelfBridge in scheduled sync mode (default behavior).
+Validates the configuration file and optionally tests API connections.
 
 ```bash
-node src/main.js start
-node src/main.js  # Same as start (default command)
+shelfbridge validate [options]
 ```
 
-This command runs the scheduled sync service based on your `sync_schedule` configuration.
+**Options:**
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--connections` | Also test API connections | `validate --connections` |
+| `--help-config` | Show configuration help | `validate --help-config` |
 
-### `interactive` - Interactive Mode
-
-Start ShelfBridge in interactive mode for manual operations.
-
+**Examples:**
 ```bash
-node src/main.js interactive
-```
+# Basic configuration validation
+shelfbridge validate
 
-- Provides menu-driven interface
-- Manual sync operations
-- Configuration management
-- Cache management
-
-### `cron` - Scheduled Sync Service (Alias)
-
-Alias for the start command - runs the same scheduled sync service.
-
-```bash
-node src/main.js cron
-```
-
-- Runs an initial sync immediately
-- Schedules recurring syncs based on `sync_schedule` in config
-- Keeps running until interrupted (Ctrl+C)
-- Uses the configured `timezone` for scheduling
-
-## ⚙️ Configuration Commands
-
-### `validate` - Validate Configuration
-
-Check your configuration file for errors and test API connections.
-
-#### Configuration Options
-
-The following global configuration options are available:
-
-**Library Fetching Options:**
-- **`max_books_to_fetch`** (default: no limit): Maximum number of books to fetch from Audiobookshelf libraries
-- **`page_size`** (default: 100): Number of books to fetch per API call (configurable pagination)
-- **`max_books_to_process`** (optional): Maximum number of books to process during sync (for testing)
-
-**Performance Options:**
-- **`workers`** (default: 3): Number of parallel workers for API requests
-- **`parallel`** (default: true): Enable parallel processing
-- **`audiobookshelf_semaphore`** (default: 5): Max concurrent Audiobookshelf API requests
-- **`hardcover_semaphore`** (default: 1): Max concurrent Hardcover API requests
-
-**Sync Behavior Options:**
-- **`min_progress_threshold`** (default: 5.0): Minimum progress percentage required to sync
-- **`auto_add_books`** (default: false): Automatically add books to Hardcover
-- **`prevent_progress_regression`** (default: true): Protect against progress loss
-- **`sync_schedule`** (default: "0 3 * * *"): Cron schedule for automatic sync
-
-```bash
-node src/main.js validate [options]
-```
-
-#### Options
-
-| Option | Description |
-|--------|-------------|
-| `--connections` | Test API connections to all services |
-| `--help-config` | Show detailed configuration help |
-
-#### Examples
-
-```bash
-# Basic validation
-node src/main.js validate
-
-# Validate and test connections
-node src/main.js validate --connections
+# Validate config and test connections
+shelfbridge validate --connections
 
 # Show configuration help
-node src/main.js validate --help-config
+shelfbridge validate --help-config
+```
+
+**Output Format:**
+```
+✅ Configuration validation completed successfully
 ```
 
 ### `config` - Show Configuration
 
-Display your current configuration (with sensitive data masked).
+Displays the current configuration in a human-readable format.
 
 ```bash
-node src/main.js config
+shelfbridge config
 ```
 
-## 🗄️ Cache Management Commands
+**Output Format:**
+```
+=== Configuration Status ===
 
-### `cache` - Manage Cache
+Global Settings:
+  Min Progress Threshold: 5.0%
+  Workers: 3
+  Parallel Processing: ON
+  Timezone: America/New_York
+  Dry Run Mode: OFF
+  Force Sync: OFF
+  Auto-add Books: ON
+  Progress Regression Protection: ON
 
-Manage the SQLite cache that stores book information and sync state.
+Users (2):
+  alice:
+    Audiobookshelf: https://audiobooks.example.com
+    Hardcover: Connected
+  bob:
+    Audiobookshelf: https://abs.home.local:13378
+    Hardcover: Connected
+
+Configuration validation: ✅ Passed
+```
+
+### `cache` - Cache Management
+
+Manages the local SQLite cache used for performance optimization.
 
 ```bash
-node src/main.js cache [options]
+shelfbridge cache [options]
 ```
 
-#### Options
-
+**Options:**
 | Option | Description | Example |
 |--------|-------------|---------|
-| `--clear` | Clear all cached data | `--clear` |
-| `--stats` | Show cache statistics | `--stats` |
-| `--show` | Show detailed cache contents | `--show` |
-| `--export <filename>` | Export cache to JSON file | `--export backup.json` |
+| `--clear` | Clear all cached data | `cache --clear` |
+| `--stats` | Show cache statistics | `cache --stats` |
+| `--show` | Show detailed cache contents | `cache --show` |
+| `--export <filename>` | Export cache to JSON | `cache --export backup.json` |
 
-#### Examples
-
+**Examples:**
 ```bash
 # Show cache statistics
-node src/main.js cache --stats
+shelfbridge cache --stats
 
-# View all cached books
-node src/main.js cache --show
+# Export cache for backup
+shelfbridge cache --export backup-2024-01-15.json
 
-# Clear cache (forces full re-sync next time)
-node src/main.js cache --clear
-
-# Export cache to JSON file
-node src/main.js cache --export my-cache-backup.json
+# Clear cache (will trigger full resync)
+shelfbridge cache --clear
 ```
 
-#### Cache Statistics Output
-
+**Stats Output:**
 ```
 === Cache Statistics ===
-Total books: 127
-Users: alice, bob
-Recent books (last 7 days): 8
-Cache size: 2.1 MB
+Total books: 1,247
+Recent books (last 7 days): 23
+Cache size: 2.3 MB
 ```
 
-## 🐛 Debug Commands
+### `cron` - Scheduled Sync Service
 
-### `debug` - Comprehensive Debug Information
-
-Show detailed diagnostic information about your ShelfBridge setup for troubleshooting and validation.
+Starts the application in scheduled sync mode, running syncs according to the configured schedule.
 
 ```bash
-node src/main.js debug [options]
+shelfbridge cron
 ```
 
-#### Options
+**Features:**
+- Runs initial sync immediately
+- Schedules recurring syncs based on `sync_schedule` configuration
+- Displays next scheduled sync time
+- Runs in foreground (use process manager for background)
 
-| Option | Short | Description | Example |
-|--------|-------|-------------|---------|
-| `--user <userId>` | `-u` | Debug specific user only | `-u alice` |
+**Output Format:**
+```
+🔍 Performing deep scan (initial sync)
+✅ Sync complete for user: alice in 15.2s
 
-#### Examples
+🕒 Next scheduled sync: 2024-01-16 03:00:00 EST
+
+Scheduled sync started. Press Ctrl+C to stop.
+```
+
+### `interactive` - Interactive Mode
+
+Starts an interactive menu-driven interface for non-technical users.
 
 ```bash
-# Debug all users
-node src/main.js debug
-
-# Debug specific user
-node src/main.js debug --user alice
+shelfbridge interactive
 ```
 
-#### Debug Output Sections
+**Menu Options:**
+- Sync all users
+- Sync specific user
+- Test connections
+- Show configuration
+- Manage cache
+- Exit
 
-The debug command provides comprehensive information organized into these sections:
-
-##### 📋 User Configuration
-- Validates all required fields (ID, URLs, tokens)
-- Shows masked API tokens for security
-- Identifies missing configuration
-
-##### 🔌 Connection Testing
-- Tests both Audiobookshelf and Hardcover APIs
-- Shows server information and user details
-- Displays library statistics
-
-##### 💾 Cache Information
-- Cache statistics (total books, size, recent activity)
-- User-specific cached books
-- Recent sync activity
-
-##### 🔍 Sample API Calls
-- Fetches sample books from Audiobookshelf
-- Tests book matching between services
-- Validates identifier matching (ISBN/ASIN)
-
-##### 🖥️ System Information
-- Node.js version and platform details
-- Memory usage and process uptime
-- Runtime environment information
-
-##### ⚙️ Configuration Check
-- Global settings overview
-- Sync behavior configurations
-- Scheduling and automation settings
-
-#### Sample Debug Output
-
+**Example Session:**
 ```
-============================================================
+? Interactive mode - choose an option: (Use arrow keys)
+❯ Sync all users
+  Sync specific user
+  Test connections
+  Show configuration
+  Manage cache
+  Exit
+```
+
+### `debug` - Debug Information
+
+Shows comprehensive debug information for troubleshooting.
+
+```bash
+shelfbridge debug [options]
+```
+
+**Options:**
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-u, --user <userId>` | Debug specific user only | `debug --user alice` |
+
+**Information Shown:**
+- User configuration details
+- API connection status with additional details
+- Cache information and statistics
+- Sample API calls and responses
+- System information
+- Configuration validation status
+
+**Output Format:**
+```
+════════════════════════════════════════════════════════════
 🐛 DEBUG INFORMATION FOR USER
-============================================================
+════════════════════════════════════════════════════════════
 User ID: alice
 Timestamp: 2024-01-15T10:30:00.000Z
-============================================================
+════════════════════════════════════════════════════════════
 
 📋 USER CONFIGURATION
 ------------------------------
 User ID: alice
-Audiobookshelf URL: https://abs.example.com
+Audiobookshelf URL: https://audiobooks.example.com
 Audiobookshelf Token: abcd1234...
-Hardcover Token: wxyz5678...
+Hardcover Token: xyz9876...
 ✅ All required fields present
 
 🔌 CONNECTION TESTING
 ------------------------------
-Testing Audiobookshelf connection...
 Audiobookshelf: ✅ Connected
-  - ABS User: alice
-  - ABS User ID: abc123
-  - ABS Libraries: 2
-Testing Hardcover connection...
+  - ABS User: alice_reader
+  - ABS User ID: 550e8400-e29b-41d4-a716-446655440000
+  - ABS Libraries: 3
 Hardcover: ✅ Connected
-  - HC User: alice_reader
-  - HC User ID: 456789
-  - HC Library Size: 127
+  - HC User: alice_books
+  - HC User ID: 12345
+  - HC Library Size: 847
 
 💾 CACHE INFORMATION
 ------------------------------
-Total books in cache: 127
-Cache size: 2.1 MB
-Recent books (last 7 days): 8
-Books for user alice: 89
-
-Recent books for this user:
-  1. The Great Gatsby
-     Progress: 75%
-     Last sync: 2024-01-15T09:15:00.000Z
-     Identifier: ISBN=9780123456789
+Total books in cache: 847
+Cache size: 2.3 MB
+Recent books (last 7 days): 15
+Books for user alice: 847
 
 🔍 SAMPLE API CALLS
 ------------------------------
 Fetching sample books from Audiobookshelf...
-Found 15 books in ABS
-Sample book: "The Great Gatsby"
-  Author: F. Scott Fitzgerald
-  Progress: 75%
-  ASIN: B08ABCDEFG
-  ISBN: 9780123456789
+Found 847 books in ABS
+Sample book: "The Name of the Wind"
+  Author: Patrick Rothfuss
+  Progress: 67.5%
+  ASIN: B12345ABCD
+  ISBN: 9780756404079
+
 Testing book matching with Hardcover...
-  ✅ Found match: "The Great Gatsby"
-  HC Book ID: 12345
-  HC Edition ID: 67890
+  ✅ Found match: "The Name of the Wind"
+  HC Book ID: 98765
+  HC Edition ID: 43210
 
 🖥️ SYSTEM INFORMATION
 ------------------------------
-Node.js version: v18.17.0
-Platform: darwin
+Node.js version: v18.19.0
+Platform: linux
 Architecture: x64
 Memory usage: 45MB
-Process uptime: 127s
+Process uptime: 120s
 
 ⚙️ CONFIGURATION CHECK
 ------------------------------
 Dry run mode: OFF
-Min progress threshold: 5%
+Min progress threshold: 5.0%
 Auto-add books: ON
 Progress regression protection: ON
-Cron schedule: 0 3 * * *
-Cron timezone: UTC
-
-============================================================
+Cron schedule: 0 3 * * * (daily at 3:00 AM)
+════════════════════════════════════════════════════════════
 🐛 DEBUG COMPLETED
-============================================================
+════════════════════════════════════════════════════════════
 ```
 
-#### When to Use Debug
+### `schema` - GraphQL Schema Exploration
 
-- **Initial Setup**: Verify your configuration is correct
-- **Troubleshooting**: Diagnose sync issues or API problems
-- **Performance**: Check cache usage and system resources
-- **Support**: Gather information for bug reports or help requests
-
-## 🔍 Schema Commands
-
-These commands help developers inspect the Hardcover GraphQL API schema.
-
-### `schema` - Show Available Mutations
-
-Display available GraphQL mutations in the Hardcover API.
+Shows available mutations in the Hardcover GraphQL schema.
 
 ```bash
-node src/main.js schema
+shelfbridge schema
+```
+
+**Output Format:**
+```
+=== Checking schema for user: alice ===
+Available mutations:
+- update_user_book_read
+  Args: object, where
+- mark_book_completed
+  Args: object, where
+- add_book_to_library
+  Args: object
 ```
 
 ### `schema-detail` - Detailed Schema Information
 
-Get detailed information about specific mutations and their arguments.
+Shows detailed information about the `update_user_book_read` mutation.
 
 ```bash
-node src/main.js schema-detail
+shelfbridge schema-detail
 ```
 
-### `schema-inputs` - Show Input Types
+### `schema-inputs` - All GraphQL Input Types
 
-Display all GraphQL input types and their fields.
+Lists all GraphQL input types and their fields.
 
 ```bash
-node src/main.js schema-inputs
+shelfbridge schema-inputs
 ```
 
-## 📜 npm Scripts
+### `start` - Default Service Mode (Default Command)
 
-For convenience, several npm scripts are available as shortcuts:
-
-| Script | Command | Description |
-|--------|---------|-------------|
-| `npm start` | `node src/main.js` | Start background service |
-| `npm run sync` | `node src/main.js sync` | One-time sync |
-| `npm run dev` | `node --watch src/main.js` | Development mode with auto-restart |
-
-**Note**: All commands can be run directly with `node src/main.js <command>` for more control over options.
-
-## 🐳 Docker Commands
-
-When running in Docker, prefix commands with docker exec:
+Equivalent to `cron` command. This is the default behavior when no command is specified.
 
 ```bash
-# Docker Compose
-docker exec -it shelfbridge <command>
-
-# Manual Docker
-docker exec -it shelfbridge-container <command>
-```
-
-### Examples
-
-```bash
-# Sync in Docker
-docker exec -it shelfbridge node src/main.js sync
-
-# Debug in Docker
-docker exec -it shelfbridge node src/main.js debug
-
-# Clear cache in Docker
-docker exec -it shelfbridge node src/main.js cache --clear
-
-# View logs
-docker-compose logs -f shelfbridge
-```
-
-### 🚨 Docker Troubleshooting: Native Module Errors
-
-If you see errors like:
-```
-Error: Could not locate the bindings file. Tried:
- → .../better_sqlite3.node
-```
-or any other native module binding errors.
-
-**The container will automatically attempt to fix all native module issues on startup.** If the automatic fix fails:
-
-1. **Rebuild the Docker image:**
-   ```bash
-   docker-compose build --no-cache
-   ```
-
-2. **Or pull the latest image:**
-   ```bash
-   docker pull ghcr.io/rohit-purandare/shelfbridge:latest
-   ```
-
-3. **For manual Docker builds:**
-   ```bash
-   docker build --no-cache -t shelfbridge .
-   ```
-
-**Why this happens:**
-- Native modules are compiled for specific OS/architecture combinations
-- Moving between different machines or architectures can cause mismatches
-- The container automatically detects and rebuilds all native modules during startup if needed
-
-**What the container does automatically:**
-- Checks all native modules (.node files) for compatibility
-- Rebuilds any broken native modules for the current environment
-- Provides detailed feedback about which modules are working or broken
-- Falls back to helpful error messages if automatic fixes don't work
-
-**Prevention:**
-- Always use the official Docker image when possible
-- If building locally, ensure you build on the same architecture you'll run on
-- The container includes comprehensive native module detection and repair
-
-### Accessing the Interactive CLI Menu in Docker
-
-You can use the interactive menu from within your Docker container. There are two main ways:
-
-#### 1. One-liner (directly from your host):
-```bash
-docker exec -it shelfbridge node src/main.js
-```
-This will launch the interactive menu immediately in your terminal.
-
-#### 2. Open a shell in the container, then run the CLI:
-```bash
-# Enter the container shell
-# (use /bin/bash or /bin/sh depending on your image)
-docker exec -it shelfbridge /bin/bash
+shelfbridge
 # or
-docker exec -it shelfbridge /bin/sh
-
-# Then, inside the container, run:
-node src/main.js
-# or
-node src/main.js start
-```
-This is useful if you want to run multiple commands or explore the container environment.
-
-## 🔧 Configuration File Options
-
-Many CLI behaviors can be controlled through your `config.yaml` file:
-
-```yaml
-global:
-  # These affect CLI behavior
-  dry_run: false              # Default for --dry-run
-  workers: 3                  # Parallel processing workers
-  sync_schedule: "0 3 * * *"  # Cron schedule for background service
-  timezone: "UTC"             # Timezone for scheduling
+shelfbridge start
 ```
 
-## 🚨 Exit Codes
+## Interactive Mode
 
-ShelfBridge uses standard exit codes:
+Interactive mode provides a user-friendly menu interface:
 
-| Code | Meaning | Common Causes |
-|------|---------|---------------|
+### Main Menu
+```
+? Interactive mode - choose an option:
+❯ Sync all users
+  Sync specific user
+  Test connections
+  Show configuration
+  Manage cache
+  Exit
+```
+
+### Cache Management Submenu
+```
+? Cache management - choose an option:
+❯ Show cache stats
+  Show cache contents
+  Clear cache
+  Export cache to JSON
+  Back
+```
+
+## Common Usage Patterns
+
+### Initial Setup and Testing
+```bash
+# 1. Validate configuration
+shelfbridge validate --connections
+
+# 2. Test sync with dry run
+shelfbridge sync --dry-run --verbose
+
+# 3. Perform first real sync
+shelfbridge sync --verbose
+```
+
+### Regular Maintenance
+```bash
+# Check cache size
+shelfbridge cache --stats
+
+# Force a complete resync
+shelfbridge sync --force
+
+# Debug connection issues
+shelfbridge debug --user alice
+```
+
+### Scheduled Operation
+```bash
+# Start as service (foreground)
+shelfbridge cron
+
+# Or use the default command
+shelfbridge
+```
+
+### Troubleshooting
+```bash
+# Test connections
+shelfbridge test --verbose
+
+# Debug specific user
+shelfbridge debug --user alice
+
+# Validate configuration
+shelfbridge validate --help-config
+```
+
+## Exit Codes
+
+| Code | Meaning | When It Occurs |
+|------|---------|----------------|
 | `0` | Success | Command completed successfully |
-| `1` | General Error | Configuration errors, API failures, network issues |
+| `1` | Error | Configuration validation failed, API errors, sync failures |
 
-## 📊 Verbose Output
+## Environment Variables
 
-For more detailed output, ShelfBridge logs extensively. Check the logs directory or use Docker logs:
+While configuration is primarily done via YAML files, these environment variables can influence behavior:
 
-```bash
-# View application logs
-tail -f logs/app.log
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LOG_LEVEL` | Logging level (error, warn, info, debug) | `info` |
+| `NODE_ENV` | Node.js environment | `production` |
 
-# Docker logs
-docker-compose logs -f shelfbridge
+## Performance Considerations
+
+### Command Performance
+- **sync**: 5-60 seconds depending on library size and cache state
+- **test**: 2-5 seconds
+- **validate**: 1-3 seconds
+- **cache --stats**: < 1 second
+- **debug**: 5-15 seconds
+- **interactive**: Real-time (menu navigation)
+
+### Memory Usage
+- **Base CLI**: ~30-50 MB
+- **During sync**: +10-20 MB
+- **Large libraries**: May use up to 100 MB temporarily
+
+### Network Usage
+- **Initial sync**: 50-200 API calls
+- **Subsequent syncs**: 10-50 API calls
+- **Rate limiting**: Automatically handled
+
+## Tips and Best Practices
+
+### For New Users
+1. Start with `validate --connections` to verify setup
+2. Use `--dry-run` for your first sync
+3. Use `interactive` mode for easier navigation
+4. Check `debug` output if you encounter issues
+
+### For Regular Use
+1. Use scheduled mode (`cron` or `start`) for automated syncing
+2. Check `cache --stats` periodically
+3. Use `--force` occasionally to ensure full sync
+4. Monitor logs for any recurring issues
+
+### For Troubleshooting
+1. Enable `--verbose` for detailed output
+2. Use `debug` command for comprehensive information
+3. Check `test` command to isolate connection issues
+4. Export cache before clearing for backup
+
+## Integration with Process Managers
+
+### systemd Service
+```ini
+[Unit]
+Description=ShelfBridge Sync Service
+After=network.target
+
+[Service]
+Type=simple
+User=shelfbridge
+WorkingDirectory=/opt/shelfbridge
+ExecStart=/usr/bin/node src/main.js start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-## 🔗 Related Pages
-
-- **[Configuration Overview](../admin/Configuration-Overview.md)** - Understanding config options
-- **[Debug Commands](Debug-Commands.md)** - Detailed debugging guide
-- **[Cache Management](../admin/Cache-Management.md)** - Understanding the cache system
-- **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solving common issues
-
-## 💡 Tips and Tricks
-
-### Quick Testing
-```bash
-# Test configuration without syncing
-node src/main.js validate --connections
-
-# See what would sync without changes
-node src/main.js sync --dry-run
-
-# Debug a single user quickly
-node src/main.js debug -u username
+### Docker Compose
+```yaml
+version: '3.8'
+services:
+  shelfbridge:
+    image: shelfbridge:latest
+    command: ["node", "src/main.js", "start"]
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
 ```
 
-### Performance Monitoring
-```bash
-# Check cache stats before sync
-node src/main.js cache --stats
-
-# Monitor sync performance
-time node src/main.js sync
-
-# Force fresh sync for comparison
-node src/main.js cache --clear && node src/main.js sync
-```
-
-### Backup and Recovery
-```bash
-# Backup cache before major changes
-node src/main.js cache --export backup-$(date +%Y%m%d).json
-
-# Clear cache to start fresh
-node src/main.js cache --clear
-```
-
----
-
-**Need more help?** Check the [Debug Commands guide](Debug-Commands.md) or [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md). 
+This CLI reference covers all available functionality. For specific configuration options, see the [Configuration Reference](../admin/Configuration-Overview.md). 

@@ -100,10 +100,20 @@ global:
 
 **Common schedules:**
 ```yaml
-sync_schedule: "0 3 * * *"     # Daily at 3 AM
-sync_schedule: "0 */6 * * *"   # Every 6 hours
-sync_schedule: "0 9,21 * * *"  # 9 AM and 9 PM
-sync_schedule: "0 3 * * 0"     # Weekly on Sunday
+# Daily at 3 AM
+sync_schedule: "0 3 * * *"
+```
+```yaml 
+# Every 6 hours
+sync_schedule: "0 */6 * * *"
+```
+```yaml
+# 9 AM and 9 PM  
+sync_schedule: "0 9,21 * * *"
+```
+```yaml
+# Weekly on Sunday
+sync_schedule: "0 3 * * 0"
 ```
 
 ### 5. Timezone
@@ -129,7 +139,7 @@ global:
   workers: 3
   
   # Max concurrent Audiobookshelf requests (1-10, default: 5)
-audiobookshelf_semaphore: 5
+  audiobookshelf_semaphore: 5
   
   # Max concurrent Hardcover requests (1-10, default: 1)
   hardcover_semaphore: 1
