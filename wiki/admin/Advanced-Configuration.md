@@ -32,6 +32,47 @@ global:
 - `workers: 3` - Default (good balance)
 - `workers: 5-8` - Aggressive (faster but more resource intensive)
 
+### Deep Scan Configuration
+
+Control how often ShelfBridge performs comprehensive library scans:
+
+```yaml
+global:
+  # Number of syncs between deep scans (default: 10)
+  deep_scan_interval: 10
+  
+  # Force deep scan every time (testing/debugging)
+  # deep_scan_interval: 1
+  
+  # Less frequent deep scans (performance-focused)
+  # deep_scan_interval: 25
+```
+
+**Deep Scan Behavior:**
+- **Deep Scan**: Checks entire Audiobookshelf library for changes
+  - Finds newly added books
+  - Detects completed books
+  - Updates library statistics  
+  - Slower but comprehensive
+
+- **Fast Scan**: Only checks books currently in progress
+  - Much faster execution
+  - Minimal API calls
+  - May miss some changes
+
+**Tuning Guidelines:**
+- `deep_scan_interval: 1` - Always deep scan (slowest, most thorough)
+- `deep_scan_interval: 5` - Frequent deep scans (good for active libraries)
+- `deep_scan_interval: 10` - Default (balanced performance)
+- `deep_scan_interval: 20-50` - Infrequent deep scans (performance focused)
+- `deep_scan_interval: 100` - Rare deep scans (speed prioritized)
+
+**When to Use Different Settings:**
+- **Active readers**: Lower intervals (5-10) to catch changes quickly
+- **Casual readers**: Higher intervals (20-50) for better performance
+- **Large libraries**: Higher intervals to reduce processing time
+- **Testing/debugging**: Interval of 1 to always see full library state
+
 ### API Rate Limiting
 
 Control request frequency to avoid overwhelming APIs:
@@ -541,8 +582,7 @@ global:
   # Performance settings
   parallel: true
   workers: 3
-  max_concurrent_requests: 5
-  request_delay: 100
+  deep_scan_interval: 15  # Custom deep scan frequency
   
   # Advanced thresholds
   auto_add_threshold: 1.0
@@ -551,41 +591,23 @@ global:
   
   # Re-reading detection
   reread_detection:
-    enabled: true
     reread_threshold: 30.0
     high_progress_threshold: 85.0
     regression_block_threshold: 50.0
     regression_warn_threshold: 15.0
-    create_new_sessions: true
   
-  # Logging
-  log_level: "info"
-  log_api_calls: false
-  log_matching_decisions: true
-  max_log_size: 10
-  log_retention_count: 5
+  # Rate limiting
+  hardcover_semaphore: 1
+  hardcover_rate_limit: 55
+  audiobookshelf_semaphore: 5
+  audiobookshelf_rate_limit: 600
   
-  # Cache settings
-  cache:
-    enabled: true
-    expiration: 168
-    max_size: 100
-    cleanup_frequency: 24
-    auto_compact: true
+  # Library fetching
+  max_books_to_fetch: 2000
+  page_size: 150
   
-  # Error handling
-  error_handling:
-    max_retries: 3
-    backoff_multiplier: 2.0
-    base_delay: 1000
-    max_delay: 30000
-  
-  # Security
-  security:
-    verify_ssl: true
-    rate_limiting:
-      enabled: true
-      max_requests_per_minute: 60
+  # Debugging
+  dump_failed_books: true
 
 users:
   - id: alice
@@ -594,10 +616,6 @@ users:
     hardcover_token: alice_hardcover_token
     
   - id: bob
-    # Custom settings for Bob
-    min_progress_threshold: 10.0
-    auto_add_books: true
-    sync_schedule: "0 4 * * *"
     abs_url: https://abs.example.com
     abs_token: bob_token
     hardcover_token: bob_hardcover_token
@@ -635,4 +653,4 @@ node src/main.js sync --dry-run --verbose
 
 ---
 
-**Advanced configuration gives you complete control over ShelfBridge's behavior!** 🔧⚙️ 
+**Advanced configuration gives you complete control over ShelfBridge's behavior!** 🔧⚙️

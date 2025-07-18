@@ -63,7 +63,8 @@ ShelfBridge is a comprehensive audiobook progress synchronization solution with 
 ### Deep vs Fast Scanning
 - **Initial deep scan** processes entire library
 - **Fast scans** only check changed books (default)
-- **Periodic deep scans** every 10th sync to refresh data
+- **Periodic deep scans** every 10th sync to refresh data (configurable)
+- **Configurable scan frequency** via `deep_scan_interval` setting
 - **Force deep scan** option for troubleshooting
 - **Library statistics caching** for performance
 

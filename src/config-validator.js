@@ -93,88 +93,57 @@ export class ConfigValidator {
                     optional: true,
                     description: 'Automatically add books to Hardcover if not found'
                 },
+                prevent_progress_regression: {
+                    type: 'boolean',
+                    default: true,
+                    optional: true,
+                    description: 'Prevent accidentally overwriting completion status'
+                },
                 max_books_to_process: {
                     type: 'number',
                     min: 1,
                     max: 10000,
                     optional: true,
-                    description: 'Maximum number of books to process during sync (useful for testing)'
-                },
-                prevent_progress_regression: {
-                    type: 'boolean',
-                    default: true,
-                    optional: true,
-                    description: 'Prevent accidentally overwriting completion status or high progress'
-                },
-                reread_detection: {
-                    type: 'object',
-                    optional: true,
-                    description: 'Controls when new reading sessions are created vs updating existing ones',
-                    properties: {
-                        reread_threshold: {
-                            type: 'number',
-                            min: 0,
-                            max: 100,
-                            default: 30,
-                            description: 'Progress below this % is considered "starting over" (0-100)'
-                        },
-                        high_progress_threshold: {
-                            type: 'number',
-                            min: 0,
-                            max: 100,
-                            default: 85,
-                            description: 'Progress above this % is considered "high progress" (0-100)'
-                        },
-                        regression_block_threshold: {
-                            type: 'number',
-                            min: 0,
-                            max: 100,
-                            default: 50,
-                            description: 'Block progress drops larger than this % from high progress (0-100)'
-                        },
-                        regression_warn_threshold: {
-                            type: 'number',
-                            min: 0,
-                            max: 100,
-                            default: 15,
-                            description: 'Warn about progress drops larger than this % from high progress (0-100)'
-                        }
-                    }
+                    description: 'Maximum number of books to process during sync'
                 },
                 hardcover_semaphore: {
                     type: 'number',
                     min: 1,
                     max: 10,
                     default: 1,
-                    description: 'Max concurrent Hardcover API requests (1-10, default: 1)'
+                    optional: true,
+                    description: 'Maximum concurrent Hardcover API requests'
                 },
                 hardcover_rate_limit: {
                     type: 'number',
                     min: 10,
                     max: 60,
                     default: 55,
-                    description: 'Hardcover API rate limit in requests per minute (10-60, default: 55)'
+                    optional: true,
+                    description: 'Hardcover API rate limit (requests per minute)'
                 },
                 audiobookshelf_semaphore: {
                     type: 'number',
                     min: 1,
                     max: 10,
                     default: 5,
-                    description: 'Max concurrent Audiobookshelf API requests (1-10, default: 5)'
+                    optional: true,
+                    description: 'Maximum concurrent Audiobookshelf API requests'
                 },
                 audiobookshelf_rate_limit: {
                     type: 'number',
                     min: 60,
                     max: 1200,
                     default: 600,
-                    description: 'Audiobookshelf API rate limit in requests per minute (60-1200, default: 600)'
+                    optional: true,
+                    description: 'Audiobookshelf API rate limit (requests per minute)'
                 },
                 max_books_to_fetch: {
                     type: 'number',
                     min: 1,
                     max: 10000,
                     optional: true,
-                    description: 'Maximum number of books to fetch from Audiobookshelf (null for no limit)'
+                    description: 'Maximum number of books to fetch from Audiobookshelf'
                 },
                 page_size: {
                     type: 'number',
@@ -182,13 +151,60 @@ export class ConfigValidator {
                     max: 200,
                     default: 100,
                     optional: true,
-                    description: 'Number of books to fetch per API call (25-200)'
+                    description: 'Number of books to fetch per API call'
+                },
+                deep_scan_interval: {
+                    type: 'number',
+                    min: 1,
+                    max: 100,
+                    default: 10,
+                    optional: true,
+                    description: 'Number of syncs between deep scans (1-100)'
                 },
                 dump_failed_books: {
                     type: 'boolean',
                     default: true,
                     optional: true,
                     description: 'Dump failed sync books to text file for debugging'
+                },
+                reread_detection: {
+                    type: 'object',
+                    optional: true,
+                    description: 'Re-reading detection configuration',
+                    properties: {
+                        reread_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 30,
+                            optional: true,
+                            description: 'Progress below this % is considered starting over'
+                        },
+                        high_progress_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 85,
+                            optional: true,
+                            description: 'Progress above this % is considered high progress'
+                        },
+                        regression_block_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 50,
+                            optional: true,
+                            description: 'Block progress drops larger than this % from high progress'
+                        },
+                        regression_warn_threshold: {
+                            type: 'number',
+                            min: 0,
+                            max: 100,
+                            default: 15,
+                            optional: true,
+                            description: 'Warn about progress drops larger than this % from high progress'
+                        }
+                    }
                 }
             },
             users: {

@@ -45,6 +45,7 @@ export class Config {
             prevent_progress_regression: true,
             audiobookshelf_semaphore: 5,
             hardcover_semaphore: 1,
+            deep_scan_interval: 10,
             dump_failed_books: true
         };
 

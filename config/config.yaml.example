@@ -81,43 +81,38 @@ users:
 #   prevent_progress_regression: true
 #   
 #   # Re-reading detection thresholds (all optional with defaults)
-#   # Controls when new reading sessions are created vs updating existing ones
-#   reread_detection:
-#     # Progress below this % is considered "starting over" (default: 30)
-#     reread_threshold: 30
-#     # Progress above this % is considered "high progress" (default: 85) 
-#     high_progress_threshold: 85
-#     # Block progress drops larger than this % from high progress (default: 50)
-#     regression_block_threshold: 50
-#     # Warn about progress drops larger than this % from high progress (default: 15)
-#     regression_warn_threshold: 15
+#   # reread_detection:
+#   #   reread_threshold: 30              # Progress below 30% = "starting over"
+#   #   high_progress_threshold: 85       # Progress above 85% = "high progress" 
+#   #   regression_block_threshold: 50    # Block drops >50% from high progress
+#   #   regression_warn_threshold: 15     # Warn about drops >15% from high progress
 #   
 #   # =============================================================================
-#   # RATE LIMITING AND PERFORMANCE (Optional - use with caution)
+#   # RATE LIMITING AND PERFORMANCE (Optional - defaults work for most users)
 #   # =============================================================================
 #   
-#   # Max concurrent Audiobookshelf API requests (default: 1, increase with caution)
-#   audiobookshelf_semaphore: 5
-#   
-#   # Audiobookshelf API rate limit in requests per minute (default: 600, range: 60-1200)
-#   # Higher values = faster syncs (good for local/self-hosted servers)
-#   # Lower values = more conservative (good for slower servers or shared hosting)
-#   audiobookshelf_rate_limit: 600
-#   
-#   # Max concurrent Hardcover API requests (default: 1, increase with caution)
+#   # Maximum concurrent requests to Hardcover API (default: 1)
+#   # Keep this at 1 to respect Hardcover's rate limits
 #   hardcover_semaphore: 1
 #   
-#   # Hardcover API rate limit in requests per minute (default: 55, max: 60)
-#   # Lower values = slower syncs but more conservative API usage
-#   # Higher values = faster syncs but may hit API limits sooner
+#   # Hardcover API rate limit in requests per minute (default: 55)
+#   # Stay below 60 to avoid hitting their limits
 #   hardcover_rate_limit: 55
 #   
+#   # Maximum concurrent requests to Audiobookshelf API (default: 5)
+#   # Can be higher since Audiobookshelf is typically self-hosted
+#   audiobookshelf_semaphore: 5
+#   
+#   # Audiobookshelf API rate limit in requests per minute (default: 600)
+#   # Adjust based on your server capacity
+#   audiobookshelf_rate_limit: 600
+#   
 #   # =============================================================================
-#   # LIBRARY FETCHING SETTINGS (Optional - for large libraries)
+#   # LIBRARY FETCHING SETTINGS (Optional)
 #   # =============================================================================
 #   
 #   # Maximum number of books to fetch from Audiobookshelf (default: no limit)
-#   # Set to a number to limit books fetched, or null/undefined for no limit
+#   # Set a number to limit memory usage on resource-constrained devices
 #   # Reduce this if you experience memory issues or timeouts on resource-constrained devices
 #   # This setting helps prevent the application from hanging when fetching large libraries
 #   max_books_to_fetch: null
@@ -126,6 +121,14 @@ users:
 #   # Smaller values = more API calls but smaller responses (better for slow connections)
 #   # Larger values = fewer API calls but larger responses (better for fast connections)
 #   page_size: 100
+#   
+#   # Number of syncs between deep scans (default: 10)
+#   # Deep scans check the entire library, fast scans only check books in progress
+#   # Examples:
+#   #   deep_scan_interval: 5   - Deep scan every 5 syncs (more frequent)
+#   #   deep_scan_interval: 20  - Deep scan every 20 syncs (less frequent)
+#   #   deep_scan_interval: 1   - Deep scan every sync (always full scan)
+#   deep_scan_interval: 10
 #   
 #   # =============================================================================
 #   # DEBUGGING AND LOGGING (Optional)
@@ -169,10 +172,5 @@ users:
 # Testing/development setup:
 # global:
 #   dry_run: true
-#   force_sync: true
-#   min_progress_threshold: 0.0
-#   max_books_to_process: 5
-
-# Manual sync only (no automatic scheduling):
-# global:
-#   sync_schedule: null  # or remove this line entirely 
+#   max_books_to_process: 10
+#   deep_scan_interval: 1  # Always do deep scan for testing 

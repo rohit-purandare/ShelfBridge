@@ -267,6 +267,22 @@ global:
   page_size: 100  # Fetch 100 books per API call
 ```
 
+#### `deep_scan_interval`
+- **Type**: Number (1-100)
+- **Default**: `10`
+- **Description**: Number of syncs between deep scans
+- **Impact**: Deep scans check entire library, fast scans only check books in progress
+- **Performance**: Lower values = more thorough but slower, higher values = faster but may miss changes
+
+```yaml
+global:
+  deep_scan_interval: 10  # Deep scan every 10 syncs
+  # Other examples:
+  # deep_scan_interval: 5   # More frequent deep scans
+  # deep_scan_interval: 20  # Less frequent deep scans
+  # deep_scan_interval: 1   # Always do deep scan (slower)
+```
+
 ### Debugging and Logging
 
 #### `dump_failed_books`
@@ -583,6 +599,7 @@ While YAML is the primary configuration method, these environment variables can 
 | `audiobookshelf_rate_limit` | Number | 60-1200 | 600 | No |
 | `max_books_to_fetch` | Number | 1-10000 or null | null | No |
 | `page_size` | Number | 25-200 | 100 | No |
+| `deep_scan_interval` | Number | 1-100 | 10 | No |
 | `dump_failed_books` | Boolean | true/false | true | No |
 | `reread_detection.*` | Object | See individual fields | Built-in defaults | No |
 | `id` | String | Min length: 1, unique | - | Yes |

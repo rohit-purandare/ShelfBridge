@@ -1376,18 +1376,27 @@ async function runInteractiveMode() {
                 process.stdout.write('\n=== Configuration Status ===\n');
                 process.stdout.write(`\nGlobal Settings:\n`);
                 
-                // CORE SYNC SETTINGS (in order from config.yaml.example)
+                // =============================================================================
+                // CORE SYNC SETTINGS
+                // =============================================================================
+                process.stdout.write(`\n📊 Core Sync Settings:\n`);
                 process.stdout.write(`  Min Progress Threshold: ${globalConfig.min_progress_threshold}%${config.isExplicitlySet('min_progress_threshold') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Workers: ${globalConfig.workers}${config.isExplicitlySet('workers') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}${config.isExplicitlySet('parallel') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Timezone: ${globalConfig.timezone}${config.isExplicitlySet('timezone') ? '' : ' (default)'}\n`);
                 
+                // =============================================================================
                 // SAFETY AND TESTING SETTINGS
+                // =============================================================================
+                process.stdout.write(`\n🛡️  Safety and Testing Settings:\n`);
                 process.stdout.write(`  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}${config.isExplicitlySet('dry_run') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}${config.isExplicitlySet('force_sync') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Max Books to Process: ${globalConfig.max_books_to_process !== undefined ? globalConfig.max_books_to_process : 'no limit'}${config.isExplicitlySet('max_books_to_process') ? '' : ' (default)'}\n`);
                 
+                // =============================================================================
                 // AUTOMATION SETTINGS
+                // =============================================================================
+                process.stdout.write(`\n⏰ Automation Settings:\n`);
                 if (globalConfig.sync_schedule) {
                     try {
                         const human = cronstrue.toString(globalConfig.sync_schedule, { use24HourTimeFormat: false });
@@ -1400,10 +1409,13 @@ async function runInteractiveMode() {
                 }
                 process.stdout.write(`  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}${config.isExplicitlySet('auto_add_books') ? '' : ' (default)'}\n`);
                 
+                // =============================================================================
                 // PROGRESS PROTECTION SETTINGS
+                // =============================================================================
+                process.stdout.write(`\n🔒 Progress Protection Settings:\n`);
                 process.stdout.write(`  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}${config.isExplicitlySet('prevent_progress_regression') ? '' : ' (default)'}\n`);
                 
-                // REREAD DETECTION SETTINGS
+                // Re-read Detection Settings
                 if (globalConfig.reread_detection) {
                     process.stdout.write(`  Re-read Detection:\n`);
                     process.stdout.write(`    Re-read Threshold: ${globalConfig.reread_detection.reread_threshold || 30}%${globalConfig.reread_detection.reread_threshold !== undefined ? '' : ' (default)'}\n`);
@@ -1414,25 +1426,39 @@ async function runInteractiveMode() {
                     process.stdout.write(`  Re-read Detection: using defaults (not configured)\n`);
                 }
                 
+                // =============================================================================
                 // RATE LIMITING AND PERFORMANCE
-                process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`);
-                process.stdout.write(`  Audiobookshelf Rate Limit: ${globalConfig.audiobookshelf_rate_limit || 600} req/min${config.isExplicitlySet('audiobookshelf_rate_limit') ? '' : ' (default)'}\n`);
+                // =============================================================================
+                process.stdout.write(`\n⚡ Rate Limiting and Performance:\n`);
                 process.stdout.write(`  Hardcover Semaphore: ${globalConfig.hardcover_semaphore}${config.isExplicitlySet('hardcover_semaphore') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Hardcover Rate Limit: ${globalConfig.hardcover_rate_limit || 55} req/min${config.isExplicitlySet('hardcover_rate_limit') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Audiobookshelf Rate Limit: ${globalConfig.audiobookshelf_rate_limit || 600} req/min${config.isExplicitlySet('audiobookshelf_rate_limit') ? '' : ' (default)'}\n`);
                 
+                // =============================================================================
                 // LIBRARY FETCHING SETTINGS
+                // =============================================================================
+                process.stdout.write(`\n📚 Library Fetching Settings:\n`);
                 process.stdout.write(`  Max Books to Fetch: ${globalConfig.max_books_to_fetch === null ? 'no limit' : (globalConfig.max_books_to_fetch || 'no limit')}${config.isExplicitlySet('max_books_to_fetch') ? '' : ' (default)'}\n`);
                 process.stdout.write(`  Page Size: ${globalConfig.page_size || 100}${config.isExplicitlySet('page_size') ? '' : ' (default)'}\n`);
+                process.stdout.write(`  Deep Scan Interval: ${globalConfig.deep_scan_interval || 10} syncs${config.isExplicitlySet('deep_scan_interval') ? '' : ' (default)'}\n`);
                 
+                // =============================================================================
                 // DEBUGGING AND LOGGING
+                // =============================================================================
+                process.stdout.write(`\n🐛 Debugging and Logging:\n`);
                 process.stdout.write(`  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}${config.isExplicitlySet('dump_failed_books') ? '' : ' (default)'}\n`);
-                process.stdout.write(`\nUsers (${users.length}):\n`);
+                
+                // =============================================================================
+                // USERS
+                // =============================================================================
+                process.stdout.write(`\n👤 Users (${users.length}):\n`);
                 for (const user of users) {
                     process.stdout.write(`  ${user.id}:\n`);
                     process.stdout.write(`    Audiobookshelf: ${user.abs_url}\n`);
                     process.stdout.write(`    Hardcover: Connected\n`);
                 }
-                process.stdout.write('\nConfiguration validation: ✅ Passed\n');
+                process.stdout.write('\n✅ Configuration validation: Passed\n');
                 break;
             case 'cache': {
                 let cacheExit = false;

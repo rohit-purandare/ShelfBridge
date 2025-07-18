@@ -144,6 +144,9 @@ global:
   # Max concurrent Hardcover requests (1-10, default: 1)
   hardcover_semaphore: 1
   
+  # Deep scan frequency (1-100, default: 10)
+  deep_scan_interval: 10
+  
   # Limit books processed (useful for testing)
   max_books_to_process: 10
 ```
@@ -152,6 +155,11 @@ global:
 - `audiobookshelf_semaphore: 5` - Balanced (recommended for most setups)
 - `hardcover_semaphore: 1` - Conservative (respects rate limits)
 - Increase carefully if you have fast servers and high rate limits
+
+**Deep Scan Settings**:
+- `deep_scan_interval: 10` - Default (deep scan every 10 syncs)
+- `deep_scan_interval: 5` - More frequent deep scans (thorough but slower)
+- `deep_scan_interval: 20` - Less frequent deep scans (faster but may miss changes)
 
 **Testing with Limited Books**:
 - `max_books_to_process: 5` - Test with just 5 books
