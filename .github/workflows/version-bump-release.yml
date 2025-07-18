@@ -30,10 +30,12 @@ jobs:
           git config --local user.name "GitHub Action"
 
       - name: Bump patch version
+        id: bump_patch_version
         run: |
           npm version patch --no-git-tag-version
           NEW_VERSION=$(node -p "require('./package.json').version")
           echo "New version: $NEW_VERSION"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Commit and push version bump
         run: |

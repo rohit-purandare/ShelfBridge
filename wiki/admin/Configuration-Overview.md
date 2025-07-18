@@ -283,6 +283,63 @@ global:
   # deep_scan_interval: 1   # Always do deep scan (slower)
 ```
 
+#### `libraries`
+- **Type**: Object
+- **Default**: No filtering (sync all libraries)
+- **Description**: Global library filtering configuration for all users
+- **Override**: Can be overridden per user
+- **Properties**: `include` or `exclude` arrays (mutually exclusive)
+
+```yaml
+global:
+  libraries:
+    # Include specific libraries (sync only these)
+    include:
+      - "Audiobooks"
+      - "Fiction"
+      - "lib_001"  # Library ID also supported
+    
+    # OR exclude specific libraries (sync all except these)
+    exclude:
+      - "Podcasts"
+      - "Sample Books"
+```
+
+**Library Filtering Rules:**
+- **Include mode**: Only sync libraries in the `include` list
+- **Exclude mode**: Sync all libraries except those in the `exclude` list
+- **Mixed mode**: Cannot specify both `include` and `exclude` (validation error)
+- **Matching**: Supports both library names (case-insensitive) and library IDs
+- **Inheritance**: User-specific settings completely override global settings
+
+**Validation:**
+- Cannot specify both `include` and `exclude`
+- Arrays cannot be empty if specified
+- No duplicate entries allowed within same array
+- Unmatched filters generate warnings but don't block sync
+
+```yaml
+# Examples of library filtering configurations
+
+# Global include (applies to all users)
+global:
+  libraries:
+    include: ["Audiobooks", "Fiction"]
+
+# Global exclude (applies to all users)  
+global:
+  libraries:
+    exclude: ["Podcasts", "Samples"]
+
+# Mixed library IDs and names
+global:
+  libraries:
+    include:
+      - "lib_001"           # Library ID
+      - "Science Fiction"   # Library name
+      - "Non-Fiction"       # Library name
+```
+
 ### Debugging and Logging
 
 #### `dump_failed_books`
@@ -341,6 +398,40 @@ users:
     hardcover_token: "another_hardcover_token"
 ```
 
+### Optional User Fields
+
+#### `libraries`
+- **Type**: Object
+- **Required**: No
+- **Description**: User-specific library filtering (overrides global settings)
+- **Properties**: `include` or `exclude` arrays (mutually exclusive)
+- **Inheritance**: Completely replaces global library configuration
+
+```yaml
+users:
+  - id: "alice"
+    abs_url: "https://audiobooks.example.com"
+    abs_token: "your_audiobookshelf_api_token"
+    hardcover_token: "your_hardcover_api_token"
+    # Alice uses global library settings
+  
+  - id: "bob"
+    abs_url: "https://abs.home.local:13378"
+    abs_token: "another_abs_token"
+    hardcover_token: "another_hardcover_token"
+    # Bob has custom library filtering
+    libraries:
+      exclude: ["Podcasts", "Samples"]
+  
+  - id: "charlie"
+    abs_url: "https://abs.family.local"
+    abs_token: "charlie_token"
+    hardcover_token: "charlie_hardcover_token"
+    # Charlie only syncs specific libraries
+    libraries:
+      include: ["Fiction", "Science Fiction"]
+```
+
 ## Configuration Examples
 
 ### Minimal Configuration
@@ -396,6 +487,41 @@ users:
     hardcover_token: "your_hardcover_token_here"
 ```
 
+### Library Filtering Configuration
+```yaml
+global:
+  min_progress_threshold: 5.0
+  workers: 3
+  auto_add_books: true
+  
+  # Global library filtering (applies to all users)
+  libraries:
+    exclude: ["Podcasts", "Sample Books", "Test Library"]
+  
+users:
+  - id: "alice"
+    abs_url: "https://audiobooks.example.com"
+    abs_token: "your_abs_token_here"
+    hardcover_token: "your_hardcover_token_here"
+    # Alice uses global library settings (excludes Podcasts, etc.)
+  
+  - id: "bob"
+    abs_url: "https://audiobooks.example.com"
+    abs_token: "bob_abs_token_here"
+    hardcover_token: "bob_hardcover_token_here"
+    # Bob overrides global settings with his own library filter
+    libraries:
+      include: ["Fiction", "Science Fiction", "lib_001"]
+  
+  - id: "charlie"
+    abs_url: "https://audiobooks.example.com"
+    abs_token: "charlie_abs_token_here"
+    hardcover_token: "charlie_hardcover_token_here"
+    # Charlie syncs everything (no library filtering)
+    # Note: To disable global filtering for a user, you must specify
+    # an empty filter or contact admin to remove global filtering
+```
+
 ### Multi-User Family Configuration
 ```yaml
 global:
@@ -405,6 +531,11 @@ global:
   sync_schedule: "0 2 * * *"    # 2 AM daily
   timezone: "America/New_York"
   prevent_progress_regression: true
+  
+  # Exclude common non-book libraries for the whole family
+  libraries:
+    exclude: ["Podcasts", "Samples", "Audiobook Previews"]
+  
   reread_detection:
     reread_threshold: 25        # Lower threshold for family with re-readers
     high_progress_threshold: 90
@@ -601,6 +732,9 @@ While YAML is the primary configuration method, these environment variables can 
 | `page_size` | Number | 25-200 | 100 | No |
 | `deep_scan_interval` | Number | 1-100 | 10 | No |
 | `dump_failed_books` | Boolean | true/false | true | No |
+| `libraries` | Object | include/exclude arrays | No filtering | No |
+| `libraries.include` | Array | String array, min length 1 | - | No |
+| `libraries.exclude` | Array | String array, min length 1 | - | No |
 | `reread_detection.*` | Object | See individual fields | Built-in defaults | No |
 | `id` | String | Min length: 1, unique | - | Yes |
 | `abs_url` | String | Valid HTTP/HTTPS URL | - | Yes |

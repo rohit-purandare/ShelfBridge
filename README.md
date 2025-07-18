@@ -39,12 +39,15 @@ node src/main.js start
 
 ## 🔄 Recent Changes
 
-**v1.12.4**: Current stable version with comprehensive CLI interface, multi-user support, and advanced configuration options. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
+**v1.13.0**: Added multi-library filtering support! Now you can include/exclude specific Audiobookshelf libraries by name or ID. Configure globally or per-user to sync only the libraries you want. Enhanced debug command shows available libraries for easy configuration.
+
+**v1.12.4**: Comprehensive CLI interface, multi-user support, and advanced configuration options. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
 
 ## 📋 Features
 
 - ✅ **Automatic sync** - Scheduled synchronization between services
 - ✅ **Multi-user support** - Sync multiple users from one server
+- ✅ **Library filtering** - Sync specific libraries or exclude unwanted ones
 - ✅ **Progress protection** - Prevent accidental progress regression
 - ✅ **Smart matching** - Match books using ISBN/ASIN identifiers
 - ✅ **Docker support** - Easy deployment with containers

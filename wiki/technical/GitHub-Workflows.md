@@ -122,10 +122,65 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:1.0.1
 npm install -g shelfbridge@1.0.1
 ```
 
+### Version Bump Workflow
+
+**File:** `.github/workflows/version-bump-release.yml`  
+**Purpose:** Automatically bump versions on release branches and create pull requests
+
+### Triggers
+- Push to `release/*` branches
+
+### What It Does
+1. **Automatic Version Bump** - Runs `npm version patch --no-git-tag-version`
+2. **Version Capture** - Captures new version using `GITHUB_OUTPUT`
+3. **Commit Changes** - Commits updated `package.json` and `package-lock.json`
+4. **PR Creation** - Creates pull request to main branch with proper title
+5. **Release Preparation** - Prepares changes for automated release
+
+### Release Branch Workflow
+```bash
+# Create release branch
+git checkout -b release/v1.2.3
+
+# Make your changes and commit
+git add .
+git commit -m "feat: new feature"
+
+# Push to trigger version bump
+git push origin release/v1.2.3
+
+# Workflow automatically:
+# 1. Bumps version to 1.2.4
+# 2. Commits version change  
+# 3. Creates PR to main
+# 4. When PR is merged → Release workflow creates GitHub release
+```
+
 ### Manual Release Process
-1. Update version in `package.json`
-2. Commit with message containing "version"
-3. Push to main → Workflow creates release automatically
+1. Create `release/*` branch
+2. Make your changes and push → Automatic version bump
+3. Merge generated PR to main → Workflow creates release automatically
+
+### Development Workflow Improvements
+
+**Documentation Enforcement** - Added pre-commit and pre-push hooks:
+
+#### Pre-commit Hook (`.husky/pre-commit`)
+- **Wiki Update Detection** - Analyzes code changes requiring documentation updates
+- **Specific Requirements** - Provides targeted guidance for different change types:
+  - Configuration changes → Update `wiki/admin/Configuration-Overview.md`
+  - CLI changes → Update `wiki/technical/CLI-Reference.md`
+  - Docker changes → Update `wiki/user-guides/Docker-Setup.md`
+  - Workflow changes → Update `wiki/technical/GitHub-Workflows.md`
+- **Smart Blocking** - Prevents commits without corresponding documentation
+- **Override Option** - Allows bypass with `git commit --no-verify` when appropriate
+
+#### Pre-push Hook (`.husky/pre-push`)
+- **Final Wiki Check** - Validates documentation freshness before pushing to main/release
+- **Recent Commit Analysis** - Examines last 10 commits for undocumented code changes
+- **Branch-specific Logic** - Only enforces on main and release branches
+- **Push Blocking** - Prevents pushes with stale documentation
+- **Clear Guidance** - Provides specific instructions for fixing documentation gaps
 
 ---
 

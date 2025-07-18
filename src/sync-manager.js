@@ -23,6 +23,9 @@ export class SyncManager {
         this.verbose = verbose;
         this.timezone = globalConfig.timezone || 'UTC';
         
+        // Resolve library configuration (user-specific overrides global)
+        const libraryConfig = user.libraries || globalConfig.libraries || null;
+        
         // Initialize clients
         this.audiobookshelf = new AudiobookshelfClient(
             user.abs_url, 
@@ -30,7 +33,9 @@ export class SyncManager {
             globalConfig.audiobookshelf_semaphore || 5,
             globalConfig.max_books_to_fetch || 500,
             globalConfig.page_size || 100,
-            globalConfig.audiobookshelf_rate_limit || 600
+            globalConfig.audiobookshelf_rate_limit || 600,
+            {}, // rereadConfig - keep empty for now
+            libraryConfig
         );
         this.hardcover = new HardcoverClient(
             user.hardcover_token, 
@@ -47,7 +52,8 @@ export class SyncManager {
         logger.debug('SyncManager initialized', { 
             userId: this.userId,
             dryRun: this.dryRun,
-            timezone: this.timezone
+            timezone: this.timezone,
+            libraryConfig: libraryConfig
         });
     }
 
@@ -125,6 +131,11 @@ export class SyncManager {
                 result.books_completed_filtered = filteringStats.completedBooksFiltered;
                 result.books_never_started = filteringStats.booksNeverStarted; // Actually never started
                 result.books_passed_filter = filteringStats.booksPassingFilter;
+                
+                // Add library filtering information
+                if (filteringStats.libraryFiltering) {
+                    result.library_filtering = filteringStats.libraryFiltering;
+                }
                 
                 // Store stats in cache if this was a deep scan
                 if (shouldDeepScan) {

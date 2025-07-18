@@ -1,0 +1,67 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🚀 Running pre-push checks..."
+
+# Get the commits being pushed
+REMOTE_REF="$2"
+LOCAL_REF="$4"
+
+# If we're pushing to main or release branches, do final wiki check
+if echo "$LOCAL_REF" | grep -E "refs/heads/(main|release/)" > /dev/null; then
+    echo "📚 Final wiki freshness check before push to $LOCAL_REF..."
+    
+    # Get commits being pushed
+    if [ "$REMOTE_REF" = "refs/heads/main" ] || echo "$REMOTE_REF" | grep -E "refs/heads/release/" > /dev/null; then
+        # Check if recent commits have code changes without wiki updates
+        COMMITS_TO_CHECK=$(git log --oneline origin/main..HEAD 2>/dev/null | head -10 | cut -d' ' -f1 || git log --oneline HEAD~5..HEAD | cut -d' ' -f1)
+        
+        for commit in $COMMITS_TO_CHECK; do
+            # Check what files were changed in this commit
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r $commit)
+            
+            # Check if code files were changed
+            CODE_CHANGED=false
+            if echo "$CHANGED_FILES" | grep -E "^src/|^config/|^package\.json$|^docker-compose\.yml$|^Dockerfile$|^\.github/workflows/" > /dev/null; then
+                CODE_CHANGED=true
+            fi
+            
+            # Check if wiki was updated in this commit
+            WIKI_CHANGED=false
+            if echo "$CHANGED_FILES" | grep -E "^wiki/|^README\.md$" > /dev/null; then
+                WIKI_CHANGED=true
+            fi
+            
+            # If code changed but wiki didn't, check if wiki was updated in nearby commits
+            if [ "$CODE_CHANGED" = true ] && [ "$WIKI_CHANGED" = false ]; then
+                # Look for wiki updates in the last few commits
+                RECENT_WIKI_UPDATES=$(git log --oneline --since="1 day ago" -- wiki/ README.md | wc -l)
+                
+                if [ "$RECENT_WIKI_UPDATES" -eq 0 ]; then
+                    echo ""
+                    echo "❌ PUSH BLOCKED - WIKI UPDATE REQUIRED:"
+                    echo "Commit $commit contains code changes but no recent wiki updates found."
+                    echo ""
+                    echo "📝 Changed files in $commit:"
+                    echo "$CHANGED_FILES" | grep -E "^src/|^config/|^package\.json$|^docker-compose\.yml$|^Dockerfile$|^\.github/workflows/" | sed 's/^/  - /'
+                    echo ""
+                    echo "💡 Please update relevant wiki pages and commit them before pushing:"
+                    echo "  git add wiki/ README.md"
+                    echo "  git commit -m 'docs: update wiki for recent changes'"
+                    echo "  git push"
+                    echo ""
+                    echo "💡 To bypass this check (not recommended), use:"
+                    echo "  git push --no-verify"
+                    echo ""
+                    exit 1
+                fi
+            fi
+        done
+        
+        echo "✅ Wiki appears to be up to date with recent code changes"
+    fi
+else
+    echo "✅ Pushing to feature branch - no wiki check required"
+fi
+
+echo "🚀 Pre-push checks completed successfully" 

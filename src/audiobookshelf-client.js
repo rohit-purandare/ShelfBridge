@@ -7,7 +7,7 @@ import logger from './logger.js';
 // Remove the global semaphore, make it per-instance
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600, rereadConfig = {}) {
+    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600, rereadConfig = {}, libraryConfig = null) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.token = normalizeApiToken(token, 'Audiobookshelf');
         this.semaphore = new Semaphore(semaphoreConcurrency);
@@ -15,6 +15,7 @@ export class AudiobookshelfClient {
         this.maxBooksToFetch = maxBooksToFetch;
         this.pageSize = pageSize;
         this.rereadConfig = rereadConfig;
+        this.libraryConfig = libraryConfig;
 
         // Create HTTP agents with keep-alive for connection reuse
         const isHttps = this.baseUrl.startsWith('https');
@@ -114,16 +115,46 @@ export class AudiobookshelfClient {
                 throw new Error('Could not get current user data, aborting sync.');
             }
 
-            // Get total library size for complete filtering stats
+            // Get all libraries and apply filtering
             const allLibraries = await this.getLibraries();
+            const libraryFilter = this.filterLibraries(allLibraries);
+            const librariesToProcess = libraryFilter.libraries;
+            
+            // Log library filtering results
+            if (libraryFilter.stats.unmatched.length > 0) {
+                console.log(`⚠️  Warning: Some library filters didn't match any libraries: ${libraryFilter.stats.unmatched.join(', ')}`);
+                console.log(`📚 Available libraries: ${allLibraries.map(lib => lib.name).join(', ')}`);
+            }
+
+            if (libraryFilter.stats.excluded > 0) {
+                console.log(`📚 Processing ${libraryFilter.stats.included} of ${libraryFilter.stats.total} libraries (${libraryFilter.stats.excluded} excluded by filter)`);
+            }
+
+            // Check if no libraries match the filter
+            if (librariesToProcess.length === 0) {
+                console.log(`❌ No libraries match your filter configuration!`);
+                console.log(`📚 Available libraries: ${allLibraries.map(lib => lib.name).join(', ')}`);
+                logger.warn('No libraries match filter configuration', {
+                    libraryConfig: this.libraryConfig,
+                    availableLibraries: allLibraries.map(lib => ({ id: lib.id, name: lib.name }))
+                });
+                // Return empty result but don't throw error
+                return [];
+            }
+
+            // Get total library size for complete filtering stats (only from libraries being processed)
             let totalBooksInLibrary = 0;
-            for (const library of allLibraries) {
+            for (const library of librariesToProcess) {
                 const response = await this._makeRequest('GET', `/api/libraries/${library.id}/items?limit=1&page=0`);
                 if (response && response.total !== undefined) {
                     totalBooksInLibrary += response.total;
                 }
             }
-            logger.debug('Total books in all libraries', { count: totalBooksInLibrary });
+            logger.debug('Total books in filtered libraries', { 
+                count: totalBooksInLibrary,
+                librariesProcessed: librariesToProcess.length,
+                librariesSkipped: libraryFilter.stats.excluded
+            });
 
             // Get library items in progress (these have some progress)
             const progressItems = await this._getItemsInProgress();
@@ -132,9 +163,9 @@ export class AudiobookshelfClient {
             // Conditionally get completed books based on deep scan flag
             let completedBooksList = [];
             if (shouldDeepScan) {
-                // Deep scan: check library books for completion status
-                logger.debug('Performing deep scan for completed books');
-                completedBooksList = await this._getCompletedBooksFromLibraries(allLibraries);
+                // Deep scan: check library books for completion status (only from filtered libraries)
+                logger.debug('Performing deep scan for completed books on filtered libraries');
+                completedBooksList = await this._getCompletedBooksFromLibraries(librariesToProcess);
                 logger.debug('Found additional books with completion status', { count: completedBooksList.length });
             } else {
                 // Fast scan: skip deep library scanning
@@ -247,7 +278,9 @@ export class AudiobookshelfClient {
                 allCompletedBooks: allCompletedBooks.length, // All completed books
                 completedBooksFiltered: completedBooksFiltered.length, // Completed books filtered out
                 booksNeverStarted: booksNeverStarted, // Books with no progress at all
-                booksPassingFilter: booksNeedingSync.length
+                booksPassingFilter: booksNeedingSync.length,
+                // Library filtering stats
+                libraryFiltering: libraryFilter.stats
             };
             
             if (booksNeedingSync.length > 0) {
@@ -518,6 +551,119 @@ export class AudiobookshelfClient {
             });
             throw error;
         }
+    }
+
+    /**
+     * Filter libraries based on configuration
+     * @param {Array} allLibraries - All available libraries
+     * @returns {Object} - { libraries: filtered libraries, stats: filtering stats }
+     */
+    filterLibraries(allLibraries) {
+        if (!this.libraryConfig || (!this.libraryConfig.include && !this.libraryConfig.exclude)) {
+            // No filtering configured, return all libraries
+            logger.debug('No library filtering configured, using all libraries', { 
+                totalLibraries: allLibraries.length 
+            });
+            return {
+                libraries: allLibraries,
+                stats: {
+                    total: allLibraries.length,
+                    included: allLibraries.length,
+                    excluded: 0,
+                    unmatched: []
+                }
+            };
+        }
+
+        const { include, exclude } = this.libraryConfig;
+        let filteredLibraries = [];
+        const stats = {
+            total: allLibraries.length,
+            included: 0,
+            excluded: 0,
+            unmatched: []
+        };
+
+        if (include && include.length > 0) {
+            // Include mode: only include specified libraries
+            const unmatchedIncludes = [...include];
+            
+            filteredLibraries = allLibraries.filter(library => {
+                // Check both name and ID for matches (case-insensitive for names)
+                const nameMatch = include.some(item => 
+                    item.toLowerCase() === library.name.toLowerCase()
+                );
+                const idMatch = include.some(item => item === library.id);
+                
+                if (nameMatch || idMatch) {
+                    // Remove matched items from unmatched list
+                    const matchedItem = include.find(item => 
+                        item.toLowerCase() === library.name.toLowerCase() || item === library.id
+                    );
+                    const index = unmatchedIncludes.indexOf(matchedItem);
+                    if (index > -1) {
+                        unmatchedIncludes.splice(index, 1);
+                    }
+                    return true;
+                }
+                return false;
+            });
+
+            stats.included = filteredLibraries.length;
+            stats.excluded = allLibraries.length - filteredLibraries.length;
+            stats.unmatched = unmatchedIncludes;
+
+            logger.debug('Applied library include filter', {
+                includeConfig: include,
+                matchedLibraries: filteredLibraries.map(lib => ({ id: lib.id, name: lib.name })),
+                unmatchedFilters: unmatchedIncludes
+            });
+
+        } else if (exclude && exclude.length > 0) {
+            // Exclude mode: exclude specified libraries
+            const unmatchedExcludes = [...exclude];
+            
+            filteredLibraries = allLibraries.filter(library => {
+                // Check both name and ID for matches (case-insensitive for names)
+                const nameMatch = exclude.some(item => 
+                    item.toLowerCase() === library.name.toLowerCase()
+                );
+                const idMatch = exclude.some(item => item === library.id);
+                
+                if (nameMatch || idMatch) {
+                    // Remove matched items from unmatched list
+                    const matchedItem = exclude.find(item => 
+                        item.toLowerCase() === library.name.toLowerCase() || item === library.id
+                    );
+                    const index = unmatchedExcludes.indexOf(matchedItem);
+                    if (index > -1) {
+                        unmatchedExcludes.splice(index, 1);
+                    }
+                    return false; // Exclude this library
+                }
+                return true; // Include this library
+            });
+
+            stats.included = filteredLibraries.length;
+            stats.excluded = allLibraries.length - filteredLibraries.length;
+            stats.unmatched = unmatchedExcludes;
+
+            logger.debug('Applied library exclude filter', {
+                excludeConfig: exclude,
+                includedLibraries: filteredLibraries.map(lib => ({ id: lib.id, name: lib.name })),
+                unmatchedFilters: unmatchedExcludes
+            });
+        }
+
+        // Log warnings for unmatched library names/IDs
+        if (stats.unmatched.length > 0) {
+            logger.warn('Some library filters did not match any libraries', {
+                unmatchedFilters: stats.unmatched,
+                availableLibraries: allLibraries.map(lib => ({ id: lib.id, name: lib.name }))
+            });
+        }
+
+        return { libraries: filteredLibraries, stats };
     }
 
     async getLibraryItems(libraryId, limit = null) {

@@ -44,4 +44,79 @@ if echo "$STAGED_FILES" | grep -q "package.json\|package-lock.json"; then
     }
 fi
 
+# Check if code changes require wiki updates
+echo "📚 Checking if wiki updates are required..."
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Analyze specific types of changes that require documentation
+NEEDS_WIKI_UPDATE=false
+SPECIFIC_REQUIREMENTS=()
+
+# Check for configuration changes
+if echo "$STAGED_FILES" | grep -E "^config/|^package\.json$" > /dev/null; then
+    NEEDS_WIKI_UPDATE=true
+    SPECIFIC_REQUIREMENTS+=("Configuration changes detected - update wiki/admin/Configuration-Overview.md")
+fi
+
+# Check for CLI/command changes
+if echo "$STAGED_FILES" | grep -E "^src/main\.js$|^src/.*cli.*\.js$" > /dev/null; then
+    NEEDS_WIKI_UPDATE=true
+    SPECIFIC_REQUIREMENTS+=("CLI changes detected - update wiki/technical/CLI-Reference.md")
+fi
+
+# Check for Docker/deployment changes
+if echo "$STAGED_FILES" | grep -E "^docker-compose\.yml$|^Dockerfile$" > /dev/null; then
+    NEEDS_WIKI_UPDATE=true
+    SPECIFIC_REQUIREMENTS+=("Docker changes detected - update wiki/user-guides/Docker-Setup.md")
+fi
+
+# Check for workflow changes
+if echo "$STAGED_FILES" | grep -E "^\.github/workflows/" > /dev/null; then
+    NEEDS_WIKI_UPDATE=true
+    SPECIFIC_REQUIREMENTS+=("GitHub workflow changes detected - update wiki/technical/GitHub-Workflows.md")
+fi
+
+# Check for major source code changes (new features, breaking changes)
+SRC_CHANGES=$(echo "$STAGED_FILES" | grep -E "^src/" | wc -l)
+if [ "$SRC_CHANGES" -gt 3 ]; then
+    # Multiple source files changed - likely a feature addition
+    NEEDS_WIKI_UPDATE=true
+    SPECIFIC_REQUIREMENTS+=("Multiple source files changed - consider updating README.md and relevant guides")
+fi
+
+if [ "$NEEDS_WIKI_UPDATE" = true ]; then
+    # Check if wiki files are also being committed
+    WIKI_UPDATED=false
+    if echo "$STAGED_FILES" | grep -E "^wiki/|^README\.md$" > /dev/null; then
+        WIKI_UPDATED=true
+    fi
+    
+    if [ "$WIKI_UPDATED" = false ]; then
+        echo ""
+        echo "❌ WIKI UPDATE REQUIRED:"
+        echo "Code changes detected that require documentation updates."
+        echo ""
+        echo "🔍 Specific requirements:"
+        for requirement in "${SPECIFIC_REQUIREMENTS[@]}"; do
+            echo "  - $requirement"
+        done
+        echo ""
+        echo "📝 Files changed that need documentation:"
+        echo "$STAGED_FILES" | grep -E "^src/|^config/|^package\.json$|^docker-compose\.yml$|^Dockerfile$|^\.github/workflows/" | sed 's/^/  - /'
+        echo ""
+        echo "💡 Update relevant documentation, then run:"
+        echo "  git add wiki/ README.md"
+        echo "  git commit"
+        echo ""
+        echo "💡 To bypass this check (not recommended), use:"
+        echo "  git commit --no-verify"
+        echo ""
+        exit 1
+    else
+        echo "✅ Wiki files are also being updated"
+    fi
+else
+    echo "✅ No code changes requiring wiki updates"
+fi
+
 echo "🔒 Pre-commit checks completed" 

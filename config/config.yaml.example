@@ -12,6 +12,19 @@ users:
     abs_url: https://your-audiobookshelf-server.com    # REQUIRED: Your Audiobookshelf server URL
     abs_token: your_audiobookshelf_api_token_here      # REQUIRED: Your Audiobookshelf API token
     hardcover_token: your_hardcover_api_token_here     # REQUIRED: Your Hardcover API token
+    
+    # OPTIONAL: Library filtering (sync only specific libraries)
+    # If omitted, all accessible libraries will be synced (default behavior)
+    # libraries:
+    #   include: ["Audiobooks", "Fiction"]    # Only sync these libraries
+    #   # OR use exclude instead:
+    #   # exclude: ["Podcasts", "Samples"]    # Skip these libraries
+    #   # 
+    #   # You can use library names (case-insensitive) or IDs:
+    #   # include: ["lib_abc123", "My Audiobooks"]
+    #   # 
+    #   # ⚠️  Cannot use both include and exclude at the same time
+    #   # ⚠️  Run 'node src/main.js debug -u your_username' to see available libraries
 
 # =============================================================================
 # ADVANCED CONFIGURATION (Optional - All Have Sensible Defaults)
@@ -71,6 +84,20 @@ users:
 #   # Whether to automatically add books to Hardcover that don't exist (default: false)
 #   # Set to true only if you want ShelfBridge to manage your Hardcover library automatically
 #   auto_add_books: false
+#   
+#   # =============================================================================
+#   # LIBRARY FILTERING (Optional - applies to all users unless overridden)
+#   # =============================================================================
+#   
+#   # Global library filtering configuration (users can override this)
+#   # If omitted, all accessible libraries will be synced (default behavior)
+#   # libraries:
+#   #   include: ["Audiobooks", "Fiction"]    # Only sync these libraries for all users
+#   #   # OR use exclude instead:
+#   #   # exclude: ["Podcasts", "Samples"]    # Skip these libraries for all users
+#   #   # 
+#   #   # Users can override this in their individual configuration
+#   #   # Run 'node src/main.js debug -u username' to see available libraries
 #   
 #   # =============================================================================
 #   # PROGRESS PROTECTION SETTINGS (Optional - recommended to keep enabled)
@@ -141,16 +168,32 @@ users:
 # =============================================================================
 # MULTIPLE USERS EXAMPLE (Family Setup)
 # =============================================================================
-# Example: Multiple users (family setup)
+# Example: Multiple users with different library preferences
+# global:
+#   # Global library filtering - applies to all users unless overridden
+#   libraries:
+#     exclude: ["Podcasts", "Sample Books"]    # Skip these for everyone
+# 
 # users:
 #   - id: alice
 #     abs_url: https://audiobookshelf.example.com
 #     abs_token: alice_audiobookshelf_token
 #     hardcover_token: alice_hardcover_token
+#     # Alice uses global settings (excludes Podcasts and Sample Books)
+#     
 #   - id: bob  
 #     abs_url: https://audiobookshelf.example.com
 #     abs_token: bob_audiobookshelf_token
 #     hardcover_token: bob_hardcover_token
+#     # Bob overrides global settings with his own filter
+#     libraries:
+#       include: ["Audiobooks", "Science Fiction"]
+#       
+#   - id: charlie
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: charlie_audiobookshelf_token
+#     hardcover_token: charlie_hardcover_token
+#     # Charlie syncs everything (no libraries filter = all libraries)
 
 # =============================================================================
 # CONFIGURATION EXAMPLES FOR DIFFERENT USE CASES
@@ -173,4 +216,36 @@ users:
 # global:
 #   dry_run: true
 #   max_books_to_process: 10
-#   deep_scan_interval: 1  # Always do deep scan for testing 
+#   deep_scan_interval: 1  # Always do deep scan for testing
+
+# =============================================================================
+# LIBRARY FILTERING EXAMPLES
+# =============================================================================
+
+# Only sync audiobook libraries:
+# global:
+#   libraries:
+#     include: ["Audiobooks", "Audio Fiction", "Audio Non-Fiction"]
+
+# Skip unwanted content globally:
+# global:
+#   libraries:
+#     exclude: ["Podcasts", "Samples", "Audio Courses", "Kids Books"]
+
+# Per-user library preferences:
+# users:
+#   - id: podcast_lover
+#     abs_url: https://abs.example.com
+#     abs_token: token
+#     hardcover_token: token
+#     # Override global to include podcasts for this user:
+#     libraries:
+#       exclude: ["Sample Books"]  # Only exclude samples
+#       
+#   - id: fiction_only
+#     abs_url: https://abs.example.com
+#     abs_token: token
+#     hardcover_token: token
+#     # Only fiction books:
+#     libraries:
+#       include: ["Fiction", "Mystery", "Sci-Fi", "Fantasy"] 

@@ -167,6 +167,31 @@ export class ConfigValidator {
                     optional: true,
                     description: 'Dump failed sync books to text file for debugging'
                 },
+                libraries: {
+                    type: 'object',
+                    optional: true,
+                    description: 'Global library filtering configuration (applies to all users unless overridden)',
+                    properties: {
+                        include: {
+                            type: 'array',
+                            optional: true,
+                            description: 'Libraries to include (by name or ID). If specified, only these libraries will be synced.',
+                            items: {
+                                type: 'string',
+                                minLength: 1
+                            }
+                        },
+                        exclude: {
+                            type: 'array', 
+                            optional: true,
+                            description: 'Libraries to exclude (by name or ID). These libraries will be skipped during sync.',
+                            items: {
+                                type: 'string',
+                                minLength: 1
+                            }
+                        }
+                    }
+                },
                 reread_detection: {
                     type: 'object',
                     optional: true,
@@ -235,6 +260,31 @@ export class ConfigValidator {
                         required: true, 
                         minLength: 10,
                         description: 'Hardcover API token'
+                    },
+                    libraries: {
+                        type: 'object',
+                        optional: true,
+                        description: 'User-specific library filtering (overrides global library settings)',
+                        properties: {
+                            include: {
+                                type: 'array',
+                                optional: true,
+                                description: 'Libraries to include (by name or ID). If specified, only these libraries will be synced.',
+                                items: {
+                                    type: 'string',
+                                    minLength: 1
+                                }
+                            },
+                            exclude: {
+                                type: 'array',
+                                optional: true,
+                                description: 'Libraries to exclude (by name or ID). These libraries will be skipped during sync.',
+                                items: {
+                                    type: 'string',
+                                    minLength: 1
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -344,6 +394,58 @@ export class ConfigValidator {
             }
         }
 
+        // Custom library configuration validation
+        if (globalConfig.libraries) {
+            const libraryErrors = this.validateLibraryConfig('Global config', globalConfig.libraries);
+            errors.push(...libraryErrors);
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validate library configuration for conflicts and logical issues
+     */
+    validateLibraryConfig(context, libraryConfig) {
+        const errors = [];
+
+        if (!libraryConfig || typeof libraryConfig !== 'object') {
+            return errors;
+        }
+
+        const { include, exclude } = libraryConfig;
+
+        // Check if both include and exclude are specified
+        if (include && exclude && include.length > 0 && exclude.length > 0) {
+            errors.push(`${context}: Cannot specify both 'include' and 'exclude' libraries. Use either 'include' to specify which libraries to sync, or 'exclude' to specify which libraries to skip.`);
+            return errors; // Return early to avoid further validation on invalid config
+        }
+
+        // Check for empty arrays
+        if (include && Array.isArray(include) && include.length === 0) {
+            errors.push(`${context}: 'libraries.include' array cannot be empty. Either specify library names/IDs or remove the include configuration.`);
+        }
+
+        if (exclude && Array.isArray(exclude) && exclude.length === 0) {
+            errors.push(`${context}: 'libraries.exclude' array cannot be empty. Either specify library names/IDs or remove the exclude configuration.`);
+        }
+
+        // Check for duplicate entries in include array
+        if (include && Array.isArray(include)) {
+            const duplicates = include.filter((item, index) => include.indexOf(item) !== index);
+            if (duplicates.length > 0) {
+                errors.push(`${context}: Duplicate entries found in 'libraries.include': ${duplicates.join(', ')}`);
+            }
+        }
+
+        // Check for duplicate entries in exclude array
+        if (exclude && Array.isArray(exclude)) {
+            const duplicates = exclude.filter((item, index) => exclude.indexOf(item) !== index);
+            if (duplicates.length > 0) {
+                errors.push(`${context}: Duplicate entries found in 'libraries.exclude': ${duplicates.join(', ')}`);
+            }
+        }
+
         return errors;
     }
 
@@ -444,6 +546,12 @@ export class ConfigValidator {
                     errors.push(`User ${index}: ${customError}`);
                 }
             }
+        }
+
+        // Custom library configuration validation for each user
+        if (user.libraries) {
+            const libraryErrors = this.validateLibraryConfig(`User ${index}`, user.libraries);
+            errors.push(...libraryErrors);
         }
 
         return { errors, warnings };

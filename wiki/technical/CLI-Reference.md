@@ -323,6 +323,31 @@ Hardcover: ✅ Connected
   - HC User ID: 12345
   - HC Library Size: 847
 
+📚 Available Libraries for filtering:
+     "Audiobooks" (ID: lib_001)
+     "Fiction" (ID: lib_002)
+     "Non-Fiction" (ID: lib_003)
+     "Podcasts" (ID: lib_004)
+     "Sample Books" (ID: lib_005)
+     "Science Fiction" (ID: lib_006)
+     "Audio Courses" (ID: lib_007)
+
+💡 Library filtering configuration:
+   To filter libraries, add to your config:
+   
+   # Global filtering (applies to all users)
+   global:
+     libraries:
+       include: ["Audiobooks", "Fiction"]
+       # OR
+       exclude: ["Podcasts", "Sample Books"]
+   
+   # User-specific filtering (overrides global)
+   users:
+     - id: alice
+       libraries:
+         include: ["Fiction", "Science Fiction"]
+
 💾 CACHE INFORMATION
 ------------------------------
 Total books in cache: 847

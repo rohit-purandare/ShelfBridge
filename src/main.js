@@ -703,8 +703,24 @@ async function syncUser(user, globalConfig, verbose = false) {
         
         // Left column - Library Status
         leftColumn.push('📚 Library Status');
+        
+        // Show library filtering information if available
+        if (result.library_filtering) {
+            const libFilter = result.library_filtering;
+            if (libFilter.excluded > 0) {
+                leftColumn.push(`├─ ${libFilter.included} of ${libFilter.total} libraries processed`);
+                leftColumn.push(`├─ ${libFilter.excluded} libraries excluded by filter`);
+                if (libFilter.unmatched.length > 0) {
+                    leftColumn.push(`├─ Warning: ${libFilter.unmatched.length} unmatched filters`);
+                }
+            } else if (libFilter.total > 0) {
+                leftColumn.push(`├─ ${libFilter.total} libraries processed`);
+            }
+        }
+        
         if (result.total_books_in_library !== undefined) {
-            leftColumn.push(`├─ ${result.total_books_in_library} total books`);
+            const prefix = result.library_filtering ? '├─' : '├─';
+            leftColumn.push(`${prefix} ${result.total_books_in_library} total books`);
             if (result.books_in_progress) {
                 leftColumn.push(`├─ ${result.books_in_progress} currently reading`);
             }
@@ -1105,6 +1121,24 @@ async function debugUser(user) {
                 console.log(`  - ABS User: ${userInfo.username || 'Unknown'}`);
                 console.log(`  - ABS User ID: ${userInfo.id || 'Unknown'}`);
                 console.log(`  - ABS Libraries: ${userInfo.librariesAccessible?.length || 'Unknown'}`);
+                
+                // Show available libraries for library filtering configuration
+                try {
+                    const libraries = await absClient.getLibraries();
+                    if (libraries && libraries.length > 0) {
+                        console.log(`\n📚 Available Libraries for filtering:`);
+                        libraries.forEach(lib => {
+                            console.log(`     "${lib.name}" (ID: ${lib.id})`);
+                        });
+                        console.log(`\n💡 Configure library filtering in config.yaml:`);
+                        console.log(`   libraries:`);
+                        console.log(`     include: ["${libraries[0]?.name || 'Library Name'}"]`);
+                        console.log(`     # OR`);
+                        console.log(`     exclude: ["Podcasts", "Samples"]`);
+                    }
+                } catch (libError) {
+                    console.log(`  - Library info unavailable: ${libError.message}`);
+                }
             } catch (error) {
                 console.log(`  - Additional ABS info unavailable: ${error.message}`);
             }
