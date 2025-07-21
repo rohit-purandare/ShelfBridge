@@ -17,7 +17,7 @@ ShelfBridge uses **5 GitHub Actions workflows** to automate:
 |----------|---------|---------|---------|
 | [CI Pipeline](#ci-pipeline) | Push/PR to main | Test across Node.js versions | ✅ Active |
 | [Code Quality](#code-quality) | Push/PR to main | ESLint + security checks | ✅ Active |
-| [Release Automation](#release-automation) | Version change + push | Create GitHub releases | ✅ Active |
+| [Release Automation](#release-automation) | Functional commits to main | Smart release creation | ✅ Active |
 | [Docker Build](#docker-build) | Push/PR to main, tags | Build container images | ✅ Active |
 | [Security Scan](#security-scan) | Push/PR, weekly schedule | Security auditing | ✅ Active |
 
@@ -87,20 +87,37 @@ strategy:
 
 ## 🚀 Release Automation
 
-**File:** `.github/workflows/release.yml`  
-**Purpose:** Automate GitHub releases when version changes
+**File:** `.github/workflows/version-and-release.yml`  
+**Purpose:** Automate GitHub releases for functional code changes
 
 ### Triggers
 - Push to `main` branch
-- Changes to `package.json`
-- Commit message contains "version"
+- **Excludes:** Documentation-only and non-functional commits
+
+### Smart Release Logic
+The workflow intelligently determines when to create releases:
+
+**✅ Triggers Release:**
+- `feat:` or `feature:` commits (minor version bump)
+- `fix:` or `bug:` commits (patch version bump)
+- Commits with `BREAKING CHANGE` (major version bump)
+- Any other functional commits (patch version bump)
+
+**⏭️ Skips Release:**
+- `docs:` commits (documentation only)
+- `chore:` commits (maintenance tasks)
+- `test:` commits (test changes only)
+- `ci:` commits (workflow/CI changes)
+- `style:` commits (formatting only)
+- Version bump commits (prevents loops)
 
 ### What It Does
-1. **Version Detection** - Extracts version from `package.json`
-2. **Duplicate Prevention** - Skips if tag already exists
-3. **Changelog Generation** - Creates changelog from git commits
-4. **GitHub Release Creation** - Creates tagged release with notes
-5. **Docker Integration** - References corresponding Docker images
+1. **Commit Analysis** - Determines if release is needed based on commit type
+2. **Version Bump Logic** - Uses conventional commits to determine bump type
+3. **Duplicate Prevention** - Skips if tag already exists
+4. **Changelog Generation** - Creates changelog from git commits
+5. **GitHub Release Creation** - Creates tagged release with notes
+6. **Docker Integration** - References corresponding Docker images
 
 ### Release Format
 ```
