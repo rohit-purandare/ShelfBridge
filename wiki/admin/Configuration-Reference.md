@@ -140,6 +140,55 @@ global:
 - **Description**: Automatically add books to Hardcover that don't exist
 - **Impact**: When true, creates new Hardcover entries for missing books
 
+### Enhanced Matching Settings
+
+#### `title_author_matching` (YAML Only)
+Advanced nested object for intelligent book matching when ASIN/ISBN are unavailable:
+
+```yaml
+global:
+  title_author_matching:
+    enabled: true                    # Enable title/author fallback matching (default: true)
+    confidence_threshold: 0.70       # Minimum confidence score (0.0-1.0, default: 0.70)
+    max_search_results: 5           # Maximum search results to evaluate (default: 5)
+```
+
+- **Type**: Object with nested properties
+- **Default**: Enabled with standard settings
+- **Environment**: Not supported (YAML configuration only)
+- **Description**: Third-tier fallback matching using Hardcover's search API
+
+**How it works:**
+1. **Primary**: ASIN matching (fastest, most reliable)
+2. **Secondary**: ISBN matching (fallback for books without ASIN)
+3. **Tertiary**: Title/Author matching (new - for books with incomplete metadata)
+
+**Sub-properties:**
+- `enabled`: Boolean, default: `true` - Enable/disable the feature
+- `confidence_threshold`: Number (0.0-1.0), default: `0.70` - Minimum match confidence
+- `max_search_results`: Number (1-20), default: `5` - Search result limit
+
+**Confidence Scoring:**
+The system uses a sophisticated scoring algorithm considering:
+- **Activity**: Popularity metrics from Hardcover (24.1% weight)
+- **Format**: Audiobook vs. physical/ebook preference (19.3% weight)
+- **Series**: Series name and sequence matching (19.2% weight)
+- **Title**: Text similarity using fuzzy matching (13.8% weight)
+- **Author**: Author name similarity (10.4% weight)
+- **Publication Year**: Edition disambiguation (8.2% weight)
+- **Narrator**: Audiobook narrator matching (5.0% weight)
+
+**Example scenarios:**
+- Audiobook with only title/author metadata
+- Books from smaller publishers without ASIN/ISBN
+- International editions with different identifiers
+- User-uploaded content with incomplete metadata
+
+**Performance:**
+- Results are cached for improved performance
+- Rate-limited to respect Hardcover API limits
+- Fallback only occurs when ASIN/ISBN matching fails
+
 ### Progress Protection Settings
 
 #### `prevent_progress_regression`

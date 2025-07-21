@@ -109,6 +109,8 @@ export class BookCache {
                 )
             `);
 
+
+
             // Perform migration operations for existing databases
             this._performMigrations();
 
@@ -985,6 +987,21 @@ export class BookCache {
             logger.error(`Error getting library stats for user ${userId}: ${err.message}`);
             return null;
         }
+    }
+
+    /**
+     * Generate a title/author identifier for caching successful matches
+     * @param {string} title - Book title
+     * @param {string} author - Author name (optional)
+     * @returns {string} - Normalized identifier for title/author matching
+     */
+    generateTitleAuthorIdentifier(title, author = null) {
+        // Normalize inputs for consistent caching
+        const normalizedTitle = (title || '').toLowerCase().trim().replace(/\s+/g, '_');
+        const normalizedAuthor = (author || '').toLowerCase().trim().replace(/\s+/g, '_');
+        
+        // Create identifier: title_author:title|author
+        return `title_author:${normalizedTitle}|${normalizedAuthor}`;
     }
 
     close() {

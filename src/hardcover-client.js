@@ -696,8 +696,145 @@ export class HardcoverClient {
         }
     }
 
+    /**
+     * Search for books using Hardcover's search API by title
+     * @param {string} title - Book title to search for
+     * @param {number} limit - Maximum number of results (default: 5)
+     * @returns {Array} - Array of search results
+     */
+    async searchBooksByTitle(title, limit = 5) {
+        if (!title || typeof title !== 'string') {
+            logger.warn('Invalid title provided for search:', title);
+            return [];
+        }
+
+        const query = `
+            query searchBooks($query: String!, $limit: Int!) {
+                search(
+                    query: $query,
+                    query_type: "books",
+                    per_page: $limit,
+                    page: 1,
+                    sort: "activities_count:desc"
+                ) {
+                    results
+                }
+            }
+        `;
+
+        const variables = { 
+            query: title.trim(),
+            limit: Math.min(limit, 10) // Cap at 10 for performance
+        };
+
+        try {
+            const result = await this._executeQuery(query, variables);
+            
+            if (result && result.search && result.search.results) {
+                // Parse the results JSON string
+                const searchResults = JSON.parse(result.search.results);
+                return Array.isArray(searchResults) ? searchResults : [];
+            }
+            
+            return [];
+        } catch (error) {
+            logger.error('Error searching books by title:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Search for books using Hardcover's search API by title and author
+     * @param {string} title - Book title to search for
+     * @param {string} author - Author name to search for
+     * @param {number} limit - Maximum number of results (default: 5)
+     * @returns {Array} - Array of search results
+     */
+    async searchBooksByTitleAndAuthor(title, author, limit = 5) {
+        if (!title || typeof title !== 'string') {
+            logger.warn('Invalid title provided for search:', title);
+            return [];
+        }
+
+        // Combine title and author for search query
+        const searchQuery = author && typeof author === 'string' 
+            ? `${title.trim()} ${author.trim()}`
+            : title.trim();
+
+        const query = `
+            query searchBooks($query: String!, $limit: Int!) {
+                search(
+                    query: $query,
+                    query_type: "books",
+                    per_page: $limit,
+                    page: 1,
+                    sort: "activities_count:desc"
+                ) {
+                    results
+                }
+            }
+        `;
+
+        const variables = { 
+            query: searchQuery,
+            limit: Math.min(limit, 10) // Cap at 10 for performance
+        };
+
+        try {
+            const result = await this._executeQuery(query, variables);
+            
+            if (result && result.search && result.search.results) {
+                // Parse the results JSON string
+                const searchResults = JSON.parse(result.search.results);
+                return Array.isArray(searchResults) ? searchResults : [];
+            }
+            
+            return [];
+        } catch (error) {
+            logger.error('Error searching books by title and author:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Search for books with rate limiting for title/author matching
+     * @param {string} title - Book title
+     * @param {string} author - Author name (optional)
+     * @param {string} narrator - Narrator name (optional)
+     * @param {number} limit - Maximum results
+     * @returns {Array} - Search results with metadata
+     */
+    async searchBooksForMatching(title, author = null, narrator = null, limit = 5) {
+        // First try combined title + author search
+        let results = [];
+        
+        if (author) {
+            logger.debug(`Searching Hardcover by title and author: "${title}" by "${author}"`);
+            results = await this.searchBooksByTitleAndAuthor(title, author, limit);
+        } else {
+            logger.debug(`Searching Hardcover by title only: "${title}"`);
+            results = await this.searchBooksByTitle(title, limit);
+        }
+
+        // If no results and we have author, try title-only as fallback
+        if (results.length === 0 && author) {
+            logger.debug(`No results for combined search, trying title-only: "${title}"`);
+            results = await this.searchBooksByTitle(title, limit);
+        }
+
+        // Add metadata for easier processing
+        return results.map(result => ({
+            ...result,
+            _searchMetadata: {
+                searchTitle: title,
+                searchAuthor: author,
+                searchNarrator: narrator,
+                searchTimestamp: Date.now()
+            }
+        }));
+    }
+
     async addBookToLibrary(bookId, statusId = 2, editionId = null) {
-        console.log('DEBUG: Running addBookToLibrary with insert_user_book mutation');
         const mutation = `
             mutation addBookToLibrary($bookId: Int!, $statusId: Int!, $editionId: Int) {
                 insert_user_book(object: {

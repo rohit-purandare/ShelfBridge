@@ -8,8 +8,10 @@ import {
     extractAsin, 
     extractTitle, 
     extractAuthor,
+    extractNarrator,
     calculateCurrentPage,
-    calculateCurrentSeconds
+    calculateCurrentSeconds,
+    calculateMatchingScore
 } from './utils.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
@@ -81,6 +83,8 @@ export class SyncManager {
         const syncTracking = await this.cache.incrementSyncCount(this.userId);
         const shouldDeepScan = this.globalConfig.force_sync || 
                               await this.cache.shouldPerformDeepScan(this.userId, this.globalConfig.deep_scan_interval || 10);
+
+
         
         if (shouldDeepScan) {
             if (syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)) {
@@ -292,12 +296,12 @@ export class SyncManager {
     }
 
     /**
-     * Find a book in the Hardcover library using identifiers
+     * Find a book in the Hardcover library using identifiers and title/author matching
      * @param {Object} absBook - Audiobookshelf book object
      * @param {Object} identifierLookup - Lookup table of identifiers to Hardcover books
      * @returns {Object|null} - Hardcover match object or null if not found
      */
-    _findBookInHardcover(absBook, identifierLookup) {
+    async _findBookInHardcover(absBook, identifierLookup) {
         const identifiers = this._extractBookIdentifier(absBook);
         const title = extractTitle(absBook) || 'Unknown Title';
         
@@ -305,7 +309,7 @@ export class SyncManager {
             identifiers: identifiers
         });
 
-        // Try ASIN first (for audiobooks)
+        // 1. Try ASIN first (for audiobooks)
         if (identifiers.asin && identifierLookup[identifiers.asin]) {
             const match = identifierLookup[identifiers.asin];
             logger.debug(`Found ASIN match for ${title}`, {
@@ -317,7 +321,7 @@ export class SyncManager {
             return match;
         }
 
-        // Fall back to ISBN
+        // 2. Fall back to ISBN
         if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
             const match = identifierLookup[identifiers.isbn];
             logger.debug(`Found ISBN match for ${title}`, {
@@ -329,10 +333,169 @@ export class SyncManager {
             return match;
         }
 
+        // 3. NEW: Try title/author matching if enabled
+        const titleAuthorConfig = this.globalConfig.title_author_matching || {};
+        if (titleAuthorConfig.enabled !== false) { // Default enabled
+            logger.debug(`Attempting title/author matching for ${title}`);
+            const titleAuthorMatch = await this._findBookByTitleAuthor(absBook);
+            if (titleAuthorMatch) {
+                return titleAuthorMatch;
+            }
+        }
+
         logger.debug(`No match found for ${title} in Hardcover library`, {
             searchedIdentifiers: identifiers
         });
         return null;
+    }
+
+    /**
+     * Find a book using title/author matching via Hardcover search API
+     * @param {Object} absBook - Audiobookshelf book object
+     * @returns {Object|null} - Hardcover match object or null if not found
+     */
+    async _findBookByTitleAuthor(absBook) {
+        const title = extractTitle(absBook);
+        const author = extractAuthor(absBook);
+        const narrator = extractNarrator(absBook);
+
+        if (!title) {
+            logger.debug('Cannot perform title/author matching: no title found');
+            return null;
+        }
+
+        // Get configuration
+        const config = this.globalConfig.title_author_matching || {};
+        const confidenceThreshold = config.confidence_threshold || 0.70;
+        const maxResults = config.max_search_results || 5;
+
+        try {
+            // 1. Check existing cache for successful title/author match
+            const titleAuthorId = this.cache.generateTitleAuthorIdentifier(title, author);
+            const cachedBookInfo = await this.cache.getCachedBookInfo(
+                this.userId, titleAuthorId, title, 'title_author'
+            );
+
+            if (cachedBookInfo && cachedBookInfo.edition_id) {
+                logger.debug(`Title/author cache HIT for "${title}"`, {
+                    identifier: titleAuthorId,
+                    editionId: cachedBookInfo.edition_id,
+                    cached: 'CACHE_HIT'
+                });
+
+                // Convert cached edition to match format
+                return {
+                    userBook: {
+                        id: cachedBookInfo.edition_id,
+                        book: { title: cachedBookInfo.title }
+                    },
+                    edition: { 
+                        id: cachedBookInfo.edition_id,
+                        format: 'audiobook' // We'll determine actual format later
+                    },
+                    _isSearchResult: true,
+                    _matchingScore: { totalScore: 85, confidence: 'high' } // Cached results are trusted
+                };
+            }
+
+            // 2. Cache miss - perform API search
+            logger.debug(`Title/author cache miss for "${title}" - calling API`);
+            const searchResults = await this.hardcover.searchBooksForMatching(
+                title, author, narrator, maxResults
+            );
+
+            if (searchResults.length === 0) {
+                logger.debug(`No search results found for "${title}"`);
+                return null;
+            }
+
+            // Score and rank results
+            const scoredResults = searchResults.map(result => {
+                const score = calculateMatchingScore(result, title, author, narrator, absBook);
+                return {
+                    ...result,
+                    _matchingScore: score
+                };
+            });
+
+            // Sort by confidence score
+            scoredResults.sort((a, b) => b._matchingScore.totalScore - a._matchingScore.totalScore);
+
+            // Find best match above threshold
+            const bestMatch = scoredResults[0];
+            if (bestMatch && bestMatch._matchingScore.totalScore >= confidenceThreshold * 100) {
+                logger.info(`Found title/author match for "${title}"`, {
+                    hardcoverTitle: bestMatch.title,
+                    confidence: bestMatch._matchingScore.totalScore,
+                    breakdown: bestMatch._matchingScore.breakdown
+                });
+
+                // 3. Cache successful match in existing books table for future performance
+                try {
+                    await this.cache.storeEditionMapping(
+                        this.userId,
+                        titleAuthorId,
+                        'title_author',
+                        bestMatch.title,
+                        bestMatch.id, // edition_id
+                        bestMatch.author_names?.[0] || author || ''
+                    );
+                    logger.debug(`Cached title/author match for "${title}"`, {
+                        identifier: titleAuthorId,
+                        editionId: bestMatch.id
+                    });
+                } catch (cacheError) {
+                    logger.warn(`Failed to cache title/author match for "${title}": ${cacheError.message}`);
+                    // Continue anyway - caching failure shouldn't break sync
+                }
+
+                // Convert search result to match format compatible with existing code
+                return this._convertSearchResultToMatch(bestMatch);
+            } else {
+                const bestScore = bestMatch ? bestMatch._matchingScore.totalScore : 0;
+                logger.debug(`Best title/author match for "${title}" below threshold`, {
+                    bestScore: bestScore,
+                    threshold: confidenceThreshold * 100,
+                    hardcoverTitle: bestMatch ? bestMatch.title : 'N/A'
+                });
+                return null;
+            }
+
+        } catch (error) {
+            logger.warn(`Title/author search failed for "${title}": ${error.message}`);
+            return null; // Graceful fallback
+        }
+    }
+
+    /**
+     * Convert search result to match format compatible with existing matching code
+     * @param {Object} searchResult - Hardcover search result with matching score
+     * @returns {Object} - Match object in expected format
+     */
+    _convertSearchResultToMatch(searchResult) {
+        // Create a simplified match object that works with existing code
+        // Note: This won't have the full userBook structure since it's from search, not user library
+        return {
+            edition: {
+                id: searchResult.id || 'search-result',
+                format: searchResult.format || 'unknown',
+                pages: searchResult.pages || null,
+                audio_seconds: searchResult.audio_seconds || null,
+                isbn_10: searchResult.isbn_10 || null,
+                isbn_13: searchResult.isbn_13 || null,
+                asin: searchResult.asin || null
+            },
+            userBook: {
+                id: null, // Will be created during auto-add process
+                book: {
+                    id: searchResult.book?.id || searchResult.id,
+                    title: searchResult.title,
+                    contributions: searchResult.contributions || []
+                }
+            },
+            _isSearchResult: true, // Flag to indicate this came from search, not user library
+            _matchingScore: searchResult._matchingScore
+        };
     }
 
     /**
@@ -705,25 +868,34 @@ export class SyncManager {
             logger.warn(`Cache lookup failed for ${title}`, { error: cacheError.message });
         }
 
-        // Try to find match in Hardcover
-        let hardcoverMatch = null;
+        // Try to find match in Hardcover using enhanced matching
+        const hardcoverMatch = await this._findBookInHardcover(absBook, identifierLookup);
         let matchedIdentifierType = null;
 
-        // First try ASIN (for audiobooks)
-        if (identifiers.asin && identifierLookup[identifiers.asin]) {
-            hardcoverMatch = identifierLookup[identifiers.asin];
-            matchedIdentifierType = 'asin';
-            // Remove the verbose console log - keep only debug logging
-            logger.debug(`Found ASIN match for ${title}: ${identifiers.asin}`);
-            syncResult.actions.push(`Found in Hardcover by ASIN: ${identifiers.asin}`);
-        }
-        // Fall back to ISBN
-        else if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
-            hardcoverMatch = identifierLookup[identifiers.isbn];
-            matchedIdentifierType = 'isbn';
-            // Remove the verbose console log - keep only debug logging
-            logger.debug(`Found ISBN match for ${title}: ${identifiers.isbn}`);
-            syncResult.actions.push(`Found in Hardcover by ISBN: ${identifiers.isbn}`);
+        // Determine how the match was found and add appropriate sync result info
+        if (hardcoverMatch) {
+            if (hardcoverMatch._isSearchResult) {
+                // This was found via title/author matching
+                matchedIdentifierType = 'title_author';
+                const confidence = hardcoverMatch._matchingScore ? 
+                    Math.round(hardcoverMatch._matchingScore.totalScore) : 'unknown';
+                logger.debug(`Found title/author match for ${title} (confidence: ${confidence}%)`);
+                syncResult.actions.push(`Found in Hardcover by title/author match (confidence: ${confidence}%)`);
+                syncResult.matching_method = 'title_author';
+                syncResult.confidence_score = confidence;
+            } else if (identifiers.asin && identifierLookup[identifiers.asin]) {
+                // Found by ASIN
+                matchedIdentifierType = 'asin';
+                logger.debug(`Found ASIN match for ${title}: ${identifiers.asin}`);
+                syncResult.actions.push(`Found in Hardcover by ASIN: ${identifiers.asin}`);
+                syncResult.matching_method = 'asin';
+            } else if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
+                // Found by ISBN
+                matchedIdentifierType = 'isbn';
+                logger.debug(`Found ISBN match for ${title}: ${identifiers.isbn}`);
+                syncResult.actions.push(`Found in Hardcover by ISBN: ${identifiers.isbn}`);
+                syncResult.matching_method = 'isbn';
+            }
         }
 
         if (!hardcoverMatch) {
@@ -734,6 +906,42 @@ export class SyncManager {
             syncResult.reason = autoAddResult.reason;
             syncResult.timing = performance.now() - startTime;
             return syncResult;
+        }
+
+        // Special handling for title/author matches from search results
+        if (hardcoverMatch._isSearchResult) {
+            // This book was found via search but isn't in the user's library yet
+            // We need to add it to the library first, then sync progress
+            logger.debug(`Title/author match requires auto-add to library: ${title}`);
+            
+            const bookId = hardcoverMatch.userBook.book.id;
+            const editionId = hardcoverMatch.edition.id;
+            
+            try {
+                if (!this.dryRun) {
+                    logger.debug(`Adding title/author matched book to library`, {
+                        bookId: bookId,
+                        editionId: editionId,
+                        title: title
+                    });
+                    
+                    const addResult = await this.hardcover.addBookToLibrary(bookId, 2, editionId);
+                    syncResult.actions.push(`Added matched book to Hardcover library`);
+                    
+                    // Update the match object to look like a regular library match
+                    hardcoverMatch.userBook.id = addResult.id || 'auto-added';
+                    hardcoverMatch._isSearchResult = false; // No longer just a search result
+                } else {
+                    logger.debug(`[DRY RUN] Would add title/author matched book to library`);
+                    syncResult.actions.push(`[DRY RUN] Would add matched book to library`);
+                }
+            } catch (error) {
+                logger.error(`Failed to add title/author matched book to library: ${error.message}`);
+                syncResult.status = 'error';
+                syncResult.reason = `Failed to add matched book: ${error.message}`;
+                syncResult.timing = performance.now() - startTime;
+                return syncResult;
+            }
         }
 
         // Store Hardcover edition info

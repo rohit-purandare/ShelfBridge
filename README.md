@@ -73,6 +73,7 @@ Required for advanced features and complex multi-user setups.
 
 **✅ Everything from Environment Variables, plus:**
 - **Library filtering** - Include/exclude specific libraries
+- **Title/Author matching** - Intelligent fuzzy matching for books without ASIN/ISBN
 - **Reread detection** - Advanced progress regression protection
 - **Multi-user advanced setups** - Different settings per user
 - **Complex family configurations** - User-specific library preferences
@@ -137,7 +138,7 @@ users:
 - ✅ **Multi-user support** - Sync multiple users from one server
 - ✅ **Library filtering** - Sync specific libraries or exclude unwanted ones
 - ✅ **Progress protection** - Prevent accidental progress regression
-- ✅ **Smart matching** - Match books using ISBN/ASIN identifiers
+- ✅ **Smart matching** - Advanced 3-tier matching: ASIN → ISBN → Title/Author with intelligent fuzzy matching
 - ✅ **Docker support** - Easy deployment with containers
 - ✅ **Comprehensive logging** - Detailed sync reports and error tracking
 

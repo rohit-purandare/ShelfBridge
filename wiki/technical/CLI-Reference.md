@@ -221,7 +221,13 @@ shelfbridge cache --clear
 Total books: 1,247
 Recent books (last 7 days): 23
 Cache size: 2.3 MB
+Title/author matches cached: 156
 ```
+
+**Cache Types:**
+- **ASIN/ISBN matches**: Books matched by Amazon identifiers (fastest)
+- **Title/author matches**: Books matched by intelligent title/author search (new in v1.16+)
+- **Recent books**: Books with activity in the last 7 days
 
 ### `cron` - Scheduled Sync Service
 

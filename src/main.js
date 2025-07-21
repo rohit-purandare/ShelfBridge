@@ -451,10 +451,20 @@ program
                 logger.info('Cache cleared successfully');
             } else if (options.stats) {
                 const stats = await cache.getCacheStats();
+                
                 console.log('=== Cache Statistics ===');
                 console.log(`Total books: ${stats.total_books}`);
                 console.log(`Recent books (last 7 days): ${stats.recent_books}`);
                 console.log(`Cache size: ${stats.cache_size_mb} MB`);
+                
+                // Show title/author cached entries
+                await cache.init();
+                const titleAuthorCount = cache.db.prepare(`
+                    SELECT COUNT(*) as count 
+                    FROM books 
+                    WHERE identifier_type = 'title_author'
+                `).get();
+                console.log(`Title/author matches cached: ${titleAuthorCount.count}`);
             } else if (options.show) {
                 const stats = await cache.getCacheStats();
                 console.log('=== Cache Contents ===');
