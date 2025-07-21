@@ -18,6 +18,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Skip Docker builds for non-functional commits (docs, chore, test, ci, style)
+    if: ${{ github.event_name != 'push' || 
+            (!startsWith(github.event.head_commit.message, 'docs:') && 
+             !startsWith(github.event.head_commit.message, 'chore:') && 
+             !startsWith(github.event.head_commit.message, 'test:') && 
+             !startsWith(github.event.head_commit.message, 'ci:') && 
+             !startsWith(github.event.head_commit.message, 'style:')) }}
 
     steps:
     - name: Checkout repository

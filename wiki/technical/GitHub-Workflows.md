@@ -18,7 +18,7 @@ ShelfBridge uses **5 GitHub Actions workflows** to automate:
 | [CI Pipeline](#ci-pipeline) | Push/PR to main | Test across Node.js versions | ✅ Active |
 | [Code Quality](#code-quality) | Push/PR to main | ESLint + security checks | ✅ Active |
 | [Release Automation](#release-automation) | Functional commits to main | Smart release creation | ✅ Active |
-| [Docker Build](#docker-build) | Push/PR to main, tags | Build container images | ✅ Active |
+| [Docker Build](#docker-build) | Functional commits to main, tags, PRs | Smart container builds | ✅ Active |
 | [Security Scan](#security-scan) | Push/PR, weekly schedule | Security auditing | ✅ Active |
 
 ---
@@ -204,19 +204,36 @@ git push origin release/v1.2.3
 ## 🐳 Docker Build
 
 **File:** `.github/workflows/docker-build.yml`  
-**Purpose:** Build and publish Docker container images
+**Purpose:** Build and publish Docker container images for functional changes
 
 ### Triggers
-- Push to `main` branch
+- Push to `main` branch (**excludes non-functional commits**)
 - Push of version tags (`v*`)
-- Pull requests to `main` (build-only)
+- Pull requests to `main` (build-only, all commits)
+
+### Smart Build Logic
+Docker builds are optimized to only run when necessary:
+
+**✅ Triggers Build:**
+- `feat:`, `fix:`, `perf:` commits (functional changes)
+- Version tags (always build releases)
+- Pull requests (for testing)
+- Any commits not starting with excluded prefixes
+
+**⏭️ Skips Build:**
+- `docs:` commits (documentation only)
+- `chore:` commits (maintenance tasks)
+- `test:` commits (test changes only)
+- `ci:` commits (workflow/CI changes)
+- `style:` commits (formatting only)
 
 ### What It Does
-1. **Multi-architecture Build** - Supports `linux/amd64` and `linux/arm64`
-2. **Image Tagging** - Creates semantic version tags
-3. **Registry Publishing** - Pushes to GitHub Container Registry
-4. **Build Caching** - Uses GitHub Actions cache for faster builds
-5. **Metadata Extraction** - Auto-generates labels and tags
+1. **Smart Triggering** - Only builds when functional code changes
+2. **Multi-architecture Build** - Supports `linux/amd64` and `linux/arm64`
+3. **Image Tagging** - Creates semantic version tags
+4. **Registry Publishing** - Pushes to GitHub Container Registry
+5. **Build Caching** - Uses GitHub Actions cache for faster builds
+6. **Metadata Extraction** - Auto-generates labels and tags
 
 ### Generated Tags
 - `ghcr.io/rohit-purandare/shelfbridge:latest` (main branch)
