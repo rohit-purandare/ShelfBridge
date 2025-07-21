@@ -26,9 +26,8 @@ New to ShelfBridge? Start here:
 ## ⚙️ Configuration & Administration
 
 ### Configuration
-- **[Configuration Overview](admin/Configuration-Overview.md)** - Understanding the config file
-- **[Basic Configuration](admin/Basic-Configuration.md)** - Essential settings
-- **[Advanced Configuration](admin/Advanced-Configuration.md)** - Power user features
+- **[Configuration Guide](admin/Configuration-Guide.md)** - Setup guide for YAML & environment variables
+- **[Configuration Reference](admin/Configuration-Reference.md)** - Complete technical reference for all settings
 - **[Multi-User Setup](admin/Multi-User-Setup.md)** - Managing multiple users
 
 ### Advanced Features
@@ -57,7 +56,7 @@ New to ShelfBridge? Start here:
 ### CI/CD & Automation
 - **[GitHub Workflows](technical/GitHub-Workflows.md)** - Automated testing, security, and releases
 - **[Docker Guide](technical/Docker-Guide.md)** - Docker images and deployment
-- **[Environment Variables](technical/Environment-Variables.md)** - Container configuration
+- **[Environment Variables](admin/Configuration-Guide.md)** - Container configuration
 - **[Health Checks](technical/Health-Checks.md)** - Monitoring container health
 
 ## 🆘 Troubleshooting & FAQ

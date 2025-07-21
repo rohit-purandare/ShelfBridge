@@ -296,7 +296,7 @@ Before sharing debug output, ensure you:
 ## 🔗 Related Commands
 
 - **[CLI Reference](CLI-Reference.md)** - All available commands
-- **[Configuration](../admin/Configuration-Overview.md)** - Setup and configuration
+- **[Configuration](../admin/Configuration-Reference.md)** - Setup and configuration
 - **[Troubleshooting](../troubleshooting/Troubleshooting-Guide.md)** - Common issues and solutions
 - **[Cache Management](../admin/Cache-Management.md)** - Understanding the cache system
 

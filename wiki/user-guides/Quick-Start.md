@@ -161,7 +161,7 @@ npm start
 Now that you're up and running:
 
 1. **[Understanding Sync Results](Understanding-Sync-Results.md)** - Learn what the sync output means
-2. **[Configuration Overview](../admin/Configuration-Overview.md)** - Explore advanced settings
+2. **[Configuration Overview](../admin/Configuration-Reference.md)** - Explore advanced settings
 3. **[Automatic Sync](Automatic-Sync.md)** - Set up scheduled synchronization
 
 ## 🔗 Related Pages

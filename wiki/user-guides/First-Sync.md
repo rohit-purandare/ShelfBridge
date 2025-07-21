@@ -334,12 +334,12 @@ pm2 start src/main.js --name shelfbridge -- start
 
 1. **[Understanding Sync Results](Understanding-Sync-Results.md)** - Learn to interpret sync output
 2. **[Automatic Sync](Automatic-Sync.md)** - Set up scheduled synchronization
-3. **[Configuration Overview](../admin/Configuration-Overview.md)** - Explore advanced settings
+3. **[Configuration Overview](../admin/Configuration-Reference.md)** - Explore advanced settings
 
 ## 🆘 Need Help?
 
 - **Sync Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](../admin/Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](../admin/Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

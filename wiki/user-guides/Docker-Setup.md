@@ -568,7 +568,7 @@ docker inspect shelfbridge
 
 - **[Prerequisites](Prerequisites.md)** - Getting API tokens and requirements
 - **[Quick Start Guide](Quick-Start.md)** - Fastest way to get running
-- **[Configuration Overview](../admin/Configuration-Overview.md)** - Understanding config options
+- **[Configuration Overview](../admin/Configuration-Reference.md)** - Understanding config options
 - **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solving common problems
 
 ## 💡 Docker Best Practices

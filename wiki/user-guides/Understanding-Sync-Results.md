@@ -436,12 +436,12 @@ Based on your sync results:
 
 1. **All good**: [Set up Automatic Sync](Automatic-Sync.md)
 2. **Issues found**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-3. **Want to customize**: [Configuration Overview](../admin/Configuration-Overview.md)
+3. **Want to customize**: [Configuration Overview](../admin/Configuration-Reference.md)
 
 ## 🆘 Need Help?
 
 - **Sync Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](../admin/Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](../admin/Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

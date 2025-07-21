@@ -475,7 +475,7 @@ docker exec -it shelfbridge node src/main.js cache --stats --user alice
 ## 🆘 Need Help?
 
 - **Configuration Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **User Management**: [Basic Configuration](Basic-Configuration.md)
+- **User Management**: [Configuration Guide](Configuration-Guide.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

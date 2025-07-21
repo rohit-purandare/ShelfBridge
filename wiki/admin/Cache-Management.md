@@ -526,14 +526,14 @@ global:
 
 ## 🎯 Next Steps
 
-1. **[Advanced Configuration](Advanced-Configuration.md)** - Fine-tune cache settings
+1. **[Configuration Reference](Configuration-Reference.md)** - Fine-tune cache settings
 2. **[Performance Issues](../troubleshooting/Performance-Issues.md)** - Optimize slow syncs
 3. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve cache issues
 
 ## 🆘 Need Help?
 
 - **Cache Issues**: [Performance Issues](../troubleshooting/Performance-Issues.md)
-- **Configuration Help**: [Configuration Overview](Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

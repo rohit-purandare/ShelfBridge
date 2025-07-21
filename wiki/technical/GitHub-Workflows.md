@@ -168,7 +168,7 @@ git push origin release/v1.2.3
 #### Pre-commit Hook (`.husky/pre-commit`)
 - **Wiki Update Detection** - Analyzes code changes requiring documentation updates
 - **Specific Requirements** - Provides targeted guidance for different change types:
-  - Configuration changes → Update `wiki/admin/Configuration-Overview.md`
+  - Configuration changes → Update `wiki/admin/Configuration-Reference.md`
   - CLI changes → Update `wiki/technical/CLI-Reference.md`
   - Docker changes → Update `wiki/user-guides/Docker-Setup.md`
   - Workflow changes → Update `wiki/technical/GitHub-Workflows.md`

@@ -463,7 +463,7 @@ docker exec -it shelfbridge node src/main.js sync --dry-run | grep -A 5 "protect
 ## 🆘 Need Help?
 
 - **Protection Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

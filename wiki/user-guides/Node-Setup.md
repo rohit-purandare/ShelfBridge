@@ -354,7 +354,7 @@ NODE_ENV=production node src/main.js sync
 
 ## 🔗 Next Steps
 
-1. **[Configuration Overview](../admin/Configuration-Overview.md)** - Understand all configuration options
+1. **[Configuration Overview](../admin/Configuration-Reference.md)** - Understand all configuration options
 2. **[First Sync Guide](First-Sync.md)** - Run your first synchronization
 3. **[CLI Reference](../technical/CLI-Reference.md)** - Complete command documentation
 4. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve common issues
@@ -362,7 +362,7 @@ NODE_ENV=production node src/main.js sync
 ## 🆘 Need Help?
 
 - **Installation Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](../admin/Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](../admin/Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

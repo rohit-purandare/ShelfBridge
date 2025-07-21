@@ -374,7 +374,7 @@ Yes! ShelfBridge is open source:
 
 - **[Quick Start Guide](../user-guides/Quick-Start.md)** - Get running in 5 minutes
 - **[Troubleshooting Guide](Troubleshooting-Guide.md)** - Solve specific problems
-- **[Configuration Overview](../admin/Configuration-Overview.md)** - All configuration options
+- **[Configuration Overview](../admin/Configuration-Reference.md)** - All configuration options
 - **[CLI Reference](../technical/CLI-Reference.md)** - Complete command documentation
 
 ---

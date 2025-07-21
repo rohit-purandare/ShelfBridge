@@ -134,6 +134,6 @@ The solution handles various edge cases:
 
 ## Related Documentation
 
-- [Configuration Overview](../admin/Configuration-Overview.md)
+- [Configuration Overview](../admin/Configuration-Reference.md)
 - [Troubleshooting Guide](./Troubleshooting-Guide.md)
 - [FAQ](./FAQ.md) 

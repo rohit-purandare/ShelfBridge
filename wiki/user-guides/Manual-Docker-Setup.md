@@ -493,14 +493,14 @@ docker run -d \
 
 ## 🎯 Next Steps
 
-1. **Configure ShelfBridge**: [Configuration Overview](../admin/Configuration-Overview.md)
+1. **Configure ShelfBridge**: [Configuration Overview](../admin/Configuration-Reference.md)
 2. **Run First Sync**: [First Sync Guide](First-Sync.md)
 3. **Set Up Monitoring**: [Understanding Sync Results](Understanding-Sync-Results.md)
 
 ## 🆘 Need Help?
 
 - **Docker Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](../admin/Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](../admin/Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---

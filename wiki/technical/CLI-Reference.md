@@ -598,4 +598,4 @@ services:
     restart: unless-stopped
 ```
 
-This CLI reference covers all available functionality. For specific configuration options, see the [Configuration Reference](../admin/Configuration-Overview.md). 
+This CLI reference covers all available functionality. For specific configuration options, see the [Configuration Reference](../admin/Configuration-Reference.md). 

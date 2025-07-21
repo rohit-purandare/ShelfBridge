@@ -722,14 +722,14 @@ docker-compose logs --tail=50 shelfbridge
 
 - **[GitHub Issues](https://github.com/rohit-purandare/ShelfBridge/issues)** - Bug reports and feature requests
 - **[FAQ](FAQ.md)** - Quick answers to common questions
-- **[Configuration Help](../admin/Configuration-Overview.md)** - Detailed configuration guide
+- **[Configuration Help](../admin/Configuration-Reference.md)** - Detailed configuration guide
 
 ## 🔗 Related Pages
 
 - **[FAQ](FAQ.md)** - Quick answers to common questions
 - **[Error Messages](Error-Messages.md)** - Specific error message explanations
 - **[CLI Reference](../technical/CLI-Reference.md)** - Complete command documentation
-- **[Configuration Overview](../admin/Configuration-Overview.md)** - Configuration help
+- **[Configuration Overview](../admin/Configuration-Reference.md)** - Configuration help
 
 ---
 

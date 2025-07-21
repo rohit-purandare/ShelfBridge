@@ -151,7 +151,7 @@ The pagination system provides detailed logging:
 
 ## 🔗 Related Documentation
 
-- **[Configuration Overview](../admin/Configuration-Overview.md)** - Complete configuration reference
+- **[Configuration Overview](../admin/Configuration-Reference.md)** - Complete configuration reference
 - **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solving pagination issues
 - **[Architecture Overview](Architecture-Overview.md)** - How pagination fits into the overall system
 - **[Rate Limiting](Rate-Limiting.md)** - How pagination interacts with rate limiting 

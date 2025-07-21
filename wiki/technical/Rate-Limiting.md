@@ -364,7 +364,7 @@ Consider adding these options in future versions:
 
 - [Hardcover API Documentation](https://docs.hardcover.app/)
 - [rate-limiter-flexible Documentation](https://github.com/animir/node-rate-limiter-flexible)
-- [ShelfBridge Configuration Guide](../admin/Configuration-Overview.md)
+- [ShelfBridge Configuration Guide](../admin/Configuration-Reference.md)
 - [API Client Documentation](../technical/Architecture-Overview.md)
 
 ---

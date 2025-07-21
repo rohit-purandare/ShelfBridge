@@ -477,7 +477,7 @@ global:
 ## 🆘 Need Help?
 
 - **Auto-Add Issues**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
-- **Configuration Help**: [Configuration Overview](Configuration-Overview.md)
+- **Configuration Help**: [Configuration Overview](Configuration-Reference.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
 
 ---
