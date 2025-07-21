@@ -125,11 +125,17 @@ users:
 
 ## 🔄 Recent Changes
 
-**v1.14.0**: Added **environment variable configuration support**! Perfect for Docker deployments and homelab setups. Configure basic settings without YAML files. Environment variables provide ~85% feature parity with YAML configuration. Advanced features like library filtering still require YAML.
+**v1.16.0**: Added **comprehensive title/author matching** as a third fallback option! When books lack ASIN/ISBN identifiers, ShelfBridge now intelligently matches using Hardcover's search API with a sophisticated scoring algorithm. Features configurable confidence thresholds and supports matching across different formats (audiobook ↔ ebook).
 
-**v1.13.0**: Added multi-library filtering support! Now you can include/exclude specific Audiobookshelf libraries by name or ID. Configure globally or per-user to sync only the libraries you want. Enhanced debug command shows available libraries for easy configuration.
+**v1.15.0**: Added **environment variable configuration support**! Perfect for Docker deployments and homelab setups. Configure basic settings without YAML files. Environment variables provide ~85% feature parity with YAML configuration. Advanced features like library filtering still require YAML.
+
+**v1.14.0**: Added **multi-library filtering support**! Now you can include/exclude specific Audiobookshelf libraries by name or ID. Configure globally or per-user to sync only the libraries you want. Enhanced debug command shows available libraries for easy configuration.
+
+**v1.13.0**: Enhanced CLI interface and workflow improvements. Improved sync output display and user experience with better progress indicators and performance metrics.
 
 **v1.12.4**: Comprehensive CLI interface, multi-user support, and advanced configuration options. Use `node src/main.js <command>` for direct access, or `node src/main.js interactive` for menu-driven mode.
+
+> 📝 **Note**: The CHANGELOG.md file is now automatically updated on every release! Check the [complete changelog](CHANGELOG.md) for detailed version history.
 
 ## 📋 Features
 

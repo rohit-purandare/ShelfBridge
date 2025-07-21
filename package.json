@@ -13,6 +13,8 @@
     "config": "node src/main.js config",
     "cache": "node src/main.js cache",
     "dev": "node --watch src/main.js",
+    "changelog": "scripts/update-changelog.sh",
+    "changelog:preview": "scripts/update-changelog.sh --dry-run",
     "prepare": "husky install"
   },
   "keywords": [

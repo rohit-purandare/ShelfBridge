@@ -79,11 +79,166 @@ jobs:
           echo "skip=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Generate changelog
-      id: changelog
+    - name: Generate changelog entry
+      id: changelog_entry
       if: steps.check_tag.outputs.skip == 'false'
       run: |
-        echo "Generating changelog..."
+        echo "Generating changelog entry for v${{ steps.package_version.outputs.version }}..."
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        CURRENT_DATE=$(date +'%Y-%m-%d')
+        NEW_VERSION="${{ steps.package_version.outputs.version }}"
+        
+        # Get commits since last tag
+        if [ -z "$LAST_TAG" ]; then
+          echo "No previous tags found, generating changelog from first commit"
+          COMMITS=$(git log --pretty=format:"%s" --no-merges)
+        else
+          echo "Generating changelog since $LAST_TAG"
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s" --no-merges --grep="^feat\|^fix\|^perf\|^refactor\|^docs\|^style\|^test\|^chore" --invert-grep)
+        fi
+        
+        # Categorize commits
+        ADDED=""
+        CHANGED=""
+        FIXED=""
+        IMPROVED=""
+        
+        while IFS= read -r commit; do
+          if echo "$commit" | grep -E "^feat(\(.+\))?!?:" > /dev/null; then
+            FEATURE=$(echo "$commit" | sed 's/^feat[^:]*: */- **/' | sed 's/$/**/')
+            ADDED="${ADDED}${FEATURE}\n"
+          elif echo "$commit" | grep -E "^fix(\(.+\))?!?:" > /dev/null; then
+            FIX=$(echo "$commit" | sed 's/^fix[^:]*: */- /')
+            FIXED="${FIXED}${FIX}\n"
+          elif echo "$commit" | grep -E "^perf(\(.+\))?!?:" > /dev/null; then
+            PERF=$(echo "$commit" | sed 's/^perf[^:]*: */- /')
+            IMPROVED="${IMPROVED}${PERF}\n"
+          elif echo "$commit" | grep -E "^refactor(\(.+\))?!?:" > /dev/null; then
+            REFACTOR=$(echo "$commit" | sed 's/^refactor[^:]*: */- /')
+            CHANGED="${CHANGED}${REFACTOR}\n"
+          else
+            # Handle non-conventional commits or improvements
+            if echo "$commit" | grep -iE "improve|enhance|better|optimi[sz]e" > /dev/null; then
+              IMPROVEMENT=$(echo "$commit" | sed 's/^/- /')
+              IMPROVED="${IMPROVED}${IMPROVEMENT}\n"
+            elif echo "$commit" | grep -iE "add|implement|create" > /dev/null; then
+              ADDITION=$(echo "$commit" | sed 's/^/- /')
+              ADDED="${ADDED}${ADDITION}\n"
+            elif echo "$commit" | grep -iE "change|update|modify" > /dev/null; then
+              CHANGE=$(echo "$commit" | sed 's/^/- /')
+              CHANGED="${CHANGED}${CHANGE}\n"
+            else
+              # Default to Changed for other commits
+              CHANGE=$(echo "$commit" | sed 's/^/- /')
+              CHANGED="${CHANGED}${CHANGE}\n"
+            fi
+          fi
+        done <<< "$COMMITS"
+        
+        # Create changelog entry
+        cat > changelog_entry.md << EOF
+        ## [$NEW_VERSION] - $CURRENT_DATE
+        
+        EOF
+        
+        if [ -n "$ADDED" ]; then
+          echo "### Added" >> changelog_entry.md
+          echo -e "$ADDED" | sed '/^$/d' >> changelog_entry.md
+          echo "" >> changelog_entry.md
+        fi
+        
+        if [ -n "$CHANGED" ]; then
+          echo "### Changed" >> changelog_entry.md
+          echo -e "$CHANGED" | sed '/^$/d' >> changelog_entry.md
+          echo "" >> changelog_entry.md
+        fi
+        
+        if [ -n "$FIXED" ]; then
+          echo "### Fixed" >> changelog_entry.md
+          echo -e "$FIXED" | sed '/^$/d' >> changelog_entry.md
+          echo "" >> changelog_entry.md
+        fi
+        
+        if [ -n "$IMPROVED" ]; then
+          echo "### Improved" >> changelog_entry.md
+          echo -e "$IMPROVED" | sed '/^$/d' >> changelog_entry.md
+          echo "" >> changelog_entry.md
+        fi
+        
+        echo "changelog_entry_file=changelog_entry.md" >> $GITHUB_OUTPUT
+    
+    - name: Update CHANGELOG.md
+      if: steps.check_tag.outputs.skip == 'false'
+      run: |
+        echo "Updating CHANGELOG.md..."
+        NEW_VERSION="${{ steps.package_version.outputs.version }}"
+        
+        # Create CHANGELOG.md if it doesn't exist
+        if [ ! -f "CHANGELOG.md" ]; then
+          cat > CHANGELOG.md << 'EOF'
+        # Changelog
+        
+        All notable changes to ShelfBridge will be documented in this file.
+        
+        The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+        and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+        
+        ## [Unreleased]
+        
+        EOF
+        fi
+        
+        # Insert new changelog entry after [Unreleased] section
+        if [ -f "changelog_entry.md" ]; then
+          # Create temporary file with updated changelog
+          awk '
+            /^## \[Unreleased\]/ {
+              print $0
+              print ""
+              while ((getline line < "changelog_entry.md") > 0) {
+                print line
+              }
+              close("changelog_entry.md")
+              next
+            }
+            {print}
+          ' CHANGELOG.md > CHANGELOG_temp.md
+          
+          mv CHANGELOG_temp.md CHANGELOG.md
+          
+          # Update the version links at the bottom
+          # Add new version link and update Unreleased link
+          if grep -q "\[Unreleased\]:" CHANGELOG.md; then
+            # Update existing links
+            sed -i "s|\[Unreleased\]:.*|[Unreleased]: https://github.com/${{ github.repository }}/compare/v${NEW_VERSION}...HEAD|" CHANGELOG.md
+            
+            # Add new version link before existing links (if not already present)
+            if ! grep -q "\[${NEW_VERSION}\]:" CHANGELOG.md; then
+              # Find the last version in links and insert new one
+              LAST_VERSION=$(grep -o '\[v\?[0-9]\+\.[0-9]\+\.[0-9]\+\]:' CHANGELOG.md | head -1 | sed 's/\[\|]://g' | sed 's/^v//')
+              if [ -n "$LAST_VERSION" ]; then
+                sed -i "/\[Unreleased\]:/a\\[${NEW_VERSION}]: https://github.com/${{ github.repository }}/compare/v${LAST_VERSION}...v${NEW_VERSION}" CHANGELOG.md
+              else
+                sed -i "/\[Unreleased\]:/a\\[${NEW_VERSION}]: https://github.com/${{ github.repository }}/releases/tag/v${NEW_VERSION}" CHANGELOG.md
+              fi
+            fi
+          else
+            # Add links section if it doesn't exist
+            echo "" >> CHANGELOG.md
+            echo "[Unreleased]: https://github.com/${{ github.repository }}/compare/v${NEW_VERSION}...HEAD" >> CHANGELOG.md
+            echo "[${NEW_VERSION}]: https://github.com/${{ github.repository }}/releases/tag/v${NEW_VERSION}" >> CHANGELOG.md
+          fi
+          
+          echo "✅ CHANGELOG.md updated successfully"
+        else
+          echo "⚠️ No changelog entry file found, skipping CHANGELOG.md update"
+        fi
+    
+    - name: Generate GitHub release changelog
+      id: release_changelog
+      if: steps.check_tag.outputs.skip == 'false'
+      run: |
+        echo "Generating GitHub release changelog..."
         LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
         if [ -z "$LAST_TAG" ]; then
           echo "No previous tags found, generating changelog from first commit"
@@ -94,33 +249,33 @@ jobs:
         fi
         
         # Save changelog to file for multi-line output
-        echo "## 📋 Changes" > changelog.md
-        echo "" >> changelog.md
-        echo "$CHANGELOG" >> changelog.md
-        echo "" >> changelog.md
-        echo "## 🐳 Docker Images" >> changelog.md
-        echo "" >> changelog.md
-        echo "- \`ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}\`" >> changelog.md
-        echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> changelog.md
-        echo "" >> changelog.md
-        echo "## 🚀 Installation" >> changelog.md
-        echo "" >> changelog.md
-        echo "\`\`\`bash" >> changelog.md
-        echo "# Docker" >> changelog.md
-        echo "docker pull ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}" >> changelog.md
-        echo "" >> changelog.md
-        echo "# Node.js" >> changelog.md
-        echo "npm install -g shelfbridge@${{ steps.package_version.outputs.version }}" >> changelog.md
-        echo "\`\`\`" >> changelog.md
+        echo "## 📋 Changes" > release_changelog.md
+        echo "" >> release_changelog.md
+        echo "$CHANGELOG" >> release_changelog.md
+        echo "" >> release_changelog.md
+        echo "## 🐳 Docker Images" >> release_changelog.md
+        echo "" >> release_changelog.md
+        echo "- \`ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}\`" >> release_changelog.md
+        echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> release_changelog.md
+        echo "" >> release_changelog.md
+        echo "## 🚀 Installation" >> release_changelog.md
+        echo "" >> release_changelog.md
+        echo "\`\`\`bash" >> release_changelog.md
+        echo "# Docker" >> release_changelog.md
+        echo "docker pull ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}" >> release_changelog.md
+        echo "" >> release_changelog.md
+        echo "# Node.js" >> release_changelog.md
+        echo "npm install -g shelfbridge@${{ steps.package_version.outputs.version }}" >> release_changelog.md
+        echo "\`\`\`" >> release_changelog.md
         
-        echo "changelog_file=changelog.md" >> $GITHUB_OUTPUT
+        echo "release_changelog_file=release_changelog.md" >> $GITHUB_OUTPUT
     
-    - name: Commit version bump
+    - name: Commit version bump and changelog
       if: steps.check_tag.outputs.skip == 'false'
       run: |
         NEW_VERSION=${{ steps.package_version.outputs.version }}
-        # Add package.json and package-lock.json (if it exists)
-        git add package.json
+        # Add package.json, package-lock.json (if it exists), and CHANGELOG.md
+        git add package.json CHANGELOG.md
         if [ -f "package-lock.json" ]; then
           git add package-lock.json
         fi
@@ -129,10 +284,13 @@ jobs:
           echo "No changes to commit"
           exit 1
         fi
-        git commit --no-verify -m "bump version to v${NEW_VERSION}"
+        git commit --no-verify -m "bump version to v${NEW_VERSION}
+
+        - Updated package.json to v${NEW_VERSION}
+        - Updated CHANGELOG.md with release notes"
         echo "Pushing version bump commit..."
         git push origin main
-        echo "✅ Version bump pushed successfully"
+        echo "✅ Version bump and changelog update pushed successfully"
     
     - name: Create Release
       if: steps.check_tag.outputs.skip == 'false'
@@ -140,7 +298,7 @@ jobs:
       with:
         tag_name: v${{ steps.package_version.outputs.version }}
         name: 🚀 ShelfBridge v${{ steps.package_version.outputs.version }}
-        body_path: ${{ steps.changelog.outputs.changelog_file }}
+        body_path: ${{ steps.release_changelog.outputs.release_changelog_file }}
         draft: false
         prerelease: false
     
@@ -148,5 +306,6 @@ jobs:
       if: steps.check_tag.outputs.skip == 'false'
       run: |
         echo "✅ Release v${{ steps.package_version.outputs.version }} created successfully"
+        echo "📝 CHANGELOG.md updated automatically"
         echo "🐳 Docker images will be available after the docker-build workflow completes"
         echo "📦 Release available at: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.package_version.outputs.version }}" 
