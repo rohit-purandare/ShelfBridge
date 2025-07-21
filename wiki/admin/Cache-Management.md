@@ -1,6 +1,6 @@
 # 💾 Cache Management
 
-ShelfBridge uses an intelligent SQLite-based cache system to optimize performance and reduce API calls. This guide explains how the cache works, how to manage it, and how to optimize it for your needs.
+ShelfBridge uses a simple SQLite-based cache system to optimize performance and reduce API calls. This guide explains how the cache works and how to manage it.
 
 ## 🎯 What is the Cache?
 
@@ -8,7 +8,6 @@ The cache stores:
 - ✅ **Book metadata** from Audiobookshelf and Hardcover
 - ✅ **Previous sync results** to detect changes
 - ✅ **User library information** for faster lookups
-- ✅ **Book matching results** to avoid re-matching
 - ✅ **Progress history** for regression protection
 
 ## 🔧 How the Cache Works
@@ -62,13 +61,9 @@ node src/main.js cache --stats
 **Sample output:**
 ```
 === Cache Statistics ===
-Database: /app/data/shelfbridge.db
-Size: 2.1 MB
 Total books: 127
-Users: alice, bob
 Recent books (last 7 days): 8
-Cache hit rate: 92%
-Last cleanup: 2024-01-15 03:15:00
+Cache size: 2.1 MB
 ```
 
 ### Cache Contents
@@ -77,162 +72,105 @@ Last cleanup: 2024-01-15 03:15:00
 # View detailed cache contents
 docker exec -it shelfbridge node src/main.js cache --show
 
-# Filter by user
-docker exec -it shelfbridge node src/main.js cache --show --user alice
-
-# Filter by recent activity
-docker exec -it shelfbridge node src/main.js cache --show --recent
+# Node.js
+node src/main.js cache --show
 ```
 
-## 🛠️ Cache Configuration
-
-### Basic Cache Settings
-
-```yaml
-global:
-  # Cache configuration
-  cache:
-    # Enable caching (recommended)
-    enabled: true
-    
-    # Cache expiration (hours)
-    expiration: 168  # 1 week
-    
-    # Maximum cache size (MB)
-    max_size: 100
-    
-    # Auto-cleanup frequency (hours)
-    cleanup_frequency: 24
-```
-
-### Advanced Cache Configuration
-
-```yaml
-global:
-  cache:
-    # Enable caching
-    enabled: true
-    
-    # Cache behavior
-    expiration: 168              # 1 week
-    max_size: 100               # 100 MB
-    cleanup_frequency: 24       # Daily cleanup
-    
-    # Performance settings
-    auto_compact: true          # Compact database periodically
-    backup_before_cleanup: true # Backup before major operations
-    
-    # Cache validation
-    validate_on_startup: true   # Check cache integrity
-    repair_if_corrupted: true   # Auto-repair corruption
-    
-    # SQLite optimization
-    sqlite_settings:
-      journal_mode: "WAL"       # Write-Ahead Logging
-      synchronous_mode: "NORMAL" # Balance safety/speed
-      page_size: 4096          # 4KB pages
-      cache_size: 2000         # 2000 pages in memory
-      mmap_size: 64            # 64MB memory-mapped I/O
-```
+**Note:** User-specific filtering (`--user`) and recent activity filtering (`--recent`) are not currently implemented.
 
 ## 🔧 Cache Management Commands
 
-### Cache Information
+### Available Commands
 
 ```bash
-# Basic cache statistics
+# Show cache statistics
 docker exec -it shelfbridge node src/main.js cache --stats
 
-# Detailed cache information
-docker exec -it shelfbridge node src/main.js cache --info
+# Show detailed cache contents
+docker exec -it shelfbridge node src/main.js cache --show
 
-# Check cache health
-docker exec -it shelfbridge node src/main.js cache --health
-```
-
-### Cache Maintenance
-
-```bash
 # Clear entire cache
 docker exec -it shelfbridge node src/main.js cache --clear
 
-# Clear cache for specific user
-docker exec -it shelfbridge node src/main.js cache --clear --user alice
-
-# Clear old entries
-docker exec -it shelfbridge node src/main.js cache --cleanup
-
-# Compact database
-docker exec -it shelfbridge node src/main.js cache --compact
-```
-
-### Cache Backup and Restore
-
-```bash
 # Export cache to JSON
-docker exec -it shelfbridge node src/main.js cache --export cache-backup.json
-
-# Import cache from JSON
-docker exec -it shelfbridge node src/main.js cache --import cache-backup.json
-
-# Backup database file
-docker exec -it shelfbridge cp /app/data/shelfbridge.db /app/data/shelfbridge.db.backup
+docker exec -it shelfbridge node src/main.js cache --export backup.json
 ```
 
-## 📈 Cache Performance Optimization
+### Cache Export
 
-### Performance Monitoring
+The export functionality creates a JSON file containing all cached books:
 
-```bash
-# Check cache performance
-docker exec -it shelfbridge node src/main.js cache --stats --verbose
-
-# Monitor cache hit rate
-docker exec -it shelfbridge node src/main.js sync --dry-run | grep -i cache
+```json
+{
+  "export_date": "2024-01-15T10:30:00.000Z",
+  "total_books": 127,
+  "books": [
+    {
+      "id": 1,
+      "user_id": "alice",
+      "identifier": "B08FHBV4ZX",
+      "identifier_type": "asin",
+      "title": "dune",
+      "edition_id": 12345,
+      "author": "Frank Herbert",
+      "progress_percent": 45.2,
+      "last_sync": "2024-01-15T09:15:00.000Z"
+    }
+  ]
+}
 ```
 
-### Cache Hit Rate Analysis
+## 📊 Cache Database Schema
 
+### Current Implementation
+
+```sql
+-- Books table
+CREATE TABLE books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    identifier TEXT NOT NULL,
+    identifier_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    edition_id INTEGER,
+    author TEXT,
+    progress_percent REAL DEFAULT 0.0,
+    last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_listened_at TIMESTAMP,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    UNIQUE(user_id, identifier, title)
+);
+
+-- Sync tracking table
+CREATE TABLE sync_tracking (
+    user_id TEXT PRIMARY KEY,
+    sync_count INTEGER DEFAULT 0,
+    last_deep_scan_date TIMESTAMP,
+    total_syncs INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Library stats table  
+CREATE TABLE library_stats (
+    user_id TEXT NOT NULL,
+    total_books INTEGER,
+    in_progress_books INTEGER,
+    completed_books INTEGER,
+    stats_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, stats_date)
+);
 ```
-Cache Hit Rate Analysis:
-==================================================
-Total Books: 127
-Cache Hits: 117 (92%)
-Cache Misses: 10 (8%)
-New Books: 3
-Changed Books: 7
-==================================================
-```
 
-**Good cache hit rates:**
-- 90%+ for regular usage
-- 80%+ for new setups
-- 70%+ for frequently changing libraries
+### Cache File Locations
 
-### Optimization Strategies
-
-```yaml
-# For large libraries (1000+ books)
-global:
-  cache:
-    max_size: 500              # Increase cache size
-    cleanup_frequency: 168     # Weekly cleanup
-    sqlite_settings:
-      cache_size: 5000         # More memory
-      mmap_size: 128           # Larger memory mapping
-
-# For frequent syncs
-global:
-  cache:
-    expiration: 720            # 30 days
-    auto_compact: true
-    
-# For limited resources
-global:
-  cache:
-    max_size: 50               # Smaller cache
-    cleanup_frequency: 12      # More frequent cleanup
-```
+| Installation | Cache Location |
+|--------------|----------------|
+| **Docker Compose** | `/app/data/.book_cache.db` (in container) |
+| **Node.js** | `data/.book_cache.db` (in project) |
+| **Manual Docker** | Depends on volume mount |
 
 ## 🔍 Cache Troubleshooting
 
@@ -243,299 +181,139 @@ global:
 # Symptoms
 - "Database is locked" errors
 - Sync failures
-- Corrupted data warnings
+- SQLite errors
 
 # Solutions
-docker exec -it shelfbridge node src/main.js cache --repair
 docker exec -it shelfbridge node src/main.js cache --clear
-```
-
-**Issue: Poor performance**
-```bash
-# Symptoms
-- Slow sync times
-- High CPU usage
-- Low cache hit rates
-
-# Solutions
-docker exec -it shelfbridge node src/main.js cache --compact
-docker exec -it shelfbridge node src/main.js cache --cleanup
 ```
 
 **Issue: Cache too large**
 ```bash
 # Symptoms
 - Disk space warnings
-- Memory issues
 - Slow database operations
 
 # Solutions
-docker exec -it shelfbridge node src/main.js cache --cleanup
-# Edit config: reduce max_size
+docker exec -it shelfbridge node src/main.js cache --clear
+```
+
+**Issue: No performance improvement**
+```bash
+# Symptoms
+- Every sync takes the same amount of time
+- No cache hits reported
+
+# Check cache status
+docker exec -it shelfbridge node src/main.js cache --stats
 ```
 
 ### Cache Debugging
 
 ```bash
 # Check cache integrity
-docker exec -it shelfbridge node src/main.js cache --validate
+docker exec -it shelfbridge ls -la /app/data/.book_cache.db
 
-# Debug cache operations
-docker exec -it shelfbridge node src/main.js sync --dry-run --verbose | grep -i cache
+# Check cache contents
+docker exec -it shelfbridge node src/main.js cache --show
 
-# Check database file
-docker exec -it shelfbridge ls -la /app/data/shelfbridge.db
+# Clear cache for fresh start
+docker exec -it shelfbridge node src/main.js cache --clear
 ```
-
-## 🔄 Cache Lifecycle Management
-
-### Automatic Cleanup
-
-```yaml
-global:
-  cache:
-    # Automatic cleanup settings
-    cleanup_frequency: 24       # Hours between cleanup
-    expiration: 168            # Hours before entries expire
-    max_size: 100              # MB before forced cleanup
-    
-    # Cleanup criteria
-    cleanup_rules:
-      remove_expired: true     # Remove expired entries
-      remove_unused: true      # Remove unused entries
-      remove_errors: true      # Remove error entries
-      compact_after: true      # Compact after cleanup
-```
-
-### Manual Cleanup
-
-```bash
-# Remove expired entries
-docker exec -it shelfbridge node src/main.js cache --cleanup --expired
-
-# Remove unused entries
-docker exec -it shelfbridge node src/main.js cache --cleanup --unused
-
-# Remove error entries
-docker exec -it shelfbridge node src/main.js cache --cleanup --errors
-
-# Full cleanup
-docker exec -it shelfbridge node src/main.js cache --cleanup --all
-```
-
-## 🎯 Cache Strategies
-
-### Conservative Caching
-
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 72             # 3 days
-    max_size: 50               # Conservative size
-    cleanup_frequency: 12      # Frequent cleanup
-    auto_compact: true
-```
-
-**Use case**: Frequently changing libraries, limited resources
-
-### Aggressive Caching
-
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 720            # 30 days
-    max_size: 500              # Large cache
-    cleanup_frequency: 168     # Weekly cleanup
-    auto_compact: false
-```
-
-**Use case**: Stable libraries, performance-focused
-
-### Balanced Caching
-
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 168            # 1 week
-    max_size: 100              # Reasonable size
-    cleanup_frequency: 24      # Daily cleanup
-    auto_compact: true
-```
-
-**Use case**: Most users (recommended)
 
 ## 🌐 Multi-User Cache Management
 
-### User-Specific Cache
+### User Data Isolation
 
-```yaml
-# Cache is automatically separated by user
-User Data Isolation:
-  - alice: Books and progress for Alice
-  - bob: Books and progress for Bob
-  - charlie: Books and progress for Charlie
-```
+The cache automatically separates data by user ID:
+- Each user's books are stored with their `user_id`
+- Sync tracking is per-user
+- Library stats are per-user
+- Cache queries are automatically filtered by user
 
-### User Cache Operations
+### Manual Cache Operations
 
-```bash
-# Check cache for specific user
-docker exec -it shelfbridge node src/main.js cache --stats --user alice
+**Note:** User-specific cache operations (like `--user alice`) are not currently implemented. All cache operations affect the entire cache for all users.
 
-# Clear cache for specific user
-docker exec -it shelfbridge node src/main.js cache --clear --user alice
+## 📈 Current Limitations
 
-# Export user-specific cache
-docker exec -it shelfbridge node src/main.js cache --export alice-cache.json --user alice
-```
+### Not Currently Implemented
 
-## 📊 Cache Database Schema
+The following features are **not implemented** but may be added in future versions:
 
-### Understanding the Database
+**Configuration Options:**
+- Cache expiration settings
+- Maximum cache size limits
+- Automatic cleanup schedules
+- Performance tuning options
 
-```sql
--- Books table
-CREATE TABLE books (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    identifier TEXT NOT NULL,
-    identifier_type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    author TEXT,
-    progress_percent REAL DEFAULT 0.0,
-    last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+**Advanced Commands:**
+- Import from JSON (`--import`)
+- Cache health checks (`--health`)
+- Database compaction (`--compact`)
+- Cache validation (`--validate`)
+- User-specific operations (`--user <userId>`)
 
--- Indexes for performance
-CREATE INDEX idx_books_user_id ON books(user_id);
-CREATE INDEX idx_books_identifier ON books(identifier);
-CREATE INDEX idx_books_last_sync ON books(last_sync);
-```
-
-### Cache File Locations
-
-| Installation | Cache Location |
-|--------------|----------------|
-| **Docker Compose** | `/app/data/shelfbridge.db` (in container) |
-| **Node.js** | `data/shelfbridge.db` (in project) |
-| **Manual Docker** | Depends on volume mount |
-
-## 🛡️ Cache Security
-
-### Backup Strategies
-
-```bash
-# Regular backup
-docker exec -it shelfbridge node src/main.js cache --export daily-backup.json
-
-# Automated backup script
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-docker exec -it shelfbridge node src/main.js cache --export "backup_${DATE}.json"
-```
-
-### Cache Encryption
-
-```yaml
-# For sensitive environments
-global:
-  cache:
-    enabled: true
-    encrypt_cache: true        # Encrypt cache database
-    encryption_key: "your-secret-key"
-    
-    # Secure deletion
-    secure_delete: true
-    overwrite_deleted: true
-```
-
-## 🔄 Cache Migration
-
-### Upgrading Cache Schema
-
-```bash
-# Check cache version
-docker exec -it shelfbridge node src/main.js cache --version
-
-# Migrate cache schema
-docker exec -it shelfbridge node src/main.js cache --migrate
-
-# Backup before migration
-docker exec -it shelfbridge node src/main.js cache --export pre-migration-backup.json
-```
-
-### Moving Cache Between Installations
-
-```bash
-# Export from old installation
-old-installation$ node src/main.js cache --export migration.json
-
-# Import to new installation
-new-installation$ node src/main.js cache --import migration.json
-```
+**Performance Features:**
+- Cache hit rate analysis
+- Automatic optimization
+- Size-based cleanup
+- Performance monitoring
 
 ## 📈 Best Practices
 
-### Recommended Settings
+### Recommended Usage
 
-**For most users:**
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 168
-    max_size: 100
-    cleanup_frequency: 24
-    auto_compact: true
+1. **Monitor cache size** periodically with `cache --stats`
+2. **Export cache** before major changes with `cache --export`
+3. **Clear cache** if you encounter sync issues
+4. **Check cache contents** to verify data integrity
+
+### When to Clear Cache
+
+- **Troubleshooting**: If sync results seem inconsistent
+- **Major config changes**: Changing user IDs or sync behavior  
+- **Fresh start**: Want to re-sync everything from scratch
+- **Database errors**: If you see SQLite corruption warnings
+
+### Backup Strategy
+
+```bash
+# Export cache before major changes
+docker exec -it shelfbridge node src/main.js cache --export backup-$(date +%Y%m%d).json
+
+# Keep cache database backup
+docker exec -it shelfbridge cp /app/data/.book_cache.db /app/data/.book_cache.db.backup
 ```
 
-**For large libraries:**
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 336            # 2 weeks
-    max_size: 500
-    cleanup_frequency: 168     # Weekly
-    auto_compact: false
+## 🎯 Interactive Cache Management
+
+You can also manage the cache through the interactive menu:
+
+```bash
+# Start interactive mode
+docker exec -it shelfbridge node src/main.js interactive
+
+# Select "Manage cache" from the menu
 ```
 
-**For resource-constrained systems:**
-```yaml
-global:
-  cache:
-    enabled: true
-    expiration: 72             # 3 days
-    max_size: 25
-    cleanup_frequency: 12      # Twice daily
-    auto_compact: true
-```
-
-### Monitoring and Maintenance
-
-1. **Monitor cache hit rates** regularly
-2. **Check cache size** periodically
-3. **Backup cache** before major changes
-4. **Clean up expired entries** regularly
-5. **Compact database** monthly
+Available options:
+- Show cache stats
+- Show cache contents  
+- Clear cache
+- Export cache to JSON
 
 ## 🎯 Next Steps
 
-1. **[Configuration Reference](Configuration-Reference.md)** - Fine-tune cache settings
-2. **[Performance Issues](../troubleshooting/Performance-Issues.md)** - Optimize slow syncs
-3. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve cache issues
+1. **[Configuration Reference](Configuration-Reference.md)** - Basic configuration options
+2. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve sync issues
+3. **[CLI Reference](../technical/CLI-Reference.md)** - All available commands
 
 ## 🆘 Need Help?
 
-- **Cache Issues**: [Performance Issues](../troubleshooting/Performance-Issues.md)
-- **Configuration Help**: [Configuration Overview](Configuration-Reference.md)
+- **Configuration Help**: [Configuration Guide](Configuration-Guide.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
+- **Troubleshooting**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
 
 ---
 
-**Efficient cache management keeps ShelfBridge running smoothly!** 💾⚡ 
+**Simple cache management for reliable sync performance!** 💾⚡ 

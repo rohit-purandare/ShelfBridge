@@ -1,6 +1,6 @@
 # 🔍 Book Matching Logic
 
-Book matching is the core of ShelfBridge's functionality. It determines how books from Audiobookshelf are matched with books in your Hardcover library. This guide explains the matching algorithm, configuration options, and troubleshooting strategies.
+Book matching is the core of ShelfBridge's functionality. It determines how books from Audiobookshelf are matched with books in your Hardcover library. This guide explains the matching algorithm and troubleshooting strategies.
 
 ## 🎯 Overview
 
@@ -9,26 +9,19 @@ Book matching works by comparing identifiers between Audiobookshelf and Hardcove
 1. **Extract identifiers** from Audiobookshelf books
 2. **Search Hardcover library** for matching identifiers
 3. **Match books** based on identifier priority
-4. **Handle edge cases** and fallbacks
+4. **Handle unmatched books** via auto-add (if enabled)
 
-## 📊 Identifier Types
+## 📊 Supported Identifiers
 
-### Primary Identifiers
+ShelfBridge currently supports these book identifiers:
 
 | Identifier | Description | Priority | Example |
 |------------|-------------|----------|---------|
 | **ASIN** | Amazon Standard Identification Number | Highest | `B08FHBV4ZX` |
 | **ISBN-13** | 13-digit International Standard Book Number | High | `9780441172719` |
 | **ISBN-10** | 10-digit International Standard Book Number | Medium | `0441172717` |
-| **ISBN** | Generic ISBN (any format) | Medium | `978-0441172719` |
 
-### Secondary Identifiers
-
-| Identifier | Description | Priority | Example |
-|------------|-------------|----------|---------|
-| **Goodreads ID** | Goodreads book identifier | Low | `77566` |
-| **Google Books ID** | Google Books identifier | Low | `zyTCAlFPjgYC` |
-| **LibraryThing ID** | LibraryThing identifier | Low | `15562` |
+**Note:** Goodreads ID, Google Books ID, and LibraryThing ID are not currently supported.
 
 ## 🔧 Matching Algorithm
 
@@ -53,17 +46,12 @@ Search Results:
   - Book matched successfully
 ```
 
-### Step 3: Match Priority
+### Step 3: Match Priority (Hard-coded)
 
-```yaml
-# Default matching priority
-identifier_priority:
-  - "asin"      # 1st priority (most reliable)
-  - "isbn13"    # 2nd priority
-  - "isbn10"    # 3rd priority
-  - "isbn"      # 4th priority
-  - "goodreads" # 5th priority (if available)
-```
+ShelfBridge uses a fixed priority system:
+
+1. **ASIN first** (most reliable for audiobooks)
+2. **ISBN fallback** (for books without ASIN)
 
 ### Step 4: Match Confirmation
 
@@ -82,54 +70,14 @@ Action: Sync progress
 
 ```yaml
 global:
-  # Identifier matching priority
-  identifier_priority:
-    - "asin"
-    - "isbn13"
-    - "isbn10"
-    - "isbn"
+  # Auto-add books not found in Hardcover
+  auto_add_books: false
   
-  # Enable fuzzy matching as fallback
-  enable_fuzzy_matching: false
-  
-  # Fuzzy matching threshold (0.0-1.0)
-  fuzzy_match_threshold: 0.85
+  # Minimum progress to sync
+  min_progress_threshold: 5.0
 ```
 
-### Advanced Matching Configuration
-
-```yaml
-global:
-  # Identifier handling
-  identifier_priority:
-    - "asin"
-    - "isbn13"
-    - "isbn10"
-    - "isbn"
-    - "goodreads_id"
-  
-  # Normalize identifiers before matching
-  normalize_identifiers: true
-  
-  # Clean identifiers (remove hyphens, spaces)
-  clean_identifiers: true
-  
-  # Case-sensitive matching
-  case_sensitive_matching: false
-  
-  # Fuzzy matching options
-  enable_fuzzy_matching: false
-  fuzzy_match_threshold: 0.85
-  fuzzy_match_fields:
-    - "title"
-    - "author"
-  
-  # Metadata matching
-  metadata_matching:
-    normalize_titles: true
-    ignore_subtitles: false
-    author_matching_strictness: "medium"  # strict, medium, loose
-```
+**Note:** Advanced matching options like fuzzy matching, configurable identifier priority, and metadata matching are not currently implemented.
 
 ## 🔍 Matching Scenarios
 
@@ -151,56 +99,52 @@ Result: ✅ PERFECT MATCH (ASIN)
 Action: Sync progress
 ```
 
-### Scenario 2: Multiple Identifier Match
+### Scenario 2: ISBN Fallback Match
 
 ```
 Audiobookshelf Book:
   Title: "Foundation"
   Author: "Isaac Asimov"
-  ASIN: B08FHBV4ZX
   ISBN-13: 9780553293357
-
-Hardcover Library:
-  Title: "Foundation"
-  Author: "Isaac Asimov"
-  ASIN: B08FHBV4ZX
-  ISBN-13: 9780553293357
-
-Result: ✅ MULTIPLE IDENTIFIER MATCH
-Action: Sync progress (using highest priority identifier)
-```
-
-### Scenario 3: Partial Match
-
-```
-Audiobookshelf Book:
-  Title: "Dune"
-  Author: "Frank Herbert"
-  ISBN-13: 9780441172719
-
-Hardcover Library:
-  Title: "Dune"
-  Author: "Frank Herbert"
-  ISBN-13: 9780441172719
   (No ASIN)
 
-Result: ✅ PARTIAL MATCH (ISBN-13)
+Hardcover Library:
+  Title: "Foundation"
+  Author: "Isaac Asimov"
+  ISBN-13: 9780553293357
+
+Result: ✅ ISBN MATCH
 Action: Sync progress
 ```
 
-### Scenario 4: No Match
+### Scenario 3: No Match - Auto-Add
+
+```
+Audiobookshelf Book:
+  Title: "New Science Fiction Novel"
+  Author: "Indie Author"
+  ASIN: B08NEWFICTION
+
+Hardcover Library:
+  (Book not found)
+
+Result: ➕ AUTO-ADD (if enabled)
+Action: Add to Hardcover, then sync progress
+```
+
+### Scenario 4: No Match - Skip
 
 ```
 Audiobookshelf Book:
   Title: "Obscure Self-Published Book"
   Author: "Unknown Author"
-  (No identifiers)
+  (No identifiers or not found in Hardcover)
 
 Hardcover Library:
   (Book not found)
 
-Result: ❌ NO MATCH
-Action: Skip or auto-add (if enabled)
+Result: ⏭️ SKIPPED
+Action: Book not synced
 ```
 
 ## 🎛️ Identifier Extraction
@@ -237,158 +181,6 @@ Normalized Identifiers:
   - "B08FHBV4ZX"          # Clean ASIN
 ```
 
-## 🧩 Fuzzy Matching
-
-### When Fuzzy Matching Helps
-
-```yaml
-# Scenario: Similar but not identical titles
-Audiobookshelf: "The Fellowship of the Ring: Book One"
-Hardcover: "The Fellowship of the Ring"
-
-Without Fuzzy Matching: ❌ NO MATCH
-With Fuzzy Matching: ✅ FUZZY MATCH (87% similarity)
-```
-
-### Fuzzy Matching Configuration
-
-```yaml
-global:
-  # Enable fuzzy matching
-  enable_fuzzy_matching: true
-  
-  # Similarity threshold (0.0-1.0)
-  fuzzy_match_threshold: 0.85
-  
-  # Fields to compare
-  fuzzy_match_fields:
-    - "title"
-    - "author"
-  
-  # Advanced fuzzy options
-  fuzzy_options:
-    ignore_case: true
-    ignore_punctuation: true
-    ignore_common_words: true
-    common_words:
-      - "the"
-      - "a"
-      - "an"
-      - "book"
-      - "volume"
-```
-
-### Fuzzy Matching Algorithms
-
-```yaml
-# Available algorithms
-fuzzy_algorithms:
-  - "levenshtein"     # Character-based distance
-  - "jaro_winkler"    # String similarity
-  - "cosine"          # Vector similarity
-  - "jaccard"         # Set similarity
-
-# Default algorithm
-fuzzy_algorithm: "jaro_winkler"
-```
-
-## 🔄 Multi-Edition Handling
-
-### Edition Matching Strategy
-
-```yaml
-# Different editions of the same book
-Book Editions:
-  - "Dune (Original Edition)"
-  - "Dune (40th Anniversary Edition)"
-  - "Dune (Unabridged Audiobook)"
-
-Matching Strategy:
-  1. Try exact identifier match first
-  2. Fall back to fuzzy title/author match
-  3. Consider edition metadata
-  4. Use user preference for edition selection
-```
-
-### Edition Configuration
-
-```yaml
-global:
-  # Edition handling
-  edition_handling:
-    prefer_edition_type: "audiobook"  # audiobook, ebook, hardcover, paperback
-    match_any_edition: true
-    create_edition_if_missing: false
-    
-  # Edition metadata
-  edition_metadata:
-    consider_narrator: true
-    consider_publisher: false
-    consider_publication_date: false
-```
-
-## 🎯 Per-User Matching
-
-### User-Specific Matching Rules
-
-```yaml
-users:
-  - id: alice
-    # Alice prefers strict matching
-    identifier_priority:
-      - "asin"
-      - "isbn13"
-    enable_fuzzy_matching: false
-    abs_url: https://abs.example.com
-    abs_token: alice_token
-    hardcover_token: alice_hardcover_token
-    
-  - id: bob
-    # Bob allows fuzzy matching
-    identifier_priority:
-      - "asin"
-      - "isbn13"
-      - "isbn10"
-      - "isbn"
-    enable_fuzzy_matching: true
-    fuzzy_match_threshold: 0.80
-    abs_url: https://abs.example.com
-    abs_token: bob_token
-    hardcover_token: bob_hardcover_token
-```
-
-## 🔍 Debugging Matching Issues
-
-### Debug Commands
-
-```bash
-# Check book matching for specific user
-docker exec -it shelfbridge node src/main.js debug --user alice
-
-# Verbose matching information
-docker exec -it shelfbridge node src/main.js sync --dry-run --verbose
-
-# Check specific book matching
-docker exec -it shelfbridge node src/main.js debug --user alice | grep -A 10 "Book Title"
-```
-
-### Debug Output Examples
-
-```
-Book Matching Debug:
-==================================================
-📘 "The Martian" by Andy Weir
-   🔸 Identifiers found:
-      - ASIN: B00EMXBDMA
-      - ISBN-13: 9780553418026
-      - ISBN-10: 0553418025
-   🔸 Hardcover search:
-      - ASIN B00EMXBDMA: ✅ Found
-      - Match confirmed via ASIN
-   🔸 Result: MATCHED
-==================================================
-```
-
 ## 🚨 Common Matching Issues
 
 ### Issue 1: Books Not Matching
@@ -416,130 +208,79 @@ docker exec -it shelfbridge node src/main.js debug --user alice
 - Books not in Hardcover library
 - Identifier extraction issues
 
-### Issue 2: Wrong Book Matched
+### Issue 2: Books Being Auto-Added Instead of Matched
 
 **Symptoms:**
-- Progress synced to wrong book
-- Different editions matched
-- Author mismatch
+- Books you know are in Hardcover are being auto-added
+- Duplicate books appearing
 
 **Solutions:**
 ```yaml
-# Increase matching strictness
-global:
-  identifier_priority:
-    - "asin"  # Only use ASIN for strict matching
-  enable_fuzzy_matching: false
+# Check your Hardcover library manually
+# Ensure the book actually exists with the same identifiers
 
-# Add metadata validation
-global:
-  metadata_validation:
-    require_author_match: true
-    require_title_similarity: 0.90
+# Check debug output for identifier extraction
+docker exec -it shelfbridge node src/main.js debug --user alice
 ```
 
-### Issue 3: Fuzzy Matching Too Aggressive
+### Issue 3: No Identifiers Found
 
 **Symptoms:**
-- Unrelated books being matched
-- Wrong matches due to similar titles
-- Performance issues
+- Books skipped with "no identifiers" message
+- Only title/author matching attempted
 
 **Solutions:**
-```yaml
-# Reduce fuzzy matching sensitivity
-global:
-  fuzzy_match_threshold: 0.95  # Stricter threshold
-  enable_fuzzy_matching: false  # Disable entirely
-```
+- Add ISBN/ASIN metadata to your Audiobookshelf books
+- Use Audiobookshelf's metadata providers
+- Manually edit book metadata
 
 ## 📊 Matching Performance
 
-### Optimization Strategies
+### Current Implementation
 
-```yaml
-global:
-  # Performance optimizations
-  matching_performance:
-    # Cache Hardcover library for faster lookups
-    cache_hardcover_library: true
-    cache_duration: 3600  # 1 hour
-    
-    # Parallel matching for multiple books
-    parallel_matching: true
-    max_parallel_matches: 5
-    
-    # Skip expensive operations
-    skip_fuzzy_for_large_libraries: true
-    large_library_threshold: 1000
-```
-
-### Monitoring Performance
-
-```bash
-# Check matching performance
-docker exec -it shelfbridge node src/main.js sync --dry-run --verbose | grep -i "match"
-
-# Monitor cache effectiveness
-docker exec -it shelfbridge node src/main.js cache --stats
-```
+- **Sequential processing** - Books matched one at a time
+- **Simple exact matching** - No fuzzy matching overhead
+- **Cached lookups** - Hardcover library cached for performance
+- **Efficient identifier extraction** - Minimal processing per book
 
 ## 📈 Best Practices
 
-### Recommended Configurations
-
-**For accuracy:**
-```yaml
-global:
-  identifier_priority:
-    - "asin"
-    - "isbn13"
-    - "isbn10"
-  enable_fuzzy_matching: false
-  normalize_identifiers: true
-```
-
-**For flexibility:**
-```yaml
-global:
-  identifier_priority:
-    - "asin"
-    - "isbn13"
-    - "isbn10"
-    - "isbn"
-  enable_fuzzy_matching: true
-  fuzzy_match_threshold: 0.85
-```
-
-**For performance:**
-```yaml
-global:
-  identifier_priority:
-    - "asin"  # Fastest, most reliable
-  enable_fuzzy_matching: false
-  cache_hardcover_library: true
-```
-
-### Metadata Management
+### For Better Matching
 
 1. **Maintain good metadata** in Audiobookshelf
-2. **Add identifiers** to books when possible
+2. **Add identifiers** to books when possible (especially ASIN for audiobooks)
 3. **Use consistent formatting** for titles and authors
 4. **Verify matches** during initial setup
 5. **Monitor matching results** in sync logs
 
+### Recommended Configuration
+
+**For most users:**
+```yaml
+global:
+  auto_add_books: false  # Conservative approach
+  min_progress_threshold: 5.0
+```
+
+**For power users:**
+```yaml
+global:
+  auto_add_books: true   # Automatically add missing books
+  min_progress_threshold: 1.0  # Sync almost everything
+```
+
 ## 🎯 Next Steps
 
-1. **[Cache Management](Cache-Management.md)** - Optimize matching performance
-2. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve matching issues
-3. **[Auto-Add Books](Auto-Add-Books.md)** - Handle unmatched books
+1. **[Auto-Add Books](Auto-Add-Books.md)** - Handle unmatched books
+2. **[Cache Management](Cache-Management.md)** - Optimize performance
+3. **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solve matching issues
 
 ## 🆘 Need Help?
 
-- **Matching Issues**: [Book Matching Issues](../troubleshooting/Book-Matching-Issues.md)
-- **Configuration Help**: [Configuration Overview](Configuration-Reference.md)
+- **Configuration Help**: [Configuration Guide](Configuration-Guide.md)
 - **General Questions**: [FAQ](../troubleshooting/FAQ.md)
+- **Troubleshooting**: [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)
 
 ---
 
-**Accurate book matching is the foundation of reliable sync!** 🔍📚 
+**Simple, reliable book matching for your audiobook progress!** 🔍📚 
