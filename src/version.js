@@ -9,10 +9,10 @@ const packageJsonPath = join(__dirname, '..', 'package.json');
 
 let currentVersion = 'unknown';
 try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-    currentVersion = packageJson.version;
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  currentVersion = packageJson.version;
 } catch (error) {
-    console.warn('Could not read version from package.json:', error.message);
+  console.warn('Could not read version from package.json:', error.message);
 }
 
-export { currentVersion }; 
+export { currentVersion };
