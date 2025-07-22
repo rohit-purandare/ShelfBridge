@@ -15,28 +15,28 @@ ShelfBridge provides a comprehensive command-line interface with 11 commands for
 
 These options can be used with any command:
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--dry-run` | Run without making changes to Hardcover | `false` |
+| Option              | Description                              | Default |
+| ------------------- | ---------------------------------------- | ------- |
+| `--dry-run`         | Run without making changes to Hardcover  | `false` |
 | `--skip-validation` | Skip configuration validation on startup | `false` |
-| `--verbose` | Show detailed logging output | `false` |
+| `--verbose`         | Show detailed logging output             | `false` |
 
 ## Commands Overview
 
-| Command | Purpose | Use Case |
-|---------|---------|----------|
-| `sync` | Synchronize reading progress | Main functionality |
-| `test` | Test API connections | Troubleshooting |
-| `validate` | Validate configuration | Setup verification |
-| `config` | Show current configuration | Configuration review |
-| `cache` | Manage local cache | Maintenance |
-| `cron` | Start scheduled sync | Background service |
-| `interactive` | Interactive menu mode | User-friendly interface |
-| `debug` | Show debug information | Troubleshooting |
-| `schema` | Check Hardcover GraphQL schema | API exploration |
-| `schema-detail` | Detailed schema for specific mutations | API development |
-| `schema-inputs` | Show all GraphQL input types | API development |
-| `start` | Default scheduled sync mode | Primary service mode |
+| Command         | Purpose                                | Use Case                |
+| --------------- | -------------------------------------- | ----------------------- |
+| `sync`          | Synchronize reading progress           | Main functionality      |
+| `test`          | Test API connections                   | Troubleshooting         |
+| `validate`      | Validate configuration                 | Setup verification      |
+| `config`        | Show current configuration             | Configuration review    |
+| `cache`         | Manage local cache                     | Maintenance             |
+| `cron`          | Start scheduled sync                   | Background service      |
+| `interactive`   | Interactive menu mode                  | User-friendly interface |
+| `debug`         | Show debug information                 | Troubleshooting         |
+| `schema`        | Check Hardcover GraphQL schema         | API exploration         |
+| `schema-detail` | Detailed schema for specific mutations | API development         |
+| `schema-inputs` | Show all GraphQL input types           | API development         |
+| `start`         | Default scheduled sync mode            | Primary service mode    |
 
 ## Command Details
 
@@ -56,6 +56,7 @@ shelfbridge sync [options]
 | `--force` | Force sync even if progress unchanged | `sync --force` |
 
 **Examples:**
+
 ```bash
 # Sync all users
 shelfbridge sync
@@ -71,6 +72,7 @@ shelfbridge sync --dry-run
 ```
 
 **Output Format:**
+
 ```
 🔄 Starting sync for alice
 ⚡ Performing fast sync
@@ -107,6 +109,7 @@ shelfbridge test [options]
 | `-u, --user <userId>` | Test specific user only | `test --user alice` |
 
 **Examples:**
+
 ```bash
 # Test all users
 shelfbridge test
@@ -116,6 +119,7 @@ shelfbridge test --user alice --verbose
 ```
 
 **Output Format:**
+
 ```
 === Testing connections for user: alice ===
 Audiobookshelf: ✅ Connected
@@ -138,6 +142,7 @@ shelfbridge validate [options]
 | `--help-config` | Show configuration help | `validate --help-config` |
 
 **Examples:**
+
 ```bash
 # Basic configuration validation
 shelfbridge validate
@@ -150,6 +155,7 @@ shelfbridge validate --help-config
 ```
 
 **Output Format:**
+
 ```
 ✅ Configuration validation completed successfully
 ```
@@ -163,6 +169,7 @@ shelfbridge config
 ```
 
 **Output Format:**
+
 ```
 === Configuration Status ===
 
@@ -204,6 +211,7 @@ shelfbridge cache [options]
 | `--export <filename>` | Export cache to JSON | `cache --export backup.json` |
 
 **Examples:**
+
 ```bash
 # Show cache statistics
 shelfbridge cache --stats
@@ -216,6 +224,7 @@ shelfbridge cache --clear
 ```
 
 **Stats Output:**
+
 ```
 === Cache Statistics ===
 Total books: 1,247
@@ -225,8 +234,11 @@ Title/author matches cached: 156
 ```
 
 **Cache Types:**
-- **ASIN/ISBN matches**: Books matched by Amazon identifiers (fastest)
-- **Title/author matches**: Books matched by intelligent title/author search (new in v1.16+)
+
+- **ASIN matches**: Books matched by Amazon identifiers (fastest, Tier 1)
+- **ISBN matches**: Books matched by international book numbers (fast, Tier 2)
+- **Title/author matches**: Books matched by edition-specific search with AI scoring (new enhanced system)
+- **Edition-specific data**: Cached edition metadata including duration, narrator, format
 - **Recent books**: Books with activity in the last 7 days
 
 ### `cron` - Scheduled Sync Service
@@ -238,12 +250,14 @@ shelfbridge cron
 ```
 
 **Features:**
+
 - Runs initial sync immediately
 - Schedules recurring syncs based on `sync_schedule` configuration
 - Displays next scheduled sync time
 - Runs in foreground (use process manager for background)
 
 **Output Format:**
+
 ```
 🔍 Performing deep scan (initial sync)
 ✅ Sync complete for user: alice in 15.2s
@@ -262,6 +276,7 @@ shelfbridge interactive
 ```
 
 **Menu Options:**
+
 - Sync all users
 - Sync specific user
 - Test connections
@@ -270,6 +285,7 @@ shelfbridge interactive
 - Exit
 
 **Example Session:**
+
 ```
 ? Interactive mode - choose an option: (Use arrow keys)
 ❯ Sync all users
@@ -294,14 +310,19 @@ shelfbridge debug [options]
 | `-u, --user <userId>` | Debug specific user only | `debug --user alice` |
 
 **Information Shown:**
+
 - User configuration details
 - API connection status with additional details
 - Cache information and statistics
 - Sample API calls and responses
+- **Book matching analysis**: Shows three-tier matching process and confidence scoring
+- **Edition-specific metadata**: Duration, narrator, format detection
+- **Scoring breakdown**: Detailed confidence factor analysis
 - System information
 - Configuration validation status
 
 **Output Format:**
+
 ```
 ════════════════════════════════════════════════════════════
 🐛 DEBUG INFORMATION FOR USER
@@ -340,14 +361,14 @@ Hardcover: ✅ Connected
 
 💡 Library filtering configuration:
    To filter libraries, add to your config:
-   
+
    # Global filtering (applies to all users)
    global:
      libraries:
        include: ["Audiobooks", "Fiction"]
        # OR
        exclude: ["Podcasts", "Sample Books"]
-   
+
    # User-specific filtering (overrides global)
    users:
      - id: alice
@@ -405,6 +426,7 @@ shelfbridge schema
 ```
 
 **Output Format:**
+
 ```
 === Checking schema for user: alice ===
 Available mutations:
@@ -447,6 +469,7 @@ shelfbridge start
 Interactive mode provides a user-friendly menu interface:
 
 ### Main Menu
+
 ```
 ? Interactive mode - choose an option:
 ❯ Sync all users
@@ -458,6 +481,7 @@ Interactive mode provides a user-friendly menu interface:
 ```
 
 ### Cache Management Submenu
+
 ```
 ? Cache management - choose an option:
 ❯ Show cache stats
@@ -470,6 +494,7 @@ Interactive mode provides a user-friendly menu interface:
 ## Common Usage Patterns
 
 ### Initial Setup and Testing
+
 ```bash
 # 1. Validate configuration
 shelfbridge validate --connections
@@ -482,6 +507,7 @@ shelfbridge sync --verbose
 ```
 
 ### Regular Maintenance
+
 ```bash
 # Check cache size
 shelfbridge cache --stats
@@ -494,6 +520,7 @@ shelfbridge debug --user alice
 ```
 
 ### Scheduled Operation
+
 ```bash
 # Start as service (foreground)
 shelfbridge cron
@@ -503,37 +530,48 @@ shelfbridge
 ```
 
 ### Troubleshooting
+
 ```bash
 # Test connections
 shelfbridge test --verbose
 
-# Debug specific user
+# Debug specific user with enhanced matching analysis
 shelfbridge debug --user alice
 
-# Validate configuration
+# Check book matching confidence scores
+shelfbridge sync --dry-run --verbose | grep "confidence"
+
+# Analyze title/author fallback performance
+shelfbridge sync --dry-run --verbose | grep -A 5 "Tier 3"
+
+# Validate configuration including new matching settings
 shelfbridge validate --help-config
 ```
 
 ## Exit Codes
 
-| Code | Meaning | When It Occurs |
-|------|---------|----------------|
-| `0` | Success | Command completed successfully |
-| `1` | Error | Configuration validation failed, API errors, sync failures |
+| Code | Meaning | When It Occurs                                             |
+| ---- | ------- | ---------------------------------------------------------- |
+| `0`  | Success | Command completed successfully                             |
+| `1`  | Error   | Configuration validation failed, API errors, sync failures |
 
 ## Environment Variables
 
 While configuration is primarily done via YAML files, these environment variables can influence behavior:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LOG_LEVEL` | Logging level (error, warn, info, debug) | `info` |
-| `NODE_ENV` | Node.js environment | `production` |
+| Variable    | Description                              | Default      |
+| ----------- | ---------------------------------------- | ------------ |
+| `LOG_LEVEL` | Logging level (error, warn, info, debug) | `info`       |
+| `NODE_ENV`  | Node.js environment                      | `production` |
 
 ## Performance Considerations
 
 ### Command Performance
-- **sync**: 5-60 seconds depending on library size and cache state
+
+- **sync**: 5-60 seconds depending on library size, cache state, and matching tier usage
+  - Tier 1 (ASIN): 0.5-1s per book
+  - Tier 2 (ISBN): 1-2s per book
+  - Tier 3 (Title/Author): 3-8s per book
 - **test**: 2-5 seconds
 - **validate**: 1-3 seconds
 - **cache --stats**: < 1 second
@@ -541,30 +579,36 @@ While configuration is primarily done via YAML files, these environment variable
 - **interactive**: Real-time (menu navigation)
 
 ### Memory Usage
+
 - **Base CLI**: ~30-50 MB
 - **During sync**: +10-20 MB
 - **Large libraries**: May use up to 100 MB temporarily
 
 ### Network Usage
-- **Initial sync**: 50-200 API calls
+
+- **Initial sync**: 50-200 API calls (may increase with title/author fallback usage)
 - **Subsequent syncs**: 10-50 API calls
-- **Rate limiting**: Automatically handled
+- **Edition-specific searches**: 1-2 additional API calls per title/author match
+- **Rate limiting**: Automatically handled (55 req/min Hardcover, 600 req/min Audiobookshelf)
 
 ## Tips and Best Practices
 
 ### For New Users
+
 1. Start with `validate --connections` to verify setup
 2. Use `--dry-run` for your first sync
 3. Use `interactive` mode for easier navigation
 4. Check `debug` output if you encounter issues
 
 ### For Regular Use
+
 1. Use scheduled mode (`cron` or `start`) for automated syncing
 2. Check `cache --stats` periodically
 3. Use `--force` occasionally to ensure full sync
 4. Monitor logs for any recurring issues
 
 ### For Troubleshooting
+
 1. Enable `--verbose` for detailed output
 2. Use `debug` command for comprehensive information
 3. Check `test` command to isolate connection issues
@@ -573,6 +617,7 @@ While configuration is primarily done via YAML files, these environment variable
 ## Integration with Process Managers
 
 ### systemd Service
+
 ```ini
 [Unit]
 Description=ShelfBridge Sync Service
@@ -591,12 +636,13 @@ WantedBy=multi-user.target
 ```
 
 ### Docker Compose
+
 ```yaml
 version: '3.8'
 services:
   shelfbridge:
     image: shelfbridge:latest
-    command: ["node", "src/main.js", "start"]
+    command: ['node', 'src/main.js', 'start']
     volumes:
       - ./config:/app/config
       - ./data:/app/data
@@ -604,4 +650,4 @@ services:
     restart: unless-stopped
 ```
 
-This CLI reference covers all available functionality. For specific configuration options, see the [Configuration Reference](../admin/Configuration-Reference.md). 
+This CLI reference covers all available functionality. For specific configuration options, see the [Configuration Reference](../admin/Configuration-Reference.md).

@@ -854,15 +854,79 @@ export class HardcoverClient {
     try {
       const result = await this._executeQuery(query, variables);
 
-      if (result && result.search && result.search.results) {
-        // Parse the results JSON string
-        const searchResults = JSON.parse(result.search.results);
-        return Array.isArray(searchResults) ? searchResults : [];
+      if (!result || !result.search) {
+        logger.debug('No search results returned from API for title:', title);
+        return [];
       }
 
-      return [];
+      if (!result.search.results) {
+        logger.debug(
+          'Search API returned null/empty results for title:',
+          title,
+        );
+        return [];
+      }
+
+      // Validate and parse the results
+      let searchResults;
+      try {
+        if (typeof result.search.results === 'string') {
+          searchResults = JSON.parse(result.search.results);
+        } else if (Array.isArray(result.search.results)) {
+          // Sometimes the API might return an array directly
+          searchResults = result.search.results;
+        } else if (
+          typeof result.search.results === 'object' &&
+          result.search.results.hits
+        ) {
+          // NEW: Handle the actual API format where results are in hits[].document
+          const hits = result.search.results.hits;
+          if (Array.isArray(hits)) {
+            searchResults = hits.map(hit => hit.document).filter(doc => doc);
+            logger.debug(
+              `Extracted ${searchResults.length} results from hits array`,
+            );
+          } else {
+            logger.warn('Unexpected hits format - not an array:', typeof hits);
+            return [];
+          }
+        } else {
+          logger.warn(
+            'Unexpected search results format for title:',
+            title,
+            'Type:',
+            typeof result.search.results,
+          );
+          return [];
+        }
+      } catch (jsonError) {
+        logger.error('Failed to parse search results JSON for title:', title, {
+          error: jsonError.message,
+          rawResults: result.search.results,
+          resultsType: typeof result.search.results,
+        });
+        return [];
+      }
+
+      if (!Array.isArray(searchResults)) {
+        logger.warn(
+          'Parsed search results is not an array for title:',
+          title,
+          'Type:',
+          typeof searchResults,
+        );
+        return [];
+      }
+
+      logger.debug(
+        `Title search for "${title}" returned ${searchResults.length} results`,
+      );
+      return searchResults;
     } catch (error) {
-      logger.error('Error searching books by title:', error.message);
+      logger.error('Error searching books by title:', title, {
+        error: error.message,
+        stack: error.stack,
+      });
       return [];
     }
   }
@@ -908,15 +972,86 @@ export class HardcoverClient {
     try {
       const result = await this._executeQuery(query, variables);
 
-      if (result && result.search && result.search.results) {
-        // Parse the results JSON string
-        const searchResults = JSON.parse(result.search.results);
-        return Array.isArray(searchResults) ? searchResults : [];
+      if (!result || !result.search) {
+        logger.debug(
+          'No search results returned from API for title+author:',
+          searchQuery,
+        );
+        return [];
       }
 
-      return [];
+      if (!result.search.results) {
+        logger.debug(
+          'Search API returned null/empty results for title+author:',
+          searchQuery,
+        );
+        return [];
+      }
+
+      // Validate and parse the results
+      let searchResults;
+      try {
+        if (typeof result.search.results === 'string') {
+          searchResults = JSON.parse(result.search.results);
+        } else if (Array.isArray(result.search.results)) {
+          // Sometimes the API might return an array directly
+          searchResults = result.search.results;
+        } else if (
+          typeof result.search.results === 'object' &&
+          result.search.results.hits
+        ) {
+          // NEW: Handle the actual API format where results are in hits[].document
+          const hits = result.search.results.hits;
+          if (Array.isArray(hits)) {
+            searchResults = hits.map(hit => hit.document).filter(doc => doc);
+            logger.debug(
+              `Extracted ${searchResults.length} results from hits array for title+author search`,
+            );
+          } else {
+            logger.warn('Unexpected hits format - not an array:', typeof hits);
+            return [];
+          }
+        } else {
+          logger.warn(
+            'Unexpected search results format for title+author:',
+            searchQuery,
+            'Type:',
+            typeof result.search.results,
+          );
+          return [];
+        }
+      } catch (jsonError) {
+        logger.error(
+          'Failed to parse search results JSON for title+author:',
+          searchQuery,
+          {
+            error: jsonError.message,
+            rawResults: result.search.results,
+            resultsType: typeof result.search.results,
+          },
+        );
+        return [];
+      }
+
+      if (!Array.isArray(searchResults)) {
+        logger.warn(
+          'Parsed search results is not an array for title+author:',
+          searchQuery,
+          'Type:',
+          typeof searchResults,
+        );
+        return [];
+      }
+
+      logger.debug(
+        `Title+author search for "${searchQuery}" returned ${searchResults.length} results`,
+      );
+      return searchResults;
     } catch (error) {
-      logger.error('Error searching books by title and author:', error.message);
+      logger.error('Error searching books by title and author:', searchQuery, {
+        error: error.message,
+        stack: error.stack,
+      });
       return [];
     }
   }
@@ -1150,6 +1285,306 @@ export class HardcoverClient {
     if (this._httpsAgent) {
       this._httpsAgent.destroy();
       logger.debug('HardcoverClient HTTPS agent cleaned up');
+    }
+  }
+
+  /**
+   * Get detailed book information including all editions for a specific book ID
+   * @param {string|number} bookId - Book ID from search results
+   * @returns {Object|null} - Detailed book data with editions
+   */
+  async getBookDetailsWithEditions(bookId) {
+    const query = `
+      query getBookDetails($id: Int!) {
+        books(where: {id: {_eq: $id}}, limit: 1) {
+          id
+          title
+          author_names
+          editions {
+            id
+            asin
+            isbn_10
+            isbn_13
+            physical_format
+            reading_format { format }
+            pages
+            audio_seconds
+          }
+          contributions(where: {contributable_type: {_eq: "Book"}}) {
+            author {
+              id
+              name
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = { id: parseInt(bookId) };
+
+    try {
+      const result = await this._executeQuery(query, variables);
+
+      if (result && result.books && result.books.length > 0) {
+        return result.books[0];
+      }
+
+      return null;
+    } catch (error) {
+      logger.error('Error getting book details with editions:', error.message, {
+        bookId,
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Enhanced search for books with detailed edition information
+   * Two-stage approach: search by title/author, then fetch edition details
+   * @param {string} title - Book title
+   * @param {string} author - Author name (optional)
+   * @param {string} narrator - Narrator name (optional, for metadata)
+   * @param {number} limit - Maximum results
+   * @returns {Array} - Search results enhanced with edition data
+   */
+  async searchBooksWithEditions(
+    title,
+    author = null,
+    narrator = null,
+    limit = 5,
+  ) {
+    logger.debug(
+      `Enhanced search for "${title}" by "${author}" with edition data`,
+    );
+
+    // Stage 1: Search for book candidates
+    const searchResults = await this.searchBooksForMatching(
+      title,
+      author,
+      narrator,
+      limit,
+    );
+
+    if (searchResults.length === 0) {
+      logger.debug(`No search results found for "${title}"`);
+      return [];
+    }
+
+    logger.debug(
+      `Found ${searchResults.length} book candidates, fetching edition details...`,
+    );
+
+    // Stage 2: Enhance each result with detailed edition information
+    const enhancedResults = [];
+
+    for (const searchResult of searchResults) {
+      try {
+        const bookId = searchResult.id;
+        if (!bookId) {
+          logger.warn(
+            `Search result missing book ID for "${searchResult.title}"`,
+          );
+          continue;
+        }
+
+        // Fetch detailed book data with editions
+        const bookDetails = await this.getBookDetailsWithEditions(bookId);
+
+        if (bookDetails && bookDetails.editions) {
+          // Create enhanced results for each edition of this book
+          for (const edition of bookDetails.editions) {
+            const enhancedResult = {
+              // Preserve original search result data
+              ...searchResult,
+
+              // Add edition-specific data
+              edition: {
+                id: edition.id,
+                asin: edition.asin,
+                isbn_10: edition.isbn_10,
+                isbn_13: edition.isbn_13,
+                physical_format: edition.physical_format,
+                reading_format: edition.reading_format,
+                pages: edition.pages,
+                audio_seconds: edition.audio_seconds,
+              },
+
+              // Enhanced book data
+              book: {
+                id: bookDetails.id,
+                title: bookDetails.title,
+                author_names: bookDetails.author_names,
+                contributions: bookDetails.contributions,
+              },
+
+              // Mark as enhanced result
+              _isEnhancedWithEditions: true,
+              _searchMetadata: {
+                ...searchResult._searchMetadata,
+                enhancementStage: 'edition_details_fetched',
+                editionCount: bookDetails.editions.length,
+              },
+            };
+
+            enhancedResults.push(enhancedResult);
+          }
+        } else {
+          // If we can't get edition details, keep the original search result
+          logger.debug(`Could not fetch edition details for book ${bookId}`);
+          enhancedResults.push({
+            ...searchResult,
+            _isEnhancedWithEditions: false,
+            _enhancementError: 'Could not fetch edition details',
+          });
+        }
+      } catch (error) {
+        logger.error(
+          `Error enhancing search result for "${searchResult.title}":`,
+          error.message,
+        );
+        // Keep original result even if enhancement fails
+        enhancedResults.push({
+          ...searchResult,
+          _isEnhancedWithEditions: false,
+          _enhancementError: error.message,
+        });
+      }
+    }
+
+    logger.debug(
+      `Enhanced search complete: ${enhancedResults.length} edition-specific results`,
+    );
+    return enhancedResults;
+  }
+
+  /**
+   * Search editions directly by title and author using Hardcover's editions API
+   * This provides edition-specific data (ASIN, ISBN, format, narrator) for accurate matching
+   * @param {string} title - Book title
+   * @param {string} author - Author name (optional)
+   * @param {string} narrator - Narrator name (optional, for metadata)
+   * @param {number} limit - Maximum results
+   * @returns {Array} - Edition search results with full edition data
+   */
+  async searchEditionsByTitleAuthor(
+    title,
+    author = null,
+    narrator = null,
+    limit = 5,
+  ) {
+    if (!title || typeof title !== 'string') {
+      logger.warn('Invalid title provided for edition search:', title);
+      return [];
+    }
+
+    logger.debug(`Searching editions for "${title}" by "${author}"`);
+
+    // Build search conditions
+    const titleCondition = `%${title.trim()}%`;
+    const whereConditions = {
+      book: {
+        title: { _ilike: titleCondition },
+      },
+    };
+
+    // Add author condition if provided (use contributions instead of author_names)
+    if (author && typeof author === 'string') {
+      whereConditions.book.contributions = {
+        author: {
+          name: { _ilike: `%${author.trim()}%` },
+        },
+      };
+    }
+
+    const query = `
+      query searchEditions($where: editions_bool_exp!, $limit: Int!) {
+        editions(
+          where: $where
+          order_by: [
+            {users_count: desc},
+            {id: desc}
+          ]
+          limit: $limit
+        ) {
+          id
+          title
+          subtitle
+          asin
+          isbn_10
+          isbn_13
+          pages
+          audio_seconds
+          release_date
+          physical_format
+          rating
+          users_count
+          users_read_count
+          lists_count
+          book {
+            id
+            title
+            contributions {
+              author {
+                id
+                name
+              }
+            }
+          }
+          publisher {
+            id
+            name
+          }
+          reading_format {
+            id
+            format
+          }
+          contributions {
+            author {
+              id
+              name
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      where: whereConditions,
+      limit: Math.min(limit, 20), // Cap at 20 for performance
+    };
+
+    try {
+      const result = await this._executeQuery(query, variables);
+
+      if (!result || !result.editions) {
+        logger.debug('No edition results returned from API for:', title);
+        return [];
+      }
+
+      const editions = result.editions;
+      logger.debug(
+        `Edition search for "${title}" returned ${editions.length} results`,
+      );
+
+      // Add search metadata to each result
+      return editions.map(edition => ({
+        ...edition,
+        _searchMetadata: {
+          searchTitle: title,
+          searchAuthor: author,
+          searchNarrator: narrator,
+          searchTimestamp: Date.now(),
+          searchType: 'direct_edition_search',
+        },
+      }));
+    } catch (error) {
+      logger.error('Error searching editions by title/author:', title, {
+        error: error.message,
+        author: author,
+        stack: error.stack,
+      });
+      return [];
     }
   }
 }

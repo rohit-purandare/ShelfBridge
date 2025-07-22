@@ -406,7 +406,7 @@ export class SyncManager {
 
     // Get configuration
     const config = this.globalConfig.title_author_matching || {};
-    const confidenceThreshold = config.confidence_threshold || 0.7;
+    const confidenceThreshold = config.confidence_threshold || 0.7; // Raised from 0.6 to 0.7 for better precision
     const maxResults = config.max_search_results || 5;
 
     try {
@@ -445,8 +445,10 @@ export class SyncManager {
       }
 
       // 2. Cache miss - perform API search
-      logger.debug(`Title/author cache miss for "${title}" - calling API`);
-      const searchResults = await this.hardcover.searchBooksForMatching(
+      logger.debug(
+        `Title/author cache miss for "${title}" - calling edition search API`,
+      );
+      const searchResults = await this.hardcover.searchEditionsByTitleAuthor(
         title,
         author,
         narrator,
@@ -495,9 +497,9 @@ export class SyncManager {
           await this.cache.storeEditionMapping(
             this.userId,
             titleAuthorId,
-            'title_author',
-            bestMatch.title,
+            title, // Use the original book title from Audiobookshelf
             bestMatch.id, // edition_id
+            'title_author',
             bestMatch.author_names?.[0] || author || '',
           );
           logger.debug(`Cached title/author match for "${title}"`, {

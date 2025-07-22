@@ -999,7 +999,43 @@ function tokenSetSimilarity(str1, str2) {
 export function extractSeries(bookData) {
   if (!bookData) return { name: null, sequence: null };
 
-  // Try different possible series fields
+  // Handle Audiobookshelf series array format first
+  if (
+    bookData.media?.metadata?.series &&
+    Array.isArray(bookData.media.metadata.series)
+  ) {
+    const firstSeries = bookData.media.metadata.series[0];
+    if (firstSeries) {
+      return {
+        name: firstSeries.name || firstSeries.series || null,
+        sequence: firstSeries.sequence || firstSeries.book_number || null,
+      };
+    }
+  }
+
+  // Handle direct series array
+  if (bookData.series && Array.isArray(bookData.series)) {
+    const firstSeries = bookData.series[0];
+    if (firstSeries) {
+      return {
+        name: firstSeries.name || firstSeries.series || null,
+        sequence: firstSeries.sequence || firstSeries.book_number || null,
+      };
+    }
+  }
+
+  // Handle nested media series array
+  if (bookData.media?.series && Array.isArray(bookData.media.series)) {
+    const firstSeries = bookData.media.series[0];
+    if (firstSeries) {
+      return {
+        name: firstSeries.name || firstSeries.series || null,
+        sequence: firstSeries.sequence || firstSeries.book_number || null,
+      };
+    }
+  }
+
+  // Fallback to old string-based extraction for compatibility
   const seriesName =
     bookData.series ||
     bookData.series_name ||
@@ -1012,6 +1048,18 @@ export function extractSeries(bookData) {
     bookData.sequence ||
     bookData.media?.metadata?.series_sequence ||
     bookData.media?.metadata?.book_number;
+
+  // Parse title for series info if no direct series data found (e.g., "The Primal Hunter 11")
+  if (!seriesName && bookData.media?.metadata?.title) {
+    const title = bookData.media.metadata.title;
+    const match = title.match(/^(.+?)\s+(\d+)$/);
+    if (match) {
+      return {
+        name: match[1].trim(),
+        sequence: parseFloat(match[2]),
+      };
+    }
+  }
 
   return {
     name: seriesName ? String(seriesName).trim() : null,
@@ -1027,7 +1075,67 @@ export function extractSeries(bookData) {
 export function extractPublicationYear(bookData) {
   if (!bookData) return null;
 
-  // Try different year fields
+  // NEW: Direct edition search results (edition data directly on result)
+  if (bookData._searchMetadata?.searchType === 'direct_edition_search') {
+    // Try edition-specific release data first
+    if (bookData.release_year) {
+      return typeof bookData.release_year === 'number'
+        ? bookData.release_year
+        : parseInt(bookData.release_year);
+    }
+
+    // Extract year from release_date
+    if (bookData.release_date) {
+      const dateMatch = bookData.release_date.match(/(\d{4})/);
+      if (dateMatch) {
+        return parseInt(dateMatch[1]);
+      }
+    }
+
+    // Check book-level data as fallback
+    if (bookData.book) {
+      const bookYear =
+        bookData.book.release_year || bookData.book.publication_year;
+      if (bookYear) {
+        return typeof bookYear === 'number' ? bookYear : parseInt(bookYear);
+      }
+    }
+  }
+
+  // Enhanced search results (edition data nested in .edition property)
+  if (bookData.edition) {
+    const edition = bookData.edition;
+    const editionYear =
+      edition.release_year ||
+      edition.publication_year ||
+      edition.published_year;
+    if (editionYear) {
+      return typeof editionYear === 'number'
+        ? editionYear
+        : parseInt(editionYear);
+    }
+  }
+
+  // Try Hardcover search result fields
+  const hardcoverYear =
+    bookData.release_year ||
+    bookData.publication_year ||
+    bookData.published_year;
+  if (hardcoverYear) {
+    return typeof hardcoverYear === 'number'
+      ? hardcoverYear
+      : parseInt(hardcoverYear);
+  }
+
+  // Handle release_date field (extract year from date string)
+  if (bookData.release_date) {
+    const dateMatch = bookData.release_date.match(/(\d{4})/);
+    if (dateMatch) {
+      return parseInt(dateMatch[1]);
+    }
+  }
+
+  // Try original Audiobookshelf fields
   const year =
     bookData.publishedYear ||
     bookData.publication_date ||
@@ -1155,72 +1263,92 @@ export function calculateMatchingScore(
   // Extract activity data
   const resultActivity = extractActivityFromSearchResult(searchResult);
 
-  // 1. Activity/Popularity (24.1% weight) - OPTIMIZED! Now THE #1 quality signal
-  const activityScore = calculateActivityScore(resultActivity);
-  score += activityScore * 0.241;
-  breakdown.activity = {
-    score: activityScore,
-    weight: 0.241,
-    value: resultActivity || 0,
-  };
+  // Extract duration data for weight calculation
+  const targetDuration = extractAudioDurationFromAudiobookshelf(targetMetadata);
+  const resultDuration = extractAudioDurationFromSearchResult(searchResult);
+  const isDurationRelevant = targetDuration || resultDuration;
 
-  // 2. Format Score (19.3% weight) - balanced priority for audiobook matching
-  const formatScore = calculateFormatScore(resultFormat);
-  score += formatScore * 0.193;
-  breakdown.format = {
-    score: formatScore,
-    weight: 0.193,
-    value: resultFormat || 'unknown',
-  };
-
-  // 3. Series Match (19.2% weight) - critical false positive prevention
-  const seriesResult = calculateSeriesScore(targetSeries, resultSeries);
-  score += seriesResult.score * 0.192;
-  breakdown.series = {
-    score: seriesResult.score,
-    weight: 0.192,
-    reason: seriesResult.reason,
-    comparison: `"${targetSeries.name || 'N/A'}" vs "${resultSeries.name || 'N/A'}"`,
-  };
-
-  // 4. Title Similarity (13.8% weight) - sufficient for primary matching accuracy
+  // 1. Title Similarity (25% weight) - PRIMARY matching factor
   const titleScore =
     calculateTextSimilarity(
       normalizeTitle(targetTitle),
       normalizeTitle(resultTitle),
     ) * 100;
-  score += titleScore * 0.138;
+  score += titleScore * 0.25;
   breakdown.title = {
     score: titleScore,
-    weight: 0.138,
+    weight: 0.25,
     comparison: `"${targetTitle}" vs "${resultTitle}"`,
   };
 
-  // 5. Author Similarity (10.4% weight) - fundamental verification
+  // 2. Author Similarity (18% weight) - SECONDARY matching factor
   const authorScore =
     calculateTextSimilarity(
       normalizeAuthor(targetAuthor || ''),
       normalizeAuthor(resultAuthor || ''),
     ) * 100;
-  score += authorScore * 0.104;
+  score += authorScore * 0.18;
   breakdown.author = {
     score: authorScore,
-    weight: 0.104,
+    weight: 0.18,
     comparison: `"${targetAuthor || 'N/A'}" vs "${resultAuthor || 'N/A'}"`,
   };
 
-  // 6. Publication Year (8.2% weight) - enhanced edition disambiguation
+  // 3. Series Match (12% weight) - Enhanced edition disambiguation
+  const seriesResult = calculateSeriesScore(targetSeries, resultSeries);
+  score += seriesResult.score * 0.12;
+  breakdown.series = {
+    score: seriesResult.score,
+    weight: 0.12,
+    reason: seriesResult.reason,
+    comparison: `"${targetSeries.name || 'N/A'}" vs "${resultSeries.name || 'N/A'}"`,
+  };
+
+  // 4. Format Score (10% weight) - Relevant for audiobook matching
+  const formatScore = calculateFormatScore(resultFormat);
+  score += formatScore * 0.1;
+  breakdown.format = {
+    score: formatScore,
+    weight: 0.1,
+    value: resultFormat || 'unknown',
+  };
+
+  // 5. Activity/Popularity (18% weight) - Important for distinguishing between similar titles
+  const activityScore = calculateActivityScore(resultActivity);
+  score += activityScore * 0.18;
+  breakdown.activity = {
+    score: activityScore,
+    weight: 0.18,
+    value: resultActivity || 0,
+  };
+
+  // 6. Publication Year (7% weight) - Enhanced edition disambiguation
   const yearResult = calculateYearScore(targetYear, resultYear);
-  score += yearResult.score * 0.082;
+  score += yearResult.score * 0.07;
   breakdown.year = {
     score: yearResult.score,
-    weight: 0.082,
+    weight: 0.07,
     reason: yearResult.reason,
     comparison: `${targetYear || 'N/A'} vs ${resultYear || 'N/A'}`,
   };
 
-  // 7. Narrator Match (5.0% weight) - focused tiebreaker role for audiobooks
-  let narratorScore = 60; // Neutral score for missing data
+  // 7. Duration Match (5% weight) - Small but helpful for audiobook edition matching
+  const durationScore = calculateDurationSimilarity(
+    targetDuration,
+    resultDuration,
+  );
+  score += durationScore * 0.05;
+  breakdown.duration = {
+    score: durationScore,
+    weight: 0.05,
+    comparison: `${targetDuration ? Math.round(targetDuration / 60) + 'm' : 'N/A'} vs ${resultDuration ? Math.round(resultDuration / 60) + 'm' : 'N/A'}`,
+    reason: isDurationRelevant
+      ? 'Duration matching for audiobook edition'
+      : 'No duration data available',
+  };
+
+  // 8. Narrator Match (3% weight) - Small tiebreaker for audiobooks
+  let narratorScore = 60; // Neutral default
   if (targetNarrator && resultNarrator) {
     narratorScore =
       calculateTextSimilarity(
@@ -1232,10 +1360,10 @@ export function calculateMatchingScore(
   } else if (!targetNarrator && resultNarrator) {
     narratorScore = 60; // Neutral
   }
-  score += narratorScore * 0.05;
+  score += narratorScore * 0.03;
   breakdown.narrator = {
     score: narratorScore,
-    weight: 0.05,
+    weight: 0.03,
     comparison: `"${targetNarrator || 'N/A'}" vs "${resultNarrator || 'N/A'}"`,
   };
 
@@ -1259,6 +1387,78 @@ export function calculateMatchingScore(
       score: -penalty,
       reason: 'Same title, very different author',
     };
+  }
+
+  // NEW: Format Preference Bonus - strongly prefer matching format types
+  const userFormat = detectUserBookFormat(targetMetadata);
+  const resultFormatLower =
+    extractFormatFromSearchResult(searchResult).toLowerCase();
+
+  if (
+    userFormat === 'audiobook' &&
+    (resultFormatLower.includes('audiobook') ||
+      resultFormatLower.includes('listened'))
+  ) {
+    const formatPreferenceBonus = 10; // Reduced from 20 - moderate bonus for audiobook match
+    score += formatPreferenceBonus;
+    breakdown.formatPreferenceBonus = {
+      score: formatPreferenceBonus,
+      reason:
+        'User has audiobook, result is audiobook - format preference match',
+    };
+    logger.debug(
+      `Applied audiobook preference bonus: +${formatPreferenceBonus} points`,
+    );
+  } else if (
+    userFormat === 'ebook' &&
+    (resultFormatLower.includes('ebook') ||
+      resultFormatLower.includes('digital'))
+  ) {
+    const formatPreferenceBonus = 8; // Reduced from 15 - moderate bonus for ebook match
+    score += formatPreferenceBonus;
+    breakdown.formatPreferenceBonus = {
+      score: formatPreferenceBonus,
+      reason: 'User has ebook, result is ebook - format preference match',
+    };
+  } else if (
+    userFormat === 'physical' &&
+    (resultFormatLower.includes('physical') ||
+      resultFormatLower.includes('paperback') ||
+      resultFormatLower.includes('hardcover'))
+  ) {
+    const formatPreferenceBonus = 5; // Reduced from 10 - small bonus for physical match
+    score += formatPreferenceBonus;
+    breakdown.formatPreferenceBonus = {
+      score: formatPreferenceBonus,
+      reason:
+        'User has physical book, result is physical - format preference match',
+    };
+  }
+
+  // NEW: Perfect Match Bonus for high-confidence title+author combinations
+  if (titleScore >= 90 && authorScore >= 90) {
+    const perfectMatchBonus = Math.min(titleScore, authorScore) * 0.08; // Reduced from 0.15 to 0.08 - up to 8 bonus points
+    score += perfectMatchBonus;
+    breakdown.perfectMatchBonus = {
+      score: perfectMatchBonus,
+      reason: `Perfect title+author match bonus (title: ${titleScore.toFixed(1)}%, author: ${authorScore.toFixed(1)}%)`,
+    };
+    logger.debug(
+      `Applied perfect match bonus: +${perfectMatchBonus.toFixed(1)} points`,
+    );
+  }
+
+  // NEW: High-confidence bonus for very good title+author matches
+  else if (titleScore >= 80 && authorScore >= 80) {
+    const highConfidenceBonus = Math.min(titleScore, authorScore) * 0.04; // Reduced from 0.08 to 0.04 - up to 4 bonus points
+    score += highConfidenceBonus;
+    breakdown.highConfidenceBonus = {
+      score: highConfidenceBonus,
+      reason: `High-confidence title+author match bonus (title: ${titleScore.toFixed(1)}%, author: ${authorScore.toFixed(1)}%)`,
+    };
+    logger.debug(
+      `Applied high-confidence bonus: +${highConfidenceBonus.toFixed(1)} points`,
+    );
   }
 
   // Ensure score is within 0-100 range
@@ -1345,9 +1545,19 @@ function calculateFormatScore(format) {
   if (!format) return 25;
 
   const formatLower = format.toLowerCase();
-  if (formatLower.includes('audiobook') || formatLower.includes('audio'))
+  if (
+    formatLower.includes('audiobook') ||
+    formatLower.includes('audio') ||
+    formatLower.includes('listened')
+  )
+    // Add "listened" format recognition
     return 100;
-  if (formatLower.includes('ebook') || formatLower.includes('digital'))
+  if (
+    formatLower.includes('ebook') ||
+    formatLower.includes('digital') ||
+    formatLower.includes('read')
+  )
+    // Add "read" format recognition
     return 75;
   if (
     formatLower.includes('paperback') ||
@@ -1412,20 +1622,56 @@ function extractAuthorFromSearchResult(searchResult) {
 
 /**
  * Extract narrator from Hardcover search result
+ * Based on actual API analysis: audiobooks have 2 contributions (author + narrator)
  * @param {Object} searchResult - Hardcover search result
- * @returns {string} - Narrator name or null
+ * @returns {string|null} - Narrator name or null
  */
-function extractNarratorFromSearchResult(searchResult) {
-  if (searchResult.contributions && searchResult.contributions.length > 0) {
-    const narratorContrib = searchResult.contributions.find(
-      c => c.role && c.role.toLowerCase().includes('narrator'),
-    );
-    if (narratorContrib && narratorContrib.author) {
-      return narratorContrib.author.name || null;
+export function extractNarratorFromSearchResult(searchResult) {
+  // Get the format to determine if this is an audiobook
+  const format = extractFormatFromSearchResult(searchResult).toLowerCase();
+  const isAudiobook =
+    format.includes('listened') || format.includes('audiobook');
+
+  // For audiobooks with multiple contributions, the last contributor is typically the narrator
+  if (
+    isAudiobook &&
+    searchResult.contributions &&
+    searchResult.contributions.length >= 2
+  ) {
+    const potentialNarrator =
+      searchResult.contributions[searchResult.contributions.length - 1]; // Last contributor
+    if (
+      potentialNarrator &&
+      potentialNarrator.author &&
+      potentialNarrator.author.name
+    ) {
+      return potentialNarrator.author.name;
     }
   }
 
-  // Check for narrator in cached contributors
+  // Fallback: check if we have multiple contributions regardless of format
+  // This covers cases where format detection might be wrong but we have clear narrator data
+  if (searchResult.contributions && searchResult.contributions.length >= 2) {
+    // If the last contributor's name suggests they're a narrator (common narrator names)
+    const potentialNarrator =
+      searchResult.contributions[searchResult.contributions.length - 1];
+    if (
+      potentialNarrator &&
+      potentialNarrator.author &&
+      potentialNarrator.author.name
+    ) {
+      const narratorName = potentialNarrator.author.name;
+
+      // Check if this looks like a known narrator (Travis Baldree, Jim Dale, etc.)
+      // or if the name is different from the first contributor (author)
+      const authorName = searchResult.contributions[0]?.author?.name || '';
+      if (narratorName !== authorName) {
+        return narratorName;
+      }
+    }
+  }
+
+  // Legacy fallback for other data structures (keeping for compatibility)
   if (
     searchResult.cached_contributors &&
     searchResult.cached_contributors.length > 0
@@ -1433,8 +1679,8 @@ function extractNarratorFromSearchResult(searchResult) {
     const narratorContrib = searchResult.cached_contributors.find(
       c => c.role && c.role.toLowerCase().includes('narrator'),
     );
-    if (narratorContrib) {
-      return narratorContrib.name || null;
+    if (narratorContrib && narratorContrib.name) {
+      return narratorContrib.name;
     }
   }
 
@@ -1446,12 +1692,72 @@ function extractNarratorFromSearchResult(searchResult) {
  * @param {Object} searchResult - Hardcover search result
  * @returns {string} - Format string
  */
-function extractFormatFromSearchResult(searchResult) {
+export function extractFormatFromSearchResult(searchResult) {
+  // NEW: Direct edition search results (edition data is on the result object itself)
+  if (searchResult._searchMetadata?.searchType === 'direct_edition_search') {
+    // Check reading format first (most specific)
+    if (searchResult.reading_format && searchResult.reading_format.format) {
+      return searchResult.reading_format.format;
+    }
+
+    // Check edition_format
+    if (searchResult.edition_format) {
+      return searchResult.edition_format;
+    }
+
+    // Check physical format
+    if (searchResult.physical_format) {
+      return searchResult.physical_format;
+    }
+
+    // Determine format from edition capabilities
+    if (searchResult.audio_seconds && searchResult.audio_seconds > 0) {
+      return 'audiobook';
+    }
+    if (searchResult.pages && searchResult.pages > 0) {
+      return 'physical';
+    }
+  }
+
+  // Enhanced search results (edition data is nested in .edition property)
+  if (searchResult.edition) {
+    const edition = searchResult.edition;
+
+    // Check reading format first (most specific)
+    if (edition.reading_format && edition.reading_format.format) {
+      return edition.reading_format.format;
+    }
+
+    // Check physical format
+    if (edition.physical_format) {
+      return edition.physical_format;
+    }
+
+    // Determine format from edition capabilities
+    if (edition.audio_seconds && edition.audio_seconds > 0) {
+      return 'audiobook';
+    }
+    if (edition.pages && edition.pages > 0) {
+      return edition.physical_format || 'physical';
+    }
+  }
+
+  // Fallback to original format detection logic
+  // Check for explicit format field first
   if (searchResult.format) return searchResult.format;
   if (searchResult.physical_format) return searchResult.physical_format;
   if (searchResult.reading_format && searchResult.reading_format.format) {
     return searchResult.reading_format.format;
   }
+
+  // Use boolean flags from search API (book-level)
+  if (searchResult.has_audiobook) {
+    return 'audiobook';
+  }
+  if (searchResult.has_ebook) {
+    return 'ebook';
+  }
+
   return 'unknown';
 }
 
@@ -1460,11 +1766,278 @@ function extractFormatFromSearchResult(searchResult) {
  * @param {Object} searchResult - Hardcover search result
  * @returns {number} - Activity count
  */
-function extractActivityFromSearchResult(searchResult) {
-  return (
-    searchResult.activities_count ||
-    searchResult.users_read_count ||
-    searchResult.ratings_count ||
-    0
-  );
+export function extractActivityFromSearchResult(searchResult) {
+  // NEW: Direct edition search results (comprehensive activity data)
+  if (searchResult._searchMetadata?.searchType === 'direct_edition_search') {
+    // Collect edition-level activity metrics
+    const editionMetrics = [
+      searchResult.users_count || 0,
+      searchResult.users_read_count || 0,
+      searchResult.lists_count || 0,
+      searchResult.rating ? Math.floor(searchResult.rating * 10) : 0, // Convert rating to 0-50 scale
+    ];
+
+    // Collect book-level activity metrics (if available)
+    const bookMetrics = [];
+    if (searchResult.book) {
+      bookMetrics.push(
+        searchResult.book.activities_count || 0,
+        searchResult.book.users_count || 0,
+        searchResult.book.users_read_count || 0,
+        searchResult.book.ratings_count || 0,
+        searchResult.book.reviews_count || 0,
+        searchResult.book.lists_count || 0,
+      );
+    }
+
+    // Combine all metrics and use the highest value for best discrimination
+    const allMetrics = [...editionMetrics, ...bookMetrics];
+    const maxActivity = Math.max(...allMetrics);
+
+    // Create a weighted composite score favoring edition-specific metrics
+    const editionScore = editionMetrics.reduce((sum, count) => sum + count, 0);
+    const bookScore = bookMetrics.reduce((sum, count) => sum + count, 0);
+    const compositeScore = Math.floor(editionScore * 0.7 + bookScore * 0.3);
+
+    // Return the higher of max single metric or weighted composite
+    return Math.max(maxActivity, compositeScore);
+  }
+
+  // Enhanced search results (book-level data)
+  // Try multiple activity metrics and use the highest value for better disambiguation
+  const activitySources = [
+    searchResult.activities_count || 0,
+    searchResult.users_read_count || 0,
+    searchResult.ratings_count || 0,
+    searchResult.users_count || 0,
+    searchResult.lists_count || 0,
+    searchResult.reviews_count || 0,
+  ];
+
+  // Use the highest activity count for best discrimination
+  const maxActivity = Math.max(...activitySources);
+
+  // If we have multiple metrics, create a composite score
+  const totalActivity = activitySources.reduce((sum, count) => sum + count, 0);
+
+  // Return the higher of max single metric or weighted composite
+  return Math.max(maxActivity, Math.floor(totalActivity * 0.4));
+}
+
+/**
+ * Detect the format of the user's book based on available metadata
+ * @param {Object} targetMetadata - User's book metadata
+ * @returns {string} - Detected format: 'audiobook', 'ebook', 'physical', or 'unknown'
+ */
+export function detectUserBookFormat(targetMetadata) {
+  if (!targetMetadata) return 'unknown';
+
+  // NEW: Check Audiobookshelf native format indicators first (most reliable)
+  const hasAudioFiles =
+    targetMetadata.audioFiles &&
+    Array.isArray(targetMetadata.audioFiles) &&
+    targetMetadata.audioFiles.length > 0;
+
+  const hasEbookFile =
+    targetMetadata.ebookFile && targetMetadata.ebookFile !== null;
+
+  if (hasAudioFiles) {
+    return 'audiobook';
+  }
+
+  if (hasEbookFile) {
+    return 'ebook';
+  }
+
+  // Check media nested structure (Audiobookshelf API response format)
+  if (targetMetadata.media) {
+    const mediaAudioFiles = targetMetadata.media.audioFiles;
+    const mediaEbookFile = targetMetadata.media.ebookFile;
+
+    if (
+      mediaAudioFiles &&
+      Array.isArray(mediaAudioFiles) &&
+      mediaAudioFiles.length > 0
+    ) {
+      return 'audiobook';
+    }
+
+    if (mediaEbookFile && mediaEbookFile !== null) {
+      return 'ebook';
+    }
+  }
+
+  // Fallback: Check for audiobook indicators (ASIN, duration, narrator)
+  const hasAsin = extractAsin(targetMetadata);
+  const hasAudioDuration =
+    targetMetadata.duration ||
+    targetMetadata.media?.metadata?.duration ||
+    targetMetadata.media?.duration;
+  const hasNarrator = extractNarrator(targetMetadata);
+
+  if (hasAsin || hasAudioDuration || hasNarrator) {
+    return 'audiobook';
+  }
+
+  // Check for ebook indicators (file extensions)
+  const filePath = targetMetadata.path || targetMetadata.media?.path || '';
+  const fileExtension = filePath.toLowerCase();
+
+  if (
+    fileExtension.includes('.epub') ||
+    fileExtension.includes('.pdf') ||
+    fileExtension.includes('.mobi') ||
+    fileExtension.includes('.azw') ||
+    fileExtension.includes('.txt')
+  ) {
+    return 'ebook';
+  }
+
+  // Check for explicit format information
+  const format =
+    targetMetadata.format ||
+    targetMetadata.media?.metadata?.format ||
+    targetMetadata.libraryItemType;
+
+  if (format) {
+    const formatLower = format.toLowerCase();
+    if (formatLower.includes('audio') || formatLower.includes('book')) {
+      return 'audiobook';
+    }
+    if (formatLower.includes('ebook') || formatLower.includes('digital')) {
+      return 'ebook';
+    }
+    if (
+      formatLower.includes('physical') ||
+      formatLower.includes('paper') ||
+      formatLower.includes('hard')
+    ) {
+      return 'physical';
+    }
+  }
+
+  // Default assumption: if we have ISBN but no audio/ebook indicators, likely physical
+  const hasIsbn = extractIsbn(targetMetadata);
+  if (hasIsbn && !hasAsin && !hasAudioDuration) {
+    return 'physical';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Extract audiobook duration in seconds from Hardcover search result
+ * @param {Object} searchResult - Hardcover search result
+ * @returns {number|null} Duration in seconds, or null if not available
+ */
+export function extractAudioDurationFromSearchResult(searchResult) {
+  if (!searchResult) return null;
+
+  // Direct edition search results
+  if (searchResult.audio_seconds && searchResult.audio_seconds > 0) {
+    return searchResult.audio_seconds;
+  }
+
+  // Edition nested in search result
+  if (
+    searchResult.edition &&
+    searchResult.edition.audio_seconds &&
+    searchResult.edition.audio_seconds > 0
+  ) {
+    return searchResult.edition.audio_seconds;
+  }
+
+  // Book nested structure
+  if (
+    searchResult.book &&
+    searchResult.book.audio_seconds &&
+    searchResult.book.audio_seconds > 0
+  ) {
+    return searchResult.book.audio_seconds;
+  }
+
+  return null;
+}
+
+/**
+ * Extract audiobook duration in seconds from Audiobookshelf metadata
+ * @param {Object} bookData - Audiobookshelf book data
+ * @returns {number|null} Duration in seconds, or null if not available
+ */
+export function extractAudioDurationFromAudiobookshelf(bookData) {
+  if (!bookData) return null;
+
+  // Check direct duration field (from screenshot: duration is Float)
+  if (bookData.duration && bookData.duration > 0) {
+    return Math.round(bookData.duration); // Convert to integer seconds
+  }
+
+  // Check media.duration
+  if (
+    bookData.media &&
+    bookData.media.duration &&
+    bookData.media.duration > 0
+  ) {
+    return Math.round(bookData.media.duration);
+  }
+
+  // Check metadata.duration
+  if (
+    bookData.media &&
+    bookData.media.metadata &&
+    bookData.media.metadata.duration &&
+    bookData.media.metadata.duration > 0
+  ) {
+    return Math.round(bookData.media.metadata.duration);
+  }
+
+  // Check if we can derive from audioFiles
+  if (
+    bookData.media &&
+    bookData.media.audioFiles &&
+    Array.isArray(bookData.media.audioFiles)
+  ) {
+    let totalDuration = 0;
+    for (const audioFile of bookData.media.audioFiles) {
+      if (audioFile.duration && audioFile.duration > 0) {
+        totalDuration += audioFile.duration;
+      }
+    }
+    if (totalDuration > 0) {
+      return Math.round(totalDuration);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Calculate similarity score for audiobook durations
+ * @param {number|null} duration1 - First duration in seconds
+ * @param {number|null} duration2 - Second duration in seconds
+ * @returns {number} Similarity score from 0-100
+ */
+export function calculateDurationSimilarity(duration1, duration2) {
+  if (!duration1 || !duration2 || duration1 <= 0 || duration2 <= 0) {
+    return 0; // No duration data available
+  }
+
+  const difference = Math.abs(duration1 - duration2);
+  const average = (duration1 + duration2) / 2;
+  const percentageDifference = (difference / average) * 100;
+
+  // Convert percentage difference to similarity score
+  // 0% difference = 100% similarity
+  // 5% difference = 75% similarity
+  // 10% difference = 50% similarity
+  // 20%+ difference = 0% similarity
+
+  if (percentageDifference <= 1) return 100; // Within 1% - perfect match
+  if (percentageDifference <= 3) return 95; // Within 3% - excellent match
+  if (percentageDifference <= 5) return 85; // Within 5% - very good match
+  if (percentageDifference <= 10) return 70; // Within 10% - good match
+  if (percentageDifference <= 15) return 50; // Within 15% - fair match
+  if (percentageDifference <= 20) return 25; // Within 20% - poor match
+
+  return 0; // Greater than 20% difference - no match
 }
