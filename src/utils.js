@@ -329,6 +329,26 @@ export function formatDuration(seconds) {
 }
 
 /**
+ * Format duration in seconds to human-readable format for logging
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} - Human-readable duration (e.g., "11h 7m 53s", "2m 30s", "45s")
+ */
+export function formatDurationForLogging(seconds) {
+  if (!seconds || seconds < 0) return '0s';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+
+  return parts.join(' ');
+}
+
+/**
  * Sleep for a specified number of milliseconds
  * @param {number} ms - Milliseconds to sleep
  * @returns {Promise} - Promise that resolves after the delay

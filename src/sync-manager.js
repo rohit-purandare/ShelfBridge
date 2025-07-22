@@ -12,6 +12,7 @@ import {
   calculateCurrentPage,
   calculateCurrentSeconds,
   calculateMatchingScore,
+  formatDurationForLogging,
 } from './utils.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
@@ -486,10 +487,17 @@ export class SyncManager {
         bestMatch &&
         bestMatch._matchingScore.totalScore >= confidenceThreshold * 100
       ) {
-        logger.info(`Found title/author match for "${title}"`, {
-          hardcoverTitle: bestMatch.title,
+        // Clean user-facing log
+        logger.info(`📚 Found "${title}" in Hardcover by title/author search`, {
+          match: bestMatch.title,
+          confidence: `${bestMatch._matchingScore.totalScore.toFixed(1)}%`,
+        });
+
+        // Detailed breakdown for debugging only
+        logger.debug(`Title/author match details for "${title}"`, {
           confidence: bestMatch._matchingScore.totalScore,
           breakdown: bestMatch._matchingScore.breakdown,
+          searchMetadata: bestMatch._searchMetadata,
         });
 
         // 3. Cache successful match in existing books table for future performance
@@ -1664,6 +1672,7 @@ export class SyncManager {
       isFinished: isFinished,
       userBookId: userBookId,
       editionId: edition.id,
+      format: edition.audio_seconds ? 'audiobook' : 'text',
     });
 
     if (this.dryRun) {
@@ -1681,10 +1690,11 @@ export class SyncManager {
         totalValue = edition.pages;
       }
 
-      logger.debug(`Completion parameters for ${title}`, {
-        totalValue: totalValue,
-        useSeconds: useSeconds,
-        format: edition.format,
+      logger.debug(`🎯 Marking ${title} complete`, {
+        total: useSeconds
+          ? formatDurationForLogging(totalValue)
+          : `${totalValue} pages`,
+        format: useSeconds ? 'audiobook' : 'ebook',
       });
 
       // Pass finished_at and started_at to Hardcover client if present
@@ -1802,6 +1812,7 @@ export class SyncManager {
       progress: progressPercent,
       userBookId: userBookId,
       editionId: edition.id,
+      format: edition.audio_seconds ? 'audiobook' : 'text',
     });
 
     if (this.dryRun) {
@@ -1826,12 +1837,15 @@ export class SyncManager {
         currentProgress = calculateCurrentPage(progressPercent, edition.pages);
       }
 
-      logger.debug(`Progress calculation for ${title}`, {
-        progressPercent: progressPercent,
-        currentProgress: currentProgress,
-        useSeconds: useSeconds,
-        totalValue: useSeconds ? edition.audio_seconds : edition.pages,
-      });
+      logger.debug(
+        `📊 Calculated ${title} progress: ${progressPercent.toFixed(1)}%`,
+        {
+          [useSeconds ? 'progress' : 'progress']: useSeconds
+            ? `${formatDurationForLogging(currentProgress)} of ${formatDurationForLogging(edition.audio_seconds)}`
+            : `page ${currentProgress} of ${edition.pages}`,
+          format: useSeconds ? 'audiobook' : 'ebook',
+        },
+      );
 
       // Prepare rollback callback for API failure
       const rollbackCallbacks = [];
@@ -1852,6 +1866,7 @@ export class SyncManager {
       logger.debug(`Previous progress for ${title}`, {
         previousProgress: previousProgress,
         newProgress: progressPercent,
+        format: useSeconds ? 'audiobook (seconds)' : 'text (pages)',
       });
 
       const result = await this.hardcover.updateReadingProgress(
@@ -1868,7 +1883,9 @@ export class SyncManager {
         logger.info(`Successfully updated progress for ${title}`, {
           userBookId: userBookId,
           progressPercent: progressPercent,
-          currentProgress: currentProgress,
+          [useSeconds ? 'progress_seconds' : 'progress_pages']: useSeconds
+            ? `${currentProgress} (${formatDurationForLogging(currentProgress)})`
+            : currentProgress,
           resultId: result.id,
         });
 
@@ -1883,6 +1900,13 @@ export class SyncManager {
                     edition.audio_seconds || 0,
                   )
                 : calculateCurrentPage(previousProgress, edition.pages || 0);
+
+              logger.debug(`Rolling back to previous progress`, {
+                [useSeconds ? 'rollback_seconds' : 'rollback_pages']: useSeconds
+                  ? `${rollbackCurrentProgress} (${formatDurationForLogging(rollbackCurrentProgress)})`
+                  : rollbackCurrentProgress,
+                previousProgressPercent: previousProgress,
+              });
 
               await this.hardcover.updateReadingProgress(
                 userBookId,
