@@ -5,21 +5,25 @@ Welcome to ShelfBridge! We're excited to have you contribute to this project. Th
 ## 🎯 Ways to Contribute
 
 ### 🐛 Bug Reports
+
 - **Found a bug?** Open a [GitHub Issue](https://github.com/rohit-purandare/ShelfBridge/issues)
 - **Include details**: OS, Node.js version, configuration (redacted), logs
 - **Reproduction steps**: Clear steps to recreate the issue
 
 ### 💡 Feature Requests
+
 - **Have an idea?** Open a [GitHub Issue](https://github.com/rohit-purandare/ShelfBridge/issues) with the "enhancement" label
 - **Describe the use case**: Why is this feature needed?
 - **Consider alternatives**: What other solutions have you considered?
 
 ### 📝 Documentation
+
 - **Improve the wiki**: Fix typos, add examples, clarify instructions
 - **Add tutorials**: New setup guides, troubleshooting tips
 - **Code comments**: Make the code more understandable
 
 ### 💻 Code Contributions
+
 - **Bug fixes**: Fix reported issues
 - **New features**: Implement approved feature requests
 - **Performance improvements**: Optimize existing code
@@ -28,6 +32,7 @@ Welcome to ShelfBridge! We're excited to have you contribute to this project. Th
 ## 🏗️ Development Setup
 
 ### Prerequisites
+
 - **Node.js**: 18.0.0 or higher
 - **npm**: Latest version
 - **Git**: For version control
@@ -57,10 +62,10 @@ Create a development configuration for testing:
 
 ```yaml
 global:
-  min_progress_threshold: 1.0    # Lower for testing
-  dry_run: true                  # Start with dry runs
+  min_progress_threshold: 1.0 # Lower for testing
+  dry_run: true # Start with dry runs
   auto_add_books: false
-  workers: 2                     # Fewer workers for development
+  workers: 2 # Fewer workers for development
 
 users:
   - id: dev_user
@@ -83,14 +88,59 @@ npm run sync
 # Run tests (when available)
 npm test
 
-# Lint code
-npm run lint
+# Code Quality & Formatting
+npm run lint              # ESLint code checking
+npm run lint:fix          # Auto-fix ESLint issues
+npm run format            # Format code with Prettier
+npm run format:check      # Check if files need formatting
 
 # Run specific commands
 node src/main.js debug
 node src/main.js validate
 node src/main.js cache --stats
 ```
+
+### Code Formatting Setup
+
+ShelfBridge uses **Prettier** for consistent code formatting and **ESLint** for code quality. The pre-commit hook automatically formats code before committing.
+
+#### Configuration Files
+
+- **`.prettierrc`** - Prettier formatting rules
+- **`.prettierignore`** - Files excluded from formatting
+- **`eslint.config.js`** - ESLint configuration
+
+#### Pre-commit Hook
+
+When you commit code, the following happens automatically:
+
+1. 🎨 **Prettier** formats your staged files
+2. 🔍 **ESLint** checks for code quality issues
+3. 🔒 **Gitleaks** scans for secrets
+4. 📚 **Wiki check** ensures documentation stays updated
+
+#### Manual Formatting
+
+```bash
+# Format all files
+npm run format
+
+# Check which files need formatting
+npm run format:check
+
+# Fix linting issues
+npm run lint:fix
+```
+
+#### Editor Integration
+
+Install the Prettier extension for your editor:
+
+- **VS Code**: Prettier - Code formatter
+- **IntelliJ/WebStorm**: Built-in Prettier support
+- **Vim/Neovim**: prettier.nvim
+
+Configure your editor to format on save for the best experience.
 
 ## 🔀 Git Workflow
 
@@ -131,6 +181,7 @@ Longer description if needed
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -140,6 +191,7 @@ Longer description if needed
 - `chore`: Maintenance tasks
 
 **Examples:**
+
 ```
 feat(sync): add progress regression protection
 
@@ -190,23 +242,27 @@ ShelfBridge/
 ### Core Components
 
 **Entry Point** (`main.js`):
+
 - CLI argument parsing
 - Command routing
 - Configuration validation
 - Error handling
 
 **Sync Manager** (`sync-manager.js`):
+
 - Orchestrates sync process
 - Book matching logic
 - Progress calculations
 - Cache integration
 
 **API Clients**:
+
 - `audiobookshelf-client.js`: REST API wrapper
 - `hardcover-client.js`: GraphQL API wrapper
 - Rate limiting and error handling
 
 **Book Cache** (`book-cache.js`):
+
 - SQLite database operations
 - Performance optimization
 - Data persistence
@@ -227,22 +283,26 @@ ShelfBridge/
 **Before submitting a PR:**
 
 1. **Configuration validation**:
+
    ```bash
    node src/main.js validate --connections
    ```
 
 2. **Dry run testing**:
+
    ```bash
    node src/main.js sync --dry-run
    ```
 
 3. **Cache operations**:
+
    ```bash
    node src/main.js cache --stats
    node src/main.js cache --clear
    ```
 
 4. **Debug output**:
+
    ```bash
    node src/main.js debug
    ```
@@ -256,12 +316,14 @@ ShelfBridge/
 ### Test Scenarios
 
 **Happy Path:**
+
 - Valid configuration
 - Books with progress in Audiobookshelf
 - Books already in Hardcover library
 - Normal sync operations
 
 **Edge Cases:**
+
 - Empty libraries
 - Books without ISBN/ASIN
 - Network failures
@@ -270,6 +332,7 @@ ShelfBridge/
 - Progress regression scenarios
 
 **Error Conditions:**
+
 - Invalid configuration
 - API failures
 - Cache corruption
@@ -290,13 +353,13 @@ const bookMatchingResults = await findBookMatches(audiobookshelfBooks);
 
 // Use async/await over promises
 async function syncBooks() {
-    try {
-        const books = await this.audiobookshelf.getReadingProgress();
-        // ... process books
-    } catch (error) {
-        logger.error('Failed to fetch books', { error: error.message });
-        throw error;
-    }
+  try {
+    const books = await this.audiobookshelf.getReadingProgress();
+    // ... process books
+  } catch (error) {
+    logger.error('Failed to fetch books', { error: error.message });
+    throw error;
+  }
 }
 
 // Document complex functions
@@ -306,7 +369,7 @@ async function syncBooks() {
  * @returns {Object} Object with isbn and asin properties
  */
 function extractBookIdentifiers(bookData) {
-    // Implementation...
+  // Implementation...
 }
 ```
 
@@ -314,14 +377,17 @@ function extractBookIdentifiers(bookData) {
 
 ```javascript
 // Use structured logging
-logger.info('Starting sync for user', { userId: user.id, bookCount: books.length });
+logger.info('Starting sync for user', {
+  userId: user.id,
+  bookCount: books.length,
+});
 
 // Include context in errors
 logger.error('Failed to update book progress', {
-    bookTitle: book.title,
-    userBookId: userBook.id,
-    error: error.message,
-    stack: error.stack
+  bookTitle: book.title,
+  userBookId: userBook.id,
+  error: error.message,
+  stack: error.stack,
 });
 
 // Use appropriate log levels
@@ -369,9 +435,11 @@ validateCustom(fieldName, value, validationType) {
 
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Documentation update
@@ -379,17 +447,20 @@ Brief description of changes
 - [ ] Performance improvement
 
 ## Testing
+
 - [ ] Manual testing completed
 - [ ] Configuration validation passes
 - [ ] Docker build succeeds (if applicable)
 
 ## Checklist
+
 - [ ] Code follows existing style
 - [ ] Documentation updated
 - [ ] No breaking changes (or documented)
 - [ ] Related issues referenced
 
 ## Screenshots/Output
+
 Include relevant command output or screenshots
 ```
 
@@ -407,6 +478,7 @@ Include relevant command output or screenshots
 ### Common Development Issues
 
 **"No books found" during development:**
+
 ```bash
 # Check API connection
 node src/main.js debug --user your_test_user
@@ -419,6 +491,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "YOUR_ABS_URL/api/me"
 ```
 
 **Cache issues:**
+
 ```bash
 # Clear cache and restart
 node src/main.js cache --clear
@@ -429,6 +502,7 @@ node src/main.js cache --show
 ```
 
 **Configuration validation errors:**
+
 ```bash
 # Show detailed help
 node src/main.js validate --help-config
@@ -440,6 +514,7 @@ python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
 ### Debugging Techniques
 
 **Add temporary logging:**
+
 ```javascript
 // Temporary debug logging
 console.log('DEBUG: Book data:', JSON.stringify(book, null, 2));
@@ -449,6 +524,7 @@ logger.debug('Processing book', { title: book.title, progress: book.progress });
 ```
 
 **Use debugger:**
+
 ```javascript
 // Add breakpoint
 debugger;
@@ -458,11 +534,14 @@ node --inspect src/main.js sync --dry-run
 ```
 
 **Test specific functions:**
+
 ```javascript
 // Create test script in project root
 const { extractIsbn } = require('./src/utils.js');
 
-const testBook = { /* test data */ };
+const testBook = {
+  /* test data */
+};
 console.log('ISBN:', extractIsbn(testBook));
 ```
 
@@ -506,12 +585,14 @@ ShelfBridge follows [Semantic Versioning](https://semver.org/):
 ### Getting Help
 
 **Stuck on something?**
+
 1. Check existing issues and documentation
 2. Search closed issues for similar problems
 3. Open a new issue with details
 4. Tag relevant maintainers if urgent
 
 **Want to chat?**
+
 - Comment on relevant issues
 - Open a discussion thread
 - Mention `@rohit-purandare` for urgent matters
@@ -551,4 +632,4 @@ ShelfBridge follows [Semantic Versioning](https://semver.org/):
 
 ---
 
-**Ready to contribute?** Start by forking the repository and making your first contribution! Every contribution, no matter how small, helps make ShelfBridge better for everyone. 🚀 
+**Ready to contribute?** Start by forking the repository and making your first contribution! Every contribution, no matter how small, helps make ShelfBridge better for everyone. 🚀

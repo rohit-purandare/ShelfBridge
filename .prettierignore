@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+logs/
+*.log
+*.min.js
+package-lock.json
+CHANGELOG.md
+.env
+.env.*
+data/
+cache_export.json
+schema-inputs.out
+schema-detail.out 

@@ -3,21 +3,18 @@
 
 echo "🔒 Running pre-commit checks..."
 
-# Run ESLint on staged JavaScript files in src/ directory
-echo "🔍 Running ESLint..."
-STAGED_JS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^src/.*\.js$' || true)
-if [ -n "$STAGED_JS_FILES" ]; then
-    echo "Checking staged JavaScript files..."
-    echo "$STAGED_JS_FILES" | xargs npx eslint --max-warnings 0 || {
-        echo ""
-        echo "❌ ESLint found issues!"
-        echo "💡 Fix the linting errors above before committing"
-        echo "💡 Run 'npx eslint src/ --ext .js --max-warnings 0' to check all files"
-        exit 1
-    }
-    echo "✅ ESLint passed"
+# Run Prettier + ESLint on staged files
+echo "🎨 Running Prettier and ESLint on staged files..."
+if ! npx lint-staged; then
+    echo ""
+    echo "❌ Code formatting or linting failed!"
+    echo "💡 Files have been automatically formatted by Prettier"
+    echo "💡 Fix any remaining ESLint errors and commit again"
+    echo "💡 Run 'npx prettier --write src/' to format all files"
+    echo "💡 Run 'npx eslint src/ --ext .js --max-warnings 0' to check all files"
+    exit 1
 else
-    echo "No JavaScript files staged in src/, skipping ESLint"
+    echo "✅ Prettier formatting and ESLint passed"
 fi
 
 # Run gitleaks to scan for secrets
