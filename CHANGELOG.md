@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.7] - 2025-07-23
+
+### Changed
+- comprehensive author contributions system enhancement
+- build(deps): bump luxon from 3.5.0 to 3.7.1 in the minor-and-patch group (#3)
+- ci: skip dependency updates from triggering releases
+
+
 ## [1.18.6] - 2025-07-23
 
 ### Changed
@@ -330,7 +338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.6...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.7...HEAD
+[1.18.7]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.6...v1.18.7
 [1.18.6]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.5...v1.18.6
 [1.18.5]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.4...v1.18.5
 [1.18.4]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.3...v1.18.4
