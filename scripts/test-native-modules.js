@@ -26,10 +26,44 @@ const nativeModules = [
         name: 'better-sqlite3',
         test: () => {
             const Database = require('better-sqlite3');
-            // Test creating an in-memory database
-            const db = new Database(':memory:');
-            db.exec('CREATE TABLE test (id INTEGER)');
-            db.close();
+            
+            // Test 1: In-memory database creation (basic test)
+            const memDb = new Database(':memory:');
+            memDb.exec('CREATE TABLE test (id INTEGER)');
+            memDb.close();
+            
+            // Test 2: File database creation (matches real app usage)
+            const fs = require('fs');
+            const path = require('path');
+            const tmpDir = '/tmp';
+            const testDbPath = path.join(tmpDir, 'test-native-modules.db');
+            
+            // Clean up any existing test file
+            try {
+                fs.unlinkSync(testDbPath);
+            } catch (e) {
+                // File doesn't exist, that's fine
+            }
+            
+            // Test actual file database creation (this is what fails in the app)
+            const fileDb = new Database(testDbPath);
+            fileDb.exec('CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT)');
+            fileDb.prepare('INSERT INTO books (title) VALUES (?)').run('Test Book');
+            
+            const result = fileDb.prepare('SELECT * FROM books WHERE title = ?').get('Test Book');
+            if (!result || result.title !== 'Test Book') {
+                throw new Error('Database operation failed');
+            }
+            
+            fileDb.close();
+            
+            // Clean up test file
+            try {
+                fs.unlinkSync(testDbPath);
+            } catch (e) {
+                // Cleanup failed, but test passed
+            }
+            
             return true;
         }
     }

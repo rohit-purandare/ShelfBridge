@@ -9,11 +9,11 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies with comprehensive native module compilation
-# Skip prepare script to avoid husky install issues
-# Use BuildKit cache mounts for better performance
+# Force compilation from source instead of using prebuilt binaries
+# Remove --prefer-offline to prevent glibc binary downloads
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --ignore-scripts --prefer-offline && \
-    npm rebuild && \
+    npm ci --omit=dev --ignore-scripts && \
+    npm rebuild --verbose && \
     npm cache clean --force
 
 # Copy source code (includes config/config.yaml.example for reference)
