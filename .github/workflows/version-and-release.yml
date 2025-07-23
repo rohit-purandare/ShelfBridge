@@ -248,6 +248,9 @@ jobs:
             CHANGELOG=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
           fi
 
+          # Convert repository name to lowercase for Docker images
+          REPO_LOWERCASE=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
           # Save changelog to file for multi-line output
           echo "## 📋 Changes" > release_changelog.md
           echo "" >> release_changelog.md
@@ -255,14 +258,14 @@ jobs:
           echo "" >> release_changelog.md
           echo "## 🐳 Docker Images" >> release_changelog.md
           echo "" >> release_changelog.md
-          echo "- \`ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}\`" >> release_changelog.md
-          echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> release_changelog.md
+          echo "- \`ghcr.io/${REPO_LOWERCASE}:${{ steps.package_version.outputs.version }}\`" >> release_changelog.md
+          echo "- \`ghcr.io/${REPO_LOWERCASE}:latest\`" >> release_changelog.md
           echo "" >> release_changelog.md
           echo "## 🚀 Installation" >> release_changelog.md
           echo "" >> release_changelog.md
           echo "\`\`\`bash" >> release_changelog.md
           echo "# Docker" >> release_changelog.md
-          echo "docker pull ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}" >> release_changelog.md
+          echo "docker pull ghcr.io/${REPO_LOWERCASE}:${{ steps.package_version.outputs.version }}" >> release_changelog.md
           echo "" >> release_changelog.md
           echo "# Node.js" >> release_changelog.md
           echo "npm install -g shelfbridge@${{ steps.package_version.outputs.version }}" >> release_changelog.md

@@ -233,6 +233,10 @@ git push origin release/v1.2.3
 - Push of version tags (`v*`)
 - Pull requests to `main` (build-only, all commits)
 
+### Case Sensitivity Fix
+
+The workflow automatically converts repository names to lowercase using the `tr` command to comply with Docker registry requirements. This prevents "repository name must be lowercase" errors.
+
 ### Smart Build Logic
 
 Docker builds are optimized to only run when necessary:
@@ -256,7 +260,7 @@ Docker builds are optimized to only run when necessary:
 
 1. **Smart Triggering** - Only builds when functional code changes
 2. **Multi-architecture Build** - Supports `linux/amd64` and `linux/arm64`
-3. **Image Tagging** - Creates semantic version tags
+3. **Image Tagging** - Creates semantic version tags with automatic lowercase conversion
 4. **Registry Publishing** - Pushes to GitHub Container Registry
 5. **Build Caching** - Uses GitHub Actions cache for faster builds
 6. **Metadata Extraction** - Auto-generates labels and tags
@@ -267,6 +271,8 @@ Docker builds are optimized to only run when necessary:
 - `ghcr.io/rohit-purandare/shelfbridge:1.0.1` (version tags)
 - `ghcr.io/rohit-purandare/shelfbridge:1.0` (major.minor)
 - `ghcr.io/rohit-purandare/shelfbridge:1` (major only)
+
+**Note**: Repository names are automatically converted to lowercase to comply with Docker registry requirements.
 
 ---
 
