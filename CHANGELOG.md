@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.10] - 2025-07-23
+
+### Fixed
+- native module compatibility and comprehensive prevention system
+
+
 ## [1.18.9] - 2025-07-23
 
 ### Fixed
@@ -350,7 +356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.9...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.10...HEAD
+[1.18.10]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.9...v1.18.10
 [1.18.9]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.8...v1.18.9
 [1.18.8]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.7...v1.18.8
 [1.18.7]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.6...v1.18.7
