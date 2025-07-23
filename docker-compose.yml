@@ -1,8 +1,8 @@
 services:
   shelfbridge:
-    # image: ghcr.io/rohit-purandare/shelfbridge:latest
+    image: ghcr.io/rohit-purandare/shelfbridge:latest
     # Uncomment the line below and comment the image line above to build locally
-    build: .
+    # build: .
     container_name: shelfbridge
     # Restart policy: "no" prevents restart loops during configuration setup
     # Container stays stopped when configuration is invalid, requiring manual restart
