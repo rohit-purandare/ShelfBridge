@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -12,70 +12,82 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x, 21.x]
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Run application tests (CRITICAL)
-      run: |
-        echo "🧪 CRITICAL: Running application tests on Node ${{ matrix.node-version }}"
-        echo "⚠️  BUILD WILL FAIL if tests don't pass"
-        if ! timeout 60s npm test; then
-          echo "❌ CRITICAL FAILURE: Application tests failed on Node ${{ matrix.node-version }}"
-          echo "🚫 BLOCKING BUILD - Fix required before merge"
-          exit 1
-        fi
-        echo "✅ Application tests passed on Node ${{ matrix.node-version }}"
-      
-    - name: Test native modules compatibility (CRITICAL)
-      run: |
-        echo "🧪 CRITICAL: Testing native modules compatibility on Node ${{ matrix.node-version }}"
-        echo "⚠️  BUILD WILL FAIL if native modules don't work"
-        if ! npm run test:native; then
-          echo "❌ CRITICAL FAILURE: Native modules broken on Node ${{ matrix.node-version }}"
-          echo "🚫 BLOCKING BUILD - Fix required before merge"
-          exit 1
-        fi
-        echo "✅ Native modules compatible with Node ${{ matrix.node-version }}"
-       
-    - name: Test cache functionality (CRITICAL)
-      run: |
-        echo "🧪 CRITICAL: Testing cache functionality on Node ${{ matrix.node-version }}"
-        echo "⚠️  BUILD WILL FAIL if cache doesn't work"
-        if ! npm run cache -- --show; then
-          echo "❌ CRITICAL FAILURE: Cache functionality broken on Node ${{ matrix.node-version }}"
-          echo "🚫 BLOCKING BUILD - Fix required before merge"
-          exit 1
-        fi
-        echo "✅ Cache functionality working on Node ${{ matrix.node-version }}"
-      
-    - name: Verify main entry point (CRITICAL)
-      run: |
-        echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
-        echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
-        if ! node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help; then
-          echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
-          echo "🚫 BLOCKING BUILD - Fix required before merge"
-          exit 1
-        fi
-        echo "✅ Main entry point working on Node ${{ matrix.node-version }}"
-      
-    - name: Check for required files (CRITICAL)
-      run: |
-        echo "🧪 CRITICAL: Checking required files on Node ${{ matrix.node-version }}"
-        echo "⚠️  BUILD WILL FAIL if required files are missing"
-        if [ ! -f "config/config.yaml.example" ]; then
-          echo "❌ CRITICAL FAILURE: config/config.yaml.example not found"
-          echo "🚫 BLOCKING BUILD - Fix required before merge"
-          exit 1
-        fi
-        echo "✅ Required files present on Node ${{ matrix.node-version }}" 
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run application tests (CRITICAL)
+        env:
+          # Test environment variables for configuration validation
+          SHELFBRIDGE_USER_0_ID: 'test_user'
+          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
+          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
+          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
+        run: |
+          echo "🧪 CRITICAL: Running application tests on Node ${{ matrix.node-version }}"
+          echo "⚠️  BUILD WILL FAIL if tests don't pass"
+          if ! npm test; then
+            echo "❌ CRITICAL FAILURE: Application tests failed on Node ${{ matrix.node-version }}"
+            echo "🚫 BLOCKING BUILD - Fix required before merge"
+            exit 1
+          fi
+          echo "✅ Application tests passed on Node ${{ matrix.node-version }}"
+
+      - name: Test native modules compatibility (CRITICAL)
+        run: |
+          echo "🧪 CRITICAL: Testing native modules compatibility on Node ${{ matrix.node-version }}"
+          echo "⚠️  BUILD WILL FAIL if native modules don't work"
+          if ! npm run test:native; then
+            echo "❌ CRITICAL FAILURE: Native modules broken on Node ${{ matrix.node-version }}"
+            echo "🚫 BLOCKING BUILD - Fix required before merge"
+            exit 1
+          fi
+          echo "✅ Native modules compatible with Node ${{ matrix.node-version }}"
+
+      - name: Test cache functionality (CRITICAL)
+        env:
+          # Test environment variables for cache tests
+          SHELFBRIDGE_USER_0_ID: 'test_user'
+          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
+          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
+          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
+        run: |
+          echo "🧪 CRITICAL: Testing cache functionality on Node ${{ matrix.node-version }}"
+          echo "⚠️  BUILD WILL FAIL if cache doesn't work"
+          if ! npm run cache -- --show; then
+            echo "❌ CRITICAL FAILURE: Cache functionality broken on Node ${{ matrix.node-version }}"
+            echo "🚫 BLOCKING BUILD - Fix required before merge"
+            exit 1
+          fi
+          echo "✅ Cache functionality working on Node ${{ matrix.node-version }}"
+
+      - name: Verify main entry point (CRITICAL)
+        run: |
+          echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
+          echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
+          if ! node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help; then
+            echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
+            echo "🚫 BLOCKING BUILD - Fix required before merge"
+            exit 1
+          fi
+          echo "✅ Main entry point working on Node ${{ matrix.node-version }}"
+
+      - name: Check for required files (CRITICAL)
+        run: |
+          echo "🧪 CRITICAL: Checking required files on Node ${{ matrix.node-version }}"
+          echo "⚠️  BUILD WILL FAIL if required files are missing"
+          if [ ! -f "config/config.yaml.example" ]; then
+            echo "❌ CRITICAL FAILURE: config/config.yaml.example not found"
+            echo "🚫 BLOCKING BUILD - Fix required before merge"
+            exit 1
+          fi
+          echo "✅ Required files present on Node ${{ matrix.node-version }}"

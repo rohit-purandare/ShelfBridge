@@ -2,7 +2,7 @@
 
 /**
  * Pre-Flight Check Script
- * 
+ *
  * Run this before pushing changes to catch issues early and prevent CI failures.
  * This replicates the key checks that CI will perform.
  * ALL TESTS MUST PASS - NO EXCEPTIONS!
@@ -24,48 +24,52 @@ const results = [];
 
 // Helper function to run commands and capture output
 function runCommand(command, description, timeout = 60000) {
-    console.log(`🔍 ${description}...`);
-    try {
-        const output = execSync(command, { 
-            encoding: 'utf8', 
-            stdio: 'pipe',
-            timeout: timeout
-        });
-        console.log(`   ✅ ${description}: PASSED`);
-        results.push({ check: description, status: 'PASSED', details: 'OK' });
-        return true;
-    } catch (error) {
-        console.log(`   ❌ ${description}: FAILED`);
-        console.log(`   📝 Error: ${error.message}`);
-        results.push({ 
-            check: description, 
-            status: 'FAILED', 
-            details: error.message.substring(0, 100) + '...' 
-        });
-        allChecksPassed = false;
-        return false;
-    }
+  console.log(`🔍 ${description}...`);
+  try {
+    const output = execSync(command, {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      timeout: timeout,
+    });
+    console.log(`   ✅ ${description}: PASSED`);
+    results.push({ check: description, status: 'PASSED', details: 'OK' });
+    return true;
+  } catch (error) {
+    console.log(`   ❌ ${description}: FAILED`);
+    console.log(`   📝 Error: ${error.message}`);
+    results.push({
+      check: description,
+      status: 'FAILED',
+      details: error.message.substring(0, 100) + '...',
+    });
+    allChecksPassed = false;
+    return false;
+  }
 }
 
 // Helper function to check if files exist
 function checkFiles(files, description) {
-    console.log(`🔍 ${description}...`);
-    const missing = files.filter(file => !existsSync(file));
-    if (missing.length === 0) {
-        console.log(`   ✅ ${description}: PASSED`);
-        results.push({ check: description, status: 'PASSED', details: 'All files present' });
-        return true;
-    } else {
-        console.log(`   ❌ ${description}: FAILED`);
-        console.log(`   📝 Missing: ${missing.join(', ')}`);
-        results.push({ 
-            check: description, 
-            status: 'FAILED', 
-            details: `Missing: ${missing.join(', ')}` 
-        });
-        allChecksPassed = false;
-        return false;
-    }
+  console.log(`🔍 ${description}...`);
+  const missing = files.filter(file => !existsSync(file));
+  if (missing.length === 0) {
+    console.log(`   ✅ ${description}: PASSED`);
+    results.push({
+      check: description,
+      status: 'PASSED',
+      details: 'All files present',
+    });
+    return true;
+  } else {
+    console.log(`   ❌ ${description}: FAILED`);
+    console.log(`   📝 Missing: ${missing.join(', ')}`);
+    results.push({
+      check: description,
+      status: 'FAILED',
+      details: `Missing: ${missing.join(', ')}`,
+    });
+    allChecksPassed = false;
+    return false;
+  }
 }
 
 console.log('📦 Checking Dependencies...');
@@ -73,8 +77,8 @@ console.log('-'.repeat(30));
 
 // Check if node_modules exists
 if (!existsSync('node_modules')) {
-    console.log('❌ node_modules not found. Run: npm install');
-    process.exit(1);
+  console.log('❌ node_modules not found. Run: npm install');
+  process.exit(1);
 }
 
 // 1. Native Module Compatibility (CRITICAL)
@@ -85,11 +89,18 @@ runCommand('npm run test:native', 'Native module compatibility');
 // 2. Application Tests (CRITICAL)
 console.log('\n🧪 CRITICAL: Application Tests...');
 console.log('-'.repeat(30));
-runCommand('timeout 60s npm test', 'Application functionality', 65000);
+// Set test environment variables for configuration validation
+process.env.SHELFBRIDGE_USER_0_ID = 'test_user';
+process.env.SHELFBRIDGE_USER_0_ABS_URL = 'https://test.audiobookshelf.com';
+process.env.SHELFBRIDGE_USER_0_ABS_TOKEN = 'test_abs_token_1234567890';
+process.env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN = 'test_hc_token_1234567890';
+// Use Node.js timeout instead of shell timeout for cross-platform compatibility
+runCommand('npm test', 'Application functionality', 60000);
 
-// 3. Cache Functionality (CRITICAL) 
+// 3. Cache Functionality (CRITICAL)
 console.log('\n🧪 CRITICAL: Cache Tests...');
 console.log('-'.repeat(30));
+// Cache tests also need test environment (same as application tests)
 runCommand('npm run cache -- --show', 'Cache functionality');
 
 // 4. Code Quality Checks (CRITICAL)
@@ -111,74 +122,92 @@ runCommand('node src/main.js --help', 'Main application loads');
 // 7. Required Files (CRITICAL)
 console.log('\n📋 CRITICAL: Required Files...');
 console.log('-'.repeat(30));
-checkFiles([
+checkFiles(
+  [
     'config/config.yaml.example',
     'docker-entrypoint.sh',
     'Dockerfile',
-    'package.json'
-], 'Required project files');
+    'package.json',
+  ],
+  'Required project files',
+);
 
 // 8. Docker Validation (CRITICAL if available)
 console.log('\n🐳 CRITICAL: Docker Tests...');
 console.log('-'.repeat(30));
 try {
-    execSync('docker --version', { stdio: 'pipe' });
-    console.log('🔍 Docker build test...');
-    
-    // Quick Docker build test (single platform)
+  execSync('docker --version', { stdio: 'pipe' });
+  console.log('🔍 Docker build test...');
+
+  // Quick Docker build test (single platform)
+  try {
+    execSync('docker build -t shelfbridge:test .', {
+      stdio: 'pipe',
+      timeout: 120000, // 2 minute timeout
+    });
+    console.log('   ✅ Docker build: PASSED');
+    results.push({
+      check: 'Docker build',
+      status: 'PASSED',
+      details: 'Build successful',
+    });
+
+    // Test the built image (CRITICAL)
     try {
-        execSync('docker build -t shelfbridge:test .', { 
-            stdio: 'pipe', 
-            timeout: 120000 // 2 minute timeout
-        });
-        console.log('   ✅ Docker build: PASSED');
-        results.push({ check: 'Docker build', status: 'PASSED', details: 'Build successful' });
-        
-        // Test the built image (CRITICAL)
-        try {
-            execSync(`docker run --rm \\
-                -e ABS_URL=https://test.example.com \\
-                -e ABS_TOKEN=test_token \\
-                -e HARDCOVER_TOKEN=test_token \\
+      execSync(
+        `docker run --rm \\
+                -e SHELFBRIDGE_USER_0_ID=test_user \\
+                -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \\
+                -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \\
+                -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN=test_hc_token_1234567890 \\
                 --entrypoint="" \\
                 shelfbridge:test \\
-                npm run test:native`, { 
-                stdio: 'pipe',
-                timeout: 30000 
-            });
-            console.log('   ✅ Docker native modules: PASSED');
-            results.push({ check: 'Docker native modules', status: 'PASSED', details: 'Container test successful' });
-        } catch (error) {
-            console.log('   ❌ Docker native modules: FAILED');
-            console.log(`   📝 Error: ${error.message}`);
-            results.push({ 
-                check: 'Docker native modules', 
-                status: 'FAILED', 
-                details: 'Container test failed' 
-            });
-            allChecksPassed = false;
-        }
-        
-        // Cleanup
-        try {
-            execSync('docker rmi shelfbridge:test', { stdio: 'pipe' });
-        } catch (e) {
-            // Cleanup failure is not critical
-        }
-        
+                npm run test:native`,
+        {
+          stdio: 'pipe',
+          timeout: 30000,
+        },
+      );
+      console.log('   ✅ Docker native modules: PASSED');
+      results.push({
+        check: 'Docker native modules',
+        status: 'PASSED',
+        details: 'Container test successful',
+      });
     } catch (error) {
-        console.log('   ❌ Docker build: FAILED');
-        console.log(`   📝 Error: ${error.message}`);
-        results.push({ 
-            check: 'Docker build', 
-            status: 'FAILED', 
-            details: 'Build failed' 
-        });
-        allChecksPassed = false;
+      console.log('   ❌ Docker native modules: FAILED');
+      console.log(`   📝 Error: ${error.message}`);
+      results.push({
+        check: 'Docker native modules',
+        status: 'FAILED',
+        details: 'Container test failed',
+      });
+      allChecksPassed = false;
     }
+
+    // Cleanup
+    try {
+      execSync('docker rmi shelfbridge:test', { stdio: 'pipe' });
+    } catch (e) {
+      // Cleanup failure is not critical
+    }
+  } catch (error) {
+    console.log('   ❌ Docker build: FAILED');
+    console.log(`   📝 Error: ${error.message}`);
+    results.push({
+      check: 'Docker build',
+      status: 'FAILED',
+      details: 'Build failed',
+    });
+    allChecksPassed = false;
+  }
 } catch (error) {
-    console.log('   ⚠️  Docker not available - will skip in CI too');
-    results.push({ check: 'Docker tests', status: 'SKIPPED', details: 'Docker not available' });
+  console.log('   ⚠️  Docker not available - will skip in CI too');
+  results.push({
+    check: 'Docker tests',
+    status: 'SKIPPED',
+    details: 'Docker not available',
+  });
 }
 
 // Results Summary
@@ -195,29 +224,31 @@ console.log(`❌ Failed: ${failed}`);
 console.log(`⏭️  Skipped: ${skipped}`);
 
 if (failed > 0) {
-    console.log('\n❌ FAILED CHECKS:');
-    results.filter(r => r.status === 'FAILED').forEach(result => {
-        console.log(`   • ${result.check}: ${result.details}`);
+  console.log('\n❌ FAILED CHECKS:');
+  results
+    .filter(r => r.status === 'FAILED')
+    .forEach(result => {
+      console.log(`   • ${result.check}: ${result.details}`);
     });
 }
 
 console.log('\n' + '='.repeat(50));
 
 if (allChecksPassed) {
-    console.log('🎉 ALL CHECKS PASSED!');
-    console.log('✅ Safe to push - CI should pass');
-    console.log('🚀 Ready for: git add . && git commit && git push');
-    process.exit(0);
+  console.log('🎉 ALL CHECKS PASSED!');
+  console.log('✅ Safe to push - CI should pass');
+  console.log('🚀 Ready for: git add . && git commit && git push');
+  process.exit(0);
 } else {
-    console.log('❌ SOME CHECKS FAILED!');
-    console.log('🚫 DO NOT PUSH - Fix issues first');
-    console.log('💡 CI WILL FAIL with these issues');
-    console.log('⚠️  NO EXCEPTIONS - ALL TESTS MUST PASS');
-    console.log('\n🔧 Common fixes:');
-    console.log('   • npm install         (dependency issues)');
-    console.log('   • npm run lint:fix     (code quality)');
-    console.log('   • npm run format       (formatting)');
-    console.log('   • npm rebuild          (native modules)');
-    console.log('   • Check error logs above for specific issues');
-    process.exit(1);
-} 
+  console.log('❌ SOME CHECKS FAILED!');
+  console.log('🚫 DO NOT PUSH - Fix issues first');
+  console.log('💡 CI WILL FAIL with these issues');
+  console.log('⚠️  NO EXCEPTIONS - ALL TESTS MUST PASS');
+  console.log('\n🔧 Common fixes:');
+  console.log('   • npm install         (dependency issues)');
+  console.log('   • npm run lint:fix     (code quality)');
+  console.log('   • npm run format       (formatting)');
+  console.log('   • npm rebuild          (native modules)');
+  console.log('   • Check error logs above for specific issues');
+  process.exit(1);
+}

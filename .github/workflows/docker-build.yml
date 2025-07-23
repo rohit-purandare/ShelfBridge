@@ -81,16 +81,17 @@ jobs:
         run: |
           echo "🧪 CRITICAL: Testing Docker image native modules compatibility..."
           echo "⚠️  BUILD WILL FAIL if native modules don't work - blocking push"
-          
+
           # Get the first tag (usually the PR or branch tag)
           TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
           echo "Testing image: $TAG"
-          
+
           # Test native modules in the container - this MUST succeed or build fails
           if ! docker run --rm \
-            -e ABS_URL=https://test.example.com \
-            -e ABS_TOKEN=test_token \
-            -e HARDCOVER_TOKEN=test_token \
+            -e SHELFBRIDGE_USER_0_ID=test_user \
+            -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
+            -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
+            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN=test_hc_token_1234567890 \
             --entrypoint="" \
             $TAG \
             npm run test:native; then
@@ -99,7 +100,7 @@ jobs:
             echo "🚫 IMAGE WILL NOT BE PUSHED TO REGISTRY"
             exit 1
           fi
-          
+
           echo "✅ Docker image native modules test passed - proceeding with push"
 
       # Only push if all tests pass
