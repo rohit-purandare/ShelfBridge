@@ -181,7 +181,7 @@ if [ -f "/app/config/config.yaml" ]; then
         echo "💡 Use 'node src/main.js validate' to check your configuration"
         echo ""
         echo "🚫 Exiting until configuration is updated..."
-        exit 1
+        exit 0
     fi
     
     echo "✅ Configuration validation passed - no placeholder values found"
