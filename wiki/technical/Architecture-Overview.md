@@ -14,17 +14,17 @@ graph TB
         UTILS[Utilities<br/>Rate Limiting & Helpers]
         LOG[Logging System<br/>winston]
     end
-    
+
     subgraph "External APIs"
         ABS[Audiobookshelf<br/>REST API]
         HC[Hardcover<br/>GraphQL API]
     end
-    
+
     subgraph "Data Storage"
         DB[(SQLite Cache<br/>Books & Progress)]
         LOGS[Log Files<br/>Rotated Daily]
     end
-    
+
     CLI --> CONFIG
     CLI --> SYNC
     SYNC --> ABS
@@ -40,6 +40,7 @@ graph TB
 ## Core Components
 
 ### 1. **Entry Point (main.js)**
+
 - **Purpose**: CLI interface and application bootstrap
 - **Features**: 11 commands, interactive mode, process management
 - **Commands**:
@@ -55,14 +56,17 @@ graph TB
   - `start` - Default scheduled sync mode
 
 ### 2. **Configuration System**
+
 #### config.js
+
 - **Purpose**: YAML configuration loading and management
 - **Features**: Default value application, explicit value tracking
 - **Structure**: Global settings + user-specific configurations
 
 #### config-validator.js
+
 - **Purpose**: Comprehensive configuration validation
-- **Features**: 
+- **Features**:
   - Schema-based validation for 25+ configuration options
   - Placeholder value detection
   - API connection testing
@@ -70,7 +74,9 @@ graph TB
   - Configuration help generation
 
 ### 3. **API Client Layer**
+
 #### audiobookshelf-client.js
+
 - **Purpose**: REST API integration with Audiobookshelf
 - **Features**:
   - HTTP connection pooling with keep-alive
@@ -80,6 +86,7 @@ graph TB
   - Comprehensive error handling
 
 #### hardcover-client.js
+
 - **Purpose**: GraphQL API integration with Hardcover
 - **Features**:
   - GraphQL query/mutation execution
@@ -89,6 +96,7 @@ graph TB
   - Connection pooling and rate limiting (default: 55 requests/minute)
 
 ### 4. **Data Persistence (book-cache.js)**
+
 - **Purpose**: SQLite-based caching system
 - **Features**:
   - WAL mode for better concurrency
@@ -99,6 +107,7 @@ graph TB
   - JSON export functionality
 
 #### Database Schema
+
 ```sql
 -- Books table - stores cached book information
 books (
@@ -141,6 +150,7 @@ library_stats (
 ```
 
 ### 5. **Synchronization Engine (sync-manager.js)**
+
 - **Purpose**: Core business logic for progress synchronization
 - **Architecture**: Class-based with dependency injection
 - **Key Features**:
@@ -152,6 +162,7 @@ library_stats (
   - Comprehensive result tracking
 
 #### Sync Flow
+
 ```mermaid
 flowchart TD
     START[Start Sync] --> INIT[Initialize Clients]
@@ -176,15 +187,20 @@ flowchart TD
 ```
 
 ### 6. **Utility Layer (utils.js)**
+
 - **Purpose**: Shared functionality and helpers
 - **Components**:
   - **Semaphore**: Concurrency control
   - **RateLimiter**: API rate limiting using rate-limiter-flexible
   - **ISBN/ASIN Normalization**: Book identifier standardization
-  - **Data Extraction**: Book metadata parsing
+  - **Enhanced Author Extraction**: Hierarchical data processing with multi-author support
+  - **Narrator Detection**: Role-based extraction with explicit label support
+  - **Text Similarity**: Target-based matching for collaborative works
+  - **Data Extraction**: Book metadata parsing with contributions support
   - **Connection Testing**: Shared API validation
 
 ### 7. **Logging System (logger.js)**
+
 - **Purpose**: Structured logging with Winston
 - **Features**:
   - Daily log rotation
@@ -197,11 +213,13 @@ flowchart TD
 ## Data Flow
 
 ### 1. **Configuration Loading**
+
 ```
 config.yaml → Config.js → ConfigValidator.js → Validated Configuration
 ```
 
 ### 2. **Sync Process**
+
 ```
 User Command → SyncManager → AudiobookshelfClient → Book Data
                 ↓
@@ -211,6 +229,7 @@ Progress Update → BookCache → SQLite Database
 ```
 
 ### 3. **Caching Strategy**
+
 ```
 First Sync: Deep Scan → Cache All Books → Store Library Stats
 Subsequent Syncs: Fast Scan → Check Cache → Update Changed Only
@@ -220,22 +239,26 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 ## Performance Optimizations
 
 ### 1. **Connection Management**
+
 - HTTP keep-alive connections
 - Connection pooling for both APIs
 - Proper connection cleanup on exit
 
 ### 2. **Concurrency Control**
+
 - Semaphore-based request limiting
 - Configurable parallel processing
 - Rate limiting to respect API limits
 
 ### 3. **Caching Strategy**
+
 - SQLite WAL mode for concurrent access
 - Indexes on frequently queried columns
 - Intelligent deep vs fast scanning
 - Library statistics caching
 
 ### 4. **Memory Management**
+
 - Streaming JSON parsing for large responses
 - Cleanup handlers for graceful shutdown
 - Resource cleanup in sync manager
@@ -243,16 +266,19 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 ## Security Considerations
 
 ### 1. **API Token Handling**
+
 - Tokens normalized to remove Bearer prefixes
 - No token logging in production
 - Secure token validation
 
 ### 2. **Error Handling**
+
 - Comprehensive error catching
 - Sensitive data filtering in logs
 - Graceful degradation on API failures
 
 ### 3. **Input Validation**
+
 - Schema-based configuration validation
 - URL and data sanitization
 - Placeholder value detection
@@ -260,16 +286,19 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 ## Extensibility Points
 
 ### 1. **Configuration System**
+
 - New validation rules in ConfigValidator
 - Additional configuration sections
 - Custom validation functions
 
 ### 2. **API Clients**
+
 - Plugin architecture potential
 - Additional API integrations
 - Custom matching algorithms
 
 ### 3. **Sync Logic**
+
 - Custom sync strategies
 - Additional book metadata sources
 - Progress calculation customization
@@ -277,6 +306,7 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 ## Dependencies
 
 ### Core Dependencies
+
 - **axios**: HTTP client for API calls
 - **better-sqlite3**: SQLite database driver
 - **winston**: Logging framework
@@ -286,8 +316,9 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 - **inquirer**: Interactive prompts
 
 ### Performance Dependencies
+
 - **rate-limiter-flexible**: API rate limiting
 - **node-cron**: Scheduled execution
 - **cronstrue**: Human-readable cron expressions
 
-This architecture provides a robust, scalable foundation for synchronizing reading progress between different platforms while maintaining data integrity and providing excellent user experience through comprehensive CLI tooling. 
+This architecture provides a robust, scalable foundation for synchronizing reading progress between different platforms while maintaining data integrity and providing excellent user experience through comprehensive CLI tooling.

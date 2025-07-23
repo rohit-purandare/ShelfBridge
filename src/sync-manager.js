@@ -9,6 +9,7 @@ import {
   extractTitle,
   extractAuthor,
   extractNarrator,
+  extractAuthorFromSearchResult,
   calculateCurrentPage,
   calculateCurrentSeconds,
   calculateMatchingScore,
@@ -508,7 +509,7 @@ export class SyncManager {
             title, // Use the original book title from Audiobookshelf
             bestMatch.id, // edition_id
             'title_author',
-            bestMatch.author_names?.[0] || author || '',
+            extractAuthorFromSearchResult(bestMatch) || author || '',
           );
           logger.debug(`Cached title/author match for "${title}"`, {
             identifier: titleAuthorId,

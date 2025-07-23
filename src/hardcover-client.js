@@ -127,6 +127,7 @@ export class HardcoverClient {
                                     id
                                     name
                                 }
+                                contribution
                             }
                             editions {
                                 id
@@ -137,6 +138,13 @@ export class HardcoverClient {
                                 audio_seconds
                                 physical_format
                                 reading_format { format }
+                                contributions {
+                                    author {
+                                        id
+                                        name
+                                    }
+                                    contribution
+                                }
                             }
                         }
                     }
@@ -758,6 +766,13 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    contributions {
+                        author {
+                            id
+                            name
+                        }
+                        contribution
+                    }
                     book {
                         id
                         title
@@ -766,6 +781,7 @@ export class HardcoverClient {
                                 id
                                 name
                             }
+                            contribution
                         }
                     }
                 }
@@ -795,6 +811,13 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    contributions {
+                        author {
+                            id
+                            name
+                        }
+                        contribution
+                    }
                     book {
                         id
                         title
@@ -803,6 +826,7 @@ export class HardcoverClient {
                                 id
                                 name
                             }
+                            contribution
                         }
                     }
                 }
@@ -1299,7 +1323,6 @@ export class HardcoverClient {
         books(where: {id: {_eq: $id}}, limit: 1) {
           id
           title
-          author_names
           editions {
             id
             asin
@@ -1309,12 +1332,20 @@ export class HardcoverClient {
             reading_format { format }
             pages
             audio_seconds
+            contributions {
+              author {
+                id
+                name
+              }
+              contribution
+            }
           }
           contributions(where: {contributable_type: {_eq: "Book"}}) {
             author {
               id
               name
             }
+            contribution
           }
         }
       }
@@ -1414,7 +1445,6 @@ export class HardcoverClient {
               book: {
                 id: bookDetails.id,
                 title: bookDetails.title,
-                author_names: bookDetails.author_names,
                 contributions: bookDetails.contributions,
               },
 
@@ -1544,6 +1574,7 @@ export class HardcoverClient {
               id
               name
             }
+            contribution
           }
         }
       }

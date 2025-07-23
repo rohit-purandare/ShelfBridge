@@ -1270,7 +1270,10 @@ export function calculateMatchingScore(
 
   // Extract data from search result
   const resultTitle = searchResult.title || '';
-  const resultAuthor = extractAuthorFromSearchResult(searchResult);
+  const resultAuthor = extractAuthorFromSearchResult(
+    searchResult,
+    targetAuthor,
+  );
   const resultNarrator = extractNarratorFromSearchResult(searchResult);
   const resultFormat = extractFormatFromSearchResult(searchResult);
 
@@ -1601,58 +1604,151 @@ function calculateActivityScore(activity) {
 }
 
 /**
- * Extract author from Hardcover search result
+ * Extract author from Hardcover search result, optionally finding best match for target author
  * @param {Object} searchResult - Hardcover search result
+ * @param {string} targetAuthor - Optional target author to find best match for
  * @returns {string} - Author name
  */
-function extractAuthorFromSearchResult(searchResult) {
-  // First try author_names array (most reliable)
-  if (searchResult.author_names && searchResult.author_names.length > 0) {
-    return searchResult.author_names[0];
-  }
+export function extractAuthorFromSearchResult(
+  searchResult,
+  targetAuthor = null,
+) {
+  let availableAuthors = [];
 
-  // Then try contributions looking specifically for authors (not narrators)
+  // Priority 1: Edition-level contributions (most specific for different editions)
   if (searchResult.contributions && searchResult.contributions.length > 0) {
-    const authorContrib = searchResult.contributions.find(
-      c => c.author && (!c.role || !c.role.toLowerCase().includes('narrator')),
+    const authorContribs = searchResult.contributions.filter(
+      c =>
+        c.author &&
+        c.author.name &&
+        (!c.contribution || !c.contribution.toLowerCase().includes('narrator')),
     );
-    if (authorContrib && authorContrib.author) {
-      return authorContrib.author.name || '';
-    }
+    availableAuthors = authorContribs.map(c => c.author.name);
   }
 
-  // Finally try cached_contributors, but filter out narrators
+  // Priority 2: Book-level contributions (fallback when no edition-level data)
   if (
+    availableAuthors.length === 0 &&
+    searchResult.book &&
+    searchResult.book.contributions &&
+    searchResult.book.contributions.length > 0
+  ) {
+    const authorContribs = searchResult.book.contributions.filter(
+      c =>
+        c.author &&
+        c.author.name &&
+        (!c.contribution || !c.contribution.toLowerCase().includes('narrator')),
+    );
+    availableAuthors = authorContribs.map(c => c.author.name);
+  }
+
+  // Fallback to author_names array for backward compatibility
+  if (
+    availableAuthors.length === 0 &&
+    searchResult.author_names &&
+    searchResult.author_names.length > 0
+  ) {
+    availableAuthors = [...searchResult.author_names];
+  }
+
+  // Additional fallback to cached_contributors, but filter out narrators
+  if (
+    availableAuthors.length === 0 &&
     searchResult.cached_contributors &&
     searchResult.cached_contributors.length > 0
   ) {
-    const authorContrib = searchResult.cached_contributors.find(
+    const authorContribs = searchResult.cached_contributors.filter(
       c => !c.role || !c.role.toLowerCase().includes('narrator'),
     );
-    if (authorContrib) {
-      return authorContrib.name || '';
-    }
+    availableAuthors = authorContribs.map(c => c.name).filter(name => name);
 
-    // If all contributors are narrators, return the first one as fallback
-    return searchResult.cached_contributors[0].name || '';
+    // If all contributors are narrators, include them as fallback
+    if (availableAuthors.length === 0) {
+      availableAuthors = searchResult.cached_contributors
+        .map(c => c.name)
+        .filter(name => name);
+    }
   }
 
-  return '';
+  // If no authors found, return empty string
+  if (availableAuthors.length === 0) {
+    return '';
+  }
+
+  // If we have a target author, find the best match
+  if (targetAuthor && availableAuthors.length > 1) {
+    let bestMatch = availableAuthors[0];
+    let bestScore = calculateTextSimilarity(
+      normalizeAuthor(targetAuthor),
+      normalizeAuthor(availableAuthors[0]),
+    );
+
+    for (let i = 1; i < availableAuthors.length; i++) {
+      const score = calculateTextSimilarity(
+        normalizeAuthor(targetAuthor),
+        normalizeAuthor(availableAuthors[i]),
+      );
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = availableAuthors[i];
+      }
+    }
+    return bestMatch;
+  }
+
+  // If no target author or only one author available, return the first one
+  return availableAuthors[0];
 }
 
 /**
  * Extract narrator from Hardcover search result
- * Based on actual API analysis: audiobooks have 2 contributions (author + narrator)
+ * Prioritizes edition-level contributions, then explicit role labels, then heuristic detection
  * @param {Object} searchResult - Hardcover search result
  * @returns {string|null} - Narrator name or null
  */
 export function extractNarratorFromSearchResult(searchResult) {
-  // Get the format to determine if this is an audiobook
+  // Priority 1: Edition-level contributors with explicit narrator role labels (most accurate)
+  if (searchResult.contributions && searchResult.contributions.length > 0) {
+    const narratorContrib = searchResult.contributions.find(
+      c =>
+        c.contribution &&
+        c.author &&
+        c.author.name &&
+        (c.contribution.toLowerCase().includes('narrator') ||
+          c.contribution.toLowerCase().includes('reader')),
+    );
+
+    if (narratorContrib) {
+      return narratorContrib.author.name;
+    }
+  }
+
+  // Priority 2: Book-level contributors with explicit narrator role labels
+  if (
+    searchResult.book &&
+    searchResult.book.contributions &&
+    searchResult.book.contributions.length > 0
+  ) {
+    const narratorContrib = searchResult.book.contributions.find(
+      c =>
+        c.contribution &&
+        c.author &&
+        c.author.name &&
+        (c.contribution.toLowerCase().includes('narrator') ||
+          c.contribution.toLowerCase().includes('reader')),
+    );
+
+    if (narratorContrib) {
+      return narratorContrib.author.name;
+    }
+  }
+
+  // Priority 3: Heuristic detection for audiobooks (fallback for unlabeled edition-level data)
   const format = extractFormatFromSearchResult(searchResult).toLowerCase();
   const isAudiobook =
     format.includes('listened') || format.includes('audiobook');
 
-  // For audiobooks with multiple contributions, the last contributor is typically the narrator
+  // For audiobooks with multiple edition-level contributions, the last contributor might be the narrator
   if (
     isAudiobook &&
     searchResult.contributions &&
@@ -1665,14 +1761,17 @@ export function extractNarratorFromSearchResult(searchResult) {
       potentialNarrator.author &&
       potentialNarrator.author.name
     ) {
-      return potentialNarrator.author.name;
+      // Only return if different from the author (avoid false positives)
+      const authorName = searchResult.contributions[0]?.author?.name || '';
+      if (potentialNarrator.author.name !== authorName) {
+        return potentialNarrator.author.name;
+      }
     }
   }
 
-  // Fallback: check if we have multiple contributions regardless of format
+  // Priority 4: Check multiple edition-level contributions regardless of format
   // This covers cases where format detection might be wrong but we have clear narrator data
   if (searchResult.contributions && searchResult.contributions.length >= 2) {
-    // If the last contributor's name suggests they're a narrator (common narrator names)
     const potentialNarrator =
       searchResult.contributions[searchResult.contributions.length - 1];
     if (
@@ -1681,10 +1780,9 @@ export function extractNarratorFromSearchResult(searchResult) {
       potentialNarrator.author.name
     ) {
       const narratorName = potentialNarrator.author.name;
-
-      // Check if this looks like a known narrator (Travis Baldree, Jim Dale, etc.)
-      // or if the name is different from the first contributor (author)
       const authorName = searchResult.contributions[0]?.author?.name || '';
+
+      // Only return if different from author and looks like a narrator name
       if (narratorName !== authorName) {
         return narratorName;
       }
@@ -1697,7 +1795,9 @@ export function extractNarratorFromSearchResult(searchResult) {
     searchResult.cached_contributors.length > 0
   ) {
     const narratorContrib = searchResult.cached_contributors.find(
-      c => c.role && c.role.toLowerCase().includes('narrator'),
+      c =>
+        (c.role && c.role.toLowerCase().includes('narrator')) ||
+        (c.contribution && c.contribution.toLowerCase().includes('narrator')),
     );
     if (narratorContrib && narratorContrib.name) {
       return narratorContrib.name;

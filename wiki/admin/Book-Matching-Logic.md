@@ -208,7 +208,7 @@ Action: Sync with detailed confidence logging
 Performance: ~5 seconds
 ```
 
-### Scenario 4: Multiple Editions Disambiguation
+### Scenario 4: Multiple Editions Disambiguation with Enhanced Metadata
 
 ```
 Audiobookshelf Book:
@@ -223,22 +223,90 @@ Hardcover Search Results:
   Edition 2: Ebook (2019) → 72% confidence
   Edition 3: Audiobook (2019, Scott Brick, 21h 5m) → 94% confidence ⭐
 
+Enhanced Metadata Analysis:
+  Author Extraction: "Frank Herbert" (edition-level contributions)
+  Narrator Detection: "Scott Brick" (explicit role label in contributions)
+  Format Priority: Audiobook preference active
+  Hierarchical Data: Edition-level metadata takes precedence
+
 Scoring Breakdown for Winner:
   Title: 95% × 0.25 = 23.75 points
-  Author: 100% × 0.18 = 18.00 points
+  Author: 100% × 0.18 = 18.00 points (enhanced extraction)
   Activity: 95% × 0.18 = 17.10 points
   Series: 85% × 0.12 = 10.20 points
   Format: 100% × 0.10 = 10.00 points (audiobook preference)
   Year: 90% × 0.07 = 6.30 points
   Duration: 95% × 0.05 = 4.75 points
-  Narrator: 100% × 0.03 = 3.00 points
+  Narrator: 100% × 0.03 = 3.00 points (role-based detection)
   TOTAL: 93.10% → Excellent Match
 
-Result: ✅ PRECISE EDITION MATCH
-Action: Sync to correct audiobook edition
+Result: ✅ PRECISE EDITION MATCH WITH ENHANCED METADATA
+Action: Sync to correct audiobook edition using hierarchical data
+```
+
+### Scenario 5: Multi-Author Collaborative Work (New!)
+
+```
+Audiobookshelf Book:
+  Title: "Good Omens"
+  Author: "Terry Pratchett, Neil Gaiman"
+  Format: Audiobook
+  Narrator: "Peter Kenny"
+
+Search Process:
+  Target Author: "Terry Pratchett" (from search context)
+
+Edition-level Analysis:
+  contributions: [
+    {author: {name: "Terry Pratchett"}, contribution: null},
+    {author: {name: "Neil Gaiman"}, contribution: null},
+    {author: {name: "Peter Kenny"}, contribution: "Narrator"}
+  ]
+
+Multi-Author Processing:
+  Text Similarity Analysis:
+    "Terry Pratchett" vs "Terry Pratchett" → 100% match ⭐
+    "Terry Pratchett" vs "Neil Gaiman" → 15% match
+    "Terry Pratchett" vs "Peter Kenny" → 5% match (filtered as narrator)
+
+  Best Author Match: "Terry Pratchett" (100% confidence)
+  Narrator Identified: "Peter Kenny" (explicit role label)
+
+Result: ✅ MULTI-AUTHOR WORK CORRECTLY PROCESSED
+Action: Sync with primary author "Terry Pratchett" and narrator "Peter Kenny"
 ```
 
 ## 🎛️ Advanced Data Extraction
+
+### Enhanced Author & Contributor Processing
+
+```javascript
+// Hierarchical author extraction with multi-author support
+Author Extraction Process:
+  1. Edition-level contributions (highest priority)
+     - Direct edition.contributions array
+     - Explicit role filtering (excludes narrators)
+  2. Book-level contributions (fallback)
+     - book.contributions with contributable_type filtering
+  3. Legacy author_names (compatibility fallback)
+
+Multi-Author Intelligence:
+  - Target-based text similarity matching
+  - Handles collaborative works ("Author A & Author B")
+  - Best match selection when searching for specific authors
+  - Text similarity threshold: 70% minimum confidence
+
+// Example: Complex author extraction
+Book: "Good Omens"
+Edition-level: [
+  {author: {name: "Terry Pratchett"}, contribution: null},
+  {author: {name: "Neil Gaiman"}, contribution: null},
+  {author: {name: "Peter Kenny"}, contribution: "Narrator"}
+]
+Target: "Terry Pratchett"
+Result: ✅ "Terry Pratchett" (100% similarity)
+Narrator: ✅ "Peter Kenny" (explicit role label)
+```
 
 ### Multi-Source Identifier Extraction
 
@@ -273,6 +341,33 @@ User: "Dune Chronicles #1" → Hardcover: "Dune #1" (90% match)
 User: "Foundation 2" → Hardcover: "Foundation #2" (95% match)
 ```
 
+### Enhanced Author & Narrator Extraction
+
+```javascript
+// Advanced author extraction with hierarchical data priority
+Author Extraction Sources (in priority order):
+  1. Edition-level contributions (edition.contributions)
+  2. Book-level contributions (book.contributions)
+  3. Legacy author_names field (fallback)
+
+Multi-Author Handling:
+  - Target-based matching with text similarity
+  - Collaborative works support (e.g., "Good Omens" by Terry Pratchett & Neil Gaiman)
+  - Best author match when multiple authors exist
+
+Narrator Detection (Enhanced):
+  1. Contributors with explicit role labels ("Narrator", "Reader", etc.)
+  2. Edition-level narrator data (takes precedence over book-level)
+  3. Heuristic detection for audiobooks using position analysis
+  4. Legacy metadata.narrator fallback
+
+// Example: Enhanced extraction process
+Book: "Good Omens" by Terry Pratchett & Neil Gaiman, narrated by Peter Kenny
+Target Author Search: "Terry Pratchett"
+Result: ✅ Best match found via text similarity (95% confidence)
+Narrator: ✅ "Peter Kenny" identified via explicit role label
+```
+
 ### Audiobook-Specific Enhancements
 
 ```javascript
@@ -283,11 +378,11 @@ Duration Sources:
   3. Sum of audioFiles[].duration
   4. metadata.duration
 
-Narrator Detection:
-  1. contributions[last] for audiobooks (most reliable)
-  2. metadata.narrator
-  3. contributors with narrator-like names
-  4. Fallback to second contributor
+Enhanced Narrator Detection:
+  1. Edition-level contributions with explicit role labels (highest priority)
+  2. Book-level contributions with role filtering
+  3. Heuristic detection for audiobooks (position-based)
+  4. Legacy metadata.narrator (fallback)
 
 // Duration matching tolerance
 Matching Logic:

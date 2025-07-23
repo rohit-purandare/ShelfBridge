@@ -237,8 +237,8 @@ Title/author matches cached: 156
 
 - **ASIN matches**: Books matched by Amazon identifiers (fastest, Tier 1)
 - **ISBN matches**: Books matched by international book numbers (fast, Tier 2)
-- **Title/author matches**: Books matched by edition-specific search with AI scoring (new enhanced system)
-- **Edition-specific data**: Cached edition metadata including duration, narrator, format
+- **Title/author matches**: Books matched by edition-specific search with enhanced multi-author support and hierarchical data priority
+- **Edition-specific data**: Cached edition metadata including duration, narrator with explicit role labels, format
 - **Recent books**: Books with activity in the last 7 days
 
 ### `cron` - Scheduled Sync Service
@@ -316,8 +316,9 @@ shelfbridge debug [options]
 - Cache information and statistics
 - Sample API calls and responses
 - **Book matching analysis**: Shows three-tier matching process and confidence scoring
-- **Edition-specific metadata**: Duration, narrator, format detection
-- **Scoring breakdown**: Detailed confidence factor analysis
+- **Author/narrator extraction**: Enhanced multi-author support with target-based matching and hierarchical data priority (edition-level → book-level → legacy)
+- **Edition-specific metadata**: Duration, narrator, format detection with explicit role label support
+- **Scoring breakdown**: Detailed confidence factor analysis with improved text similarity matching
 - System information
 - Configuration validation status
 
@@ -541,10 +542,13 @@ shelfbridge debug --user alice
 # Check book matching confidence scores
 shelfbridge sync --dry-run --verbose | grep "confidence"
 
-# Analyze title/author fallback performance
+# Analyze title/author fallback performance with enhanced multi-author support
 shelfbridge sync --dry-run --verbose | grep -A 5 "Tier 3"
 
-# Validate configuration including new matching settings
+# Check author/narrator extraction with hierarchical data priority
+shelfbridge sync --dry-run --verbose | grep -E "(narrator|contributions|edition-level)"
+
+# Validate configuration including enhanced matching settings
 shelfbridge validate --help-config
 ```
 
@@ -571,7 +575,7 @@ While configuration is primarily done via YAML files, these environment variable
 - **sync**: 5-60 seconds depending on library size, cache state, and matching tier usage
   - Tier 1 (ASIN): 0.5-1s per book
   - Tier 2 (ISBN): 1-2s per book
-  - Tier 3 (Title/Author): 3-8s per book
+  - Tier 3 (Title/Author): 3-8s per book (enhanced with multi-author support and hierarchical data priority)
 - **test**: 2-5 seconds
 - **validate**: 1-3 seconds
 - **cache --stats**: < 1 second
@@ -588,7 +592,8 @@ While configuration is primarily done via YAML files, these environment variable
 
 - **Initial sync**: 50-200 API calls (may increase with title/author fallback usage)
 - **Subsequent syncs**: 10-50 API calls
-- **Edition-specific searches**: 1-2 additional API calls per title/author match
+- **Edition-specific searches**: 1-2 additional API calls per title/author match (enhanced with hierarchical data retrieval)
+- **Enhanced GraphQL queries**: Improved data completeness with edition-level and book-level contributions
 - **Rate limiting**: Automatically handled (55 req/min Hardcover, 600 req/min Audiobookshelf)
 
 ## Tips and Best Practices
