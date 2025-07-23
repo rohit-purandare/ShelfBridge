@@ -10,6 +10,7 @@
     "cron": "node src/main.js cron",
     "sync": "node src/main.js sync",
     "test": "node src/main.js test",
+    "test:native": "node scripts/test-native-modules.js",
     "config": "node src/main.js config",
     "cache": "node src/main.js cache",
     "dev": "node --watch src/main.js",

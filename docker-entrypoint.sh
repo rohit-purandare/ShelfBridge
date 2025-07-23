@@ -8,17 +8,21 @@ check_native_modules() {
     # Check for any native modules in node_modules
     if find /app/node_modules -name "*.node" -type f 2>/dev/null | grep -q .; then
         echo "🔍 Found native modules, testing compatibility..."
-        # Try to require all .node files to check for issues
-        native_module_count=0
-        for node_file in $(find /app/node_modules -name "*.node" -type f 2>/dev/null); do
-            if node -e "require('$node_file')" 2>/dev/null; then
-                native_module_count=$((native_module_count + 1))
+        
+        # Test specific native modules that we actually use
+        modules_to_test=("better-sqlite3")
+        working_modules=0
+        
+        for module in "${modules_to_test[@]}"; do
+            if node -e "try { require('$module'); console.log('✅ $module: OK'); } catch(e) { console.error('❌ $module: FAILED -', e.message); process.exit(1); }" 2>/dev/null; then
+                working_modules=$((working_modules + 1))
             else
-                echo "❌ Native module compatibility issue detected"
+                echo "❌ Native module compatibility issue detected: $module failed to load"
                 return 1
             fi
         done
-        echo "✅ All native modules ($native_module_count) are working correctly"
+        
+        echo "✅ All required native modules ($working_modules) are working correctly"
     else
         echo "ℹ️  No native modules found"
     fi
@@ -30,8 +34,27 @@ check_native_modules() {
 rebuild_native_modules() {
     echo "🔧 Rebuilding all native modules..."
     
-    # Rebuild all native modules
-    if npm rebuild; then
+    # Clear any cached build artifacts first
+    echo "🧹 Clearing native module cache..."
+    rm -rf /app/node_modules/.cache 2>/dev/null || true
+    
+    # Rebuild specific native modules that we know about
+    echo "🔧 Rebuilding better-sqlite3..."
+    if npm rebuild better-sqlite3 --verbose; then
+        echo "✅ better-sqlite3 rebuild successful"
+    else
+        echo "❌ better-sqlite3 rebuild failed"
+        echo "🔍 System info for debugging:"
+        echo "Node version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        echo "Architecture: $(uname -m)"
+        echo "OS: $(uname -s)"
+        return 1
+    fi
+    
+    # Rebuild all modules as fallback
+    echo "🔧 Rebuilding all native modules..."
+    if npm rebuild --verbose; then
         echo "✅ Native module rebuild successful"
         return 0
     else
