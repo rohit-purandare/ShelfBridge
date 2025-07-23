@@ -1429,8 +1429,36 @@ export class SyncManager {
       });
 
       // Check for progress regression protection if enabled
-      const shouldProtectAgainstRegression =
+      // First, get sync tracking to detect first sync scenarios
+      const syncTracking = await this.cache.getSyncTracking(this.userId);
+      const isFirstSync = syncTracking.total_syncs === 1;
+      const isForceSync = this.globalConfig.force_sync === true;
+
+      // Determine if protection should be applied
+      let shouldProtectAgainstRegression =
         this.globalConfig.prevent_progress_regression !== false;
+
+      // Disable protection for first sync or force sync
+      if (shouldProtectAgainstRegression && isFirstSync) {
+        shouldProtectAgainstRegression = false;
+        logger.debug(
+          `Disabling progress regression protection for ${title}: first sync detected`,
+          {
+            userBookId: userBook.id,
+            totalSyncs: syncTracking.total_syncs,
+          },
+        );
+      } else if (shouldProtectAgainstRegression && isForceSync) {
+        shouldProtectAgainstRegression = false;
+        logger.debug(
+          `Disabling progress regression protection for ${title}: force sync enabled`,
+          {
+            userBookId: userBook.id,
+            forceSync: isForceSync,
+          },
+        );
+      }
+
       if (shouldProtectAgainstRegression) {
         const regressionCheck = await this._checkProgressRegression(
           userBook.id,
