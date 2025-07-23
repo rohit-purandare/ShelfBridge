@@ -13,12 +13,14 @@ jobs:
       packages: write
     # Skip if this is already a version bump commit to avoid infinite loops
     # Also skip non-functional commits (docs, chore, test, ci, style, refactor without breaking changes)
+    # Also skip dependency updates from dependabot
     if: ${{ !contains(github.event.head_commit.message, 'bump version to v') &&
       !startsWith(github.event.head_commit.message, 'docs:') &&
       !startsWith(github.event.head_commit.message, 'chore:') &&
       !startsWith(github.event.head_commit.message, 'test:') &&
       !startsWith(github.event.head_commit.message, 'ci:') &&
-      !startsWith(github.event.head_commit.message, 'style:') }}
+      !startsWith(github.event.head_commit.message, 'style:') &&
+      !startsWith(github.event.head_commit.message, 'build(deps):') }}
 
     steps:
       - uses: actions/checkout@v4
