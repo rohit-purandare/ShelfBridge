@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.13] - 2025-07-23
+
+### Fixed
+- remove npm cache mount that was preserving glibc binaries
+
+
 ## [1.18.12] - 2025-07-23
 
 ### Changed
@@ -374,7 +380,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.12...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.13...HEAD
+[1.18.13]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.12...v1.18.13
 [1.18.12]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.11...v1.18.12
 [1.18.11]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.10...v1.18.11
 [1.18.10]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.9...v1.18.10
