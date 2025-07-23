@@ -244,9 +244,27 @@ Docker builds are optimized to only run when necessary:
 **✅ Triggers Build:**
 
 - `feat:`, `fix:`, `perf:` commits (functional changes)
-- Version tags (always build releases)
+- **Version tags (always build releases)** - **NEW: Always builds for tag pushes regardless of commit message**
 - Pull requests (for testing)
 - Any commits not starting with excluded prefixes
+
+### Version-Specific Docker Images
+
+**Fixed Issue:** The workflow now ensures that version-specific Docker images are created for every release:
+
+- ✅ **Automatic version tagging** - Creates `ghcr.io/owner/repo:1.18.2` style tags
+- ✅ **Always builds for releases** - Tag pushes trigger builds regardless of commit message
+- ✅ **Enables version targeting** - Users can pull specific versions instead of just `:latest`
+
+**Example usage:**
+
+```bash
+# Pull specific version
+docker pull ghcr.io/rohit-purandare/shelfbridge:1.18.2
+
+# Pull latest
+docker pull ghcr.io/rohit-purandare/shelfbridge:latest
+```
 
 **⏭️ Skips Build:**
 
