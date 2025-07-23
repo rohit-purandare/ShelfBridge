@@ -295,6 +295,15 @@ jobs:
           git push origin main
           echo "✅ Version bump and changelog update pushed successfully"
 
+      - name: Create and push tag
+        if: steps.check_tag.outputs.skip == 'false'
+        run: |
+          NEW_VERSION=${{ steps.package_version.outputs.version }}
+          echo "Creating and pushing tag v${NEW_VERSION}..."
+          git tag "v${NEW_VERSION}"
+          git push origin "v${NEW_VERSION}"
+          echo "✅ Tag v${NEW_VERSION} pushed successfully"
+
       - name: Create Release
         if: steps.check_tag.outputs.skip == 'false'
         uses: softprops/action-gh-release@v1

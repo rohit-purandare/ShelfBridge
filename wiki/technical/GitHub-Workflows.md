@@ -130,8 +130,9 @@ The workflow intelligently determines when to create releases:
 2. **Version Bump Logic** - Uses conventional commits to determine bump type
 3. **Duplicate Prevention** - Skips if tag already exists
 4. **Changelog Generation** - Creates changelog from git commits
-5. **GitHub Release Creation** - Creates tagged release with notes
-6. **Docker Integration** - References corresponding Docker images
+5. **Tag Push** - **NEW: Explicitly pushes git tag to trigger Docker build workflow**
+6. **GitHub Release Creation** - Creates tagged release with notes
+7. **Docker Integration** - Automatic Docker images with version-specific tags
 
 ### Release Format
 
@@ -196,6 +197,20 @@ git push origin release/v1.2.3
 1. Create `release/*` branch
 2. Make your changes and push → Automatic version bump
 3. Merge generated PR to main → Workflow creates release automatically
+
+### Release Workflow Improvements
+
+**Automatic Version Targeting** - **NEW: Fixed Docker image creation for releases**
+
+The workflow now ensures that version-specific Docker images are automatically created:
+
+- ✅ **Explicit tag push** - Pushes git tag before GitHub release creation
+- ✅ **Triggers Docker builds** - Tag push events now properly trigger Docker workflow
+- ✅ **Version-specific images** - Creates `ghcr.io/owner/repo:1.18.2` style tags automatically
+- ✅ **No manual intervention** - Everything happens automatically on functional commits
+
+**Previous Issue:** GitHub release creation didn't trigger `push: tags` events for Docker builds
+**Fix Applied:** Added explicit `git tag` and `git push origin v{version}` before release creation
 
 ### Development Workflow Improvements
 
