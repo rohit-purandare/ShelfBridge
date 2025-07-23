@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.5] - 2025-07-23
+
+### Fixed
+- update labeler configuration for actions/labeler@v5 compatibility
+
+
 ## [1.18.4] - 2025-07-23
 
 ### Fixed
@@ -318,7 +324,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.4...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.5...HEAD
+[1.18.5]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.4...v1.18.5
 [1.18.4]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.3...v1.18.4
 [1.18.3]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.2...v1.18.3
 [1.18.2]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.1...v1.18.2
