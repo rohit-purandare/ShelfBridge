@@ -1,8 +1,8 @@
 services:
   shelfbridge:
-    image: ghcr.io/rohit-purandare/shelfbridge:latest
+    # image: ghcr.io/rohit-purandare/shelfbridge:latest
     # Uncomment the line below and comment the image line above to build locally
-    # build: .
+    build: .
     container_name: shelfbridge
     # Restart policy: "on-failure" prevents restart loops during configuration setup
     # but auto-restarts on sync failures
@@ -23,6 +23,9 @@ services:
     # 💡 Use environment variables for: Basic setups, Docker deployments, simple configuration
     # 💡 Use config.yaml for: Library filtering, multi-user advanced setups, complex family configurations
     environment:
+      # Default environment - prevents empty environment mapping error
+      NODE_ENV: "production"
+      
       # =============================================================================
       # REQUIRED USER CONFIGURATION (Must be set if not using config.yaml)
       # =============================================================================

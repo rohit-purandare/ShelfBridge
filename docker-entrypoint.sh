@@ -10,14 +10,20 @@ check_native_modules() {
         echo "🔍 Found native modules, testing compatibility..."
         
         # Test specific native modules that we actually use
-        modules_to_test=("better-sqlite3")
+        modules_to_test="better-sqlite3"
         working_modules=0
         
-        for module in "${modules_to_test[@]}"; do
+        for module in $modules_to_test; do
+            echo "   Testing $module..."
             if node -e "try { require('$module'); console.log('✅ $module: OK'); } catch(e) { console.error('❌ $module: FAILED -', e.message); process.exit(1); }" 2>/dev/null; then
                 working_modules=$((working_modules + 1))
+                echo "   ✅ $module: Compatible"
             else
                 echo "❌ Native module compatibility issue detected: $module failed to load"
+                echo "🔍 Debug info:"
+                echo "   Node version: $(node --version)"
+                echo "   Platform: $(uname -s -m)"
+                echo "   Module path: $(find /app/node_modules -name "$module" -type d | head -1)"
                 return 1
             fi
         done

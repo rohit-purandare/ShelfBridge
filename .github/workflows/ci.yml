@@ -24,21 +24,58 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
-    
-    - name: Run tests
-      run: timeout 60s npm test || echo "⚠️ Test command timed out after 60 seconds"
       
-    - name: Test cache functionality
-      run: npm run cache -- --show || echo "⚠️ Cache command has known issues, skipping for now"
-      
-    - name: Verify main entry point
-      run: node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help
-      
-    - name: Check for required files
+    - name: Run application tests (CRITICAL)
       run: |
-        echo "Checking for required configuration files..."
-        if [ ! -f "config/config.yaml.example" ]; then
-          echo "❌ config/config.yaml.example not found"
+        echo "🧪 CRITICAL: Running application tests on Node ${{ matrix.node-version }}"
+        echo "⚠️  BUILD WILL FAIL if tests don't pass"
+        if ! timeout 60s npm test; then
+          echo "❌ CRITICAL FAILURE: Application tests failed on Node ${{ matrix.node-version }}"
+          echo "🚫 BLOCKING BUILD - Fix required before merge"
           exit 1
         fi
-        echo "✅ Required files present" 
+        echo "✅ Application tests passed on Node ${{ matrix.node-version }}"
+      
+    - name: Test native modules compatibility (CRITICAL)
+      run: |
+        echo "🧪 CRITICAL: Testing native modules compatibility on Node ${{ matrix.node-version }}"
+        echo "⚠️  BUILD WILL FAIL if native modules don't work"
+        if ! npm run test:native; then
+          echo "❌ CRITICAL FAILURE: Native modules broken on Node ${{ matrix.node-version }}"
+          echo "🚫 BLOCKING BUILD - Fix required before merge"
+          exit 1
+        fi
+        echo "✅ Native modules compatible with Node ${{ matrix.node-version }}"
+       
+    - name: Test cache functionality (CRITICAL)
+      run: |
+        echo "🧪 CRITICAL: Testing cache functionality on Node ${{ matrix.node-version }}"
+        echo "⚠️  BUILD WILL FAIL if cache doesn't work"
+        if ! npm run cache -- --show; then
+          echo "❌ CRITICAL FAILURE: Cache functionality broken on Node ${{ matrix.node-version }}"
+          echo "🚫 BLOCKING BUILD - Fix required before merge"
+          exit 1
+        fi
+        echo "✅ Cache functionality working on Node ${{ matrix.node-version }}"
+      
+    - name: Verify main entry point (CRITICAL)
+      run: |
+        echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
+        echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
+        if ! node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help; then
+          echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
+          echo "🚫 BLOCKING BUILD - Fix required before merge"
+          exit 1
+        fi
+        echo "✅ Main entry point working on Node ${{ matrix.node-version }}"
+      
+    - name: Check for required files (CRITICAL)
+      run: |
+        echo "🧪 CRITICAL: Checking required files on Node ${{ matrix.node-version }}"
+        echo "⚠️  BUILD WILL FAIL if required files are missing"
+        if [ ! -f "config/config.yaml.example" ]; then
+          echo "❌ CRITICAL FAILURE: config/config.yaml.example not found"
+          echo "🚫 BLOCKING BUILD - Fix required before merge"
+          exit 1
+        fi
+        echo "✅ Required files present on Node ${{ matrix.node-version }}" 

@@ -40,7 +40,7 @@ RUN mkdir -p logs && \
 
 # Add health check to ensure the application and native modules are working properly
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "console.log('✅ Health check passed')" || exit 1
+    CMD npm run test:native > /dev/null 2>&1 || exit 1
 
 # Expose port (if needed for health checks)
 EXPOSE 3000
