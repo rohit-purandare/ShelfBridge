@@ -209,8 +209,14 @@ The workflow now ensures that version-specific Docker images are automatically c
 - ✅ **Version-specific images** - Creates `ghcr.io/owner/repo:1.18.2` style tags automatically
 - ✅ **No manual intervention** - Everything happens automatically on functional commits
 
-**Previous Issue:** GitHub release creation didn't trigger `push: tags` events for Docker builds
-**Fix Applied:** Added explicit `git tag` and `git push origin v{version}` before release creation
+**Previous Issue:** GitHub workflows can't trigger other workflows with default token for security
+**Fix Applied:** Integrated Docker build directly into the version-and-release workflow
+
+**Technical Details:**
+
+- Docker images are now built as part of the release process (same workflow)
+- Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags
+- Eliminates dependency on separate Docker build workflow triggers
 
 ### Development Workflow Improvements
 
