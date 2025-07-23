@@ -10,7 +10,8 @@ COPY package*.json ./
 
 # Install dependencies with comprehensive native module compilation
 # Force compilation from source instead of using prebuilt binaries
-# Remove cache mount to prevent glibc binary persistence
+# Set environment variables to ensure source compilation
+ENV npm_config_build_from_source=true
 RUN npm ci --omit=dev --ignore-scripts && \
     npm rebuild --verbose && \
     npm cache clean --force

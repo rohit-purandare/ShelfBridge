@@ -106,7 +106,7 @@ services:
       # SHELFBRIDGE_USER_1_HARDCOVER_TOKEN: "dad_hardcover_token"
     command: ['npm', 'start']
     healthcheck:
-      test: ['CMD', 'node', 'src/main.js', 'config', '--help']
+      test: ['CMD', 'npm', 'run', 'test:native']
       interval: 30s
       timeout: 10s
       retries: 3
