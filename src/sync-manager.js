@@ -549,9 +549,44 @@ export class SyncManager {
   _convertSearchResultToMatch(searchResult) {
     // Create a simplified match object that works with existing code
     // Note: This won't have the full userBook structure since it's from search, not user library
+
+    const editionId = searchResult.id;
+    // CRITICAL: The book ID must come from searchResult.book.id, not from searchResult.id
+    // searchResult.id is the edition ID, searchResult.book.id is the book ID
+    const bookId = searchResult.book?.id;
+
+    logger.debug('Converting search result to match format', {
+      originalSearchResult: {
+        id: searchResult.id,
+        title: searchResult.title,
+        bookId: searchResult.book?.id,
+        format: searchResult.format,
+        hasBookObject: !!searchResult.book,
+      },
+      extractedIds: {
+        bookId: bookId,
+        editionId: editionId,
+      },
+    });
+
+    // Validate that we have the required book ID
+    if (!bookId) {
+      logger.error(
+        'Search result missing book.id - cannot create valid match',
+        {
+          searchResult: {
+            id: searchResult.id,
+            title: searchResult.title,
+            hasBook: !!searchResult.book,
+            bookKeys: searchResult.book ? Object.keys(searchResult.book) : [],
+          },
+        },
+      );
+    }
+
     return {
       edition: {
-        id: searchResult.id || 'search-result',
+        id: editionId || 'search-result',
         format: searchResult.format || 'unknown',
         pages: searchResult.pages || null,
         audio_seconds: searchResult.audio_seconds || null,
@@ -562,7 +597,7 @@ export class SyncManager {
       userBook: {
         id: null, // Will be created during auto-add process
         book: {
-          id: searchResult.book?.id || searchResult.id,
+          id: bookId, // This MUST be the actual book ID, not the edition ID
           title: searchResult.title,
           contributions: searchResult.contributions || [],
         },
@@ -1058,6 +1093,24 @@ export class SyncManager {
       const bookId = hardcoverMatch.userBook.book.id;
       const editionId = hardcoverMatch.edition.id;
 
+      // Validate we have the necessary IDs
+      if (!bookId || !editionId) {
+        logger.error(
+          `Missing required IDs for adding title/author matched book to library`,
+          {
+            bookId: bookId,
+            editionId: editionId,
+            title: title,
+            hasBook: !!hardcoverMatch.userBook.book,
+            hasEdition: !!hardcoverMatch.edition,
+          },
+        );
+        syncResult.status = 'error';
+        syncResult.reason = `Failed to add matched book: Missing book ID (${bookId}) or edition ID (${editionId})`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
       try {
         if (!this.dryRun) {
           logger.debug(`Adding title/author matched book to library`, {
@@ -1071,11 +1124,27 @@ export class SyncManager {
             2,
             editionId,
           );
-          syncResult.actions.push(`Added matched book to Hardcover library`);
 
-          // Update the match object to look like a regular library match
-          hardcoverMatch.userBook.id = addResult.id || 'auto-added';
-          hardcoverMatch._isSearchResult = false; // No longer just a search result
+          if (addResult && addResult.id) {
+            syncResult.actions.push(`Added matched book to Hardcover library`);
+
+            // Update the match object to look like a regular library match
+            hardcoverMatch.userBook.id = addResult.id;
+            hardcoverMatch._isSearchResult = false; // No longer just a search result
+          } else {
+            logger.error(
+              `Failed to add title/author matched book to library: API returned null`,
+              {
+                bookId: bookId,
+                editionId: editionId,
+                title: title,
+              },
+            );
+            syncResult.status = 'error';
+            syncResult.reason = `Failed to add matched book: API returned null response`;
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+          }
         } else {
           logger.debug(
             `[DRY RUN] Would add title/author matched book to library`,

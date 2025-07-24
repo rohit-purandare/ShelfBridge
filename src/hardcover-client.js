@@ -5,6 +5,27 @@ import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
 
+/**
+ * Safely convert a value to integer for GraphQL, handling null/undefined cases
+ * @param {any} value - Value to convert
+ * @param {string} fieldName - Field name for error logging
+ * @returns {number|null} - Integer value or null
+ */
+function safeParseInt(value, fieldName = 'unknown') {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value;
+  }
+  const parsed = parseInt(value);
+  if (isNaN(parsed)) {
+    logger.warn(`Invalid integer value for ${fieldName}: ${value}`);
+    return null;
+  }
+  return parsed;
+}
+
 export class HardcoverClient {
   constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
     // Normalize token by stripping "Bearer" prefix if present
@@ -322,15 +343,15 @@ export class HardcoverClient {
             `;
       const variables = useSeconds
         ? {
-            id: readId,
-            seconds: currentProgress,
-            editionId,
+            id: safeParseInt(readId, 'readId'),
+            seconds: safeParseInt(currentProgress, 'currentProgress'),
+            editionId: safeParseInt(editionId, 'editionId'),
             startedAt: startedAt ? startedAt.slice(0, 10) : null,
           }
         : {
-            id: readId,
-            pages: currentProgress,
-            editionId,
+            id: safeParseInt(readId, 'readId'),
+            pages: safeParseInt(currentProgress, 'currentProgress'),
+            editionId: safeParseInt(editionId, 'editionId'),
             startedAt: startedAt ? startedAt.slice(0, 10) : null,
           };
       try {
@@ -530,9 +551,9 @@ export class HardcoverClient {
                 }
             `;
       variables = {
-        id: readId,
-        editionId,
-        seconds: totalValue,
+        id: safeParseInt(readId, 'readId'),
+        editionId: safeParseInt(editionId, 'editionId'),
+        seconds: safeParseInt(totalValue, 'totalValue'),
       };
       if (finishedAt) variables.finishedAt = finishedAt;
       if (startedAt) variables.startedAt = startedAt;
@@ -558,9 +579,9 @@ export class HardcoverClient {
                 }
             `;
       variables = {
-        id: readId,
-        editionId,
-        pages: totalValue,
+        id: safeParseInt(readId, 'readId'),
+        editionId: safeParseInt(editionId, 'editionId'),
+        pages: safeParseInt(totalValue, 'totalValue'),
       };
       if (finishedAt) variables.finishedAt = finishedAt;
       if (startedAt) variables.startedAt = startedAt;
@@ -608,8 +629,8 @@ export class HardcoverClient {
         `;
 
     const variables = {
-      userBookId,
-      statusId,
+      userBookId: safeParseInt(userBookId, 'userBookId'),
+      statusId: safeParseInt(statusId, 'statusId'),
     };
 
     try {
@@ -724,15 +745,15 @@ export class HardcoverClient {
         `;
     const variables = useSeconds
       ? {
-          id: userBookId,
-          seconds: currentProgress,
-          editionId,
+          id: safeParseInt(userBookId, 'userBookId'),
+          seconds: safeParseInt(currentProgress, 'currentProgress'),
+          editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
         }
       : {
-          id: userBookId,
-          pages: currentProgress,
-          editionId,
+          id: safeParseInt(userBookId, 'userBookId'),
+          pages: safeParseInt(currentProgress, 'currentProgress'),
+          editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
         };
     try {
@@ -1141,20 +1162,57 @@ export class HardcoverClient {
         `;
 
     const variables = {
-      bookId,
-      statusId,
-      editionId,
+      bookId: safeParseInt(bookId, 'bookId'),
+      statusId: safeParseInt(statusId, 'statusId'),
+      editionId: safeParseInt(editionId, 'editionId'),
     };
 
     try {
+      logger.debug('Attempting to add book to library', {
+        bookId,
+        statusId,
+        editionId,
+        mutation: mutation.replace(/\s+/g, ' ').trim(),
+      });
+
       const result = await this._executeQuery(mutation, variables);
+
+      logger.debug('Add book to library response', {
+        result: result,
+        hasInsertUserBook: !!(result && result.insert_user_book),
+        hasId: !!(
+          result &&
+          result.insert_user_book &&
+          result.insert_user_book.id
+        ),
+      });
+
       if (result && result.insert_user_book && result.insert_user_book.id) {
+        logger.debug('Successfully added book to library', {
+          userBookId: result.insert_user_book.id,
+          bookId,
+          editionId,
+        });
         // Return a minimal object with just the id since that's all we get
         return { id: result.insert_user_book.id };
+      } else {
+        logger.warn(
+          'Add book to library returned unexpected result structure',
+          {
+            result: result,
+            bookId,
+            editionId,
+          },
+        );
+        return null;
       }
-      return null;
     } catch (error) {
-      logger.error('Error adding book to library:', error.message);
+      logger.error('Error adding book to library', {
+        error: error.message,
+        bookId,
+        editionId,
+        statusId,
+      });
       return null;
     }
   }
@@ -1351,7 +1409,7 @@ export class HardcoverClient {
       }
     `;
 
-    const variables = { id: parseInt(bookId) };
+    const variables = { id: safeParseInt(bookId, 'bookId') };
 
     try {
       const result = await this._executeQuery(query, variables);
