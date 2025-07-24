@@ -675,7 +675,7 @@ export class HardcoverClient {
                 }
             }
         `;
-    const variables = { userBookId };
+    const variables = { userBookId: safeParseInt(userBookId, 'userBookId') };
     try {
       const result = await this._executeQuery(query, variables);
       if (
