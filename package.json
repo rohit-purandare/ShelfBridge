@@ -11,6 +11,7 @@
     "sync": "node src/main.js sync",
     "test": "node src/main.js test",
     "test:native": "node scripts/test-native-modules.js",
+    "validate:sqlite": "node scripts/validate-better-sqlite3.js",
     "pre-flight": "node scripts/pre-flight-check.js",
     "config": "node src/main.js config",
     "cache": "node src/main.js cache",
@@ -34,7 +35,7 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
-    "better-sqlite3": "^12.2.0",
+    "better-sqlite3": "12.2.0",
     "commander": "^11.1.0",
     "cron": "^3.1.6",
     "cronstrue": "^3.1.0",

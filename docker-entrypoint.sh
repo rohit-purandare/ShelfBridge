@@ -15,15 +15,38 @@ check_native_modules() {
         
         for module in $modules_to_test; do
             echo "   Testing $module..."
-            if node -e "try { require('$module'); console.log('✅ $module: OK'); } catch(e) { console.error('❌ $module: FAILED -', e.message); process.exit(1); }" 2>/dev/null; then
+            
+            # Capture detailed error information
+            error_output=$(node -e "
+                try { 
+                    const mod = require('$module'); 
+                    console.log('✅ $module: OK'); 
+                } catch(e) { 
+                    console.error('❌ $module: FAILED');
+                    console.error('Error:', e.message);
+                    if (e.message.includes('fcntl64')) {
+                        console.error('💡 This is a glibc/musl compatibility issue');
+                        console.error('💡 Try rebuilding with: npm rebuild $module --verbose');
+                    } else if (e.message.includes('NODE_MODULE_VERSION')) {
+                        console.error('💡 Node.js version mismatch - rebuild required');
+                    } else if (e.message.includes('cannot open shared object')) {
+                        console.error('💡 Missing system dependencies');
+                    }
+                    process.exit(1); 
+                }" 2>&1)
+            
+            if echo "$error_output" | grep -q "✅"; then
                 working_modules=$((working_modules + 1))
                 echo "   ✅ $module: Compatible"
             else
                 echo "❌ Native module compatibility issue detected: $module failed to load"
+                echo "$error_output"
                 echo "🔍 Debug info:"
                 echo "   Node version: $(node --version)"
                 echo "   Platform: $(uname -s -m)"
+                echo "   Libc: $(ldd --version 2>&1 | head -n1 || echo 'Unknown')"
                 echo "   Module path: $(find /app/node_modules -name "$module" -type d | head -1)"
+                echo "   Binary files: $(find /app/node_modules/$module -name "*.node" 2>/dev/null || echo 'None found')"
                 return 1
             fi
         done
@@ -36,81 +59,23 @@ check_native_modules() {
     return 0
 }
 
-# Function to rebuild all native modules
-rebuild_native_modules() {
-    echo "🔧 Rebuilding all native modules..."
-    
-    # Clear any cached build artifacts first
-    echo "🧹 Clearing native module cache..."
-    rm -rf /app/node_modules/.cache 2>/dev/null || true
-    
-    # Rebuild specific native modules that we know about
-    echo "🔧 Rebuilding better-sqlite3..."
-    if npm rebuild better-sqlite3 --verbose; then
-        echo "✅ better-sqlite3 rebuild successful"
-    else
-        echo "❌ better-sqlite3 rebuild failed"
-        echo "🔍 System info for debugging:"
-        echo "Node version: $(node --version)"
-        echo "NPM version: $(npm --version)"
-        echo "Architecture: $(uname -m)"
-        echo "OS: $(uname -s)"
-        return 1
-    fi
-    
-    # Rebuild all modules as fallback
-    echo "🔧 Rebuilding all native modules..."
-    if npm rebuild --verbose; then
-        echo "✅ Native module rebuild successful"
-        return 0
-    else
-        echo "❌ Native module rebuild failed"
-        return 1
-    fi
-}
 
-# Check native modules on startup
+
+# Check native modules on startup - should never fail with proper Docker build
 if ! check_native_modules; then
     echo ""
-    echo "🚨 NATIVE MODULE ERROR DETECTED"
+    echo "🚨 CRITICAL ERROR: Native modules not working"
     echo ""
-    echo "One or more native modules are not working properly."
-    echo "This usually happens when:"
-    echo "  • The container was built on a different architecture"
-    echo "  • Dependencies weren't installed correctly"
-    echo "  • Node.js version mismatch"
-    echo "  • Missing system dependencies"
+    echo "This should not happen with the current Docker build process."
+    echo "The image may be corrupted or from an old version."
     echo ""
-    echo "🔧 ATTEMPTING TO FIX..."
+    echo "🔧 IMMEDIATE ACTION REQUIRED:"
+    echo "  1. Pull the latest image: docker pull ghcr.io/rohit-purandare/shelfbridge:latest"
+    echo "  2. Or rebuild completely: docker-compose build --no-cache"
     echo ""
-    
-    # Try to rebuild all native modules
-    if rebuild_native_modules; then
-        echo "✅ Rebuild successful"
-        if check_native_modules; then
-            echo "✅ All native modules are now working"
-        else
-            echo "❌ Rebuild failed to fix the issue"
-            echo ""
-            echo "Please try:"
-            echo "  1. Rebuild the Docker image: docker-compose build --no-cache"
-            echo "  2. Or pull the latest image: docker pull ghcr.io/rohit-purandare/shelfbridge:latest"
-            echo "  3. Check if your system has the required build tools"
-            echo ""
-            exit 1
-        fi
-    else
-        echo "❌ Failed to rebuild native modules"
-        echo ""
-        echo "Please rebuild the Docker image:"
-        echo "  docker-compose build --no-cache"
-        echo ""
-        echo "Or check your system for required build dependencies:"
-        echo "  - python3, make, g++ (for Alpine Linux)"
-        echo "  - build-essential (for Ubuntu/Debian)"
-        echo ""
-        exit 1
-    fi
+    echo "If this error persists, please report it as a bug."
+    echo ""
+    exit 1
 fi
 
 # Always ensure config directory exists
@@ -200,4 +165,4 @@ fi
 # --- End Permission Fix ---
 
 # Drop privileges to node user and execute the original command
-exec su-exec node "$@" 
+exec gosu node "$@" 
