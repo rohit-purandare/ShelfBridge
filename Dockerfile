@@ -22,7 +22,9 @@ ENV npm_config_build_from_source=true \
     npm_config_better_sqlite3_binary_host_mirror="" \
     npm_config_sqlite3_binary_host_mirror="" \
     npm_config_target_platform=linux \
-    PYTHON=/usr/bin/python3
+    PYTHON=/usr/bin/python3 \
+    LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib \
+    LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib
 
 # Install dependencies and build native modules with comprehensive validation
 RUN set -e && \
@@ -47,7 +49,14 @@ RUN set -e && \
     echo "Test 7: Prepared statements with parameters..." && \
     node -e "const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER, value TEXT)'); const insert = db.prepare('INSERT INTO test (id, value) VALUES (?, ?)'); insert.run(1, 'hello'); insert.run(2, 'world'); const rows = db.prepare('SELECT * FROM test ORDER BY id').all(); if (rows.length !== 2 || rows[0].value !== 'hello') throw new Error('Prepared statements failed'); console.log('✅ Prepared statements work');" && \
     echo "🎉 ALL BETTER-SQLITE3 TESTS PASSED - MODULE IS FULLY FUNCTIONAL!" && \
-    echo "🎯 BETTER-SQLITE3 IS NOW BULLETPROOF AND PRODUCTION-READY!"
+    echo "🎯 BETTER-SQLITE3 IS NOW BULLETPROOF AND PRODUCTION-READY!" && \
+    echo "🔧 FIXING USER PERMISSIONS AND TESTING AS NODE USER..." && \
+    chown -R node:node /app/node_modules && \
+    echo "Test 8: Node user can load better-sqlite3..." && \
+    su node -c "cd /app && node -e \"const db = require('better-sqlite3')(':memory:'); console.log('✅ Node user can load module');\"" && \
+    echo "Test 9: Node user can create database..." && \
+    su node -c "cd /app && node -e \"const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER)'); db.exec('INSERT INTO test (id) VALUES (1)'); const count = db.prepare('SELECT COUNT(*) as count FROM test').get().count; if (count !== 1) throw new Error('Node user DB failed'); console.log('✅ Node user database operations work');\"" && \
+    echo "🎉 NODE USER CONTEXT VERIFIED - BETTER-SQLITE3 FULLY FUNCTIONAL!"
 
 # Copy source code (includes config/config.yaml.example for reference)
 COPY . .
