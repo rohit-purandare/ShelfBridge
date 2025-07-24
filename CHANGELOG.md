@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.18] - 2025-07-24
+
+### Improved
+- hotfix: resolve better-sqlite3 user permissions issue
+
+
 ## [1.18.17] - 2025-07-24
 
 ### Fixed
@@ -404,7 +410,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.17...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.18...HEAD
+[1.18.18]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.17...v1.18.18
 [1.18.17]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.16...v1.18.17
 [1.18.16]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.15...v1.18.16
 [1.18.15]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.14...v1.18.15
