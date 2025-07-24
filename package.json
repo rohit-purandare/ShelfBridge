@@ -1,6 +1,6 @@
 {
   "name": "shelfbridge",
-  "version": "1.18.15",
+  "version": "1.18.16",
   "description": "Sync your audiobook listening progress from Audiobookshelf to Hardcover automatically",
   "main": "src/main.js",
   "type": "module",
