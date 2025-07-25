@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Use Debian-based image instead of Alpine to fix better-sqlite3 compatibility
 # Alpine uses musl libc which causes fcntl64 symbol issues with better-sqlite3
 FROM node:20-slim
@@ -28,9 +29,10 @@ ENV npm_config_build_from_source=true \
     LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib
 
 # Install dependencies and build native modules with comprehensive validation
-RUN set -e && \
-    echo "🔧 Installing dependencies..." && \
-    npm cache clean --force && \
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/tmp/build-cache \
+    set -e && \
+    echo "🔧 Installing dependencies with BuildKit cache..." && \
     npm ci --omit=dev --ignore-scripts && \
     echo "🔧 Building better-sqlite3 from source..." && \
     npm rebuild better-sqlite3 --verbose && \
@@ -50,7 +52,7 @@ RUN set -e && \
     echo "Test 7: Prepared statements with parameters..." && \
     node -e "const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER, value TEXT)'); const insert = db.prepare('INSERT INTO test (id, value) VALUES (?, ?)'); insert.run(1, 'hello'); insert.run(2, 'world'); const rows = db.prepare('SELECT * FROM test ORDER BY id').all(); if (rows.length !== 2 || rows[0].value !== 'hello') throw new Error('Prepared statements failed'); console.log('✅ Prepared statements work');" && \
     echo "🎉 ALL BETTER-SQLITE3 TESTS PASSED - MODULE IS FULLY FUNCTIONAL!" && \
-    echo "🎯 BETTER-SQLITE3 IS NOW BULLETPROOF AND PRODUCTION-READY!" && \
+    echo "🎯 BETTER-SQLITE3 IS NOW ROBUST AND PRODUCTION-READY!" && \
     echo "🔧 FIXING USER PERMISSIONS AND TESTING AS NODE USER..." && \
     chown -R node:node /app/node_modules && \
     echo "Test 8: Node user can load better-sqlite3..." && \
@@ -60,7 +62,7 @@ RUN set -e && \
     echo "🎉 NODE USER CONTEXT VERIFIED - BETTER-SQLITE3 FULLY FUNCTIONAL!" && \
     echo "🔧 VERIFYING STATIC LINKING - TESTING SHARED OBJECT DEPENDENCIES..." && \
     node -e "const db = require('better-sqlite3')(':memory:'); console.log('✅ Static linking verification: better-sqlite3 loads without external dependencies');" && \
-    echo "🎯 STATIC LINKING SUCCESSFUL - BETTER-SQLITE3 IS NOW BULLETPROOF!"
+    echo "🎯 STATIC LINKING SUCCESSFUL - BETTER-SQLITE3 IS NOW STABLE!"
 
 # Copy source code (includes config/config.yaml.example for reference)
 COPY . .
