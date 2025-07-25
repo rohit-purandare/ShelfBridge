@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.20] - 2025-07-25
+
+### Changed
+- Fix missing book ID in title/author search results (#16)
+- ci: fix labeler permissions for pull requests
+- ci: enable Docker builds for feature branches and fix labeler config
+
+
 ## [1.18.19] - 2025-07-24
 
 ### Fixed
@@ -416,7 +424,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.19...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.20...HEAD
+[1.18.20]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.19...v1.18.20
 [1.18.19]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.18...v1.18.19
 [1.18.18]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.17...v1.18.18
 [1.18.17]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.16...v1.18.17
