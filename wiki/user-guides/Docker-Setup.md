@@ -5,7 +5,9 @@ This comprehensive guide covers all Docker deployment options for ShelfBridge. D
 ## 🎯 Why Choose Docker?
 
 **Benefits:**
+
 - ✅ **No Node.js installation required**
+- ✅ **Optimized image size** (~650MB with multi-stage builds)
 - ✅ **Automatic container management**
 - ✅ **Easy updates and rollbacks**
 - ✅ **Isolated environment**
@@ -13,6 +15,7 @@ This comprehensive guide covers all Docker deployment options for ShelfBridge. D
 - ✅ **Built-in health checks**
 
 **Ideal for:**
+
 - Home server setups
 - NAS deployments (Synology, QNAP, etc.)
 - Cloud deployments
@@ -21,10 +24,12 @@ This comprehensive guide covers all Docker deployment options for ShelfBridge. D
 ## 📋 Prerequisites
 
 ### Required Software
+
 - **Docker**: Version 20.10.0 or higher
 - **Docker Compose**: Version 1.28.0 or higher (or Docker Desktop)
 
 ### Check Your Installation
+
 ```bash
 # Verify Docker installation
 docker --version
@@ -35,6 +40,7 @@ docker run hello-world
 ```
 
 ### Required Information
+
 - **Audiobookshelf server URL** and **API token**
 - **Hardcover API token**
 - See [Prerequisites](Prerequisites.md) for detailed token setup
@@ -74,16 +80,18 @@ docker-compose restart
 
 Pre-built multi-architecture images are available:
 
-| Tag | Description | Use Case |
-|-----|-------------|----------|
-| `ghcr.io/rohit-purandare/shelfbridge:latest` | Latest stable release | Production |
-| `ghcr.io/rohit-purandare/shelfbridge:main` | Latest development build | Testing |
+| Tag                                          | Description              | Use Case   |
+| -------------------------------------------- | ------------------------ | ---------- |
+| `ghcr.io/rohit-purandare/shelfbridge:latest` | Latest stable release    | Production |
+| `ghcr.io/rohit-purandare/shelfbridge:main`   | Latest development build | Testing    |
 
 **Platforms Supported:**
+
 - `linux/amd64` - Intel/AMD processors
 - `linux/arm64` - ARM processors (Apple Silicon, Raspberry Pi, etc.)
 
 ### Verify Image Availability
+
 ```bash
 # Check available tags
 docker search shelfbridge
@@ -97,6 +105,7 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ### Option 1: Download and Run (Easiest)
 
 **Step 1: Download Configuration**
+
 ```bash
 # Create project directory
 mkdir shelfbridge && cd shelfbridge
@@ -106,6 +115,7 @@ curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docke
 ```
 
 **Step 2: Start Container**
+
 ```bash
 # Start in background
 docker-compose up -d
@@ -115,7 +125,8 @@ docker-compose ps
 ```
 
 **Step 3: Configure**
-```bash
+
+````bash
 # Edit configuration (auto-created from template)
 # Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
 # Once you have updated and saved the configuration, (re)start the container:
@@ -134,9 +145,10 @@ users:
     abs_url: https://your-audiobookshelf-server.com
     abs_token: your_actual_audiobookshelf_token
     hardcover_token: your_actual_hardcover_token
-```
+````
 
 **Step 4: Restart and Verify**
+
 ```bash
 # Restart to apply configuration
 docker-compose restart
@@ -165,6 +177,7 @@ docker-compose up -d
 ### Docker Compose Configuration
 
 **Default `docker-compose.yml` explained:**
+
 ```yaml
 version: '3.8'
 
@@ -172,22 +185,22 @@ services:
   shelfbridge:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
     container_name: shelfbridge
-    restart: unless-stopped                    # Auto-restart on failure
+    restart: unless-stopped # Auto-restart on failure
     # Note: No user specification needed - container runs as 'node' user (UID 1000) by default
     volumes:
-      - shelfbridge-config:/app/config        # Configuration persistence
-      - shelfbridge-data:/app/data            # Cache persistence
-    command: ["npm", "start"]                 # Background service mode
-    healthcheck:                              # Container health monitoring
-      test: ["CMD", "node", "src/main.js", "config", "--help"]
+      - shelfbridge-config:/app/config # Configuration persistence
+      - shelfbridge-data:/app/data # Cache persistence
+    command: ['npm', 'start'] # Background service mode
+    healthcheck: # Container health monitoring
+      test: ['CMD', 'node', 'src/main.js', 'config', '--help']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
 volumes:
-  shelfbridge-config:                         # Named volume for config
-  shelfbridge-data:                           # Named volume for data/cache
+  shelfbridge-config: # Named volume for config
+  shelfbridge-data: # Named volume for data/cache
 ```
 
 ## 🔧 Manual Docker Run
@@ -295,12 +308,14 @@ docker buildx build \
 ### Understanding Volumes
 
 **Named Volumes (Recommended):**
+
 - Managed by Docker
 - Persist across container updates
 - Easy backup and restore
 - Cross-platform compatible
 
 **Bind Mounts:**
+
 - Direct access to host filesystem
 - Easier for development
 - Platform-specific paths
@@ -395,6 +410,7 @@ docker exec -it shelfbridge ps aux
 ### Updating ShelfBridge
 
 **Using Docker Compose:**
+
 ```bash
 # Pull latest image
 docker-compose pull
@@ -407,6 +423,7 @@ docker-compose logs shelfbridge
 ```
 
 **Manual Docker:**
+
 ```bash
 # Stop container
 docker stop shelfbridge
@@ -429,12 +446,14 @@ docker run -d \
 ### Backup Strategy
 
 **Configuration Backup:**
+
 ```bash
 # Export configuration
 docker exec -it shelfbridge cat /app/config/config.yaml > config-backup.yaml
 ```
 
 **Cache Backup:**
+
 ```bash
 # Export cache to JSON
 docker exec -it shelfbridge node src/main.js cache --export /app/data/cache-backup.json
@@ -444,6 +463,7 @@ docker cp shelfbridge:/app/data/cache-backup.json ./
 ```
 
 **Full Volume Backup:**
+
 ```bash
 # Backup all volumes
 docker run --rm \
@@ -458,17 +478,20 @@ docker run --rm \
 ### Container Won't Start
 
 **Check logs:**
+
 ```bash
 docker-compose logs shelfbridge
 ```
 
 **Common issues:**
+
 - **Configuration errors**: Invalid YAML syntax
 - **Permission issues**: User/group ownership problems
 - **Port conflicts**: Another service using same port
 - **Volume issues**: Mounting problems
 
 **Solutions:**
+
 ```bash
 # Check container status
 docker-compose ps
@@ -489,6 +512,7 @@ docker-compose up -d --force-recreate
 **If you're still experiencing this issue:**
 
 **Quick Fix:**
+
 ```bash
 # Update to latest version
 docker-compose pull
@@ -496,6 +520,7 @@ docker-compose up -d
 ```
 
 **If that doesn't work:**
+
 ```bash
 # Manual fix for legacy versions
 docker exec -u root -it shelfbridge chown -R node:node /app/config /app/data
@@ -503,6 +528,7 @@ docker-compose restart shelfbridge
 ```
 
 **Last resort:**
+
 ```bash
 # Check current permissions
 docker exec -it shelfbridge ls -la /app/config/
@@ -574,17 +600,22 @@ docker inspect shelfbridge
 ## 💡 Docker Best Practices
 
 ### Security
+
 - **Run as non-root**: Container runs as `node` user (UID 1000) by default
 - **Read-only filesystem**: Add `read_only: true` with tmpfs for writable areas
 - **Resource limits**: Set memory and CPU limits
 - **Keep updated**: Regularly update base images
 
 ### Performance
+
+- **Optimized Docker builds**: Multi-stage builds reduce image size by ~30% (950MB → ~650MB)
+- **Build cache efficiency**: BuildKit cache mounts speed up CI/CD builds
 - **Use named volumes**: Better performance than bind mounts
 - **Appropriate resources**: Don't over-allocate memory/CPU
 - **Health checks**: Monitor container health
 
 ### Maintenance
+
 - **Regular updates**: Keep ShelfBridge and Docker updated
 - **Monitor logs**: Check for errors regularly
 - **Backup volumes**: Regular configuration and cache backups
@@ -592,4 +623,4 @@ docker inspect shelfbridge
 
 ---
 
-**Next Steps:** Configure ShelfBridge with your [API tokens](Prerequisites.md) and run your [first sync](First-Sync.md)! 
+**Next Steps:** Configure ShelfBridge with your [API tokens](Prerequisites.md) and run your [first sync](First-Sync.md)!

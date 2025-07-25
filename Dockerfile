@@ -1,24 +1,16 @@
 # syntax=docker/dockerfile:1.4
-# Use Debian-based image instead of Alpine to fix better-sqlite3 compatibility
-# Alpine uses musl libc which causes fcntl64 symbol issues with better-sqlite3
-FROM node:20-slim
 
-# Install dependencies for native modules and gosu for privilege dropping
-# Use Debian package manager instead of Alpine's apk
+# ===== BUILD STAGE =====
+FROM node:20-slim as builder
+
+# Install build dependencies (only in this stage)
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    gosu \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy package files first for better caching
-COPY package*.json ./
-
-# Install dependencies with native module compilation from source
-# Use environment variables to ensure glibc compatibility and avoid prebuilt binaries
+# Set build environment variables
 ENV npm_config_build_from_source=true \
     npm_config_better_sqlite3_binary_host_mirror="" \
     npm_config_sqlite3_binary_host_mirror="" \
@@ -27,6 +19,11 @@ ENV npm_config_build_from_source=true \
     PYTHON=/usr/bin/python3 \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib \
     LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
 
 # Install dependencies and build native modules with comprehensive validation
 RUN --mount=type=cache,target=/root/.npm \
@@ -63,6 +60,22 @@ RUN --mount=type=cache,target=/root/.npm \
     echo "🔧 VERIFYING STATIC LINKING - TESTING SHARED OBJECT DEPENDENCIES..." && \
     node -e "const db = require('better-sqlite3')(':memory:'); console.log('✅ Static linking verification: better-sqlite3 loads without external dependencies');" && \
     echo "🎯 STATIC LINKING SUCCESSFUL - BETTER-SQLITE3 IS NOW STABLE!"
+
+# ===== RUNTIME STAGE =====
+FROM node:20-slim as runtime
+
+# Install only runtime dependencies (much smaller than build stage)
+RUN apt-get update && apt-get install -y \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package files for reference
+COPY package*.json ./
+
+# Copy ONLY the compiled node_modules from builder stage (no build tools)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy source code (includes config/config.yaml.example for reference)
 COPY . .
@@ -101,13 +114,10 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
         } catch (e) { \
             console.error('better-sqlite3 health check failed:', e.message); \
             process.exit(1); \
-        }" || exit 1
+        } \
+    " || exit 1
 
-# Expose port (if needed for health checks)
+# Container configuration
 EXPOSE 3000
-
-# Set entrypoint to handle config provisioning and native module validation
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
-# Default command
 CMD ["npm", "start"] 
