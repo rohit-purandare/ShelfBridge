@@ -2,7 +2,16 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [main]
+    branches:
+      [
+        main,
+        'feature/*',
+        'feat/*',
+        'bugfix/*',
+        'fix/*',
+        'hotfix/*',
+        'release/*',
+      ]
     tags: ['v*']
   pull_request:
     branches: [main]

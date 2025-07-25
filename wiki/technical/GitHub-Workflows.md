@@ -14,13 +14,13 @@ ShelfBridge uses **5 GitHub Actions workflows** to automate:
 
 ## 🔄 Workflow Summary
 
-| Workflow                                  | Trigger                               | Purpose                      | Status    |
-| ----------------------------------------- | ------------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)               | Push/PR to main                       | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)             | Push/PR to main                       | ESLint + security checks     | ✅ Active |
-| [Release Automation](#release-automation) | Functional commits to main            | Smart release creation       | ✅ Active |
-| [Docker Build](#docker-build)             | Functional commits to main, tags, PRs | Smart container builds       | ✅ Active |
-| [Security Scan](#security-scan)           | Push/PR, weekly schedule              | Security auditing            | ✅ Active |
+| Workflow                                  | Trigger                           | Purpose                      | Status    |
+| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security checks     | ✅ Active |
+| [Release Automation](#release-automation) | Functional commits to main        | Smart release creation       | ✅ Active |
+| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
+| [Security Scan](#security-scan)           | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
 
 ---
 
@@ -252,6 +252,7 @@ The workflow now ensures that version-specific Docker images are automatically c
 ### Triggers
 
 - Push to `main` branch (**excludes non-functional commits**)
+- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`)
 - Push of version tags (`v*`)
 - Pull requests to `main` (build-only, all commits)
 
@@ -308,6 +309,7 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ### Generated Tags
 
 - `ghcr.io/rohit-purandare/shelfbridge:latest` (main branch)
+- `ghcr.io/rohit-purandare/shelfbridge:feature-branch-name` (feature branches)
 - `ghcr.io/rohit-purandare/shelfbridge:1.0.1` (version tags)
 - `ghcr.io/rohit-purandare/shelfbridge:1.0` (major.minor)
 - `ghcr.io/rohit-purandare/shelfbridge:1` (major only)
