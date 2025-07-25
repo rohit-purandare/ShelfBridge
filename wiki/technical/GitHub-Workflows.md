@@ -131,9 +131,9 @@ The workflow intelligently determines when to create releases:
 2. **Version Bump Logic** - Uses conventional commits to determine bump type
 3. **Duplicate Prevention** - Skips if tag already exists
 4. **Changelog Generation** - Creates changelog from git commits
-5. **Tag Push** - **NEW: Explicitly pushes git tag to trigger Docker build workflow**
+5. **Tag Push** - Creates and pushes git tag to trigger separate Docker build workflow
 6. **GitHub Release Creation** - Creates tagged release with notes
-7. **Docker Integration** - Automatic Docker images with version-specific tags
+7. **Docker Coordination** - Tag triggers docker-build.yml for automatic container images
 
 ### Release Format
 
@@ -210,14 +210,15 @@ The workflow now ensures that version-specific Docker images are automatically c
 - ✅ **Version-specific images** - Creates `ghcr.io/owner/repo:1.18.2` style tags automatically
 - ✅ **No manual intervention** - Everything happens automatically on functional commits
 
-**Previous Issue:** GitHub workflows can't trigger other workflows with default token for security
-**Fix Applied:** Integrated Docker build directly into the version-and-release workflow
+**Previous Issue:** Redundant Docker builds were occurring - once in release workflow and again via tag triggers
+**Fix Applied:** Removed Docker build from version-and-release workflow; now relies solely on docker-build.yml
 
 **Technical Details:**
 
-- Docker images are now built as part of the release process (same workflow)
-- Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags
-- Eliminates dependency on separate Docker build workflow triggers
+- Docker images are built by `docker-build.yml` when tags are pushed (cleaner separation of concerns)
+- Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags via docker-build.yml
+- Eliminates redundant builds and follows industry-standard CI/CD practices
+- Version workflow focuses on versioning; Docker workflow focuses on container builds
 
 ### Development Workflow Improvements
 
