@@ -523,7 +523,35 @@ export class SyncManager {
         }
 
         // Convert search result to match format compatible with existing code
-        return this._convertSearchResultToMatch(bestMatch);
+        const convertedMatch = this._convertSearchResultToMatch(bestMatch);
+
+        // Check if conversion was successful (should be rare now with lookup strategy)
+        if (!convertedMatch) {
+          logger.error(
+            `Failed to convert search result to match format for "${title}" - no valid edition ID found`,
+            {
+              bestMatchId: bestMatch.id,
+              bestMatchTitle: bestMatch.title,
+              hasBookObject: !!bestMatch.book,
+              bookKeys: bestMatch.book ? Object.keys(bestMatch.book) : [],
+            },
+          );
+          return null;
+        }
+
+        // Log if we'll need to lookup book ID (this is normal and expected in some cases)
+        if (convertedMatch._needsBookIdLookup) {
+          logger.debug(
+            `Title/author match will require book ID lookup for "${title}"`,
+            {
+              editionId: bestMatch.id,
+              title: bestMatch.title,
+              reason: 'book.id missing from search result',
+            },
+          );
+        }
+
+        return convertedMatch;
       } else {
         const bestScore = bestMatch ? bestMatch._matchingScore.totalScore : 0;
         logger.debug(`Best title/author match for "${title}" below threshold`, {
@@ -569,24 +597,27 @@ export class SyncManager {
       },
     });
 
-    // Validate that we have the required book ID
-    if (!bookId) {
+    // Validate that we have at least an edition ID
+    if (!editionId) {
       logger.error(
-        'Search result missing book.id - cannot create valid match',
+        'Search result missing edition ID - cannot create valid match',
         {
           searchResult: {
             id: searchResult.id,
             title: searchResult.title,
             hasBook: !!searchResult.book,
             bookKeys: searchResult.book ? Object.keys(searchResult.book) : [],
+            fullBookObject: searchResult.book,
           },
         },
       );
+      return null;
     }
 
+    // Note: We allow bookId to be missing here - it will be resolved later if needed
     return {
       edition: {
-        id: editionId || 'search-result',
+        id: editionId,
         format: searchResult.format || 'unknown',
         pages: searchResult.pages || null,
         audio_seconds: searchResult.audio_seconds || null,
@@ -597,13 +628,14 @@ export class SyncManager {
       userBook: {
         id: null, // Will be created during auto-add process
         book: {
-          id: bookId, // This MUST be the actual book ID, not the edition ID
+          id: bookId, // May be null - will be resolved later if needed
           title: searchResult.title,
           contributions: searchResult.contributions || [],
         },
       },
       _isSearchResult: true, // Flag to indicate this came from search, not user library
       _matchingScore: searchResult._matchingScore,
+      _needsBookIdLookup: !bookId, // Flag to indicate if we need to lookup book ID
     };
   }
 
@@ -1090,10 +1122,56 @@ export class SyncManager {
       // We need to add it to the library first, then sync progress
       logger.debug(`Title/author match requires auto-add to library: ${title}`);
 
-      const bookId = hardcoverMatch.userBook.book.id;
+      let bookId = hardcoverMatch.userBook.book.id;
       const editionId = hardcoverMatch.edition.id;
 
-      // Validate we have the necessary IDs
+      // If book ID is missing, look it up from the edition ID
+      if (!bookId && hardcoverMatch._needsBookIdLookup) {
+        logger.debug(`Looking up book ID from edition ID: ${editionId}`);
+
+        try {
+          const bookInfo = await this.hardcover.getBookIdFromEdition(editionId);
+          if (bookInfo && bookInfo.bookId) {
+            bookId = bookInfo.bookId;
+            // Update the match object with the resolved book info
+            hardcoverMatch.userBook.book.id = bookId;
+            hardcoverMatch.userBook.book.title =
+              bookInfo.title || hardcoverMatch.userBook.book.title;
+            hardcoverMatch.userBook.book.contributions =
+              bookInfo.contributions ||
+              hardcoverMatch.userBook.book.contributions;
+            hardcoverMatch._needsBookIdLookup = false;
+
+            logger.debug(
+              `Successfully resolved book ID: ${bookId} for edition: ${editionId}`,
+            );
+          } else {
+            logger.error(`Failed to lookup book ID for edition: ${editionId}`, {
+              title: title,
+              editionId: editionId,
+            });
+            syncResult.status = 'error';
+            syncResult.reason = `Failed to resolve book ID for edition ${editionId} - may indicate API or data issue`;
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+          }
+        } catch (error) {
+          logger.error(
+            `Error during book ID lookup for edition: ${editionId}`,
+            {
+              error: error.message,
+              title: title,
+              editionId: editionId,
+            },
+          );
+          syncResult.status = 'error';
+          syncResult.reason = `Failed to lookup book ID: ${error.message}`;
+          syncResult.timing = performance.now() - startTime;
+          return syncResult;
+        }
+      }
+
+      // Final validation - we must have both IDs to proceed
       if (!bookId || !editionId) {
         logger.error(
           `Missing required IDs for adding title/author matched book to library`,
@@ -1103,8 +1181,10 @@ export class SyncManager {
             title: title,
             hasBook: !!hardcoverMatch.userBook.book,
             hasEdition: !!hardcoverMatch.edition,
+            attemptedLookup: hardcoverMatch._needsBookIdLookup,
           },
         );
+
         syncResult.status = 'error';
         syncResult.reason = `Failed to add matched book: Missing book ID (${bookId}) or edition ID (${editionId})`;
         syncResult.timing = performance.now() - startTime;

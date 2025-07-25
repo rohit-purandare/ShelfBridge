@@ -1148,6 +1148,71 @@ export class HardcoverClient {
     }));
   }
 
+  /**
+   * Get book ID from edition ID when book relationship is missing
+   * @param {string|number} editionId - Edition ID
+   * @returns {Object|null} - Object with book info or null if not found
+   */
+  async getBookIdFromEdition(editionId) {
+    const query = `
+      query getBookFromEdition($editionId: Int!) {
+        editions(where: {id: {_eq: $editionId}}, limit: 1) {
+          id
+          book {
+            id
+            title
+            contributions(where: {contributable_type: {_eq: "Book"}}) {
+              author {
+                id
+                name
+              }
+              contribution
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = { editionId: safeParseInt(editionId, 'editionId') };
+
+    try {
+      const result = await this._executeQuery(query, variables);
+
+      if (result && result.editions && result.editions.length > 0) {
+        const edition = result.editions[0];
+        if (edition.book && edition.book.id) {
+          return {
+            bookId: edition.book.id,
+            title: edition.book.title,
+            contributions: edition.book.contributions || [],
+          };
+        }
+      }
+
+      logger.warn('Edition found but no valid book relationship', {
+        editionId,
+        hasEditions: !!(
+          result &&
+          result.editions &&
+          result.editions.length > 0
+        ),
+        hasBook: !!(
+          result &&
+          result.editions &&
+          result.editions[0] &&
+          result.editions[0].book
+        ),
+      });
+      return null;
+    } catch (error) {
+      logger.error('Error looking up book ID from edition:', error.message, {
+        editionId,
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
   async addBookToLibrary(bookId, statusId = 2, editionId = null) {
     const mutation = `
             mutation addBookToLibrary($bookId: Int!, $statusId: Int!, $editionId: Int) {

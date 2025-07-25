@@ -1,5 +1,7 @@
 # ShelfBridge
 
+<!-- Trigger Docker build for fix/missing-book-id branch -->
+
 Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically.
 
 ## 🚀 Quick Start
@@ -7,6 +9,7 @@ Sync your audiobook reading progress from Audiobookshelf to Hardcover automatica
 ### Docker (Recommended)
 
 **Option 1: Environment Variables (Basic Setup)**
+
 ```bash
 # Download docker-compose.yml
 curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml
@@ -22,6 +25,7 @@ docker-compose up -d
 ```
 
 **Option 2: YAML Configuration (Basic + Advanced Features)**
+
 ```bash
 # Download and start
 curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml
@@ -34,6 +38,7 @@ docker-compose up -d
 ```
 
 ### Node.js
+
 ```bash
 # Clone and install
 git clone https://github.com/rohit-purandare/ShelfBridge.git
@@ -50,15 +55,18 @@ node src/main.js start
 ShelfBridge supports two configuration methods to fit different deployment needs:
 
 ### 🔧 **Environment Variables** (Basic Configuration)
+
 Perfect for Docker deployments, container environments, and simple setups.
 
 **✅ Supports:**
+
 - User credentials (tokens, URLs)
 - Core sync settings (workers, scheduling, thresholds)
 - Rate limiting and performance tuning
 - Safety settings (dry-run, progress protection)
 
 **Example:**
+
 ```bash
 SHELFBRIDGE_USER_0_ID=alice
 SHELFBRIDGE_USER_0_ABS_URL=https://abs.example.com
@@ -69,9 +77,11 @@ SHELFBRIDGE_AUTO_ADD_BOOKS=true
 ```
 
 ### 📄 **YAML Configuration** (Basic + Advanced Features)
+
 Required for advanced features and complex multi-user setups.
 
 **✅ Everything from Environment Variables, plus:**
+
 - **Library filtering** - Include/exclude specific libraries
 - **Title/Author matching** - Intelligent fuzzy matching for books without ASIN/ISBN
 - **Reread detection** - Advanced progress regression protection
@@ -79,12 +89,13 @@ Required for advanced features and complex multi-user setups.
 - **Complex family configurations** - User-specific library preferences
 
 **Example:**
+
 ```yaml
 global:
   min_progress_threshold: 5.0
   auto_add_books: true
   libraries:
-    exclude: ["Podcasts", "Samples"]  # ← Not possible with env vars
+    exclude: ['Podcasts', 'Samples'] # ← Not possible with env vars
 
 users:
   - id: alice
@@ -92,34 +103,37 @@ users:
     abs_token: your_abs_token
     hardcover_token: your_hardcover_token
     libraries:
-      include: ["Audiobooks", "Fiction"]  # ← Advanced per-user filtering
+      include: ['Audiobooks', 'Fiction'] # ← Advanced per-user filtering
 ```
 
 ### 🎯 **Which Should You Use?**
 
-| Use Case | Recommendation | Why |
-|----------|---------------|-----|
-| **Basic Docker setup** | Environment Variables | Simple, container-friendly |
-| **Single user, no filtering** | Environment Variables | Fastest to configure |
-| **Homelab/NAS deployment** | Environment Variables | Easy container management |
-| **Need library filtering** | YAML Configuration | Arrays not supported in env vars |
-| **Multi-user with different libraries** | YAML Configuration | Complex per-user settings |
-| **Family setup** | YAML Configuration | Advanced user management |
+| Use Case                                | Recommendation        | Why                              |
+| --------------------------------------- | --------------------- | -------------------------------- |
+| **Basic Docker setup**                  | Environment Variables | Simple, container-friendly       |
+| **Single user, no filtering**           | Environment Variables | Fastest to configure             |
+| **Homelab/NAS deployment**              | Environment Variables | Easy container management        |
+| **Need library filtering**              | YAML Configuration    | Arrays not supported in env vars |
+| **Multi-user with different libraries** | YAML Configuration    | Complex per-user settings        |
+| **Family setup**                        | YAML Configuration    | Advanced user management         |
 
 > 💡 **Hybrid Approach:** You can use both! Set basic credentials via environment variables and advanced features via YAML.
 
 ## 📖 Documentation
 
 ### 🚀 **Getting Started**
+
 - **[Quick Start Guide](wiki/user-guides/Quick-Start.md)** - Get running in 5 minutes
 - **[Installation Methods](wiki/user-guides/Installation-Methods.md)** - Choose your setup method
 - **[Docker Setup](wiki/user-guides/Docker-Setup.md)** - Container deployment guide
 
 ### ⚙️ **Configuration**
+
 - **[Configuration Guide](wiki/admin/Configuration-Guide.md)** - Setup guide for YAML & environment variables
 - **[Configuration Reference](wiki/admin/Configuration-Reference.md)** - Complete technical reference for all settings
 
 ### 🔧 **Usage & Commands**
+
 - **[CLI Reference](wiki/technical/CLI-Reference.md)** - Command-line interface guide
 - **[Feature Overview](wiki/user-guides/Feature-Overview.md)** - All available features
 
@@ -154,4 +168,4 @@ See [Contributing Guide](wiki/developer/Contributing.md) for development setup a
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details. 
+MIT License - see [LICENSE](LICENSE) file for details.
