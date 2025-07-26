@@ -7,7 +7,7 @@ This comprehensive guide covers all Docker deployment options for ShelfBridge. D
 **Benefits:**
 
 - ✅ **No Node.js installation required**
-- ✅ **Optimized image size** (~650MB with multi-stage builds)
+- ✅ **Optimized image size** (~780MB with multi-stage builds and GLIBC compatibility)
 - ✅ **Automatic container management**
 - ✅ **Easy updates and rollbacks**
 - ✅ **Isolated environment**
@@ -608,7 +608,7 @@ docker inspect shelfbridge
 
 ### Performance
 
-- **Optimized Docker builds**: Multi-stage builds reduce image size by ~30% (950MB → ~650MB)
+- **Optimized Docker builds**: Multi-stage builds with Ubuntu 24.04 base for GLIBC compatibility (~780MB)
 - **Build cache efficiency**: BuildKit cache mounts speed up CI/CD builds
 - **Use named volumes**: Better performance than bind mounts
 - **Appropriate resources**: Don't over-allocate memory/CPU
