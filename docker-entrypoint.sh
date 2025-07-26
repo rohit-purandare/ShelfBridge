@@ -165,4 +165,4 @@ fi
 # --- End Permission Fix ---
 
 # Drop privileges to node user and execute the original command
-exec gosu node "$@" 
+exec su-exec node "$@" 

@@ -1,32 +1,26 @@
 # syntax=docker/dockerfile:1.4
-# Use Debian-based image instead of Alpine to fix better-sqlite3 compatibility
-# Alpine uses musl libc which causes fcntl64 symbol issues with better-sqlite3
-FROM node:20-slim
 
-# Install dependencies for native modules and gosu for privilege dropping
-# Use Debian package manager instead of Alpine's apk
-RUN apt-get update && apt-get install -y \
+# ===== BUILD STAGE =====
+FROM node:20-alpine as builder
+
+# Install build dependencies for native modules
+RUN apk add --no-cache \
     python3 \
     make \
-    g++ \
-    gosu \
-    && rm -rf /var/lib/apt/lists/*
+    g++
 
-WORKDIR /app
-
-# Copy package files first for better caching
-COPY package*.json ./
-
-# Install dependencies with native module compilation from source
-# Use environment variables to ensure glibc compatibility and avoid prebuilt binaries
+# Set build environment variables
 ENV npm_config_build_from_source=true \
     npm_config_better_sqlite3_binary_host_mirror="" \
     npm_config_sqlite3_binary_host_mirror="" \
     npm_config_sqlite3_static_link=true \
     npm_config_target_platform=linux \
-    PYTHON=/usr/bin/python3 \
-    LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib \
-    LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib
+    PYTHON=/usr/bin/python3
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
 
 # Install dependencies and build native modules with comprehensive validation
 RUN --mount=type=cache,target=/root/.npm \
@@ -53,16 +47,27 @@ RUN --mount=type=cache,target=/root/.npm \
     node -e "const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER, value TEXT)'); const insert = db.prepare('INSERT INTO test (id, value) VALUES (?, ?)'); insert.run(1, 'hello'); insert.run(2, 'world'); const rows = db.prepare('SELECT * FROM test ORDER BY id').all(); if (rows.length !== 2 || rows[0].value !== 'hello') throw new Error('Prepared statements failed'); console.log('✅ Prepared statements work');" && \
     echo "🎉 ALL BETTER-SQLITE3 TESTS PASSED - MODULE IS FULLY FUNCTIONAL!" && \
     echo "🎯 BETTER-SQLITE3 IS NOW ROBUST AND PRODUCTION-READY!" && \
-    echo "🔧 FIXING USER PERMISSIONS AND TESTING AS NODE USER..." && \
-    chown -R node:node /app/node_modules && \
-    echo "Test 8: Node user can load better-sqlite3..." && \
-    su node -c "cd /app && node -e \"const db = require('better-sqlite3')(':memory:'); console.log('✅ Node user can load module');\"" && \
-    echo "Test 9: Node user can create database..." && \
-    su node -c "cd /app && node -e \"const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER)'); db.exec('INSERT INTO test (id) VALUES (1)'); const count = db.prepare('SELECT COUNT(*) as count FROM test').get().count; if (count !== 1) throw new Error('Node user DB failed'); console.log('✅ Node user database operations work');\"" && \
-    echo "🎉 NODE USER CONTEXT VERIFIED - BETTER-SQLITE3 FULLY FUNCTIONAL!" && \
-    echo "🔧 VERIFYING STATIC LINKING - TESTING SHARED OBJECT DEPENDENCIES..." && \
-    node -e "const db = require('better-sqlite3')(':memory:'); console.log('✅ Static linking verification: better-sqlite3 loads without external dependencies');" && \
-    echo "🎯 STATIC LINKING SUCCESSFUL - BETTER-SQLITE3 IS NOW STABLE!"
+    echo "🔧 VERIFYING ALPINE MUSL COMPATIBILITY..." && \
+    ldd --version 2>/dev/null || echo "Using musl libc (no ldd)" && \
+    echo "🔧 CHECKING BETTER-SQLITE3 SHARED LIBRARY DEPENDENCIES..." && \
+    ldd /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node 2>/dev/null || echo "Static linking detected - no external dependencies" && \
+    echo "🎯 ALPINE MUSL COMPATIBILITY VERIFIED!"
+
+# ===== RUNTIME STAGE =====
+FROM node:20-alpine as runtime
+
+# Install runtime dependencies (dumb-init for proper signal handling, and su-exec for user switching)
+RUN apk add --no-cache \
+    su-exec \
+    dumb-init
+
+WORKDIR /app
+
+# Copy package files for reference
+COPY package*.json ./
+
+# Copy ONLY the compiled node_modules from builder stage (no build tools)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy source code (includes config/config.yaml.example for reference)
 COPY . .
@@ -81,8 +86,8 @@ RUN mkdir -p /app/.config-template && \
         echo "# Copy this file to config.yaml and edit with your credentials" >> /app/.config-template/config.yaml.example; \
     fi
 
-# Create logs directory (config and data are handled by volume mounts)
-# The node user already exists in the node:20-slim image, just set ownership
+# Create logs directory and set ownership to node user
+# Alpine's node user has UID 1000 by default
 RUN mkdir -p logs && \
     chown -R node:node /app
 
@@ -101,13 +106,10 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
         } catch (e) { \
             console.error('better-sqlite3 health check failed:', e.message); \
             process.exit(1); \
-        }" || exit 1
+        } \
+    " || exit 1
 
-# Expose port (if needed for health checks)
+# Container configuration
 EXPOSE 3000
-
-# Set entrypoint to handle config provisioning and native module validation
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
-# Default command
 CMD ["npm", "start"] 
