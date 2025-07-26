@@ -1,3 +1,27 @@
+## [1.18.21] - 2025-07-26
+
+### Fixed
+- 🔧 **Critical GLIBC Compatibility Fix**: Resolved `GLIBC_2.38` dependency issue
+  - Switched from `node:20-slim` to `node:20-alpine` base image
+  - Eliminates GLIBC version conflicts preventing container startup
+  - Ensures better-sqlite3 native module compatibility across all systems
+- 🚀 **Docker Image Optimization**: Reduced image size from ~650MB to ~530MB
+  - Multi-stage Alpine builds with optimized cache strategy  
+  - Enhanced CI/CD pipeline with comprehensive testing
+  - Improved reliability for ARM64 and AMD64 platforms
+- 🛠️ **Workflow Improvements**: Enhanced release automation and testing
+  - Added gitleaks security scanning to CI pipelines
+  - Fixed pre-commit hook compatibility issues
+  - Implemented robust Docker build timeout handling
+
+### Technical Details
+- **Base Image**: Now uses `node:20-alpine` for better compatibility
+- **Build Process**: better-sqlite3 compiled from source for musl libc
+- **Testing**: Comprehensive native module validation in CI
+- **Platforms**: Full support for linux/amd64 and linux/arm64
+
+This release resolves the critical container startup failures reported by users.
+
 # Changelog
 
 All notable changes to ShelfBridge will be documented in this file.
