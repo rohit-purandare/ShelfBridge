@@ -23,7 +23,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -104,13 +104,13 @@ jobs:
             --entrypoint="" \
             $TAG \
             npm run test:native; then
+            echo "✅ Docker image native modules test passed - proceeding with database tests"
+          else
             echo "❌ CRITICAL FAILURE: Native modules are broken in Docker image"
             echo "🚫 BLOCKING DEPLOYMENT - Fix required before merge/release"
             echo "🚫 IMAGE WILL NOT BE PUSHED TO REGISTRY"
             exit 1
           fi
-
-          echo "✅ Docker image native modules test passed - proceeding with database tests"
 
       - name: Test Docker image better-sqlite3 functionality (CRITICAL)
         run: |
@@ -220,12 +220,12 @@ jobs:
             --entrypoint="" \
             $TAG \
             node src/main.js validate >/dev/null 2>&1; then
+            echo "✅ Configuration validation tests passed"
+          else
             echo "❌ CRITICAL FAILURE: Configuration validation failed"
             echo "🚫 BLOCKING DEPLOYMENT - Config system broken"
             exit 1
           fi
-
-          echo "✅ Configuration validation tests passed"
 
       - name: Test Docker image health check (CRITICAL)
         run: |
@@ -275,12 +275,12 @@ jobs:
             --entrypoint="" \
             $TAG \
             npm run cache -- --show >/dev/null 2>&1; then
+            echo "✅ Cache functionality tests passed"
+          else
             echo "❌ CRITICAL FAILURE: Cache functionality is broken"
             echo "🚫 BLOCKING DEPLOYMENT - Database operations will fail"
             exit 1
           fi
-
-          echo "✅ Cache functionality tests passed"
 
       - name: Comprehensive Docker image validation summary
         run: |
@@ -308,10 +308,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha,scope=build
-            type=registry,ref=${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}:buildcache
           cache-to: |
             type=gha,mode=max,scope=build
-            type=registry,ref=${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
