@@ -96,7 +96,7 @@ jobs:
           echo "Testing image: $TAG"
 
           # Test native modules in the container - this MUST succeed or build fails
-          if ! docker run --rm \
+          if docker run --rm \
             -e SHELFBRIDGE_USER_0_ID=test_user \
             -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
             -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
@@ -121,7 +121,7 @@ jobs:
           echo "Testing database operations in image: $TAG"
 
           # Test comprehensive better-sqlite3 functionality
-          if ! docker run --rm --entrypoint="" $TAG node -e "
+          if docker run --rm --entrypoint="" $TAG node -e "
             console.log('🔍 Testing better-sqlite3 comprehensive functionality...');
             const db = require('better-sqlite3')(':memory:');
             
@@ -185,13 +185,17 @@ jobs:
           echo "Testing application startup in image: $TAG"
 
           # Test application version and help commands
-          if ! docker run --rm --entrypoint="" $TAG node src/main.js --version; then
+          if docker run --rm --entrypoint="" $TAG node src/main.js --version; then
+            echo "✅ Application version command passed"
+          else
             echo "❌ CRITICAL FAILURE: Application version command failed"
             echo "🚫 BLOCKING DEPLOYMENT - Basic app functionality broken"
             exit 1
           fi
 
-          if ! docker run --rm --entrypoint="" $TAG node src/main.js --help >/dev/null 2>&1; then
+          if docker run --rm --entrypoint="" $TAG node src/main.js --help >/dev/null 2>&1; then
+            echo "✅ Application help command passed"
+          else
             echo "❌ CRITICAL FAILURE: Application help command failed"
             echo "🚫 BLOCKING DEPLOYMENT - Basic app functionality broken"
             exit 1
@@ -208,7 +212,7 @@ jobs:
           echo "Testing configuration in image: $TAG"
 
           # Test configuration validation with environment variables
-          if ! docker run --rm \
+          if docker run --rm \
             -e SHELFBRIDGE_USER_0_ID=test_user \
             -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
             -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
@@ -232,7 +236,7 @@ jobs:
           echo "Testing health check in image: $TAG"
 
           # Test the health check command that's defined in Dockerfile
-          if ! docker run --rm --entrypoint="" $TAG node -e "
+          if docker run --rm --entrypoint="" $TAG node -e "
             try {
               const db = require('better-sqlite3')(':memory:');
               db.exec('CREATE TABLE health_check (id INTEGER PRIMARY KEY, timestamp TEXT)');
@@ -263,7 +267,7 @@ jobs:
           echo "Testing cache functionality in image: $TAG"
 
           # Test cache functionality with proper environment
-          if ! docker run --rm \
+          if docker run --rm \
             -e SHELFBRIDGE_USER_0_ID=test_user \
             -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
             -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
