@@ -153,16 +153,16 @@ if [ -f "/app/config/config.yaml" ]; then
 fi
 
 # --- Permission Fix for Zero-Config Setup ---
-# Only fix if not already owned by ubuntu (UID 1000)
+# Only fix if not already owned by node (UID 1000)
 if [ "$(stat -c %u /app/config)" != "1000" ]; then
     echo "Fixing config volume ownership..."
-    chown -R ubuntu:ubuntu /app/config
+    chown -R node:node /app/config
 fi
 if [ "$(stat -c %u /app/data)" != "1000" ]; then
     echo "Fixing data volume ownership..."
-    chown -R ubuntu:ubuntu /app/data
+    chown -R node:node /app/data
 fi
 # --- End Permission Fix ---
 
-# Drop privileges to ubuntu user and execute the original command
-exec gosu ubuntu "$@" 
+# Drop privileges to node user and execute the original command
+exec su-exec node "$@" 

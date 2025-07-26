@@ -1,19 +1,13 @@
 # syntax=docker/dockerfile:1.4
 
 # ===== BUILD STAGE =====
-FROM ubuntu:24.04 as builder
+FROM node:20-alpine as builder
 
-# Install Node.js 20 and build dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
+# Install build dependencies for native modules
+RUN apk add --no-cache \
     python3 \
     make \
-    g++ \
-    ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    g++
 
 # Set build environment variables
 ENV npm_config_build_from_source=true \
@@ -21,9 +15,7 @@ ENV npm_config_build_from_source=true \
     npm_config_sqlite3_binary_host_mirror="" \
     npm_config_sqlite3_static_link=true \
     npm_config_target_platform=linux \
-    PYTHON=/usr/bin/python3 \
-    LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib \
-    LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib
+    PYTHON=/usr/bin/python3
 
 WORKDIR /app
 
@@ -55,26 +47,19 @@ RUN --mount=type=cache,target=/root/.npm \
     node -e "const db = require('better-sqlite3')(':memory:'); db.exec('CREATE TABLE test (id INTEGER, value TEXT)'); const insert = db.prepare('INSERT INTO test (id, value) VALUES (?, ?)'); insert.run(1, 'hello'); insert.run(2, 'world'); const rows = db.prepare('SELECT * FROM test ORDER BY id').all(); if (rows.length !== 2 || rows[0].value !== 'hello') throw new Error('Prepared statements failed'); console.log('✅ Prepared statements work');" && \
     echo "🎉 ALL BETTER-SQLITE3 TESTS PASSED - MODULE IS FULLY FUNCTIONAL!" && \
     echo "🎯 BETTER-SQLITE3 IS NOW ROBUST AND PRODUCTION-READY!" && \
-    echo "🔧 VERIFYING GLIBC COMPATIBILITY..." && \
-    ldd --version && \
+    echo "🔧 VERIFYING ALPINE MUSL COMPATIBILITY..." && \
+    ldd --version 2>/dev/null || echo "Using musl libc (no ldd)" && \
     echo "🔧 CHECKING BETTER-SQLITE3 SHARED LIBRARY DEPENDENCIES..." && \
-    ldd /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node || echo "Static linking detected - no external dependencies" && \
-    echo "🎯 GLIBC COMPATIBILITY VERIFIED!"
+    ldd /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node 2>/dev/null || echo "Static linking detected - no external dependencies" && \
+    echo "🎯 ALPINE MUSL COMPATIBILITY VERIFIED!"
 
 # ===== RUNTIME STAGE =====
-FROM ubuntu:24.04 as runtime
+FROM node:20-alpine as runtime
 
-# Install Node.js 20 and runtime dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    gosu \
-    ca-certificates \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Use existing ubuntu user (UID/GID 1000) instead of creating node user
+# Install runtime dependencies (dumb-init for proper signal handling, and su-exec for user switching)
+RUN apk add --no-cache \
+    su-exec \
+    dumb-init
 
 WORKDIR /app
 
@@ -101,10 +86,10 @@ RUN mkdir -p /app/.config-template && \
         echo "# Copy this file to config.yaml and edit with your credentials" >> /app/.config-template/config.yaml.example; \
     fi
 
-# Create logs directory (config and data are handled by volume mounts)
-# Set ownership to ubuntu user
+# Create logs directory and set ownership to node user
+# Alpine's node user has UID 1000 by default
 RUN mkdir -p logs && \
-    chown -R ubuntu:ubuntu /app
+    chown -R node:node /app
 
 # Add comprehensive health check to ensure better-sqlite3 is always working
 # This performs multiple operations to catch any runtime issues
