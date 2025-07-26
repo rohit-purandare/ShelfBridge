@@ -167,6 +167,21 @@ export class ConfigValidator {
           optional: true,
           description: 'Dump failed sync books to text file for debugging',
         },
+        initial_sync_mode: {
+          type: 'string',
+          enum: ['safe', 'full', 'smart-safe'],
+          default: 'safe',
+          optional: true,
+          description:
+            'How to handle progress updates when no cache exists (new installations)',
+        },
+        validate_on_force: {
+          type: 'boolean',
+          default: true,
+          optional: true,
+          description:
+            'Validate against Hardcover progress when force_sync is enabled',
+        },
         libraries: {
           type: 'object',
           optional: true,

@@ -1163,6 +1163,37 @@ export class BookCache {
   }
 
   /**
+   * Check if this is a new installation (no cached books for user)
+   * @param {string} userId - User ID
+   * @returns {boolean} Whether this appears to be a new installation
+   */
+  async isNewInstallation(userId) {
+    await this.init();
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT COUNT(*) as book_count FROM books WHERE user_id = ?
+      `);
+
+      const result = stmt.get(userId);
+      const hasBooks = result && result.book_count > 0;
+
+      logger.debug(`New installation check for user ${userId}`, {
+        cached_books: result?.book_count || 0,
+        is_new_installation: !hasBooks,
+      });
+
+      return !hasBooks;
+    } catch (err) {
+      logger.error(`Error checking installation status for ${userId}`, {
+        error: err.message,
+      });
+      // Assume new installation on error to be safe
+      return true;
+    }
+  }
+
+  /**
    * Store library statistics from deep scan for use during fast syncs
    * @param {string} userId - User ID
    * @param {Object} stats - Library statistics object

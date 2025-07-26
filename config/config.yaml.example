@@ -125,6 +125,11 @@ users:
 #   #   regression_block_threshold: 50    # Block drops >50% from high progress
 #   #   regression_warn_threshold: 15     # Warn about drops >15% from high progress
 #   
+#   # Duplicate progress update prevention (default: safe)
+#   # Controls how to handle progress updates when no cache exists (new installations)
+#   # initial_sync_mode: "safe"           # safe = skip updates, full = update all, smart-safe = validate first
+#   # validate_on_force: true             # When force_sync=true, validate against Hardcover before updating
+#   
 #   # =============================================================================
 #   # RATE LIMITING AND PERFORMANCE (Optional - defaults work for most users)
 #   # =============================================================================

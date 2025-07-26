@@ -90,6 +90,10 @@ export class SyncManager {
         this.globalConfig.deep_scan_interval || 10,
       ));
 
+    // Check for new installation and display appropriate messaging
+    const isNewInstallation = await this.cache.isNewInstallation(this.userId);
+    const initialSyncMode = this.globalConfig.initial_sync_mode || 'safe';
+
     if (shouldDeepScan) {
       if (
         syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)
@@ -104,6 +108,36 @@ export class SyncManager {
       }
     } else {
       console.log(`⚡ Performing fast sync`);
+    }
+
+    // Display new installation guidance
+    if (isNewInstallation) {
+      const modeEmoji =
+        {
+          safe: '🛡️',
+          'smart-safe': '🧠',
+          full: '🚀',
+        }[initialSyncMode] || '🛡️';
+
+      console.log(
+        `${modeEmoji} New installation detected - Mode: ${initialSyncMode}`,
+      );
+
+      if (initialSyncMode === 'safe' && !this.globalConfig.force_sync) {
+        console.log(
+          `⚠️  Safe mode: Will skip progress updates to prevent duplicates`,
+        );
+        console.log(
+          `💡 Use --force-sync to establish baseline cache if needed`,
+        );
+      } else if (initialSyncMode === 'smart-safe') {
+        console.log(
+          `🔍 Smart mode: Will validate against Hardcover before updating`,
+        );
+        console.log(
+          `⏱️  This may take longer due to additional API validation`,
+        );
+      }
     }
 
     const result = {
@@ -1256,21 +1290,19 @@ export class SyncManager {
       };
     }
 
-    // Check if progress has changed (unless force sync is enabled)
-    if (
-      !this.globalConfig.force_sync &&
-      !(await this.cache.hasProgressChanged(
-        this.userId,
-        identifier,
-        title,
-        progressPercent,
-        identifierType,
-      ))
-    ) {
-      // Remove the verbose console log - keep only debug logging
-      logger.debug(`Skipping ${title}: Progress unchanged`);
+    // Check if progress has changed with duplicate prevention logic
+    const shouldSkipUpdate = await this._shouldSkipProgressUpdate(
+      identifier,
+      title,
+      progressPercent,
+      identifierType,
+      hardcoverMatch,
+    );
+
+    if (shouldSkipUpdate.skip) {
+      logger.debug(`Skipping ${title}: ${shouldSkipUpdate.reason}`);
       syncResult.status = 'skipped';
-      syncResult.reason = 'Progress unchanged';
+      syncResult.reason = shouldSkipUpdate.reason;
       syncResult.timing = performance.now() - startTime;
       return syncResult;
     } else {
@@ -2312,5 +2344,182 @@ export class SyncManager {
     });
 
     return breakdown;
+  }
+
+  /**
+   * Determine if progress update should be skipped based on duplicate prevention settings
+   * @param {string} identifier - Book identifier (ISBN/ASIN)
+   * @param {string} title - Book title
+   * @param {number} progressPercent - Current progress percentage
+   * @param {string} identifierType - Type of identifier (isbn/asin)
+   * @param {Object} hardcoverMatch - Matched Hardcover book data
+   * @returns {Object} Decision object with skip flag and reason
+   */
+  async _shouldSkipProgressUpdate(
+    identifier,
+    title,
+    progressPercent,
+    identifierType,
+    hardcoverMatch,
+  ) {
+    const initialSyncMode = this.globalConfig.initial_sync_mode || 'safe';
+    const validateOnForce = this.globalConfig.validate_on_force !== false;
+    const isForceSync = this.globalConfig.force_sync === true;
+
+    // Check if cache has progress data for this book
+    const hasProgressChanged = await this.cache.hasProgressChanged(
+      this.userId,
+      identifier,
+      title,
+      progressPercent,
+      identifierType,
+    );
+
+    // If force sync is disabled and progress hasn't changed according to cache, skip
+    if (!isForceSync && !hasProgressChanged) {
+      return { skip: true, reason: 'Progress unchanged (cached)' };
+    }
+
+    // Check if this is a new installation (no cached books)
+    const isNewInstallation = await this.cache.isNewInstallation(this.userId);
+
+    if (isNewInstallation) {
+      logger.debug(`New installation detected for user ${this.userId}`, {
+        initial_sync_mode: initialSyncMode,
+        force_sync: isForceSync,
+        validate_on_force: validateOnForce,
+      });
+
+      switch (initialSyncMode) {
+        case 'safe':
+          if (!isForceSync) {
+            return {
+              skip: true,
+              reason:
+                'New installation - safe mode (use --force-sync to override)',
+            };
+          }
+
+          // Force sync enabled - validate if configured
+          if (validateOnForce) {
+            return await this._validateAgainstHardcover(
+              identifier,
+              title,
+              progressPercent,
+              hardcoverMatch,
+            );
+          }
+          break;
+
+        case 'smart-safe':
+          // Always validate against Hardcover for new installations
+          return await this._validateAgainstHardcover(
+            identifier,
+            title,
+            progressPercent,
+            hardcoverMatch,
+          );
+
+        case 'full':
+          // Original behavior - update everything
+          break;
+
+        default:
+          logger.warn(
+            `Unknown initial_sync_mode: ${initialSyncMode}, defaulting to safe`,
+          );
+          return {
+            skip: true,
+            reason: 'New installation - unknown mode, defaulting to safe',
+          };
+      }
+    }
+
+    // Not a new installation or force sync enabled - proceed normally
+    return { skip: false, reason: null };
+  }
+
+  /**
+   * Validate current progress against Hardcover to prevent duplicates
+   * @param {string} identifier - Book identifier
+   * @param {string} title - Book title
+   * @param {number} absProgressPercent - Progress from Audiobookshelf
+   * @param {Object} hardcoverMatch - Matched Hardcover book data
+   * @returns {Object} Decision object with skip flag and reason
+   */
+  async _validateAgainstHardcover(
+    identifier,
+    title,
+    absProgressPercent,
+    hardcoverMatch,
+  ) {
+    try {
+      logger.debug(`Validating progress against Hardcover for ${title}`, {
+        abs_progress: absProgressPercent,
+        user_book_id: hardcoverMatch.userBook.id,
+      });
+
+      // Get current progress from Hardcover
+      const hardcoverProgress = await this.hardcover.getBookCurrentProgress(
+        hardcoverMatch.userBook.id,
+      );
+
+      if (!hardcoverProgress.has_progress) {
+        // No progress in Hardcover, safe to update
+        logger.debug(
+          `No Hardcover progress found for ${title}, proceeding with update`,
+        );
+        return { skip: false, reason: null };
+      }
+
+      // Calculate Hardcover progress percentage
+      const edition = hardcoverMatch.edition;
+      let hcProgressPercent = 0;
+
+      if (hardcoverProgress.latest_read) {
+        const latestRead = hardcoverProgress.latest_read;
+
+        if (edition.audio_seconds && latestRead.progress_seconds) {
+          hcProgressPercent =
+            (latestRead.progress_seconds / edition.audio_seconds) * 100;
+        } else if (edition.pages && latestRead.progress_pages) {
+          hcProgressPercent = (latestRead.progress_pages / edition.pages) * 100;
+        }
+      }
+
+      // Compare progress with tolerance
+      const tolerance = 1.0; // 1% tolerance
+      const progressDiff = Math.abs(absProgressPercent - hcProgressPercent);
+
+      if (progressDiff <= tolerance) {
+        logger.debug(`Progress matches Hardcover for ${title}`, {
+          abs_progress: absProgressPercent.toFixed(1),
+          hc_progress: hcProgressPercent.toFixed(1),
+          difference: progressDiff.toFixed(1),
+        });
+        return {
+          skip: true,
+          reason: `Progress matches Hardcover (${hcProgressPercent.toFixed(1)}% vs ${absProgressPercent.toFixed(1)}%)`,
+        };
+      }
+
+      logger.debug(`Progress differs from Hardcover for ${title}`, {
+        abs_progress: absProgressPercent.toFixed(1),
+        hc_progress: hcProgressPercent.toFixed(1),
+        difference: progressDiff.toFixed(1),
+      });
+
+      return { skip: false, reason: null };
+    } catch (error) {
+      logger.warn(`Failed to validate against Hardcover for ${title}`, {
+        error: error.message,
+      });
+
+      // On validation error, err on the side of caution and skip
+      return {
+        skip: true,
+        reason: `Validation failed: ${error.message}`,
+      };
+    }
   }
 }

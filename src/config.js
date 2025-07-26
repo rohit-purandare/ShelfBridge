@@ -70,6 +70,8 @@ export class Config {
       PAGE_SIZE: 'page_size',
       DEEP_SCAN_INTERVAL: 'deep_scan_interval',
       DUMP_FAILED_BOOKS: 'dump_failed_books',
+      INITIAL_SYNC_MODE: 'initial_sync_mode',
+      VALIDATE_ON_FORCE: 'validate_on_force',
     };
 
     for (const [envKey, configKey] of Object.entries(envMapping)) {
@@ -199,6 +201,7 @@ export class Config {
       'auto_add_books',
       'prevent_progress_regression',
       'dump_failed_books',
+      'validate_on_force',
     ];
     const numberKeys = [
       'min_progress_threshold',
@@ -240,6 +243,8 @@ export class Config {
       hardcover_semaphore: 1,
       deep_scan_interval: 10,
       dump_failed_books: true,
+      initial_sync_mode: 'safe',
+      validate_on_force: true,
     };
 
     // Track which values were explicitly set vs using defaults
