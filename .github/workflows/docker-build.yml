@@ -23,7 +23,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -308,10 +308,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha,scope=build
-            type=registry,ref=${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}:buildcache
           cache-to: |
             type=gha,mode=max,scope=build
-            type=registry,ref=${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
