@@ -303,9 +303,68 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 1. **Smart Triggering** - Only builds when functional code changes
 2. **Multi-architecture Build** - Supports `linux/amd64` and `linux/arm64`
 3. **Image Tagging** - Creates semantic version tags with automatic lowercase conversion
-4. **Registry Publishing** - Pushes to GitHub Container Registry
-5. **Build Caching** - Uses GitHub Actions cache for faster builds
-6. **Metadata Extraction** - Auto-generates labels and tags
+4. **🧪 Comprehensive Testing** - **NEW: Validates Docker images before publishing**
+5. **Registry Publishing** - Pushes to GitHub Container Registry only after all tests pass
+6. **Build Caching** - Uses GitHub Actions cache for faster builds
+7. **Metadata Extraction** - Auto-generates labels and tags
+
+### 🛡️ Comprehensive Docker Testing
+
+**Purpose:** Prevent broken releases like GLIBC compatibility issues
+
+The workflow now includes **6 critical test stages** that run before any image is published:
+
+#### 1. Native Module Compatibility Testing
+
+- Tests `npm run test:native` in Docker environment
+- Validates all native modules (especially better-sqlite3) load correctly
+- Catches GLIBC/musl compatibility issues
+
+#### 2. Database Operations Testing
+
+- **Comprehensive better-sqlite3 functionality testing**
+- Tests table creation, insert/query operations, transactions
+- Tests both in-memory and file-based databases
+- **Would have caught the recent GLIBC 2.38 compatibility issue**
+
+#### 3. Application Startup Testing
+
+- Validates main application entry point (`src/main.js`)
+- Tests version and help commands
+- Ensures basic application functionality works
+
+#### 4. Configuration Validation Testing
+
+- Tests config system with environment variables
+- Validates `node src/main.js validate` command
+- Ensures configuration parsing works correctly
+
+#### 5. Health Check Testing
+
+- Tests Docker HEALTHCHECK functionality
+- Validates monitoring capabilities
+- Ensures health endpoints respond correctly
+
+#### 6. Cache/Database Integration Testing
+
+- Tests BookCache initialization and operations
+- Validates `npm run cache` functionality
+- Ensures database layer works in Docker environment
+
+### 🚫 Deployment Blocking
+
+**Critical:** If ANY test fails, the build **immediately fails** and **no image is pushed** to the registry.
+
+This prevents broken releases from reaching users and ensures:
+
+- ✅ All native modules work correctly
+- ✅ Database operations function properly
+- ✅ Application starts without crashes
+- ✅ Configuration system is operational
+- ✅ Health monitoring works
+- ✅ Core functionality is validated
+
+**Error Messages:** Failed tests provide specific diagnostic information to help developers identify and fix issues quickly.
 
 ### Generated Tags
 
