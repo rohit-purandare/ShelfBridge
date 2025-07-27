@@ -49,7 +49,7 @@ docker run hello-world
 
 ### Zero-Setup Docker Compose
 
-ShelfBridge uses named volumes for truly zero-setup deployment:
+ShelfBridge automatically creates all necessary folders and configuration files:
 
 ```bash
 # Create a directory for ShelfBridge
@@ -58,17 +58,59 @@ mkdir shelfbridge && cd shelfbridge
 # Download docker-compose.yml
 curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml
 
-# Start the service
+# Start the service - everything is created automatically!
+docker-compose up -d
+```
+
+**What happens automatically:**
+
+- ✅ **Folders created**: `config/`, `data/`, and `logs/` directories
+- ✅ **Config template**: `config.yaml.example` copied for reference
+- ✅ **Base config**: `config.yaml` created from template
+- ⚠️ **Container exits**: Stops gracefully until you edit the config with real credentials
+
+**Next: Edit your configuration**
+
+The container will show instructions for editing your config. You have two options:
+
+**Option 1: Named Volumes (Default - Zero Config)**
+
+```bash
+# Since container exits with invalid config, you need to use environment variables
+# OR edit via temporary container:
+
+# Method A: Use environment variables (Recommended)
+# Edit docker-compose.yml and uncomment/set these variables:
+# SHELFBRIDGE_USER_0_ID: "your_username"
+# SHELFBRIDGE_USER_0_ABS_URL: "https://your-abs-server.com"
+# SHELFBRIDGE_USER_0_ABS_TOKEN: "your_abs_token"
+# SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "your_hardcover_token"
+
+# Method B: Edit via temporary container
+docker run --rm -it \
+  -v shelfbridge-config:/app/config \
+  ghcr.io/rohit-purandare/shelfbridge:latest \
+  sh -c "nano /app/config/config.yaml"
+
+# Then restart your main container
+docker-compose up -d
+```
+
+**Option 2: Local Directories (Easier Editing)**
+
+```bash
+# Stop container
+docker-compose down
+
+# Edit docker-compose.yml:
+# - Comment out the named volume lines
+# - Uncomment the local directory lines
+
+# Start with local directories
 docker-compose up -d
 
-# Edit configuration
-# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
-# Once you have updated and saved the configuration, (re)start the container:
-docker-compose up -d
-
-> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
-
-# Restart to apply config
+# Now edit config directly on your host machine
+nano config/config.yaml
 docker-compose restart
 ```
 
@@ -176,32 +218,58 @@ docker-compose up -d
 
 ### Docker Compose Configuration
 
-**Default `docker-compose.yml` explained:**
+**Default `docker-compose.yml` with flexible volume options:**
 
 ```yaml
-version: '3.8'
-
 services:
   shelfbridge:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
     container_name: shelfbridge
-    restart: unless-stopped # Auto-restart on failure
-    # Note: No user specification needed - container runs as 'node' user (UID 1000) by default
+    restart: 'no' # Prevents restart loops during config setup
     volumes:
-      - shelfbridge-config:/app/config # Configuration persistence
-      - shelfbridge-data:/app/data # Cache persistence
-    command: ['npm', 'start'] # Background service mode
-    healthcheck: # Container health monitoring
-      test: ['CMD', 'node', 'src/main.js', 'config', '--help']
+      # Named volumes for zero-setup (DEFAULT)
+      - shelfbridge-config:/app/config
+      - shelfbridge-data:/app/data
+
+      # ALTERNATIVE: Local directories for easier editing
+      # Uncomment lines below and comment named volumes above
+      # - ./config:/app/config
+      # - ./data:/app/data
+      # - ./logs:/app/logs  # Optional: access logs locally
+
+    # Environment variables for configuration (optional)
+    environment:
+      NODE_ENV: 'production'
+      # Uncomment and set for environment-based config:
+      # SHELFBRIDGE_USER_0_ID: "your_username"
+      # SHELFBRIDGE_USER_0_ABS_URL: "https://your-abs-server.com"
+      # SHELFBRIDGE_USER_0_ABS_TOKEN: "your_abs_token"
+      # SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "your_hardcover_token"
+
+    command: ['npm', 'start']
+    healthcheck:
+      test: ['CMD', 'npm', 'run', 'test:native']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
 volumes:
-  shelfbridge-config: # Named volume for config
-  shelfbridge-data: # Named volume for data/cache
+  shelfbridge-config:
+    driver: local
+  shelfbridge-data:
+    driver: local
 ```
+
+**Key features:**
+
+- ✅ **Automatic setup**: All folders and config files created automatically
+- ✅ **Flexible volumes**: Easy switch between named volumes and local directories
+- ✅ **Environment config**: Optional environment variable configuration
+- ✅ **Health checks**: Built-in container health monitoring
+- ⚠️ **Config validation**: Container exits gracefully with placeholder values (prevents restart loops)
+
+> **Note:** The container uses `restart: 'no'` and will exit when it detects placeholder values in config.yaml. This prevents endless restart loops and gives you clear instructions on what to fix. Once you edit the config with real credentials, restart the container with `docker-compose up -d`.
 
 ## 🔧 Manual Docker Run
 
@@ -233,22 +301,29 @@ docker-compose up -d
 docker restart shelfbridge
 ```
 
-### Option B: Bind Mounts (Local Development)
+### Option B: Local Directories (Easier Config Editing)
 
 ```bash
-# Create local directories
-mkdir -p config data
+# Directories are created automatically by the container
+# No need to pre-create them!
 
-# Run with bind mounts
+# Run with local directory mounts
 docker run -d \
   --name shelfbridge \
   --restart unless-stopped \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
   ghcr.io/rohit-purandare/shelfbridge:latest
 
-# Edit local config file
+# Container automatically creates:
+# - ./config/ directory with config.yaml and config.yaml.example
+# - ./data/ directory for cache and sync data
+# - ./logs/ directory for application logs
+
+# Edit config file directly on your host
 nano config/config.yaml
+docker restart shelfbridge
 ```
 
 ### Option C: Custom Configuration
@@ -344,21 +419,58 @@ docker run --rm \
 
 ### Configuration File Access
 
+ShelfBridge automatically creates all configuration files. Choose your preferred editing method:
+
+**Named Volumes (Default Setup):**
+
 ```bash
-# Edit config file
-# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
-# Once you have updated and saved the configuration, (re)start the container:
+# Container exits with invalid config, so use one of these methods:
+
+# Method 1: Environment variables (Easiest)
+# Edit docker-compose.yml and set environment variables instead of config file
+
+# Method 2: Temporary container to edit config file
+docker run --rm -it \
+  -v shelfbridge-config:/app/config \
+  ghcr.io/rohit-purandare/shelfbridge:latest \
+  sh -c "nano /app/config/config.yaml"
+
+# Method 3: Copy out, edit, copy back (if container was running)
+# Only works if container is running - won't work with invalid config
+# docker cp shelfbridge:/app/config/config.yaml ./config.yaml
+# nano config.yaml
+# docker cp ./config.yaml shelfbridge:/app/config/config.yaml
+
+# Restart after editing
 docker-compose up -d
+```
 
-> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
+**Local Directories (Easier Editing):**
 
-# View current config
-docker exec -it shelfbridge cat /app/config/config.yaml
+```bash
+# Switch to local directories by editing docker-compose.yml
+# Comment out named volumes, uncomment local directories
+docker-compose down && docker-compose up -d
 
-# Copy config to host (for easier editing)
-docker cp shelfbridge:/app/config/config.yaml ./config.yaml
-# Edit locally, then copy back:
-docker cp ./config.yaml shelfbridge:/app/config/config.yaml
+# Now edit directly on host
+nano config/config.yaml  # Direct access to your config file
+docker-compose restart   # Apply changes
+```
+
+**View and validate configuration:**
+
+```bash
+# Check container logs for guidance (works even if container exited)
+docker-compose logs shelfbridge
+
+# If container is running, you can validate:
+# docker exec -it shelfbridge node src/main.js validate
+
+# View config via temporary container (for named volumes)
+docker run --rm \
+  -v shelfbridge-config:/app/config \
+  ghcr.io/rohit-purandare/shelfbridge:latest \
+  cat /app/config/config.yaml
 ```
 
 ## 📊 Monitoring and Logs
@@ -475,17 +587,42 @@ docker run --rm \
 
 ## 🛠️ Troubleshooting Docker Issues
 
-### Container Won't Start
+### Container Won't Start or Exits Immediately
 
-**Check logs:**
+**First: Check if this is expected behavior:**
 
 ```bash
+# Check logs for placeholder value detection
 docker-compose logs shelfbridge
 ```
 
-**Common issues:**
+**Expected Exit Scenarios:**
 
-- **Configuration errors**: Invalid YAML syntax
+- **Placeholder values detected**: Container exits gracefully with clear instructions
+- **Missing config**: Container exits until you provide configuration
+
+**This is normal!** Edit your config and restart:
+
+```bash
+# Option 1: Local directories (if using local mounts)
+nano config/config.yaml
+
+# Option 2: Environment variables (recommended for named volumes)
+# Edit docker-compose.yml and set SHELFBRIDGE_USER_0_* variables
+
+# Option 3: Temporary container (for named volumes)
+docker run --rm -it \
+  -v shelfbridge-config:/app/config \
+  ghcr.io/rohit-purandare/shelfbridge:latest \
+  sh -c "nano /app/config/config.yaml"
+
+# Restart container
+docker-compose up -d
+```
+
+**Actual Problems:**
+
+- **Invalid YAML syntax**: Check for indentation/formatting errors
 - **Permission issues**: User/group ownership problems
 - **Port conflicts**: Another service using same port
 - **Volume issues**: Mounting problems
@@ -496,10 +633,12 @@ docker-compose logs shelfbridge
 # Check container status
 docker-compose ps
 
-# Restart container
-docker-compose restart shelfbridge
+# Validate config syntax (only works if container is running)
+# docker exec -it shelfbridge node src/main.js validate
+# If container exited, check logs instead:
+docker-compose logs shelfbridge
 
-# Rebuild and restart
+# Force recreate if needed
 docker-compose up -d --force-recreate
 ```
 

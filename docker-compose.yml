@@ -11,6 +11,13 @@ services:
       # Named volumes for zero-setup - no local directories required
       - shelfbridge-config:/app/config
       - shelfbridge-data:/app/data
+
+      # ALTERNATIVE: Use local directories for easier config editing
+      # Uncomment the lines below and comment the named volumes above
+      # This creates local ./config and ./data directories you can easily access
+      # - ./config:/app/config
+      # - ./data:/app/data
+      # - ./logs:/app/logs  # Optional: access logs locally
     # Environment variables for configuration (optional - takes precedence after config.yaml)
     # Uncomment and customize the values below to use environment variable configuration
     # NOTE: config.yaml values take highest precedence, followed by environment variables, then defaults
