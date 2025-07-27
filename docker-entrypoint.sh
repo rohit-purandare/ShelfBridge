@@ -78,14 +78,19 @@ if ! check_native_modules; then
     exit 1
 fi
 
-# Always ensure config directory exists
+# Always ensure directories exist (both container and host-side for bind mounts)
 mkdir -p /app/config
-
-# Always ensure data directory exists
-mkdir -p /app/data
-
-# Always ensure logs directory exists (even though it's created by the app, this ensures it exists upfront)
+mkdir -p /app/data  
 mkdir -p /app/logs
+
+# For bind mounts, ensure host directories are created by writing to them
+# This forces Docker to create the directories on the host side even if container exits early
+touch /app/config/.docker-init 2>/dev/null || true
+touch /app/data/.docker-init 2>/dev/null || true
+touch /app/logs/.docker-init 2>/dev/null || true
+
+# Clean up the temp files (they've served their purpose)
+rm -f /app/config/.docker-init /app/data/.docker-init /app/logs/.docker-init 2>/dev/null || true
 
 # Copy sample config if it doesn't exist (handles both mounted and non-mounted scenarios)
 if [ ! -f "/app/config/config.yaml.example" ]; then
