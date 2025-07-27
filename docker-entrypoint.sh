@@ -81,6 +81,12 @@ fi
 # Always ensure config directory exists
 mkdir -p /app/config
 
+# Always ensure data directory exists
+mkdir -p /app/data
+
+# Always ensure logs directory exists (even though it's created by the app, this ensures it exists upfront)
+mkdir -p /app/logs
+
 # Copy sample config if it doesn't exist (handles both mounted and non-mounted scenarios)
 if [ ! -f "/app/config/config.yaml.example" ]; then
     echo "📋 Copying sample config to config directory..."
@@ -96,22 +102,25 @@ if [ ! -f "/app/config/config.yaml" ]; then
     echo "💡 Container will restart automatically when you save changes to config.yaml"
     echo "📝 Edit: ./config/config.yaml"
     
-    # If no volumes are mounted, provide helpful instructions
-    if [ ! -w "/app/config" ] || ! mountpoint -q /app/config 2>/dev/null; then
-        echo ""
-        echo "🚀 QUICK START OPTIONS:"
-        echo ""
-        echo "1️⃣  Set credentials via environment variables:"
-        echo "   docker run -e ABS_URL=https://your-abs.com -e ABS_TOKEN=abc123 -e HARDCOVER_TOKEN=xyz789 ghcr.io/rohit-purandare/shelfbridge:latest"
-        echo ""
-        echo "2️⃣  Mount a config directory for persistent editing:"
-        echo "   docker run -v ./config:/app/config ghcr.io/rohit-purandare/shelfbridge:latest"
-        echo ""
-        echo "3️⃣  Use Docker Compose for full setup:"
-        echo "   curl -o docker-compose.yml https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml"
-        echo "   docker-compose up -d"
-        echo ""
+    # Provide helpful instructions based on volume setup
+    echo ""
+    echo "🚀 CONFIGURATION OPTIONS:"
+    echo ""
+    if mountpoint -q /app/config 2>/dev/null; then
+        echo "📁 Using Docker volume for config (zero-config setup)"
+        echo "   • Config file: Use docker exec to edit inside container"
+        echo "   • OR switch to local directories for easier editing (see docker-compose.yml comments)"
+    else
+        echo "📁 Using local directory mount for config"
+        echo "   • Config file: Edit ./config/config.yaml on your host machine"
+        echo "   • Logs: Available in ./logs/ directory (if mounted)"
+        echo "   • Data: Available in ./data/ directory (if mounted)"
     fi
+    echo ""
+    echo "🔧 ALTERNATIVE: Use environment variables in docker-compose.yml"
+    echo "   • Uncomment and set SHELFBRIDGE_USER_0_* variables"
+    echo "   • No config file editing required"
+    echo ""
 fi
 
 # Check if config.yaml still contains placeholder values
