@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.22] - 2025-07-27
+
+### Added
+- ci: implement token-based automatic release workflow
+- Feat/auto create folders and config (#19)
+
+### Fixed
+- test automatic release workflow with token
+
+
 ## [1.18.20] - 2025-07-25
 
 ### Changed
@@ -448,7 +458,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.20...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.22...HEAD
+[1.18.22]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.20...v1.18.22
 [1.18.20]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.19...v1.18.20
 [1.18.19]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.18...v1.18.19
 [1.18.18]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.17...v1.18.18
