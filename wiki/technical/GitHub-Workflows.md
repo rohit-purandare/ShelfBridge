@@ -368,13 +368,28 @@ This prevents broken releases from reaching users and ensures:
 
 ### Generated Tags
 
-- `ghcr.io/rohit-purandare/shelfbridge:latest` (main branch)
+- `ghcr.io/rohit-purandare/shelfbridge:latest` (main branch only)
 - `ghcr.io/rohit-purandare/shelfbridge:feature-branch-name` (feature branches)
 - `ghcr.io/rohit-purandare/shelfbridge:1.0.1` (version tags)
 - `ghcr.io/rohit-purandare/shelfbridge:1.0` (major.minor)
 - `ghcr.io/rohit-purandare/shelfbridge:1` (major only)
 
 **Note**: Repository names are automatically converted to lowercase to comply with Docker registry requirements.
+
+### Latest Tag Restriction
+
+**Fixed Issue:** Feature branches were incorrectly receiving the `latest` tag, causing confusion about which image represents the stable release.
+
+**Solution Applied:** Changed the latest tag condition from `{{is_default_branch}}` to `${{ github.ref_name == 'main' }}` for explicit branch checking.
+
+**Behavior:**
+
+- ✅ **Main branch builds** → Tagged with `latest`
+- ❌ **Feature branch builds** → No `latest` tag (branch name only)
+- ❌ **PR builds** → No `latest` tag (pr-number only)
+- ✅ **Release tag builds** → Tagged with versions + `latest` (if from main)
+
+This ensures that `latest` always points to the most recent stable build from the main branch.
 
 ---
 
