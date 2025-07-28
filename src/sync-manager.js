@@ -443,6 +443,7 @@ export class SyncManager {
           },
           _isSearchResult: true,
           _matchingScore: { totalScore: 85, confidence: 'high' }, // Cached results are trusted
+          _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
         };
       }
 
