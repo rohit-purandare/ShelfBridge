@@ -99,34 +99,33 @@ if [ ! -f "/app/config/config.yaml.example" ]; then
     echo "✅ Sample config available at ./config/config.yaml.example"
 fi
 
-# Auto-create config.yaml from example if it doesn't exist
-if [ ! -f "/app/config/config.yaml" ]; then
-    echo "🔧 Creating config.yaml from example template..."
-    cp /app/config/config.yaml.example /app/config/config.yaml
-    echo "✅ Created config.yaml - please edit it with your API credentials"
-    echo "💡 Container will restart automatically when you save changes to config.yaml"
-    echo "📝 Edit: ./config/config.yaml"
-    
-    # Provide helpful instructions based on volume setup
+# Show configuration guidance without auto-creating config.yaml
+echo ""
+echo "🚀 SHELFBRIDGE CONFIGURATION OPTIONS:"
+echo ""
+
+if [ -f "/app/config/config.yaml" ]; then
+    echo "📁 Using YAML configuration file: /app/config/config.yaml"
+    echo "   • YAML configuration takes highest priority"
+    echo "   • Environment variables will only fill missing values"
+elif [ -n "$SHELFBRIDGE_USER_0_ID" ]; then
+    echo "🔧 Using environment variables for configuration"
+    echo "   • No config.yaml file found - using SHELFBRIDGE_* environment variables"
+    echo "   • This is perfect for container deployments!"
+else
+    echo "⚠️  No configuration detected!"
     echo ""
-    echo "🚀 CONFIGURATION OPTIONS:"
+    echo "📝 OPTION 1: Create YAML configuration file"
+    echo "   • Copy: cp /app/config/config.yaml.example /app/config/config.yaml"
+    echo "   • Edit: /app/config/config.yaml with your API credentials"
     echo ""
-    if mountpoint -q /app/config 2>/dev/null; then
-        echo "📁 Using Docker volume for config (zero-config setup)"
-        echo "   • Config file: Use docker exec to edit inside container"
-        echo "   • OR switch to local directories for easier editing (see docker-compose.yml comments)"
-    else
-        echo "📁 Using local directory mount for config"
-        echo "   • Config file: Edit ./config/config.yaml on your host machine"
-        echo "   • Logs: Available in ./logs/ directory (if mounted)"
-        echo "   • Data: Available in ./data/ directory (if mounted)"
-    fi
+    echo "🔧 OPTION 2: Use environment variables (recommended for Docker)"
+    echo "   • Set SHELFBRIDGE_USER_0_ID, SHELFBRIDGE_USER_0_ABS_URL, etc."
+    echo "   • No config file needed - perfect for containers!"
     echo ""
-    echo "🔧 ALTERNATIVE: Use environment variables in docker-compose.yml"
-    echo "   • Uncomment and set SHELFBRIDGE_USER_0_* variables"
-    echo "   • No config file editing required"
-    echo ""
+    echo "📖 See documentation for complete setup guide"
 fi
+echo ""
 
 # Check if config.yaml still contains placeholder values
 if [ -f "/app/config/config.yaml" ]; then
@@ -137,25 +136,20 @@ if [ -f "/app/config/config.yaml" ]; then
         echo ""
         echo "❌ CONFIGURATION ERROR: Placeholder values detected in config.yaml"
         echo ""
-        echo "🔧 PLEASE EDIT YOUR CONFIG FILE:"
+        echo "🔧 CHOOSE YOUR CONFIGURATION METHOD:"
         echo ""
-        echo "1. Edit config/config.yaml with your actual credentials:"
-        echo "   • abs_url: Your Audiobookshelf server URL"
-        echo "   • abs_token: Get from Audiobookshelf Settings > Users > API Token"
-        echo "   • hardcover_token: Get from https://hardcover.app/account/developer"
-        echo "   • id: Choose a unique user identifier"
+        echo "📝 OPTION 1: Edit the existing config.yaml file"
+        echo "   • Replace placeholder values with your actual credentials:"
+        echo "     - abs_url: Your Audiobookshelf server URL"
+        echo "     - abs_token: Get from Audiobookshelf Settings > Users > API Token"
+        echo "     - hardcover_token: Get from https://hardcover.app/account/developer"
+        echo "     - id: Choose a unique user identifier"
+        echo "   • Save the file - container will restart automatically"
         echo ""
-        echo "2. Save the file - the container will restart automatically"
-        echo ""
-        echo "📝 Example config.yaml:"
-        echo "global:"
-        echo "  min_progress_threshold: 5.0"
-        echo "  # ... other settings ..."
-        echo "users:"
-        echo "  - id: alice"
-        echo "    abs_url: https://audiobookshelf.mydomain.com"
-        echo "    abs_token: your_actual_abs_token_here"
-        echo "    hardcover_token: your_actual_hardcover_token_here"
+        echo "🔧 OPTION 2: Switch to environment variables (easier for Docker)"
+        echo "   • Delete config.yaml: rm /app/config/config.yaml"
+        echo "   • Set environment variables: SHELFBRIDGE_USER_0_ID, SHELFBRIDGE_USER_0_ABS_URL, etc."
+        echo "   • Restart container"
         echo ""
         echo "💡 Use 'node src/main.js validate' to check your configuration"
         echo ""

@@ -18,17 +18,24 @@ services:
       # - ./config:/app/config
       # - ./data:/app/data
       # - ./logs:/app/logs  # Optional: access logs locally
-    # Environment variables for configuration (optional - takes precedence after config.yaml)
+    # Environment variables for configuration (recommended for Docker)
     # Uncomment and customize the values below to use environment variable configuration
-    # NOTE: config.yaml values take highest precedence, followed by environment variables, then defaults
+    #
+    # 🚀 CONFIGURATION MODES:
+    # 1. Environment Variables (no config.yaml needed) - Perfect for Docker!
+    # 2. YAML Configuration (create config/config.yaml manually) - Advanced features
+    #
+    # 📋 PRIORITY ORDER (if both exist):
+    # 1. config.yaml values (highest) - if config.yaml exists
+    # 2. Environment variables (fallback) - fills missing config.yaml values
+    # 3. Built-in defaults (lowest)
     #
     # ⚠️  LIMITATIONS: Some advanced features require config.yaml:
     #     - Library filtering (include/exclude arrays)
     #     - Reread detection configuration (nested settings)
     #     - Per-user library filtering
     #
-    # 💡 Use environment variables for: Basic setups, Docker deployments, simple configuration
-    # 💡 Use config.yaml for: Library filtering, multi-user advanced setups, complex family configurations
+    # 💡 Recommendation: Use environment variables for most setups - no file editing needed!
     environment:
       # Default environment - prevents empty environment mapping error
       NODE_ENV: 'production'
