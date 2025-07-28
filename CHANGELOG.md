@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.24] - 2025-07-28
+
+### Fixed
+- resolve config.yaml auto-creation blocking environment variables (#20)
+
+
 ## [1.18.23] - 2025-07-27
 
 ### Changed
@@ -464,7 +470,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.23...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...HEAD
+[1.18.24]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.23...v1.18.24
 [1.18.23]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.22...v1.18.23
 [1.18.22]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.20...v1.18.22
 [1.18.20]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.19...v1.18.20
