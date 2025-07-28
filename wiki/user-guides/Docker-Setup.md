@@ -66,52 +66,42 @@ docker-compose up -d
 
 - ✅ **Folders created**: `config/`, `data/`, and `logs/` directories
 - ✅ **Config template**: `config.yaml.example` copied for reference
-- ✅ **Base config**: `config.yaml` created from template
-- ⚠️ **Container exits**: Stops gracefully until you edit the config with real credentials
+- ℹ️ **Smart configuration**: Detects your preferred configuration method
+- ⚠️ **Container guides you**: Shows clear instructions if configuration is missing
 
-**Next: Edit your configuration**
+**Next: Choose your configuration method**
 
-The container will show instructions for editing your config. You have two options:
+ShelfBridge will detect your configuration and guide you. You have two excellent options:
 
-**Option 1: Named Volumes (Default - Zero Config)**
+**Option 1: Environment Variables (Recommended - No File Editing!)**
 
 ```bash
-# Since container exits with invalid config, you need to use environment variables
-# OR edit via temporary container:
-
-# Method A: Use environment variables (Recommended)
 # Edit docker-compose.yml and uncomment/set these variables:
 # SHELFBRIDGE_USER_0_ID: "your_username"
 # SHELFBRIDGE_USER_0_ABS_URL: "https://your-abs-server.com"
 # SHELFBRIDGE_USER_0_ABS_TOKEN: "your_abs_token"
 # SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "your_hardcover_token"
 
-# Method B: Edit via temporary container
+# That's it! No config file editing needed.
+docker-compose up -d
+```
+
+**Option 2: YAML Configuration File (Advanced Features)**
+
+```bash
+# Create config file manually from template
+docker run --rm -v shelfbridge-config:/app/config \
+  ghcr.io/rohit-purandare/shelfbridge:latest \
+  cp /app/config/config.yaml.example /app/config/config.yaml
+
+# Edit via temporary container
 docker run --rm -it \
   -v shelfbridge-config:/app/config \
   ghcr.io/rohit-purandare/shelfbridge:latest \
   sh -c "nano /app/config/config.yaml"
 
-# Then restart your main container
+# Start your main container
 docker-compose up -d
-```
-
-**Option 2: Local Directories (Easier Editing)**
-
-```bash
-# Stop container
-docker-compose down
-
-# Edit docker-compose.yml:
-# - Comment out the named volume lines
-# - Uncomment the local directory lines
-
-# Start with local directories
-docker-compose up -d
-
-# Now edit config directly on your host machine
-nano config/config.yaml
-docker-compose restart
 ```
 
 **That's it!** ShelfBridge is now running with automatic scheduling.
@@ -168,26 +158,42 @@ docker-compose ps
 
 **Step 3: Configure**
 
-````bash
-# Edit configuration (auto-created from template)
-# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
-# Once you have updated and saved the configuration, (re)start the container:
-docker-compose up -d
+Choose your preferred configuration method:
 
-> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
+**Option A: Environment Variables (Recommended)**
 
-Replace placeholder values:
-```yaml
+```bash
+# Edit docker-compose.yml and uncomment these lines:
+environment:
+  SHELFBRIDGE_USER_0_ID: "your_username"
+  SHELFBRIDGE_USER_0_ABS_URL: "https://your-abs-server.com"
+  SHELFBRIDGE_USER_0_ABS_TOKEN: "your_actual_abs_token"
+  SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "your_actual_hardcover_token"
+
+# That's it! No file editing needed.
+```
+
+**Option B: YAML Configuration File (Advanced)**
+
+```bash
+# Create config file from template
+docker exec -it shelfbridge cp /app/config/config.yaml.example /app/config/config.yaml
+
+# Edit configuration file
+docker exec -it shelfbridge nano /app/config/config.yaml
+# Replace placeholder values with your actual credentials
+
+# Example config.yaml:
 global:
   min_progress_threshold: 5.0
   auto_add_books: false
 
 users:
   - id: your_username
-    abs_url: https://your-audiobookshelf-server.com
-    abs_token: your_actual_audiobookshelf_token
+    abs_url: https://your-abs-server.com
+    abs_token: your_actual_abs_token
     hardcover_token: your_actual_hardcover_token
-````
+```
 
 **Step 4: Restart and Verify**
 
@@ -263,13 +269,13 @@ volumes:
 
 **Key features:**
 
-- ✅ **Automatic setup**: All folders and config files created automatically
+- ✅ **Automatic setup**: All folders and config templates created automatically
 - ✅ **Flexible volumes**: Easy switch between named volumes and local directories
-- ✅ **Environment config**: Optional environment variable configuration
+- ✅ **Environment config**: Environment variables work perfectly without config files
 - ✅ **Health checks**: Built-in container health monitoring
-- ⚠️ **Config validation**: Container exits gracefully with placeholder values (prevents restart loops)
+- ⚠️ **Smart configuration**: Detects and guides you to your preferred config method
 
-> **Note:** The container uses `restart: 'no'` and will exit when it detects placeholder values in config.yaml. This prevents endless restart loops and gives you clear instructions on what to fix. Once you edit the config with real credentials, restart the container with `docker-compose up -d`.
+> **Note:** The container uses `restart: 'no'` and provides clear guidance on configuration options. Choose environment variables for easy Docker setup, or create config.yaml manually for advanced features. Once configured, restart with `docker-compose up -d`.
 
 ## 🔧 Manual Docker Run
 
@@ -290,12 +296,16 @@ docker run -d \
   -v shelfbridge-data:/app/data \
   ghcr.io/rohit-purandare/shelfbridge:latest
 
-# Configure
-# Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
-# Once you have updated and saved the configuration, (re)start the container:
-docker-compose up -d
+# Configure (choose one method)
+# Option A: Environment variables (add to docker run command):
+# -e SHELFBRIDGE_USER_0_ID="your_username" \
+# -e SHELFBRIDGE_USER_0_ABS_URL="https://your-abs-server.com" \
+# -e SHELFBRIDGE_USER_0_ABS_TOKEN="your_abs_token" \
+# -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN="your_hardcover_token" \
 
-> **Note:** The container will exit if the config file is missing or invalid. Always edit the config file on your host, not inside the container.
+# Option B: Create and edit config file
+# docker exec -it shelfbridge cp /app/config/config.yaml.example /app/config/config.yaml
+# docker exec -it shelfbridge nano /app/config/config.yaml
 
 # Restart to apply config
 docker restart shelfbridge
@@ -317,12 +327,16 @@ docker run -d \
   ghcr.io/rohit-purandare/shelfbridge:latest
 
 # Container automatically creates:
-# - ./config/ directory with config.yaml and config.yaml.example
+# - ./config/ directory with config.yaml.example template
 # - ./data/ directory for cache and sync data
 # - ./logs/ directory for application logs
 
-# Edit config file directly on your host
-nano config/config.yaml
+# Configure (choose one method):
+# Option A: Environment variables (add -e flags to docker run above)
+# Option B: Create and edit config file manually
+# cp config/config.yaml.example config/config.yaml
+# nano config/config.yaml
+
 docker restart shelfbridge
 ```
 
