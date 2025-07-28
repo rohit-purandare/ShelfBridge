@@ -4,26 +4,28 @@ Get ShelfBridge configured quickly and understand which configuration method to 
 
 ## 🎯 Quick Decision Matrix
 
-| Your Situation | Use This Method | Why |
-|----------------|-----------------|-----|
-| **Basic Docker setup** | Environment Variables | Simple, container-friendly |
-| **Single user, no filtering** | Environment Variables | Fastest to configure |
-| **Homelab/NAS deployment** | Environment Variables | Easy container management |
-| **Need library filtering** | YAML Configuration | Arrays not supported in env vars |
-| **Multi-user with different libraries** | YAML Configuration | Complex per-user settings |
-| **Family setup** | YAML Configuration | Advanced user management |
+| Your Situation                          | Use This Method       | Why                              |
+| --------------------------------------- | --------------------- | -------------------------------- |
+| **Basic Docker setup**                  | Environment Variables | Simple, container-friendly       |
+| **Single user, no filtering**           | Environment Variables | Fastest to configure             |
+| **Homelab/NAS deployment**              | Environment Variables | Easy container management        |
+| **Need library filtering**              | YAML Configuration    | Arrays not supported in env vars |
+| **Multi-user with different libraries** | YAML Configuration    | Complex per-user settings        |
+| **Family setup**                        | YAML Configuration    | Advanced user management         |
 
 ## 🚀 Method 1: Environment Variables (Basic Setup)
 
 Perfect for Docker deployments, homelab setups, and simple configurations.
 
 ### ✅ **What Environment Variables Support:**
+
 - User credentials (tokens, URLs)
 - Core sync settings (workers, scheduling, thresholds)
 - Rate limiting and performance tuning
 - Safety settings (dry-run, progress protection)
 
 ### ❌ **What Requires YAML:**
+
 - **Library filtering** - Include/exclude specific libraries
 - **Reread detection** - Advanced progress regression protection
 - **Multi-user advanced setups** - Different settings per user
@@ -38,16 +40,16 @@ services:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
     environment:
       # REQUIRED USER CONFIGURATION
-      SHELFBRIDGE_USER_0_ID: "your_username"
-      SHELFBRIDGE_USER_0_ABS_URL: "https://your-abs-server.com"
-      SHELFBRIDGE_USER_0_ABS_TOKEN: "your_audiobookshelf_token"
-      SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "your_hardcover_token"
-      
+      SHELFBRIDGE_USER_0_ID: 'your_username'
+      SHELFBRIDGE_USER_0_ABS_URL: 'https://your-abs-server.com'
+      SHELFBRIDGE_USER_0_ABS_TOKEN: 'your_audiobookshelf_token'
+      SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'your_hardcover_token'
+
       # OPTIONAL GLOBAL SETTINGS
-      SHELFBRIDGE_MIN_PROGRESS_THRESHOLD: "5.0"
-      SHELFBRIDGE_AUTO_ADD_BOOKS: "true"
-      SHELFBRIDGE_SYNC_SCHEDULE: "0 3 * * *"
-      SHELFBRIDGE_TIMEZONE: "UTC"
+      SHELFBRIDGE_MIN_PROGRESS_THRESHOLD: '5.0'
+      SHELFBRIDGE_AUTO_ADD_BOOKS: 'true'
+      SHELFBRIDGE_SYNC_SCHEDULE: '0 3 * * *'
+      SHELFBRIDGE_TIMEZONE: 'UTC'
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -86,13 +88,31 @@ This means you can mix both methods! Set basic credentials via environment varia
 
 Required for advanced features like library filtering and complex multi-user setups.
 
-### 📁 Configuration File Location
+### 📁 Configuration File Setup
 
-| Installation Method | Configuration Path |
-|-------------------|-------------------|
-| **Docker Compose** | `./config/config.yaml` (mounted to `/app/config/config.yaml`) |
-| **Node.js** | `config/config.yaml` |
-| **Manual Docker** | Depends on your volume mount |
+| Installation Method | Configuration Path                                            |
+| ------------------- | ------------------------------------------------------------- |
+| **Docker Compose**  | `./config/config.yaml` (mounted to `/app/config/config.yaml`) |
+| **Node.js**         | `config/config.yaml`                                          |
+| **Manual Docker**   | Depends on your volume mount                                  |
+
+#### 🏗️ Creating Your Configuration File
+
+1. **Copy the example file:**
+
+   ```bash
+   cp config/config.yaml.example config/config.yaml
+   ```
+
+2. **Edit with your credentials:**
+
+   ```bash
+   nano config/config.yaml  # or your preferred editor
+   ```
+
+3. **Never commit your config.yaml** - it contains sensitive API tokens!
+
+> 💡 **Tip:** The `config.yaml.example` file contains comprehensive documentation and examples for all available settings.
 
 ### 🏗️ Basic YAML Template
 
@@ -103,18 +123,18 @@ Create `config/config.yaml`:
 global:
   # Minimum progress required to sync a book (0-100)
   min_progress_threshold: 5.0
-  
+
   # Automatically add books to Hardcover if not found
   auto_add_books: false
-  
+
   # Prevent accidental progress regression
   prevent_progress_regression: true
-  
+
   # Sync schedule (cron format)
-  sync_schedule: "0 3 * * *"
-  
+  sync_schedule: '0 3 * * *'
+
   # Timezone for scheduling
-  timezone: "UTC"
+  timezone: 'UTC'
 
 # User configurations
 users:
@@ -130,12 +150,12 @@ users:
 global:
   min_progress_threshold: 5.0
   auto_add_books: true
-  sync_schedule: "0 3 * * *"
-  timezone: "UTC"
-  
+  sync_schedule: '0 3 * * *'
+  timezone: 'UTC'
+
   # Global library filtering (applies to all users unless overridden)
   libraries:
-    exclude: ["Podcasts", "Samples", "Previews"]
+    exclude: ['Podcasts', 'Samples', 'Previews']
 
 users:
   - id: alice
@@ -143,14 +163,14 @@ users:
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
     # Alice inherits global library filtering
-    
+
   - id: bob
     abs_url: https://abs.example.com
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
     # Bob overrides global settings
     libraries:
-      include: ["Science Fiction", "Fantasy", "Audiobooks"]
+      include: ['Science Fiction', 'Fantasy', 'Audiobooks']
 ```
 
 ## 📖 Practical Examples
@@ -158,58 +178,61 @@ users:
 ### Example 1: Single User with Docker
 
 **Environment Variables Approach:**
+
 ```yaml
 # docker-compose.yml
 services:
   shelfbridge:
     image: ghcr.io/rohit-purandare/shelfbridge:latest
     environment:
-      SHELFBRIDGE_USER_0_ID: "alice"
-      SHELFBRIDGE_USER_0_ABS_URL: "https://audiobooks.mydomain.com"
-      SHELFBRIDGE_USER_0_ABS_TOKEN: "eyJhbGciOiJIUzI1NiIs..."
-      SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: "hc_sk_1234567890ab..."
-      SHELFBRIDGE_MIN_PROGRESS_THRESHOLD: "3.0"
-      SHELFBRIDGE_AUTO_ADD_BOOKS: "true"
+      SHELFBRIDGE_USER_0_ID: 'alice'
+      SHELFBRIDGE_USER_0_ABS_URL: 'https://audiobooks.mydomain.com'
+      SHELFBRIDGE_USER_0_ABS_TOKEN: 'eyJhbGciOiJIUzI1NiIs...'
+      SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'hc_sk_1234567890ab...'
+      SHELFBRIDGE_MIN_PROGRESS_THRESHOLD: '3.0'
+      SHELFBRIDGE_AUTO_ADD_BOOKS: 'true'
 ```
 
 ### Example 2: Family Setup with YAML
 
 **YAML Configuration Approach:**
+
 ```yaml
 # config/config.yaml
 global:
   min_progress_threshold: 5.0
   auto_add_books: true
-  sync_schedule: "0 */6 * * *"  # Every 6 hours
-  timezone: "America/New_York"
-  
+  sync_schedule: '0 */6 * * *' # Every 6 hours
+  timezone: 'America/New_York'
+
   # Skip podcasts and samples for everyone
   libraries:
-    exclude: ["Podcasts", "Sample Books"]
+    exclude: ['Podcasts', 'Sample Books']
 
 users:
   - id: mom
     abs_url: https://family-audiobooks.com
     abs_token: mom_abs_token
     hardcover_token: mom_hardcover_token
-    
+
   - id: dad
     abs_url: https://family-audiobooks.com
     abs_token: dad_abs_token
     hardcover_token: dad_hardcover_token
-    
+
   - id: teen
     abs_url: https://family-audiobooks.com
     abs_token: teen_abs_token
     hardcover_token: teen_hardcover_token
     # Teen only syncs specific libraries
     libraries:
-      include: ["Young Adult", "Fantasy", "Science Fiction"]
+      include: ['Young Adult', 'Fantasy', 'Science Fiction']
 ```
 
 ### Example 3: Multi-User with Environment Variables
 
 **Simple Multi-User (No Library Filtering):**
+
 ```bash
 # User 0 (Primary)
 export SHELFBRIDGE_USER_0_ID="alice"
@@ -231,6 +254,7 @@ export SHELFBRIDGE_AUTO_ADD_BOOKS="true"
 ### Example 4: Development/Testing Setup
 
 **Environment Variables for Testing:**
+
 ```bash
 # Safe testing configuration
 export SHELFBRIDGE_DRY_RUN="true"              # Don't make real changes
@@ -248,51 +272,58 @@ export SHELFBRIDGE_USER_0_HARDCOVER_TOKEN="test_hardcover_token"
 ## 🔧 Essential Settings Explained
 
 ### 1. Minimum Progress Threshold
+
 Controls when books are synced based on progress percentage:
 
 ```yaml
 global:
-  min_progress_threshold: 5.0  # Only sync books with 5%+ progress
+  min_progress_threshold: 5.0 # Only sync books with 5%+ progress
 ```
 
 **Common values:**
+
 - `1.0` - Very permissive (sync almost everything)
 - `5.0` - Default (skip accidental opens)
 - `10.0` - Conservative (only sync books you're actively reading)
 - `25.0` - Strict (only sync books you're committed to)
 
 ### 2. Auto-Add Books
+
 Determines if books should be automatically added to Hardcover:
 
 ```yaml
 global:
-  auto_add_books: false  # Conservative (recommended for beginners)
+  auto_add_books: false # Conservative (recommended for beginners)
 ```
 
 **Options:**
+
 - `false` - Conservative, only sync existing books
 - `true` - Convenient, automatically adds missing books
 
 ### 3. Sync Schedule
+
 When automatic syncing should occur:
 
 ```yaml
 global:
-  sync_schedule: "0 3 * * *"  # Daily at 3 AM
+  sync_schedule: '0 3 * * *' # Daily at 3 AM
 ```
 
 **Common schedules:**
+
 - `"0 3 * * *"` - Daily at 3 AM (default)
 - `"0 */6 * * *"` - Every 6 hours
 - `"0 9,21 * * *"` - Twice daily (9 AM and 9 PM)
 - `"0 2 * * 0"` - Weekly on Sunday at 2 AM
 
 ### 4. Progress Protection
+
 Prevents accidental loss of reading progress:
 
 ```yaml
 global:
-  prevent_progress_regression: true  # Recommended
+  prevent_progress_regression: true # Recommended
 ```
 
 **Always keep this enabled** unless you have a specific reason to disable it.
@@ -318,6 +349,7 @@ node src/main.js config
 ### Common Issues and Solutions
 
 #### Missing Required Settings
+
 ```
 ❌ Configuration Validation Failed:
   ✗ User configuration: 'id' is required for user 0
@@ -326,6 +358,7 @@ node src/main.js config
 **Solution**: Ensure all required user variables are set.
 
 #### Invalid Data Types
+
 ```
 ❌ Configuration Validation Failed:
   ✗ Global config: 'workers' must be number (got: string)
@@ -334,6 +367,7 @@ node src/main.js config
 **Solution**: Check that numeric environment variables contain valid numbers.
 
 #### Out of Range Values
+
 ```
 ❌ Configuration Validation Failed:
   ✗ Global config: 'min_progress_threshold' must be between 0 and 100
@@ -346,6 +380,7 @@ node src/main.js config
 ### Protecting Sensitive Data
 
 **Environment Variables:**
+
 ```bash
 # ✅ Use secure methods
 export SHELFBRIDGE_USER_0_ABS_TOKEN="$(cat /run/secrets/abs_token)"
@@ -355,6 +390,7 @@ export SHELFBRIDGE_USER_0_ABS_TOKEN="plaintext_token_here"
 ```
 
 **YAML Files:**
+
 ```bash
 # Restrict file access
 chmod 600 config/config.yaml
@@ -384,4 +420,4 @@ If you encounter issues, check: **[Troubleshooting Guide](../troubleshooting/Tro
 
 ---
 
-💡 **Pro Tip**: Start with environment variables for basic setup, then migrate to YAML if you need library filtering or advanced multi-user features. You can even use both methods together! 
+💡 **Pro Tip**: Start with environment variables for basic setup, then migrate to YAML if you need library filtering or advanced multi-user features. You can even use both methods together!

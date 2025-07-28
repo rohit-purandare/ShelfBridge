@@ -1,3 +1,14 @@
+# =============================================================================
+# SETUP INSTRUCTIONS
+# =============================================================================
+# 1. Copy this file to config.yaml:
+#    cp config/config.yaml.example config/config.yaml
+# 
+# 2. Edit config.yaml with your actual credentials and settings
+# 
+# 3. Never commit your config.yaml file (it contains sensitive tokens)
+# =============================================================================
+
 # ShelfBridge Configuration File
 # This file configures the sync behavior between Audiobookshelf and Hardcover
 

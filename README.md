@@ -31,10 +31,11 @@ docker-compose up -d
 curl -O https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/docker-compose.yml
 docker-compose up -d
 
-# Configure your settings in config.yaml
-# Edit the config/config.yaml file with your credentials and advanced settings
+# Configure your settings
+cp config/config.yaml.example config/config.yaml
+# Edit config/config.yaml with your credentials and advanced settings
 # Restart the container:
-docker-compose up -d
+docker-compose restart
 ```
 
 ### Node.js
