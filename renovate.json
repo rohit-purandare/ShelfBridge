@@ -35,7 +35,10 @@
         "nodemon",
         "winston",
         "js-yaml",
-        "luxon"
+        "luxon",
+        "commander",
+        "husky",
+        "lint-staged"
       ],
       "groupName": "high confidence npm dependencies",
       "labels": ["dependencies", "high-confidence"],
@@ -54,7 +57,16 @@
       "dependencyDashboardApproval": true,
       "groupName": "review required npm dependencies",
       "labels": ["dependencies", "review-required"],
-      "prTitle": "build(deps): update dependencies requiring review ({{updateType}})"
+      "prTitle": "build(deps): update dependencies requiring review"
+    },
+    {
+      "description": "DEFAULT: All other npm dependencies require dashboard approval",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "dependencyDashboardApproval": true,
+      "groupName": "other npm dependencies",
+      "labels": ["dependencies", "review-required"],
+      "prTitle": "build(deps): update other dependencies"
     },
     {
       "description": "Group all GitHub Actions updates",
