@@ -90,8 +90,7 @@
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
-    "**/vendor/**",
-    "**/fresh-install-test/**"
+    "**/vendor/**"
   ],
   "lockFileMaintenance": {
     "enabled": true,
