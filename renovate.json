@@ -23,16 +23,45 @@
   "prTitle": "build(deps): update {{depName}} to {{newVersion}}",
   "packageRules": [
     {
-      "description": "Group all non-major npm dependencies",
+      "description": "HIGH CONFIDENCE: Mature, stable updates - proceed immediately",
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "non-major npm dependencies"
+      "matchPackageNames": [
+        "@eslint/js",
+        "eslint",
+        "globals",
+        "prettier",
+        "cron",
+        "nodemon",
+        "winston",
+        "js-yaml",
+        "luxon"
+      ],
+      "groupName": "high confidence npm dependencies",
+      "labels": ["dependencies", "high-confidence"],
+      "prTitle": "build(deps): update high confidence dependencies"
+    },
+    {
+      "description": "LOW CONFIDENCE: New releases requiring review - manual approval needed",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchPackageNames": [
+        "cronstrue",
+        "axios",
+        "inquirer",
+        "rate-limiter-flexible"
+      ],
+      "dependencyDashboardApproval": true,
+      "groupName": "review required npm dependencies",
+      "labels": ["dependencies", "review-required"],
+      "prTitle": "build(deps): update dependencies requiring review ({{updateType}})"
     },
     {
       "description": "Group all GitHub Actions updates",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "GitHub Actions"
+      "groupName": "GitHub Actions",
+      "labels": ["dependencies", "github-actions"]
     },
     {
       "description": "Separate major updates for careful review",
@@ -43,7 +72,7 @@
       "commitMessageAction": "update major version of"
     },
     {
-      "description": "Auto-merge patch updates for development tools",
+      "description": "Auto-merge patch updates for development tools only",
       "matchPackageNames": ["eslint", "prettier", "@eslint/js", "globals"],
       "matchUpdateTypes": ["patch"],
       "automerge": true,
@@ -60,7 +89,7 @@
       "commitMessageAction": "pin"
     },
     {
-      "description": "High-priority security updates (bypasses schedule)",
+      "description": "High-priority security updates (bypasses schedule and confidence)",
       "matchDatasources": ["npm"],
       "groupName": "security updates",
       "labels": ["dependencies", "security"],
