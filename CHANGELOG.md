@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.25] - 2025-07-28
+
+### Added
+- chore: add setup instructions to config example file
+
+### Changed
+- ci: prevent feature branches from getting latest Docker tag
+- chore: remove redundant security-scan workflow
+
+### Fixed
+- add missing _needsBookIdLookup flag for cached title/author matches (#22)
+
+
 ## [1.18.24] - 2025-07-28
 
 ### Fixed
@@ -470,7 +483,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...HEAD
+[1.18.25]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...v1.18.25
 [1.18.24]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.23...v1.18.24
 [1.18.23]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.22...v1.18.23
 [1.18.22]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.20...v1.18.22
