@@ -289,28 +289,28 @@ jobs:
         if: steps.check_tag.outputs.skip == 'false'
         run: |
           NEW_VERSION=${{ steps.package_version.outputs.version }}
-          
+
           # Configure git to use release token for bypassing branch protection
           git remote set-url origin https://x-access-token:${{ secrets.RELEASE_TOKEN || github.token }}@github.com/${{ github.repository }}.git
-          
+
           # Add package.json, package-lock.json (if it exists), and CHANGELOG.md
           git add package.json CHANGELOG.md
           if [ -f "package-lock.json" ]; then
             git add package-lock.json
           fi
-          
+
           # Verify we have something to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 1
           fi
-          
+
           # Commit version bump
           git commit --no-verify -m "bump version to v${NEW_VERSION}
 
           - Updated package.json to v${NEW_VERSION}
           - Updated CHANGELOG.md with release notes"
-          
+
           echo "Pushing version bump commit..."
           git push origin main
           echo "✅ Version bump and changelog update pushed successfully"
@@ -323,6 +323,16 @@ jobs:
           git tag "v${NEW_VERSION}"
           git push origin "v${NEW_VERSION}"
           echo "✅ Tag v${NEW_VERSION} pushed successfully"
+
+      - name: Wait for Docker build to complete
+        if: steps.check_tag.outputs.skip == 'false'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: v${{ steps.package_version.outputs.version }}
+          check-name: 'build-and-push'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          allowed-conclusions: success
 
       - name: Create Release
         if: steps.check_tag.outputs.skip == 'false'
@@ -340,5 +350,6 @@ jobs:
           echo "✅ Release v${{ steps.package_version.outputs.version }} created successfully"
           echo "📝 CHANGELOG.md updated automatically"
           echo "🏷️ Tag v${{ steps.package_version.outputs.version }} pushed"
+          echo "🐳 Docker images built and pushed successfully"
           echo "📦 Release available at: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.package_version.outputs.version }}"
-          echo "🐳 Docker images will be built automatically via docker-build workflow"
+          echo "🚀 All Docker images are ready for immediate use"

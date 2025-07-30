@@ -132,8 +132,9 @@ The workflow intelligently determines when to create releases:
 3. **Duplicate Prevention** - Skips if tag already exists
 4. **Changelog Generation** - Creates changelog from git commits
 5. **Tag Push** - Creates and pushes git tag to trigger separate Docker build workflow
-6. **GitHub Release Creation** - Creates tagged release with notes
-7. **Docker Coordination** - Tag triggers docker-build.yml for automatic container images
+6. **Docker Build Synchronization** - **NEW: Waits for Docker build completion before creating release**
+7. **GitHub Release Creation** - Creates tagged release with notes only after Docker images are available
+8. **Docker Coordination** - Ensures Docker images are built and published before users see the release
 
 ### Release Format
 
@@ -219,6 +220,26 @@ The workflow now ensures that version-specific Docker images are automatically c
 - Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags via docker-build.yml
 - Eliminates redundant builds and follows industry-standard CI/CD practices
 - Version workflow focuses on versioning; Docker workflow focuses on container builds
+
+**NEW: Release Timing Synchronization Fix** - **Fixed race condition between release creation and Docker image availability**
+
+**Previous Issue:** Releases were created immediately after tag push, but before Docker images were actually built and available in the registry. This caused "image not found" errors for users trying to pull Docker images immediately after seeing a release announcement.
+
+**Fix Applied:** Added synchronization step using `lewagon/wait-on-check-action` that waits for the Docker build workflow to complete successfully before creating the GitHub release.
+
+**How It Works:**
+
+1. Version workflow pushes git tag (triggers Docker build in parallel)
+2. **NEW: Wait step** monitors `build-and-push` job status until completion
+3. Release is created only after Docker images are confirmed available
+4. Users see releases with guaranteed Docker image availability
+
+**Benefits:**
+
+- ✅ No more "image not found" errors for immediate Docker pulls
+- ✅ Reliable Docker installation instructions in releases
+- ✅ Better user experience with guaranteed artifact availability
+- ✅ Maintains existing workflow logic while fixing timing issues
 
 ### Development Workflow Improvements
 
