@@ -20,7 +20,6 @@
   "commitMessageAction": "update",
   "commitMessageTopic": "{{depName}}",
   "commitMessageExtra": "to {{newVersion}}",
-  "prTitle": "build(deps): update {{depName}} to {{newVersion}}",
   "packageRules": [
     {
       "description": "HIGH CONFIDENCE: Mature, stable updates - proceed immediately",
@@ -42,7 +41,7 @@
       ],
       "groupName": "high confidence npm dependencies",
       "labels": ["dependencies", "high-confidence"],
-      "prTitle": "build(deps): update high confidence dependencies"
+      "commitMessageTopic": "high confidence dependencies"
     },
     {
       "description": "LOW CONFIDENCE: New releases requiring review - manual approval needed",
@@ -57,7 +56,7 @@
       "dependencyDashboardApproval": true,
       "groupName": "review required npm dependencies",
       "labels": ["dependencies", "review-required"],
-      "prTitle": "build(deps): update dependencies requiring review"
+      "commitMessageTopic": "dependencies requiring review"
     },
     {
       "description": "DEFAULT: All other npm dependencies require dashboard approval",
@@ -66,7 +65,7 @@
       "dependencyDashboardApproval": true,
       "groupName": "other npm dependencies",
       "labels": ["dependencies", "review-required"],
-      "prTitle": "build(deps): update other dependencies"
+      "commitMessageTopic": "other dependencies"
     },
     {
       "description": "Group all GitHub Actions updates",
@@ -80,8 +79,8 @@
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true,
       "labels": ["dependencies", "major"],
-      "prTitle": "build(deps): update {{depName}} to {{newVersion}} (major)",
-      "commitMessageAction": "update major version of"
+      "commitMessageAction": "update major version of",
+      "commitMessageExtra": "to {{newVersion}}"
     },
     {
       "description": "Auto-merge patch updates for development tools only",
@@ -97,8 +96,8 @@
       "matchPackageNames": ["better-sqlite3"],
       "rangeStrategy": "pin",
       "labels": ["dependencies", "native-module"],
-      "prTitle": "build(deps): pin {{depName}} to {{newVersion}}",
-      "commitMessageAction": "pin"
+      "commitMessageAction": "pin",
+      "commitMessageExtra": "to {{newVersion}}"
     },
     {
       "description": "High-priority security updates (bypasses schedule and confidence)",
@@ -133,7 +132,6 @@
     "enabled": true,
     "schedule": ["before 4am on the first day of the month"],
     "commitMessageAction": "maintain",
-    "commitMessageTopic": "lock file",
-    "prTitle": "build(deps): maintain lock file"
+    "commitMessageTopic": "lock file"
   }
 }
