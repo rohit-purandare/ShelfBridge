@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.26] - 2025-07-30
+
+### Changed
+- Fix/completed book filtering (#23)
+
+
 ## [1.18.25] - 2025-07-28
 
 ### Added
@@ -483,7 +489,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.26...HEAD
+[1.18.26]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...v1.18.25
 [1.18.24]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.23...v1.18.24
 [1.18.23]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.22...v1.18.23
