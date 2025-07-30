@@ -4,7 +4,7 @@ This page documents all automated workflows that run on the ShelfBridge reposito
 
 ## 📋 Overview
 
-ShelfBridge uses **5 GitHub Actions workflows** to automate:
+ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 - **Code Quality** - ESLint, security checks, dependency audits
 - **Testing** - Cross-platform Node.js testing
@@ -17,7 +17,7 @@ ShelfBridge uses **5 GitHub Actions workflows** to automate:
 | Workflow                                  | Trigger                           | Purpose                      | Status    |
 | ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
 | [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security checks     | ✅ Active |
+| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
 | [Release Automation](#release-automation) | Functional commits to main        | Smart release creation       | ✅ Active |
 | [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
 | [Security Scan](#security-scan)           | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
@@ -71,14 +71,22 @@ strategy:
 - Push to `main` branch
 - Pull requests targeting `main`
 
-### What It Does
+### Jobs
+
+#### `lint` Job
 
 1. **ESLint Analysis** - Enforces JavaScript coding standards
 2. **Debug Statement Detection** - Finds `console.debug`, `debugger` statements
 3. **TODO Comment Tracking** - Reports TODO/FIXME comments
-4. **Dependency Security Audit** - Scans for high-severity vulnerabilities
+4. **Dependency Security Audit** - Scans for high-severity vulnerabilities (legacy check)
 5. **Package.json Validation** - Verifies required npm scripts exist
 6. **Configuration File Validation** - Validates YAML syntax
+
+#### `security-scan` Job (NEW)
+
+1. **Dependency Security Audit** - npm audit for high-severity vulnerabilities
+2. **Hardcoded Secret Detection** - Scans for potential hardcoded credentials
+3. **Required Status Check** - Provides `security-scan` status for branch protection
 
 ### ESLint Configuration
 
@@ -89,8 +97,15 @@ strategy:
 
 ### Quality Gates
 
-- ❌ **Fails on:** ESLint errors, high-severity vulnerabilities
-- ⚠️ **Warns on:** TODO comments, moderate vulnerabilities
+#### `lint` Job
+
+- ❌ **Fails on:** ESLint errors, invalid configuration files
+- ⚠️ **Warns on:** TODO comments, debug statements
+
+#### `security-scan` Job
+
+- ❌ **Fails on:** High-severity vulnerabilities, obvious hardcoded secrets
+- ⚠️ **Reports:** Potential security concerns for review
 
 ---
 
