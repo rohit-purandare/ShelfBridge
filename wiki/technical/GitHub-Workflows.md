@@ -122,7 +122,7 @@ The workflow intelligently determines when to create releases:
 - `test:` commits (test changes only)
 - `ci:` commits (workflow/CI changes)
 - `style:` commits (formatting only)
-- `build(deps):` commits (dependency updates from dependabot)
+- `build(deps):` commits (dependency updates from Renovate)
 - Version bump commits (prevents loops)
 
 ### What It Does

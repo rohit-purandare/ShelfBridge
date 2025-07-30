@@ -1,0 +1,262 @@
+# ShelfBridge Configuration File
+# This file configures the sync behavior between Audiobookshelf and Hardcover
+
+# =============================================================================
+# MINIMAL WORKING CONFIGURATION (Docker Users Start Here)
+# =============================================================================
+# Replace the placeholder values below with your actual credentials
+# This is all you need to get started!
+
+users:
+  - id: your_username                    # REQUIRED: Choose any unique identifier
+    abs_url: https://your-audiobookshelf-server.com    # REQUIRED: Your Audiobookshelf server URL
+    abs_token: your_audiobookshelf_api_token_here      # REQUIRED: Your Audiobookshelf API token
+    hardcover_token: your_hardcover_api_token_here     # REQUIRED: Your Hardcover API token
+    
+    # OPTIONAL: Library filtering (sync only specific libraries)
+    # If omitted, all accessible libraries will be synced (default behavior)
+    # libraries:
+    #   include: ["Audiobooks", "Fiction"]    # Only sync these libraries
+    #   # OR use exclude instead:
+    #   # exclude: ["Podcasts", "Samples"]    # Skip these libraries
+    #   # 
+    #   # You can use library names (case-insensitive) or IDs:
+    #   # include: ["lib_abc123", "My Audiobooks"]
+    #   # 
+    #   # ⚠️  Cannot use both include and exclude at the same time
+    #   # ⚠️  Run 'node src/main.js debug -u your_username' to see available libraries
+
+# =============================================================================
+# ADVANCED CONFIGURATION (Optional - All Have Sensible Defaults)
+# =============================================================================
+# The following settings are OPTIONAL and have sensible defaults
+# You can customize these based on your needs
+
+# global:
+#   # =============================================================================
+#   # CORE SYNC SETTINGS (Optional - all have defaults)
+#   # =============================================================================
+#   
+#   # Minimum progress percentage required to sync (default: 5.0)
+#   # Books with less than this progress will be skipped
+#   min_progress_threshold: 5.0
+#   
+#   # Number of parallel workers for API requests (default: 3)
+#   workers: 3
+#   
+#   # Enable parallel processing for faster sync (default: true)
+#   # Set to false if you encounter rate limiting or want sequential processing
+#   parallel: true
+#   
+#   # Timezone for logging and date formatting (default: UTC)
+#   timezone: "UTC"
+#   
+#   # =============================================================================
+#   # SAFETY AND TESTING SETTINGS (Optional)
+#   # =============================================================================
+#   
+#   # Whether to run without making actual changes (default: false)
+#   # Set to true for testing or to see what would happen without making changes
+#   dry_run: false
+#   
+#   # Force sync even if progress appears unchanged (default: false)
+#   # Useful for recovering from sync errors or cache issues
+#   force_sync: false
+#   
+#   # Maximum number of books to process during sync (default: no limit)
+#   # Useful for testing with a small subset of books
+#   max_books_to_process: 10
+#   
+#   # =============================================================================
+#   # AUTOMATION SETTINGS (Optional)
+#   # =============================================================================
+#   
+#   # Cron schedule for automatic sync (default: "0 3 * * *" - daily at 3 AM)
+#   # Format: "minute hour day month day-of-week"
+#   # Examples:
+#   #   "0 3 * * *"     - Every day at 3:00 AM
+#   #   "0 */6 * * *"   - Every 6 hours
+#   #   "0 9,21 * * *"  - Twice daily at 9 AM and 9 PM
+#   #   "0 3 * * 1"     - Every Monday at 3:00 AM
+#   #   null/undefined  - Disable automatic sync (manual only)
+#   sync_schedule: "0 3 * * *"
+#   
+#   # Whether to automatically add books to Hardcover that don't exist (default: false)
+#   # Set to true only if you want ShelfBridge to manage your Hardcover library automatically
+#   auto_add_books: false
+#   
+#   # =============================================================================
+#   # TITLE/AUTHOR MATCHING (Optional - Enabled by Default)
+#   # =============================================================================
+#   
+#   # Enhanced book matching using title and author when ASIN/ISBN aren't available
+#   # This significantly improves matching for audiobooks with incomplete metadata
+#   title_author_matching:
+#     enabled: true                      # Enable title/author fallback matching (default: true)
+#     confidence_threshold: 0.70         # Minimum confidence score to accept match (0.0-1.0, default: 0.70)
+#     max_search_results: 5             # Maximum search results to evaluate (default: 5)
+#   
+#   # =============================================================================
+#   # LIBRARY FILTERING (Optional - applies to all users unless overridden)
+#   # =============================================================================
+#   
+#   # Global library filtering configuration (users can override this)
+#   # If omitted, all accessible libraries will be synced (default behavior)
+#   # libraries:
+#   #   include: ["Audiobooks", "Fiction"]    # Only sync these libraries for all users
+#   #   # OR use exclude instead:
+#   #   # exclude: ["Podcasts", "Samples"]    # Skip these libraries for all users
+#   #   # 
+#   #   # Users can override this in their individual configuration
+#   #   # Run 'node src/main.js debug -u username' to see available libraries
+#   
+#   # =============================================================================
+#   # PROGRESS PROTECTION SETTINGS (Optional - recommended to keep enabled)
+#   # =============================================================================
+#   
+#   # Progress regression protection (default: true)
+#   # Prevents accidentally overwriting completion status or high progress
+#   prevent_progress_regression: true
+#   
+#   # Re-reading detection thresholds (all optional with defaults)
+#   # reread_detection:
+#   #   reread_threshold: 30              # Progress below 30% = "starting over"
+#   #   high_progress_threshold: 85       # Progress above 85% = "high progress" 
+#   #   regression_block_threshold: 50    # Block drops >50% from high progress
+#   #   regression_warn_threshold: 15     # Warn about drops >15% from high progress
+#   
+#   # =============================================================================
+#   # RATE LIMITING AND PERFORMANCE (Optional - defaults work for most users)
+#   # =============================================================================
+#   
+#   # Maximum concurrent requests to Hardcover API (default: 1)
+#   # Keep this at 1 to respect Hardcover's rate limits
+#   hardcover_semaphore: 1
+#   
+#   # Hardcover API rate limit in requests per minute (default: 55)
+#   # Stay below 60 to avoid hitting their limits
+#   hardcover_rate_limit: 55
+#   
+#   # Maximum concurrent requests to Audiobookshelf API (default: 5)
+#   # Can be higher since Audiobookshelf is typically self-hosted
+#   audiobookshelf_semaphore: 5
+#   
+#   # Audiobookshelf API rate limit in requests per minute (default: 600)
+#   # Adjust based on your server capacity
+#   audiobookshelf_rate_limit: 600
+#   
+#   # =============================================================================
+#   # LIBRARY FETCHING SETTINGS (Optional)
+#   # =============================================================================
+#   
+#   # Maximum number of books to fetch from Audiobookshelf (default: no limit)
+#   # Set a number to limit memory usage on resource-constrained devices
+#   # Reduce this if you experience memory issues or timeouts on resource-constrained devices
+#   # This setting helps prevent the application from hanging when fetching large libraries
+#   max_books_to_fetch: null
+#   
+#   # Number of books to fetch per API call (default: 100)
+#   # Smaller values = more API calls but smaller responses (better for slow connections)
+#   # Larger values = fewer API calls but larger responses (better for fast connections)
+#   page_size: 100
+#   
+#   # Number of syncs between deep scans (default: 10)
+#   # Deep scans check the entire library, fast scans only check books in progress
+#   # Examples:
+#   #   deep_scan_interval: 5   - Deep scan every 5 syncs (more frequent)
+#   #   deep_scan_interval: 20  - Deep scan every 20 syncs (less frequent)
+#   #   deep_scan_interval: 1   - Deep scan every sync (always full scan)
+#   deep_scan_interval: 10
+#   
+#   # =============================================================================
+#   # DEBUGGING AND LOGGING (Optional)
+#   # =============================================================================
+#   
+#   # Dump failed sync books to text file (default: true)
+#   # When enabled, creates a detailed error report in the data/ folder
+#   dump_failed_books: true
+
+# =============================================================================
+# MULTIPLE USERS EXAMPLE (Family Setup)
+# =============================================================================
+# Example: Multiple users with different library preferences
+# global:
+#   # Global library filtering - applies to all users unless overridden
+#   libraries:
+#     exclude: ["Podcasts", "Sample Books"]    # Skip these for everyone
+# 
+# users:
+#   - id: alice
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: alice_audiobookshelf_token
+#     hardcover_token: alice_hardcover_token
+#     # Alice uses global settings (excludes Podcasts and Sample Books)
+#     
+#   - id: bob  
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: bob_audiobookshelf_token
+#     hardcover_token: bob_hardcover_token
+#     # Bob overrides global settings with his own filter
+#     libraries:
+#       include: ["Audiobooks", "Science Fiction"]
+#       
+#   - id: charlie
+#     abs_url: https://audiobookshelf.example.com
+#     abs_token: charlie_audiobookshelf_token
+#     hardcover_token: charlie_hardcover_token
+#     # Charlie syncs everything (no libraries filter = all libraries)
+
+# =============================================================================
+# CONFIGURATION EXAMPLES FOR DIFFERENT USE CASES
+# =============================================================================
+
+# High-frequency sync (every 2 hours) with more workers:
+# global:
+#   sync_schedule: "0 */2 * * *"
+#   workers: 5
+#   parallel: true
+
+# Conservative sync (weekly, low impact):
+# global:
+#   sync_schedule: "0 2 * * 0"  # Sundays at 2 AM
+#   workers: 1
+#   parallel: false
+#   min_progress_threshold: 10.0
+
+# Testing/development setup:
+# global:
+#   dry_run: true
+#   max_books_to_process: 10
+#   deep_scan_interval: 1  # Always do deep scan for testing
+
+# =============================================================================
+# LIBRARY FILTERING EXAMPLES
+# =============================================================================
+
+# Only sync audiobook libraries:
+# global:
+#   libraries:
+#     include: ["Audiobooks", "Audio Fiction", "Audio Non-Fiction"]
+
+# Skip unwanted content globally:
+# global:
+#   libraries:
+#     exclude: ["Podcasts", "Samples", "Audio Courses", "Kids Books"]
+
+# Per-user library preferences:
+# users:
+#   - id: podcast_lover
+#     abs_url: https://abs.example.com
+#     abs_token: token
+#     hardcover_token: token
+#     # Override global to include podcasts for this user:
+#     libraries:
+#       exclude: ["Sample Books"]  # Only exclude samples
+#       
+#   - id: fiction_only
+#     abs_url: https://abs.example.com
+#     abs_token: token
+#     hardcover_token: token
+#     # Only fiction books:
+#     libraries:
+#       include: ["Fiction", "Mystery", "Sci-Fi", "Fantasy"] 
