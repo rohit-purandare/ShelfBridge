@@ -121,7 +121,7 @@
   "rebaseWhen": "conflicted",
   "prConcurrentLimit": 10,
   "prHourlyLimit": 2,
-  "stabilityDays": 3,
+  "minimumReleaseAge": "3 days",
   "branchPrefix": "renovate/",
   "ignorePaths": [
     "**/node_modules/**",
