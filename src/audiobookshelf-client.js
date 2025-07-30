@@ -255,7 +255,8 @@ export class AudiobookshelfClient {
         }),
       });
 
-      // Filter books based on completion status and re-reading detection
+      // Include all books for sync - let the cache check and proper re-reading detection
+      // in sync-manager.js handle whether the book actually needs syncing
       const booksNeedingSync = progressResults.filter(book => {
         if (!book) return false;
 
@@ -266,26 +267,8 @@ export class AudiobookshelfClient {
         const isFinished = book.is_finished === true || book.is_finished === 1;
         const progress = book.progress_percentage || 0;
 
-        if (isFinished) {
-          // For completed books, check if this might be a re-reading scenario
-          // Low progress on a completed book suggests re-reading
-          const rereadThreshold = this.rereadConfig.reread_threshold || 30;
-
-          if (progress <= rereadThreshold) {
-            logger.debug(
-              `Including completed book for re-reading: ${title} (${progress.toFixed(1)}% progress, threshold: ${rereadThreshold}%)`,
-            );
-            return true;
-          } else {
-            logger.debug(
-              `Skipping completed book with high progress: ${title} (${progress.toFixed(1)}% complete, threshold: ${rereadThreshold}%)`,
-            );
-            return false;
-          }
-        }
-
         logger.debug(
-          `Including book for sync: ${title} (${progress.toFixed(1)}% progress)`,
+          `Including book for sync consideration: ${title} (${progress.toFixed(1)}% progress, finished: ${isFinished})`,
         );
         return true;
       });
@@ -298,12 +281,9 @@ export class AudiobookshelfClient {
         return isFinished; // Count ALL completed books, regardless of progress
       });
 
-      const completedBooksFiltered = validBooks.filter(book => {
-        const isFinished = book.is_finished === true || book.is_finished === 1;
-        const progress = book.progress_percentage || 0;
-        const rereadThreshold = this.rereadConfig.reread_threshold || 30;
-        return isFinished && progress > rereadThreshold; // Only those actually filtered out
-      });
+      // Since we no longer filter out completed books early, this count should be 0
+      // Actual filtering now happens later in the sync process based on cache checks
+      const completedBooksFiltered = [];
 
       logger.debug('Book filtering summary', {
         totalWithProgress: validBooks.length,
@@ -311,7 +291,7 @@ export class AudiobookshelfClient {
         completedBooksFiltered: completedBooksFiltered.length,
         booksNeedingSync: booksNeedingSync.length,
         filteringDetails: {
-          rereadThreshold: this.rereadConfig.reread_threshold || 30,
+          note: 'Early filtering removed - all books passed to sync logic for cache checking',
         },
       });
 
