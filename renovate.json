@@ -7,7 +7,7 @@
     ":semanticCommitTypeAll(build)"
   ],
   "timezone": "UTC",
-  "schedule": ["every monday before 10am"],
+  "schedule": ["before 10am on monday"],
   "labels": ["dependencies"],
   "assignees": ["@rohit-purandare"],
   "reviewers": ["@rohit-purandare"],
@@ -26,14 +26,14 @@
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["patch", "minor"],
       "groupName": "non-major npm dependencies",
-      "schedule": ["every monday before 10am"]
+      "schedule": ["before 10am on monday"]
     },
     {
       "description": "Group all GitHub Actions updates",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["patch", "minor"],
       "groupName": "GitHub Actions",
-      "schedule": ["every monday before 10am"]
+      "schedule": ["before 10am on monday"]
     },
     {
       "description": "Separate major updates for careful review",
@@ -43,7 +43,7 @@
       "prTitle": "build(deps): update {{depName}} to {{newVersion}} (major)",
       "commitMessagePrefix": "build(deps):",
       "commitMessageAction": "update major version of",
-      "schedule": ["every monday before 10am"]
+      "schedule": ["before 10am on monday"]
     },
     {
       "description": "Auto-merge patch updates for well-known safe packages",
@@ -65,7 +65,6 @@
     {
       "description": "Group security updates for faster processing",
       "matchDatasources": ["npm"],
-      "vulnerabilityAlertsEnabled": true,
       "groupName": "security updates",
       "labels": ["dependencies", "security"],
       "prPriority": 10,
