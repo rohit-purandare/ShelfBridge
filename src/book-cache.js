@@ -654,6 +654,25 @@ export class BookCache {
     const normalizedTitle = title.toLowerCase().trim();
     const currentTime = new Date().toISOString();
 
+    // Use activity timestamp when available and valid, fall back to current time
+    let activityTime = currentTime;
+    if (lastListenedAt) {
+      try {
+        const testDate = new Date(lastListenedAt);
+        if (!isNaN(testDate.getTime())) {
+          activityTime = lastListenedAt;
+        } else {
+          logger.warn(
+            `Invalid lastListenedAt timestamp: ${lastListenedAt}, using current time`,
+          );
+        }
+      } catch (_error) {
+        logger.warn(
+          `Error parsing lastListenedAt timestamp: ${lastListenedAt}, using current time`,
+        );
+      }
+    }
+
     const upsertStmt = this.db.prepare(`
             INSERT INTO books (user_id, identifier, identifier_type, title, progress_percent, last_sync, updated_at, last_listened_at, started_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -673,12 +692,14 @@ export class BookCache {
       identifierType,
       normalizedTitle,
       progressPercent,
-      currentTime,
-      currentTime,
+      activityTime,
+      activityTime,
       lastListenedAt,
       startedAt,
     );
-    logger.debug(`Stored progress for ${title}: ${progressPercent}%`);
+    logger.debug(
+      `Stored progress for ${title}: ${progressPercent}% (activity time: ${activityTime})`,
+    );
     return result;
   }
 
@@ -695,7 +716,9 @@ export class BookCache {
     if (!finishedAt) return null;
 
     const normalizedTitle = title.toLowerCase().trim();
-    const currentTime = new Date().toISOString();
+
+    // Use completion activity timestamp for updated_at
+    const activityTime = finishedAt;
 
     const updateStmt = this.db.prepare(`
             UPDATE books 
@@ -705,13 +728,15 @@ export class BookCache {
 
     const result = updateStmt.run(
       finishedAt,
-      currentTime,
+      activityTime,
       userId,
       identifier,
       identifierType,
       normalizedTitle,
     );
-    logger.debug(`Stored completion timestamp for ${title}: ${finishedAt}`);
+    logger.debug(
+      `Stored completion timestamp for ${title}: ${finishedAt} (activity time: ${activityTime})`,
+    );
     return result;
   }
 

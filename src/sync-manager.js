@@ -81,30 +81,8 @@ export class SyncManager {
     logger.debug(`Starting sync for user: ${this.userId}`);
     console.log(`🔄 Starting sync for ${this.userId}`);
 
-    // Increment sync count and check if deep scan is needed
-    const syncTracking = await this.cache.incrementSyncCount(this.userId);
-    const shouldDeepScan =
-      this.globalConfig.force_sync ||
-      (await this.cache.shouldPerformDeepScan(
-        this.userId,
-        this.globalConfig.deep_scan_interval || 10,
-      ));
-
-    if (shouldDeepScan) {
-      if (
-        syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)
-      ) {
-        console.log(
-          `🔍 Performing deep scan (periodic sync #${syncTracking.sync_count})`,
-        );
-      } else if (this.globalConfig.force_sync) {
-        console.log(`🔍 Performing deep scan (forced)`);
-      } else {
-        console.log(`🔍 Performing deep scan (initial sync)`);
-      }
-    } else {
-      console.log(`⚡ Performing fast sync`);
-    }
+    // Increment sync count for tracking
+    const _syncTracking = await this.cache.incrementSyncCount(this.userId);
 
     const result = {
       books_processed: 0,
@@ -115,18 +93,14 @@ export class SyncManager {
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
-      deep_scan_performed: shouldDeepScan,
+      completion_detection_performed: true, // Always check for completions now
     };
 
     try {
-      // Get books from Audiobookshelf
-      const absBooks =
-        await this.audiobookshelf.getReadingProgress(shouldDeepScan);
+      // Get books from Audiobookshelf (always includes completion detection)
+      const absBooks = await this.audiobookshelf.getReadingProgress();
 
-      // Record the deep scan to reset counter if one was performed
-      if (shouldDeepScan) {
-        await this.cache.recordDeepScan(this.userId);
-      }
+      // Note: We now always check for completions, so no need for deep scan tracking
 
       if (!absBooks || absBooks.length === 0) {
         logger.debug('No books found in Audiobookshelf');
@@ -153,49 +127,9 @@ export class SyncManager {
           result.library_filtering = filteringStats.libraryFiltering;
         }
 
-        // Store stats in cache if this was a deep scan
-        if (shouldDeepScan) {
-          await this.cache.storeLibraryStats(this.userId, filteringStats);
-          result.stats_source = 'deep_scan';
-        } else {
-          result.stats_source = 'realtime';
-        }
-      } else {
-        // Fast scan - try to get cached library stats
-        if (!shouldDeepScan) {
-          const cachedStats = await this.cache.getLibraryStats(this.userId);
-          if (cachedStats) {
-            result.total_books_in_library = cachedStats.totalBooksInLibrary;
-            result.books_with_progress = cachedStats.totalWithProgress;
-            result.books_in_progress = cachedStats.inProgressBooks;
-            result.all_completed_books = cachedStats.allCompletedBooks;
-            result.books_never_started = cachedStats.booksNeverStarted;
-            result.stats_source = 'cached';
-            result.stats_last_updated = cachedStats.lastUpdated;
-
-            logger.debug(
-              `Using cached library stats for user ${this.userId}`,
-              cachedStats,
-            );
-          } else {
-            result.stats_source = 'none';
-          }
-        }
-      }
-
-      // For fast scans, enhance realtime data with cached completed book counts
-      if (!shouldDeepScan && filteringStats) {
-        const cachedStats = await this.cache.getLibraryStats(this.userId);
-        if (cachedStats && cachedStats.allCompletedBooks > 0) {
-          // Update the completed books count from cache since fast scan doesn't find them
-          result.all_completed_books = cachedStats.allCompletedBooks;
-          result.stats_source = 'mixed'; // Indicate mixed data source
-          result.stats_last_updated = cachedStats.lastUpdated;
-
-          logger.debug(
-            `Enhanced fast scan with cached completed books: ${cachedStats.allCompletedBooks}`,
-          );
-        }
+        // Always store fresh stats since we now do comprehensive scans
+        await this.cache.storeLibraryStats(this.userId, filteringStats);
+        result.stats_source = 'comprehensive_scan';
       }
 
       // Filter out metadata-only entries for actual processing
@@ -1902,6 +1836,7 @@ export class SyncManager {
         useSeconds,
         finishedAt,
         startedAt,
+        absBook.last_listened_at, // Pass lastListenedAt for activity timestamp fallback
       );
 
       if (success) {
@@ -2056,6 +1991,7 @@ export class SyncManager {
         useSeconds,
         this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
         this.globalConfig.reread_detection, // Pass reread configuration
+        absBook.last_listened_at, // Pass lastListenedAt for activity timestamp fallback
       );
 
       if (result && result.id) {

@@ -918,26 +918,9 @@ async function syncUser(user, globalConfig, verbose = false) {
       result.books_synced > 0 ||
       result.books_completed > 0 ||
       result.books_auto_added > 0 ||
-      result.deep_scan_performed;
+      result.completion_detection_performed;
     if (cacheUpdated) {
       rightColumn.push('├─ Cache updated');
-    }
-
-    // Show next deep scan information
-    if (result.sync_tracking) {
-      const currentCount = result.sync_tracking.sync_count;
-      const interval = globalConfig.deep_scan_interval || 10;
-      const syncsUntilDeepScan = interval - currentCount;
-
-      if (result.deep_scan_performed) {
-        rightColumn.push('├─ Deep scan completed');
-      } else if (syncsUntilDeepScan <= 0) {
-        rightColumn.push('├─ Deep scan due next sync');
-      } else if (syncsUntilDeepScan === 1) {
-        rightColumn.push('├─ Next deep scan: 1 sync away');
-      } else {
-        rightColumn.push(`├─ Next deep scan: ${syncsUntilDeepScan} syncs away`);
-      }
     }
 
     rightColumn.push('└─ Ready for next sync');

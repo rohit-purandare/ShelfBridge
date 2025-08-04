@@ -116,10 +116,10 @@ export class AudiobookshelfClient {
     }
   }
 
-  async getReadingProgress(shouldDeepScan = false) {
-    logger.debug('Fetching reading progress from Audiobookshelf', {
-      shouldDeepScan,
-    });
+  async getReadingProgress() {
+    logger.debug(
+      'Fetching reading progress from Audiobookshelf with completion detection',
+    );
 
     try {
       // Get user info first
@@ -187,22 +187,15 @@ export class AudiobookshelfClient {
       const progressItems = await this._getItemsInProgress();
       logger.debug('Found items in progress', { count: progressItems.length });
 
-      // Conditionally get completed books based on deep scan flag
-      let completedBooksList = [];
-      if (shouldDeepScan) {
-        // Deep scan: check library books for completion status (only from filtered libraries)
-        logger.debug(
-          'Performing deep scan for completed books on filtered libraries',
-        );
-        completedBooksList =
-          await this._getCompletedBooksFromLibraries(librariesToProcess);
-        logger.debug('Found additional books with completion status', {
-          count: completedBooksList.length,
-        });
-      } else {
-        // Fast scan: skip deep library scanning
-        logger.debug('Skipping deep scan, using fast mode');
-      }
+      // Always get completed books (now optimized with parallel processing)
+      logger.debug(
+        'Checking for completed books across all filtered libraries',
+      );
+      const completedBooksList =
+        await this._getCompletedBooksFromLibraries(librariesToProcess);
+      logger.debug('Found books with completion status', {
+        count: completedBooksList.length,
+      });
 
       // Combine progress items with completed books (avoiding duplicates)
       const allBooksWithAnyProgress = this._combineProgressAndCompletedBooks(
@@ -385,71 +378,21 @@ export class AudiobookshelfClient {
   }
 
   async _getCompletedBooksFromLibraries(libraries) {
-    const completedBooks = [];
-
     try {
-      logger.debug(`Starting deep scan across ${libraries.length} libraries`);
+      logger.debug(
+        `Starting parallelized completion detection across ${libraries.length} libraries`,
+      );
 
-      // Check each library for books and their progress status
-      for (const library of libraries) {
-        // Get a larger sample of books from each library to check for completed status
-        const sampleSize = Math.min(100, this.maxBooksToFetch || 100);
-        logger.debug(
-          `Scanning library ${library.name} (ID: ${library.id}) with sample size ${sampleSize}`,
-        );
+      // Process all libraries in parallel
+      const libraryPromises = libraries.map(library =>
+        this._getCompletedBooksFromSingleLibrary(library),
+      );
 
-        const libraryItems = await this.getLibraryItems(library.id, sampleSize);
-
-        if (libraryItems && libraryItems.length > 0) {
-          logger.debug(
-            `Checking ${libraryItems.length} books from library ${library.name} for completion status`,
-          );
-
-          // Check each book's progress to see if it's completed
-          let completedInLibrary = 0;
-          for (const item of libraryItems) {
-            try {
-              const progress = await this._getUserProgress(item.id);
-              logger.debug(
-                `Progress for ${item.media?.metadata?.title || item.id}:`,
-                {
-                  isFinished: progress?.isFinished,
-                  progress: progress?.progress,
-                  hasProgress: !!progress,
-                },
-              );
-
-              if (progress && progress.isFinished) {
-                // Found a completed book
-                completedBooks.push({
-                  id: item.id,
-                  libraryId: library.id,
-                  title: item.media?.metadata?.title || 'Unknown',
-                  isCompleted: true,
-                });
-                completedInLibrary++;
-                logger.debug(
-                  `Found completed book: ${item.media?.metadata?.title || item.id}`,
-                );
-              }
-            } catch (error) {
-              // Skip books we can't get progress for
-              logger.debug(
-                `Could not get progress for book ${item.id}: ${error.message}`,
-              );
-            }
-          }
-
-          logger.debug(
-            `Found ${completedInLibrary} completed books in library ${library.name}`,
-          );
-        } else {
-          logger.debug(`No items found in library ${library.name}`);
-        }
-      }
+      const allResults = await Promise.all(libraryPromises);
+      const completedBooks = allResults.flat();
 
       logger.debug(
-        `Deep scan complete: Found ${completedBooks.length} completed books across all libraries`,
+        `Parallelized completion detection complete: Found ${completedBooks.length} completed books across all libraries`,
       );
       return completedBooks;
     } catch (error) {
@@ -457,6 +400,94 @@ export class AudiobookshelfClient {
         error: error.message,
       });
       return [];
+    }
+  }
+
+  async _getCompletedBooksFromSingleLibrary(library) {
+    const completedBooks = [];
+
+    try {
+      logger.debug(
+        `Scanning library ${library.name} (ID: ${library.id}) for ALL books`,
+      );
+
+      // Get ALL books from this library (no artificial limit)
+      const libraryItems = await this.getLibraryItems(library.id);
+
+      if (!libraryItems || libraryItems.length === 0) {
+        logger.debug(`No items found in library ${library.name}`);
+        return completedBooks;
+      }
+
+      logger.debug(
+        `Checking ${libraryItems.length} books from library ${library.name} for completion status`,
+      );
+
+      // Process books in parallel chunks to respect rate limits
+      const workers = this.semaphoreConcurrency || 3; // Use existing semaphore concurrency
+      const chunks = [];
+
+      // Split books into chunks for parallel processing
+      for (let i = 0; i < libraryItems.length; i += workers) {
+        chunks.push(libraryItems.slice(i, i + workers));
+      }
+
+      let completedInLibrary = 0;
+
+      // Process chunks sequentially, books within chunks in parallel
+      for (const chunk of chunks) {
+        const progressPromises = chunk.map(async item => {
+          try {
+            const progress = await this._getUserProgress(item.id);
+
+            if (progress && progress.isFinished) {
+              logger.debug(
+                `Found completed book: ${item.media?.metadata?.title || item.id}`,
+              );
+              return {
+                id: item.id,
+                libraryId: library.id,
+                title: item.media?.metadata?.title || 'Unknown',
+                isCompleted: true,
+              };
+            }
+            return null;
+          } catch (error) {
+            // Skip books we can't get progress for
+            logger.debug(
+              `Could not get progress for book ${item.id}: ${error.message}`,
+            );
+            return null;
+          }
+        });
+
+        const chunkResults = await Promise.all(progressPromises);
+        const chunkCompleted = chunkResults.filter(Boolean);
+
+        completedBooks.push(...chunkCompleted);
+        completedInLibrary += chunkCompleted.length;
+
+        // Log progress for large libraries
+        if (libraryItems.length > 100) {
+          const processedCount = Math.min(
+            (chunks.indexOf(chunk) + 1) * workers,
+            libraryItems.length,
+          );
+          logger.debug(
+            `Progress: ${processedCount}/${libraryItems.length} books processed in library ${library.name}`,
+          );
+        }
+      }
+
+      logger.debug(
+        `Found ${completedInLibrary} completed books in library ${library.name}`,
+      );
+      return completedBooks;
+    } catch (error) {
+      logger.error(`Error scanning library ${library.name}`, {
+        error: error.message,
+      });
+      return completedBooks;
     }
   }
 

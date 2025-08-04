@@ -259,6 +259,7 @@ export class HardcoverClient {
     useSeconds = false,
     startedAt = null,
     rereadConfig = null,
+    lastListenedAt = null,
   ) {
     // Check for existing progress
     const progressInfo = await this.getBookCurrentProgress(userBookId);
@@ -278,9 +279,32 @@ export class HardcoverClient {
       logger.info(
         `Creating new reading session: ${shouldCreateNewSession.reason}`,
       );
-      const startDate = startedAt
-        ? startedAt.slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+      // Use startedAt, fall back to lastListenedAt, then current date
+      let startDate;
+      if (startedAt) {
+        startDate = startedAt.slice(0, 10);
+      } else if (lastListenedAt) {
+        try {
+          const activityDate = new Date(lastListenedAt);
+          if (isNaN(activityDate.getTime())) {
+            throw new Error('Invalid date');
+          }
+          startDate = activityDate.toISOString().slice(0, 10);
+          logger.debug(
+            `Using lastListenedAt as start date: ${startDate} (from ${lastListenedAt})`,
+          );
+        } catch (_error) {
+          logger.warn(
+            `Invalid lastListenedAt timestamp: ${lastListenedAt}, falling back to current date`,
+          );
+          startDate = new Date().toISOString().slice(0, 10);
+        }
+      } else {
+        startDate = new Date().toISOString().slice(0, 10);
+        logger.debug(
+          `No activity timestamp available, using current date: ${startDate}`,
+        );
+      }
       return await this.insertUserBookRead(
         userBookId,
         currentProgress,
@@ -373,10 +397,32 @@ export class HardcoverClient {
         return false;
       }
     } else {
-      // Insert new progress record - use provided startedAt or current date
-      const startDate = startedAt
-        ? startedAt.slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+      // Insert new progress record - use provided startedAt, fall back to lastListenedAt, then current date
+      let startDate;
+      if (startedAt) {
+        startDate = startedAt.slice(0, 10);
+      } else if (lastListenedAt) {
+        try {
+          const activityDate = new Date(lastListenedAt);
+          if (isNaN(activityDate.getTime())) {
+            throw new Error('Invalid date');
+          }
+          startDate = activityDate.toISOString().slice(0, 10);
+          logger.debug(
+            `Using lastListenedAt as start date: ${startDate} (from ${lastListenedAt})`,
+          );
+        } catch (_error) {
+          logger.warn(
+            `Invalid lastListenedAt timestamp: ${lastListenedAt}, falling back to current date`,
+          );
+          startDate = new Date().toISOString().slice(0, 10);
+        }
+      } else {
+        startDate = new Date().toISOString().slice(0, 10);
+        logger.debug(
+          `No activity timestamp available, using current date: ${startDate}`,
+        );
+      }
       return await this.insertUserBookRead(
         userBookId,
         currentProgress,
@@ -497,6 +543,7 @@ export class HardcoverClient {
     useSeconds = false,
     finishedAt = null,
     startedAt = null,
+    lastListenedAt = null,
   ) {
     // First get the user_book_read record ID
     const progressInfo = await this.getBookCurrentProgress(userBookId);
@@ -511,11 +558,29 @@ export class HardcoverClient {
       logger.debug(
         'No existing progress record found, creating new one for completion',
       );
+      // Use startedAt, fall back to lastListenedAt for activity timestamp, then null
+      let effectiveStartedAt = startedAt;
+      if (!startedAt && lastListenedAt) {
+        try {
+          const activityDate = new Date(lastListenedAt);
+          if (!isNaN(activityDate.getTime())) {
+            effectiveStartedAt = activityDate.toISOString().slice(0, 10);
+            logger.debug(
+              `Using lastListenedAt as start date for completion: ${effectiveStartedAt} (from ${lastListenedAt})`,
+            );
+          }
+        } catch (_error) {
+          logger.warn(
+            `Invalid lastListenedAt for completion: ${lastListenedAt}`,
+          );
+        }
+      }
+
       const newRecord = await this.insertUserBookRead(
         userBookId,
         totalValue,
         editionId,
-        startedAt,
+        effectiveStartedAt,
         useSeconds,
       );
       if (!newRecord) {

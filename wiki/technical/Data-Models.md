@@ -372,7 +372,7 @@ interface SyncResult {
   errors: string[]; // error messages
   timing: Record<string, number>; // timing information
   book_details: BookSyncDetail[]; // detailed results per book
-  deep_scan_performed: boolean; // whether deep scan was used
+  completion_detection_performed: boolean; // whether completion detection was performed
 
   // Library statistics (if available)
   total_books_in_library?: number;
@@ -380,7 +380,12 @@ interface SyncResult {
   books_in_progress?: number;
   all_completed_books?: number;
   books_never_started?: number;
-  stats_source?: 'deep_scan' | 'cached' | 'realtime' | 'mixed' | 'none';
+  stats_source?:
+    | 'completion_detection'
+    | 'cached'
+    | 'realtime'
+    | 'mixed'
+    | 'none';
   stats_last_updated?: string;
 }
 ```
