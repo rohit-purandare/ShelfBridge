@@ -1094,6 +1094,12 @@ export class SyncManager {
             hardcoverMatch.userBook.book.contributions =
               bookInfo.contributions ||
               hardcoverMatch.userBook.book.contributions;
+
+            // Update edition metadata if available
+            if (bookInfo.edition) {
+              Object.assign(hardcoverMatch.edition, bookInfo.edition);
+            }
+
             hardcoverMatch._needsBookIdLookup = false;
 
             logger.debug(

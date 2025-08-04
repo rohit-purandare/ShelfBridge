@@ -1158,6 +1158,10 @@ export class HardcoverClient {
       query getBookFromEdition($editionId: Int!) {
         editions(where: {id: {_eq: $editionId}}, limit: 1) {
           id
+          pages
+          audio_seconds
+          physical_format
+          reading_format { format }
           book {
             id
             title
@@ -1185,6 +1189,13 @@ export class HardcoverClient {
             bookId: edition.book.id,
             title: edition.book.title,
             contributions: edition.book.contributions || [],
+            edition: {
+              id: edition.id,
+              pages: edition.pages,
+              audio_seconds: edition.audio_seconds,
+              physical_format: edition.physical_format,
+              reading_format: edition.reading_format,
+            },
           };
         }
       }
