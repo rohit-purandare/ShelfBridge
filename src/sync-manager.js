@@ -82,7 +82,7 @@ export class SyncManager {
     console.log(`🔄 Starting sync for ${this.userId}`);
 
     // Increment sync count and check if deep scan is needed
-    const syncTracking = await this.cache.incrementSyncCount(this.userId);
+    const _syncTracking = await this.cache.incrementSyncCount(this.userId);
     const shouldDeepScan =
       this.globalConfig.force_sync ||
       (await this.cache.shouldPerformDeepScan(
@@ -90,21 +90,8 @@ export class SyncManager {
         this.globalConfig.deep_scan_interval || 10,
       ));
 
-    if (shouldDeepScan) {
-      if (
-        syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)
-      ) {
-        console.log(
-          `🔍 Performing deep scan (periodic sync #${syncTracking.sync_count})`,
-        );
-      } else if (this.globalConfig.force_sync) {
-        console.log(`🔍 Performing deep scan (forced)`);
-      } else {
-        console.log(`🔍 Performing deep scan (initial sync)`);
-      }
-    } else {
-      console.log(`⚡ Performing fast sync`);
-    }
+    // Simple unified sync message (completion detection now always runs)
+    console.log(`🔄 Starting sync...`);
 
     const result = {
       books_processed: 0,
