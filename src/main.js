@@ -765,16 +765,6 @@ async function syncUser(user, globalConfig, verbose = false) {
   try {
     const result = await syncManager.syncProgress();
 
-    // Get sync tracking information for next deep scan display
-    try {
-      const cache = syncManager.cache;
-      result.sync_tracking = await cache.getSyncTracking(user.id);
-    } catch (trackingError) {
-      logger.debug('Could not get sync tracking info for display', {
-        error: trackingError.message,
-      });
-    }
-
     // Log summary
     const duration = (Date.now() - startTime) / 1000;
 
@@ -917,27 +907,9 @@ async function syncUser(user, globalConfig, verbose = false) {
     const cacheUpdated =
       result.books_synced > 0 ||
       result.books_completed > 0 ||
-      result.books_auto_added > 0 ||
-      result.deep_scan_performed;
+      result.books_auto_added > 0;
     if (cacheUpdated) {
       rightColumn.push('├─ Cache updated');
-    }
-
-    // Show next deep scan information
-    if (result.sync_tracking) {
-      const currentCount = result.sync_tracking.sync_count;
-      const interval = globalConfig.deep_scan_interval || 10;
-      const syncsUntilDeepScan = interval - currentCount;
-
-      if (result.deep_scan_performed) {
-        rightColumn.push('├─ Deep scan completed');
-      } else if (syncsUntilDeepScan <= 0) {
-        rightColumn.push('├─ Deep scan due next sync');
-      } else if (syncsUntilDeepScan === 1) {
-        rightColumn.push('├─ Next deep scan: 1 sync away');
-      } else {
-        rightColumn.push(`├─ Next deep scan: ${syncsUntilDeepScan} syncs away`);
-      }
     }
 
     rightColumn.push('└─ Ready for next sync');
@@ -1725,9 +1697,6 @@ async function runInteractiveMode() {
         );
         process.stdout.write(
           `  Page Size: ${globalConfig.page_size || 100}${config.isExplicitlySet('page_size') ? '' : ' (default)'}\n`,
-        );
-        process.stdout.write(
-          `  Deep Scan Interval: ${globalConfig.deep_scan_interval || 10} syncs${config.isExplicitlySet('deep_scan_interval') ? '' : ' (default)'}\n`,
         );
 
         // =============================================================================

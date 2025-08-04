@@ -171,14 +171,6 @@ users:
 #   # Larger values = fewer API calls but larger responses (better for fast connections)
 #   page_size: 100
 #   
-#   # Number of syncs between deep scans (default: 10)
-#   # Deep scans check the entire library, fast scans only check books in progress
-#   # Examples:
-#   #   deep_scan_interval: 5   - Deep scan every 5 syncs (more frequent)
-#   #   deep_scan_interval: 20  - Deep scan every 20 syncs (less frequent)
-#   #   deep_scan_interval: 1   - Deep scan every sync (always full scan)
-#   deep_scan_interval: 10
-#   
 #   # =============================================================================
 #   # DEBUGGING AND LOGGING (Optional)
 #   # =============================================================================
@@ -238,7 +230,6 @@ users:
 # global:
 #   dry_run: true
 #   max_books_to_process: 10
-#   deep_scan_interval: 1  # Always do deep scan for testing
 
 # =============================================================================
 # LIBRARY FILTERING EXAMPLES

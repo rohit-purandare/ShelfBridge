@@ -81,14 +81,8 @@ export class SyncManager {
     logger.debug(`Starting sync for user: ${this.userId}`);
     console.log(`🔄 Starting sync for ${this.userId}`);
 
-    // Increment sync count and check if deep scan is needed
+    // Increment sync count (for tracking purposes)
     const _syncTracking = await this.cache.incrementSyncCount(this.userId);
-    const shouldDeepScan =
-      this.globalConfig.force_sync ||
-      (await this.cache.shouldPerformDeepScan(
-        this.userId,
-        this.globalConfig.deep_scan_interval || 10,
-      ));
 
     // Simple unified sync message (completion detection now always runs)
     console.log(`🔄 Starting sync...`);
@@ -102,18 +96,11 @@ export class SyncManager {
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
-      deep_scan_performed: shouldDeepScan,
     };
 
     try {
       // Get books from Audiobookshelf
-      const absBooks =
-        await this.audiobookshelf.getReadingProgress(shouldDeepScan);
-
-      // Record the deep scan to reset counter if one was performed
-      if (shouldDeepScan) {
-        await this.cache.recordDeepScan(this.userId);
-      }
+      const absBooks = await this.audiobookshelf.getReadingProgress();
 
       if (!absBooks || absBooks.length === 0) {
         logger.debug('No books found in Audiobookshelf');
@@ -140,48 +127,27 @@ export class SyncManager {
           result.library_filtering = filteringStats.libraryFiltering;
         }
 
-        // Store stats in cache if this was a deep scan
-        if (shouldDeepScan) {
-          await this.cache.storeLibraryStats(this.userId, filteringStats);
-          result.stats_source = 'deep_scan';
-        } else {
-          result.stats_source = 'realtime';
-        }
+        // Always store fresh stats from scan
+        await this.cache.storeLibraryStats(this.userId, filteringStats);
+        result.stats_source = 'realtime';
       } else {
-        // Fast scan - try to get cached library stats
-        if (!shouldDeepScan) {
-          const cachedStats = await this.cache.getLibraryStats(this.userId);
-          if (cachedStats) {
-            result.total_books_in_library = cachedStats.totalBooksInLibrary;
-            result.books_with_progress = cachedStats.totalWithProgress;
-            result.books_in_progress = cachedStats.inProgressBooks;
-            result.all_completed_books = cachedStats.allCompletedBooks;
-            result.books_never_started = cachedStats.booksNeverStarted;
-            result.stats_source = 'cached';
-            result.stats_last_updated = cachedStats.lastUpdated;
-
-            logger.debug(
-              `Using cached library stats for user ${this.userId}`,
-              cachedStats,
-            );
-          } else {
-            result.stats_source = 'none';
-          }
-        }
-      }
-
-      // For fast scans, enhance realtime data with cached completed book counts
-      if (!shouldDeepScan && filteringStats) {
+        // No stats from scan - try to get cached library stats
         const cachedStats = await this.cache.getLibraryStats(this.userId);
-        if (cachedStats && cachedStats.allCompletedBooks > 0) {
-          // Update the completed books count from cache since fast scan doesn't find them
+        if (cachedStats) {
+          result.total_books_in_library = cachedStats.totalBooksInLibrary;
+          result.books_with_progress = cachedStats.totalWithProgress;
+          result.books_in_progress = cachedStats.inProgressBooks;
           result.all_completed_books = cachedStats.allCompletedBooks;
-          result.stats_source = 'mixed'; // Indicate mixed data source
+          result.books_never_started = cachedStats.booksNeverStarted;
+          result.stats_source = 'cached';
           result.stats_last_updated = cachedStats.lastUpdated;
 
           logger.debug(
-            `Enhanced fast scan with cached completed books: ${cachedStats.allCompletedBooks}`,
+            `Using cached library stats for user ${this.userId}`,
+            cachedStats,
           );
+        } else {
+          result.stats_source = 'none';
         }
       }
 

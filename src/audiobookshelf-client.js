@@ -116,10 +116,8 @@ export class AudiobookshelfClient {
     }
   }
 
-  async getReadingProgress(shouldDeepScan = false) {
-    logger.debug('Fetching reading progress from Audiobookshelf', {
-      shouldDeepScan,
-    });
+  async getReadingProgress() {
+    logger.debug('Fetching reading progress from Audiobookshelf');
 
     try {
       // Get user info first

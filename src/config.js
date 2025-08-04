@@ -68,7 +68,6 @@ export class Config {
       AUDIOBOOKSHELF_RATE_LIMIT: 'audiobookshelf_rate_limit',
       MAX_BOOKS_TO_FETCH: 'max_books_to_fetch',
       PAGE_SIZE: 'page_size',
-      DEEP_SCAN_INTERVAL: 'deep_scan_interval',
       DUMP_FAILED_BOOKS: 'dump_failed_books',
     };
 
@@ -210,7 +209,6 @@ export class Config {
       'audiobookshelf_rate_limit',
       'max_books_to_fetch',
       'page_size',
-      'deep_scan_interval',
     ];
 
     if (booleanKeys.includes(configKey)) {
@@ -238,7 +236,6 @@ export class Config {
       prevent_progress_regression: true,
       audiobookshelf_semaphore: 5,
       hardcover_semaphore: 1,
-      deep_scan_interval: 10,
       dump_failed_books: true,
     };
 

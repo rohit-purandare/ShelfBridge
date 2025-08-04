@@ -89,7 +89,6 @@ export class BookCache {
                 CREATE TABLE IF NOT EXISTS sync_tracking (
                     user_id TEXT PRIMARY KEY,
                     sync_count INTEGER DEFAULT 0,
-                    last_deep_scan_date TIMESTAMP,
                     total_syncs INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -301,6 +300,62 @@ export class BookCache {
         );
       } else {
         logger.error(`Migration 4 failed: ${err.message}`);
+        throw err;
+      }
+    }
+
+    // Migration 5: Drop redundant last_deep_scan_date column from sync_tracking if it exists
+    try {
+      this.db
+        .prepare('SELECT last_deep_scan_date FROM sync_tracking LIMIT 1')
+        .get();
+      // Column exists, need to drop it
+      logger.debug(
+        'Migration 5: Removing redundant last_deep_scan_date column from sync_tracking',
+      );
+
+      // SQLite doesn't support DROP COLUMN, so we need to recreate the table
+      const transaction = this.db.transaction(() => {
+        // Create temporary table without last_deep_scan_date column
+        this.db.exec(`
+                    CREATE TABLE sync_tracking_temp (
+                        user_id TEXT PRIMARY KEY,
+                        sync_count INTEGER DEFAULT 0,
+                        total_syncs INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+
+        // Copy data from old table to new table (excluding last_deep_scan_date)
+        this.db.exec(`
+                    INSERT INTO sync_tracking_temp (
+                        user_id, sync_count, total_syncs, created_at, updated_at
+                    )
+                    SELECT 
+                        user_id, sync_count, total_syncs, created_at, updated_at
+                    FROM sync_tracking
+                `);
+
+        // Drop old table
+        this.db.exec('DROP TABLE sync_tracking');
+
+        // Rename temp table to sync_tracking
+        this.db.exec('ALTER TABLE sync_tracking_temp RENAME TO sync_tracking');
+
+        logger.debug(
+          'Migration 5: Successfully removed last_deep_scan_date column from sync_tracking',
+        );
+      });
+
+      transaction();
+    } catch (err) {
+      if (err.message.includes('no such column: last_deep_scan_date')) {
+        logger.debug(
+          'Migration 5: last_deep_scan_date column does not exist (already clean)',
+        );
+      } else {
+        logger.error(`Migration 5 failed: ${err.message}`);
         throw err;
       }
     }
@@ -1057,7 +1112,7 @@ export class BookCache {
       logger.error(
         `Error incrementing sync count for user ${userId}: ${err.message}`,
       );
-      return { sync_count: 1, total_syncs: 1, last_deep_scan_date: null };
+      return { sync_count: 1, total_syncs: 1 };
     }
   }
 
@@ -1080,7 +1135,6 @@ export class BookCache {
         return {
           sync_count: result.sync_count,
           total_syncs: result.total_syncs,
-          last_deep_scan_date: result.last_deep_scan_date,
           created_at: result.created_at,
           updated_at: result.updated_at,
         };
@@ -1088,7 +1142,6 @@ export class BookCache {
         return {
           sync_count: 0,
           total_syncs: 0,
-          last_deep_scan_date: null,
           created_at: null,
           updated_at: null,
         };
@@ -1097,73 +1150,12 @@ export class BookCache {
       logger.error(
         `Error getting sync tracking for user ${userId}: ${err.message}`,
       );
-      return { sync_count: 0, total_syncs: 0, last_deep_scan_date: null };
+      return { sync_count: 0, total_syncs: 0 };
     }
   }
 
   /**
-   * Record that a deep scan was performed
-   * @param {string} userId - User ID
-   */
-  async recordDeepScan(userId) {
-    await this.init();
-
-    try {
-      const currentTime = new Date().toISOString();
-
-      const updateStmt = this.db.prepare(`
-                UPDATE sync_tracking 
-                SET last_deep_scan_date = ?, sync_count = 0, updated_at = ?
-                WHERE user_id = ?
-            `);
-
-      const result = updateStmt.run(currentTime, currentTime, userId);
-
-      if (result.changes === 0) {
-        // No existing record, create one
-        const insertStmt = this.db.prepare(`
-                    INSERT INTO sync_tracking (user_id, sync_count, total_syncs, last_deep_scan_date, updated_at)
-                    VALUES (?, 0, 1, ?, ?)
-                `);
-        insertStmt.run(userId, currentTime, currentTime);
-      }
-
-      logger.debug(`Recorded deep scan for user ${userId}`);
-    } catch (err) {
-      logger.error(
-        `Error recording deep scan for user ${userId}: ${err.message}`,
-      );
-    }
-  }
-
-  /**
-   * Check if a deep scan is needed based on sync count
-   * @param {string} userId - User ID
-   * @param {number} deepScanInterval - Number of syncs between deep scans (default: 10)
-   * @returns {boolean} Whether deep scan is needed
-   */
-  async shouldPerformDeepScan(userId, deepScanInterval = 10) {
-    const tracking = await this.getSyncTracking(userId);
-
-    // Deep scan needed if:
-    // 1. Never done a deep scan (cache is empty)
-    // 2. Sync count reaches the interval
-    const neverDeepScanned = !tracking.last_deep_scan_date;
-    const intervalReached = tracking.sync_count >= deepScanInterval;
-
-    logger.debug(`Deep scan check for user ${userId}`, {
-      sync_count: tracking.sync_count,
-      deep_scan_interval: deepScanInterval,
-      never_deep_scanned: neverDeepScanned,
-      interval_reached: intervalReached,
-      should_deep_scan: neverDeepScanned || intervalReached,
-    });
-
-    return neverDeepScanned || intervalReached;
-  }
-
-  /**
-   * Store library statistics from deep scan for use during fast syncs
+   * Store library statistics from sync
    * @param {string} userId - User ID
    * @param {Object} stats - Library statistics object
    */
