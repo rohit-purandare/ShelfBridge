@@ -868,12 +868,11 @@ async function syncUser(user, globalConfig, verbose = false) {
     const skippedCalls = result.books_skipped;
 
     if (isDryRun) {
-      // In dry-run mode, show what would happen
-      const wouldBeUpdated = totalApiCalls + skippedCalls;
-      rightColumn.push(`├─ ${wouldBeUpdated} would be updated`);
+      // In dry-run mode, show what would happen (skipped books remain skipped)
+      rightColumn.push(`├─ ${totalApiCalls} would be updated`);
       rightColumn.push(`├─ 0 API calls made (dry run)`);
       rightColumn.push(`├─ ${result.errors.length} would fail`);
-      rightColumn.push(`└─ 0 skipped (all simulated)`);
+      rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
     } else {
       // Normal mode, show actual results
       rightColumn.push(`├─ ${totalApiCalls} API calls made`);
@@ -896,9 +895,8 @@ async function syncUser(user, globalConfig, verbose = false) {
         result.books_auto_added +
         result.books_skipped;
       if (totalActions > 0) {
-        if (result.books_synced + result.books_skipped > 0) {
-          const progressCount = result.books_synced + result.books_skipped;
-          leftColumn.push(`├─ ${progressCount} would update progress`);
+        if (result.books_synced > 0) {
+          leftColumn.push(`├─ ${result.books_synced} would update progress`);
         }
         if (result.books_completed > 0)
           leftColumn.push(`├─ ${result.books_completed} would mark complete`);

@@ -185,6 +185,9 @@ export class SyncManager {
         logger.warn('No books found in Hardcover library');
       }
 
+      // Store for cross-referencing in cache logic
+      this.hardcoverBooks = hardcoverBooks;
+
       // Create identifier lookup
       const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
 
@@ -296,6 +299,29 @@ export class SyncManager {
   }
 
   /**
+   * Find a user book in the current Hardcover library that contains the given edition ID
+   * @param {number} editionId - Edition ID to search for
+   * @returns {Object|null} - User book object if found, null otherwise
+   */
+  _findUserBookByEditionId(editionId) {
+    if (!this.hardcoverBooks || !Array.isArray(this.hardcoverBooks)) {
+      return null;
+    }
+
+    for (const userBook of this.hardcoverBooks) {
+      if (!userBook.book || !userBook.book.editions) continue;
+
+      for (const edition of userBook.book.editions) {
+        if (edition.id === editionId) {
+          return userBook;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Find a book in the Hardcover library using identifiers and title/author matching
    * @param {Object} absBook - Audiobookshelf book object
    * @param {Object} identifierLookup - Lookup table of identifiers to Hardcover books
@@ -390,20 +416,56 @@ export class SyncManager {
           cached: 'CACHE_HIT',
         });
 
-        // Convert cached edition to match format
-        return {
-          userBook: {
-            id: cachedBookInfo.edition_id,
-            book: { title: cachedBookInfo.title },
-          },
-          edition: {
-            id: cachedBookInfo.edition_id,
-            format: 'audiobook', // We'll determine actual format later
-          },
-          _isSearchResult: true,
-          _matchingScore: { totalScore: 85, confidence: 'high' }, // Cached results are trusted
-          _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
-        };
+        // Check if this cached edition already exists in user's current Hardcover library
+        const existingUserBook = this._findUserBookByEditionId(
+          cachedBookInfo.edition_id,
+        );
+
+        if (existingUserBook) {
+          // Book is already in library - use real user book ID
+          logger.debug(
+            `Cached edition found in current library for "${title}"`,
+            {
+              editionId: cachedBookInfo.edition_id,
+              realUserBookId: existingUserBook.id,
+              libraryTitle: existingUserBook.book.title,
+            },
+          );
+
+          return {
+            userBook: existingUserBook,
+            edition: {
+              id: cachedBookInfo.edition_id,
+              format: 'audiobook', // We'll determine actual format later
+            },
+            _isSearchResult: false, // Not a search result, it's already in library
+            _matchingScore: { totalScore: 85, confidence: 'high' },
+            _needsBookIdLookup: false, // We already have the real user book ID
+          };
+        } else {
+          // Book not in current library - needs auto-add (existing behavior)
+          logger.debug(
+            `Cached edition NOT found in current library for "${title}"`,
+            {
+              editionId: cachedBookInfo.edition_id,
+              willAutoAdd: true,
+            },
+          );
+
+          return {
+            userBook: {
+              id: cachedBookInfo.edition_id,
+              book: { title: cachedBookInfo.title },
+            },
+            edition: {
+              id: cachedBookInfo.edition_id,
+              format: 'audiobook', // We'll determine actual format later
+            },
+            _isSearchResult: true,
+            _matchingScore: { totalScore: 85, confidence: 'high' },
+            _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
+          };
+        }
       }
 
       // 2. Cache miss - perform API search
