@@ -260,11 +260,17 @@ export class SyncManager {
       if (!book || !book.editions) continue;
 
       for (const edition of book.editions) {
+        // Extract format from reading_format for consistent format detection
+        const editionWithFormat = {
+          ...edition,
+          format: this._mapHardcoverFormatToInternal(edition),
+        };
+
         // Add ISBN-10
         if (edition.isbn_10) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_10);
           if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition };
+            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
           }
         }
 
@@ -272,7 +278,7 @@ export class SyncManager {
         if (edition.isbn_13) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_13);
           if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition };
+            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
           }
         }
 
@@ -280,7 +286,7 @@ export class SyncManager {
         if (edition.asin) {
           const normalizedAsin = normalizeAsin(edition.asin);
           if (normalizedAsin) {
-            lookup[normalizedAsin] = { userBook, edition };
+            lookup[normalizedAsin] = { userBook, edition: editionWithFormat };
           }
         }
       }
@@ -694,6 +700,60 @@ export class SyncManager {
   }
 
   /**
+   * Map Hardcover's reading_format.format to our internal format system
+   * @param {Object} edition - Edition object with reading_format and audio_seconds
+   * @returns {string} - Internal format: "audiobook", "ebook", "book", or "mixed"
+   */
+  _mapHardcoverFormatToInternal(edition) {
+    // Use Hardcover's format classification as source of truth
+    const hardcoverFormat = edition.reading_format?.format;
+
+    // Map Hardcover formats to our internal system
+    switch (hardcoverFormat) {
+      case 'Listened':
+        return 'audiobook';
+      case 'Ebook':
+        return 'ebook';
+      case 'Read':
+        return 'book';
+      case 'Both':
+        return 'mixed';
+      default:
+        // Fallback to edition capabilities if no explicit format
+        if (edition.audio_seconds && edition.audio_seconds > 0) {
+          return 'audiobook';
+        }
+        return 'book'; // Default for text-based books
+    }
+  }
+
+  /**
+   * Get Hardcover's reading_format_id for mutations
+   * @param {Object} edition - Edition object with reading_format
+   * @returns {number} - Reading format ID: 1=Read, 2=Listened, 3=Both, 4=Ebook
+   */
+  _getReadingFormatId(edition) {
+    const hardcoverFormat = edition.reading_format?.format;
+
+    switch (hardcoverFormat) {
+      case 'Read':
+        return 1;
+      case 'Listened':
+        return 2;
+      case 'Both':
+        return 3;
+      case 'Ebook':
+        return 4;
+      default:
+        // Fallback based on edition capabilities
+        if (edition.audio_seconds && edition.audio_seconds > 0) {
+          return 2; // Listened (audiobook)
+        }
+        return 1; // Read (default for text-based books)
+    }
+  }
+
+  /**
    * Format timestamp for display using configured timezone
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
    * @returns {string} - Formatted date string for display
@@ -1099,23 +1159,10 @@ export class SyncManager {
             if (bookInfo.edition) {
               Object.assign(hardcoverMatch.edition, bookInfo.edition);
 
-              // Determine correct format based on edition capabilities
-              let detectedFormat = 'text'; // default
-              if (
-                bookInfo.edition.audio_seconds &&
-                bookInfo.edition.audio_seconds > 0
-              ) {
-                detectedFormat = 'audiobook';
-              } else if (
-                bookInfo.edition.reading_format &&
-                bookInfo.edition.reading_format.format
-              ) {
-                detectedFormat = bookInfo.edition.reading_format.format;
-              } else if (bookInfo.edition.physical_format) {
-                detectedFormat = bookInfo.edition.physical_format;
-              } else if (bookInfo.edition.pages && bookInfo.edition.pages > 0) {
-                detectedFormat = 'text';
-              }
+              // Determine correct format using Hardcover as source of truth
+              const detectedFormat = this._mapHardcoverFormatToInternal(
+                bookInfo.edition,
+              );
 
               // Update the format in the edition object
               hardcoverMatch.edition.format = detectedFormat;
@@ -1787,7 +1834,11 @@ export class SyncManager {
       if (book && book.editions) {
         const cachedEdition = book.editions.find(e => e.id === cachedEditionId);
         if (cachedEdition) {
-          return cachedEdition;
+          // Apply format extraction like we do in _createIdentifierLookup
+          return {
+            ...cachedEdition,
+            format: this._mapHardcoverFormatToInternal(cachedEdition),
+          };
         }
       }
     }
@@ -2013,7 +2064,7 @@ export class SyncManager {
           [useSeconds ? 'progress' : 'progress']: useSeconds
             ? `${formatDurationForLogging(currentProgress)} of ${formatDurationForLogging(edition.audio_seconds)}`
             : `page ${currentProgress} of ${edition.pages}`,
-          format: useSeconds ? 'audiobook' : 'ebook',
+          format: edition.format || (useSeconds ? 'audiobook' : 'book'),
         },
       );
 
