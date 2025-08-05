@@ -259,6 +259,7 @@ export class HardcoverClient {
     useSeconds = false,
     startedAt = null,
     rereadConfig = null,
+    readingFormatId = null,
   ) {
     // Check for existing progress
     const progressInfo = await this.getBookCurrentProgress(userBookId);
@@ -316,10 +317,11 @@ export class HardcoverClient {
         // Preserve existing start date - don't send started_at
         mutation = useSeconds
           ? `
-                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int) {
+                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $readingFormatId: Int) {
                       update_user_book_read(id: $id, object: {
                           progress_seconds: $seconds,
-                          edition_id: $editionId
+                          edition_id: $editionId,
+                          reading_format_id: $readingFormatId
                       }) {
                           error
                           user_book_read {
@@ -327,15 +329,17 @@ export class HardcoverClient {
                               progress_seconds
                               edition_id
                               started_at
+
                           }
                       }
                   }
               `
           : `
-                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int) {
+                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $readingFormatId: Int) {
                       update_user_book_read(id: $id, object: {
                           progress_pages: $pages,
-                          edition_id: $editionId
+                          edition_id: $editionId,
+                          reading_format_id: $readingFormatId
                       }) {
                           error
                           user_book_read {
@@ -343,6 +347,7 @@ export class HardcoverClient {
                               progress_pages
                               edition_id
                               started_at
+
                           }
                       }
                   }
@@ -352,11 +357,13 @@ export class HardcoverClient {
               id: safeParseInt(readId, 'readId'),
               seconds: safeParseInt(currentProgress, 'currentProgress'),
               editionId: safeParseInt(editionId, 'editionId'),
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
             }
           : {
               id: safeParseInt(readId, 'readId'),
               pages: safeParseInt(currentProgress, 'currentProgress'),
               editionId: safeParseInt(editionId, 'editionId'),
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
             };
 
         logger.debug(
@@ -366,11 +373,12 @@ export class HardcoverClient {
         // No existing start date - send started_at
         mutation = useSeconds
           ? `
-                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
+                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
                       update_user_book_read(id: $id, object: {
                           progress_seconds: $seconds,
                           edition_id: $editionId,
-                          started_at: $startedAt
+                          started_at: $startedAt,
+                          reading_format_id: $readingFormatId
                       }) {
                           error
                           user_book_read {
@@ -378,16 +386,18 @@ export class HardcoverClient {
                               progress_seconds
                               edition_id
                               started_at
+
                           }
                       }
                   }
               `
           : `
-                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
+                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
                       update_user_book_read(id: $id, object: {
                           progress_pages: $pages,
                           edition_id: $editionId,
-                          started_at: $startedAt
+                          started_at: $startedAt,
+                          reading_format_id: $readingFormatId
                       }) {
                           error
                           user_book_read {
@@ -395,6 +405,7 @@ export class HardcoverClient {
                               progress_pages
                               edition_id
                               started_at
+
                           }
                       }
                   }
@@ -405,12 +416,14 @@ export class HardcoverClient {
               seconds: safeParseInt(currentProgress, 'currentProgress'),
               editionId: safeParseInt(editionId, 'editionId'),
               startedAt: startedAt ? startedAt.slice(0, 10) : null,
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
             }
           : {
               id: safeParseInt(readId, 'readId'),
               pages: safeParseInt(currentProgress, 'currentProgress'),
               editionId: safeParseInt(editionId, 'editionId'),
               startedAt: startedAt ? startedAt.slice(0, 10) : null,
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
             };
 
         logger.debug(
@@ -768,14 +781,16 @@ export class HardcoverClient {
     editionId,
     startedAt,
     useSeconds = false,
+    readingFormatId = null,
   ) {
     const mutation = useSeconds
       ? `
-            mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
+            mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
                 insert_user_book_read(user_book_id: $id, user_book_read: {
                     progress_seconds: $seconds,
                     edition_id: $editionId,
-                    started_at: $startedAt
+                    started_at: $startedAt,
+                    reading_format_id: $readingFormatId
                 }) {
                     error
                     user_book_read {
@@ -784,16 +799,18 @@ export class HardcoverClient {
                         finished_at
                         edition_id
                         progress_seconds
+
                     }
                 }
             }
         `
       : `
-            mutation InsertUserBookRead($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
+            mutation InsertUserBookRead($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
                 insert_user_book_read(user_book_id: $id, user_book_read: {
                     progress_pages: $pages,
                     edition_id: $editionId,
-                    started_at: $startedAt
+                    started_at: $startedAt,
+                    reading_format_id: $readingFormatId
                 }) {
                     error
                     user_book_read {
@@ -802,6 +819,7 @@ export class HardcoverClient {
                         finished_at
                         edition_id
                         progress_pages
+
                     }
                 }
             }
@@ -812,12 +830,14 @@ export class HardcoverClient {
           seconds: safeParseInt(currentProgress, 'currentProgress'),
           editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
+          readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
         }
       : {
           id: safeParseInt(userBookId, 'userBookId'),
           pages: safeParseInt(currentProgress, 'currentProgress'),
           editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
+          readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
         };
     try {
       const result = await this._executeQuery(mutation, variables);

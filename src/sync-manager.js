@@ -2090,6 +2090,9 @@ export class SyncManager {
         format: useSeconds ? 'audiobook (seconds)' : 'text (pages)',
       });
 
+      // Get reading format ID for enhanced accuracy
+      const readingFormatId = this._getReadingFormatId(edition);
+
       const result = await this.hardcover.updateReadingProgress(
         userBookId,
         currentProgress,
@@ -2098,6 +2101,7 @@ export class SyncManager {
         useSeconds,
         this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
         this.globalConfig.reread_detection, // Pass reread configuration
+        readingFormatId, // Enhanced format accuracy
       );
 
       if (result && result.id) {
@@ -2129,6 +2133,9 @@ export class SyncManager {
                 previousProgressPercent: previousProgress,
               });
 
+              // Get reading format ID for rollback accuracy
+              const rollbackReadingFormatId = this._getReadingFormatId(edition);
+
               await this.hardcover.updateReadingProgress(
                 userBookId,
                 rollbackCurrentProgress,
@@ -2137,6 +2144,7 @@ export class SyncManager {
                 useSeconds,
                 this._formatDateForHardcover(absBook.started_at),
                 this.globalConfig.reread_detection,
+                rollbackReadingFormatId, // Enhanced format accuracy
               );
             } catch (rollbackError) {
               logger.error(`Failed to rollback progress for ${title}`, {
