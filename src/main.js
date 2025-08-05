@@ -858,33 +858,72 @@ async function syncUser(user, globalConfig, verbose = false) {
     }
 
     // Right column - Hardcover Updates
-    rightColumn.push('🌐 Hardcover Updates');
+    const isDryRun = globalConfig.dry_run;
+    rightColumn.push(
+      isDryRun ? '🌐 Hardcover Updates (DRY RUN)' : '🌐 Hardcover Updates',
+    );
+
     const totalApiCalls =
       result.books_synced + result.books_completed + result.books_auto_added;
     const skippedCalls = result.books_skipped;
 
-    rightColumn.push(`├─ ${totalApiCalls} API calls made`);
-    rightColumn.push(`├─ ${totalApiCalls} successful`);
-    rightColumn.push(`├─ ${result.errors.length} failed`);
-    rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
+    if (isDryRun) {
+      // In dry-run mode, show what would happen
+      const wouldBeUpdated = totalApiCalls + skippedCalls;
+      rightColumn.push(`├─ ${wouldBeUpdated} would be updated`);
+      rightColumn.push(`├─ 0 API calls made (dry run)`);
+      rightColumn.push(`├─ ${result.errors.length} would fail`);
+      rightColumn.push(`└─ 0 skipped (all simulated)`);
+    } else {
+      // Normal mode, show actual results
+      rightColumn.push(`├─ ${totalApiCalls} API calls made`);
+      rightColumn.push(`├─ ${totalApiCalls} successful`);
+      rightColumn.push(`├─ ${result.errors.length} failed`);
+      rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
+    }
 
     // Second row - Processing Results and Sync Status
     leftColumn.push('');
-    leftColumn.push('📊 Processing Results');
-    if (result.books_synced > 0)
-      leftColumn.push(`├─ ${result.books_synced} progress updated`);
-    if (result.books_completed > 0)
-      leftColumn.push(`├─ ${result.books_completed} marked complete`);
-    if (result.books_auto_added > 0)
-      leftColumn.push(`├─ ${result.books_auto_added} auto-added`);
-    if (result.books_skipped > 0)
-      leftColumn.push(`├─ ${result.books_skipped} skipped (no change)`);
+    leftColumn.push(
+      isDryRun ? '📊 Processing Results (SIMULATED)' : '📊 Processing Results',
+    );
+
+    if (isDryRun) {
+      // In dry-run mode, show what would happen
+      const totalActions =
+        result.books_synced +
+        result.books_completed +
+        result.books_auto_added +
+        result.books_skipped;
+      if (totalActions > 0) {
+        if (result.books_synced + result.books_skipped > 0) {
+          const progressCount = result.books_synced + result.books_skipped;
+          leftColumn.push(`├─ ${progressCount} would update progress`);
+        }
+        if (result.books_completed > 0)
+          leftColumn.push(`├─ ${result.books_completed} would mark complete`);
+        if (result.books_auto_added > 0)
+          leftColumn.push(`├─ ${result.books_auto_added} would auto-add`);
+      } else {
+        leftColumn.push('├─ No changes would be made');
+      }
+    } else {
+      // Normal mode, show actual results
+      if (result.books_synced > 0)
+        leftColumn.push(`├─ ${result.books_synced} progress updated`);
+      if (result.books_completed > 0)
+        leftColumn.push(`├─ ${result.books_completed} marked complete`);
+      if (result.books_auto_added > 0)
+        leftColumn.push(`├─ ${result.books_auto_added} auto-added`);
+      if (result.books_skipped > 0)
+        leftColumn.push(`├─ ${result.books_skipped} skipped (no change)`);
+    }
 
     // Ensure last item has └─
-    if (
-      leftColumn.length >
-      leftColumn.findIndex(line => line === '📊 Processing Results') + 1
-    ) {
+    const processingResultsIndex = leftColumn.findIndex(line =>
+      line.includes('📊 Processing Results'),
+    );
+    if (leftColumn.length > processingResultsIndex + 1) {
       leftColumn[leftColumn.length - 1] = leftColumn[
         leftColumn.length - 1
       ].replace('├─', '└─');
