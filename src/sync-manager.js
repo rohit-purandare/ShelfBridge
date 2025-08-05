@@ -1098,6 +1098,38 @@ export class SyncManager {
             // Update edition metadata if available
             if (bookInfo.edition) {
               Object.assign(hardcoverMatch.edition, bookInfo.edition);
+
+              // Determine correct format based on edition capabilities
+              let detectedFormat = 'text'; // default
+              if (
+                bookInfo.edition.audio_seconds &&
+                bookInfo.edition.audio_seconds > 0
+              ) {
+                detectedFormat = 'audiobook';
+              } else if (
+                bookInfo.edition.reading_format &&
+                bookInfo.edition.reading_format.format
+              ) {
+                detectedFormat = bookInfo.edition.reading_format.format;
+              } else if (bookInfo.edition.physical_format) {
+                detectedFormat = bookInfo.edition.physical_format;
+              } else if (bookInfo.edition.pages && bookInfo.edition.pages > 0) {
+                detectedFormat = 'text';
+              }
+
+              // Update the format in the edition object
+              hardcoverMatch.edition.format = detectedFormat;
+
+              logger.debug(
+                `Updated edition format for ${title}: ${detectedFormat}`,
+                {
+                  editionId: editionId,
+                  pages: bookInfo.edition.pages,
+                  audioSeconds: bookInfo.edition.audio_seconds,
+                  physicalFormat: bookInfo.edition.physical_format,
+                  readingFormat: bookInfo.edition.reading_format?.format,
+                },
+              );
             }
 
             hardcoverMatch._needsBookIdLookup = false;
