@@ -76,7 +76,7 @@ create_and_verify_permissions() {
             chown -R ${PUID}:${PGID} $1
         fi
     else
-        if [ "$(stat -c %u $1)" != "${id -u}" ]; then
+        if [ "$(stat -c %u $1)" != "$(id -u)" ]; then
             echo "You have specified a custom user via docker. Make sure that $1 is owned by that user."
             exit 1
         fi
