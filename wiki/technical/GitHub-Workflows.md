@@ -326,6 +326,29 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:1.18.2
 docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ```
 
+### 🔄 Duplicate Build Prevention
+
+**Fixed Issue:** Release workflow was creating infinite loops due to multiple simultaneous Docker builds
+
+**Previous Problem:**
+
+- Version-and-release workflow pushes version bump commit → triggers Docker build #1
+- Version-and-release workflow pushes git tag → triggers Docker build #2
+- `lewagon/wait-on-check-action` waits for ALL `build-and-push` checks to complete
+- Results in infinite loop: "The requested checks aren't complete yet, will check back in 30 seconds..."
+
+**Solution Applied:** Enhanced commit message filtering in Docker build workflow
+
+- **Before:** `!startsWith(github.event.head_commit.message, 'bump version to v')`
+- **After:** `!contains(github.event.head_commit.message, 'bump version to v')`
+
+**Benefits:**
+
+- ✅ More reliable detection of version bump commits
+- ✅ Prevents race conditions between commit and tag builds
+- ✅ Fixes "allowed-conclusions: success" errors in releases
+- ✅ Eliminates infinite loops in release automation
+
 **⏭️ Skips Build:**
 
 - `docs:` commits (documentation only)
@@ -333,6 +356,7 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 - `test:` commits (test changes only)
 - `ci:` commits (workflow/CI changes)
 - `style:` commits (formatting only)
+- Version bump commits (prevents duplicate builds)
 
 ### What It Does
 
