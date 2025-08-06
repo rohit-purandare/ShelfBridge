@@ -40,6 +40,10 @@ services:
       # Default environment - prevents empty environment mapping error
       NODE_ENV: 'production'
 
+      # Optional: specify the user and group id that the docker container should use
+      # PUID: 1000
+      # PGID: 1000
+
       # =============================================================================
       # REQUIRED USER CONFIGURATION (Must be set if not using config.yaml)
       # =============================================================================
