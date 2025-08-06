@@ -1,31 +1,11 @@
 import axios from 'axios';
-import { Agent } from 'https';
-import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
+import { RateLimiter, Semaphore } from './utils/concurrency.js';
+import { normalizeApiToken, createHttpAgent } from './utils/network.js';
+import { safeParseInt } from './utils/data.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
-
-/**
- * Safely convert a value to integer for GraphQL, handling null/undefined cases
- * @param {any} value - Value to convert
- * @param {string} fieldName - Field name for error logging
- * @returns {number|null} - Integer value or null
- */
-function safeParseInt(value, fieldName = 'unknown') {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'number' && Number.isInteger(value)) {
-    return value;
-  }
-  const parsed = parseInt(value);
-  if (isNaN(parsed)) {
-    logger.warn(`Invalid integer value for ${fieldName}: ${value}`);
-    return null;
-  }
-  return parsed;
-}
 
 export class HardcoverClient {
   constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
@@ -36,11 +16,9 @@ export class HardcoverClient {
     this.semaphore = new Semaphore(semaphoreConcurrency);
 
     // Create HTTPS agent with keep-alive for connection reuse (Hardcover is always HTTPS)
-    this._httpsAgent = new Agent({
-      keepAlive: true,
+    this._httpsAgent = createHttpAgent(true, {
       maxSockets: 5,
       maxFreeSockets: 2,
-      timeout: 60000,
       freeSocketTimeout: 30000, // Keep connections alive for 30s
     });
 

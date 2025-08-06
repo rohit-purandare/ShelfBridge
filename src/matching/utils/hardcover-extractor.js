@@ -4,6 +4,7 @@
  * This module provides functions to extract book metadata
  * from Hardcover search results and book objects.
  */
+import { parseDurationString } from '../../utils/time.js';
 
 /**
  * Extract author from Hardcover search result, optionally finding best match for target author
@@ -232,33 +233,6 @@ export function extractAudioDurationFromSearchResult(searchResult) {
   }
 
   return null;
-}
-
-/**
- * Parse duration string like "10h 30m" to seconds
- * @param {string} durationStr - Duration string
- * @returns {number|null} - Duration in seconds or null
- */
-function parseDurationString(durationStr) {
-  if (!durationStr) return null;
-
-  const hourMatch = durationStr.match(/(\d+)h/);
-  const minuteMatch = durationStr.match(/(\d+)m/);
-  const secondMatch = durationStr.match(/(\d+)s/);
-
-  let totalSeconds = 0;
-
-  if (hourMatch) {
-    totalSeconds += parseInt(hourMatch[1]) * 3600;
-  }
-  if (minuteMatch) {
-    totalSeconds += parseInt(minuteMatch[1]) * 60;
-  }
-  if (secondMatch) {
-    totalSeconds += parseInt(secondMatch[1]);
-  }
-
-  return totalSeconds > 0 ? totalSeconds : null;
 }
 
 /**

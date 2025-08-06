@@ -3,7 +3,7 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
 import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
-import { formatDurationForLogging } from './utils.js';
+import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
 
@@ -987,15 +987,34 @@ export class SyncManager {
       }
 
       if (searchResults.length === 0) {
-        logger.info(`Could not find ${title} in Hardcover database`, {
-          searchedIdentifiers: identifiers,
-          dryRun: this.dryRun,
-        });
-        return {
-          status: 'skipped',
-          reason: 'Book not found in Hardcover',
-          title,
-        };
+        if (this.globalConfig.force_sync) {
+          logger.warn(
+            `Force sync: Book ${title} not found in Hardcover database - attempting more aggressive matching`,
+            {
+              searchedIdentifiers: identifiers,
+              dryRun: this.dryRun,
+              forceSync: true,
+            },
+          );
+          // For force sync, we could try additional matching strategies here
+          // For now, still return skipped but with force context
+          return {
+            status: 'skipped',
+            reason: 'Book not found in Hardcover (force sync attempted)',
+            title,
+            forceSync: true,
+          };
+        } else {
+          logger.info(`Could not find ${title} in Hardcover database`, {
+            searchedIdentifiers: identifiers,
+            dryRun: this.dryRun,
+          });
+          return {
+            status: 'skipped',
+            reason: 'Book not found in Hardcover',
+            title,
+          };
+        }
       }
 
       // Add the first result to library
@@ -1351,7 +1370,11 @@ export class SyncManager {
           identifierType,
         );
 
-        if (cachedInfo.exists && cachedInfo.finished_at) {
+        if (
+          cachedInfo.exists &&
+          cachedInfo.finished_at &&
+          !this.globalConfig.force_sync
+        ) {
           logger.debug(
             `Book ${title} already marked as completed, skipping re-processing`,
             {
@@ -1361,6 +1384,17 @@ export class SyncManager {
             },
           );
           return { status: 'completed', title, cached: true };
+        } else if (
+          cachedInfo.exists &&
+          cachedInfo.finished_at &&
+          this.globalConfig.force_sync
+        ) {
+          logger.debug(`Force sync: Re-processing completed book ${title}`, {
+            finishedAt: cachedInfo.finished_at,
+            lastSync: cachedInfo.last_sync,
+            userBookId: userBook.id,
+            forceSync: true,
+          });
         }
 
         return await this._handleCompletionStatus(

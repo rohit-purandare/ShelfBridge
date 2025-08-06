@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { DateTime } from 'luxon';
-import { testApiConnections } from './utils.js';
+import { testApiConnections } from './utils/api-testing.js';
 
 export class ConfigValidator {
   constructor() {
