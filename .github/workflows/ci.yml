@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 21.x]
+        node-version: [20.x, 22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
         run: |
           echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
           echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
-          if ! node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help; then
+          if ! node src/main.js --help >/dev/null 2>&1; then
             echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
             echo "🚫 BLOCKING BUILD - Fix required before merge"
             exit 1

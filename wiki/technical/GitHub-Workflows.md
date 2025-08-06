@@ -14,13 +14,14 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 ## 🔄 Workflow Summary
 
-| Workflow                                  | Trigger                           | Purpose                      | Status    |
-| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation) | Functional commits to main        | Smart release creation       | ✅ Active |
-| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
-| [Security Scan](#security-scan)           | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
+| Workflow                                      | Trigger                           | Purpose                      | Status    |
+| --------------------------------------------- | --------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
+| [Release Automation](#release-automation)     | Functional commits to main        | Smart release creation       | ✅ Active |
+| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
+| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
+| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
 
 ---
 
@@ -28,6 +29,31 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 **File:** `.github/workflows/ci.yml`  
 **Purpose:** Ensure code works across multiple Node.js versions
+
+### 🔧 Critical Bug Fix: Main Entry Point Test
+
+**Fixed Issue:** The main entry point test was using malformed command syntax that gave false positives
+
+**Previous Problem:**
+
+```bash
+# BROKEN - This didn't actually test the application:
+node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help
+```
+
+**Solution Applied:**
+
+```bash
+# CORRECT - Actually tests if the app's --help command works:
+node src/main.js --help >/dev/null 2>&1
+```
+
+**Benefits:**
+
+- ✅ Actually validates application functionality across Node.js versions
+- ✅ Catches real entry point failures instead of false positives
+- ✅ Proper error handling and clean output
+- ✅ Ensures CI reliability for critical application testing
 
 ### Triggers
 
@@ -49,8 +75,37 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 ```yaml
 strategy:
   matrix:
-    node-version: [18.x, 20.x, 21.x]
+    node-version: [20.x, 22.x] # Updated: Node.js 20+ required by dependencies
 ```
+
+### 🔧 Node.js Version Update
+
+**Updated:** CI matrix to align with dependency requirements
+
+**Previous Configuration:**
+
+```yaml
+node-version: [18.x, 20.x, 21.x] # Node.js 18 causing EBADENGINE warnings
+```
+
+**Current Configuration:**
+
+```yaml
+node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
+```
+
+**Reason for Change:**
+
+- **better-sqlite3@12.2.0** requires Node.js 20+
+- **lint-staged@16.1.2** requires Node.js 20.17+
+- **commander@14.0.0** requires Node.js 20+
+- **Node.js 18 EOL:** April 2025 (packages dropping support)
+
+**Benefits:**
+
+- ✅ **No more EBADENGINE warnings** during npm install
+- ✅ **Future compatibility** with updated dependencies
+- ✅ **LTS alignment** with current Node.js support lifecycle
 
 ### Success Criteria
 
@@ -65,6 +120,43 @@ strategy:
 
 **File:** `.github/workflows/code-quality.yml`  
 **Purpose:** Enforce coding standards and detect quality issues
+
+### 🔧 Performance Fix: Dependency Management
+
+**Fixed Issue:** The workflow was installing ESLint dependencies during runtime instead of using package.json versions
+
+**Previous Problem:**
+
+```yaml
+# REDUNDANT - Installing dependencies already in package.json:
+- name: Install ESLint
+  run: npm install --save-dev eslint@latest @eslint/js globals
+```
+
+**Issues with Runtime Installation:**
+
+- ❌ **Version drift** - CI uses `@latest`, development uses package.json versions
+- ❌ **Inconsistent behavior** - different ESLint versions between environments
+- ❌ **Slower builds** - unnecessary package downloads during CI
+- ❌ **Risk of breaks** - unexpected breaking changes from latest versions
+
+**Solution Applied:**
+
+```yaml
+# EFFICIENT - Use dependencies already installed by npm ci:
+- name: Install dependencies
+  run: npm ci
+
+- name: Run ESLint # Uses exact versions from package.json
+  run: npx eslint src/ --ext .js --max-warnings 0
+```
+
+**Benefits:**
+
+- ✅ **Consistent versions** - same ESLint version across all environments
+- ✅ **Faster CI builds** - no redundant package installations
+- ✅ **Predictable behavior** - eliminates version-related surprises
+- ✅ **Better dependency management** - single source of truth in package.json
 
 ### Triggers
 
@@ -150,6 +242,47 @@ The workflow intelligently determines when to create releases:
 6. **Docker Build Synchronization** - **NEW: Waits for Docker build completion before creating release**
 7. **GitHub Release Creation** - Creates tagged release with notes only after Docker images are available
 8. **Docker Coordination** - Ensures Docker images are built and published before users see the release
+
+### 🔒 Security Fix: Safe Binary Installation
+
+**Fixed Issue:** The workflow was downloading gitleaks binary without security verification during releases
+
+**Previous Security Risk:**
+
+```yaml
+# DANGEROUS - Unverified binary download:
+- name: Install gitleaks for pre-commit hooks
+  run: |
+    wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+    tar xzf gitleaks_8.18.4_linux_x64.tar.gz
+    sudo mv gitleaks /usr/local/bin/
+    chmod +x /usr/local/bin/gitleaks
+```
+
+**Security Problems:**
+
+- ❌ **Supply chain attack vector** - no checksum verification
+- ❌ **Man-in-the-middle risk** - unverified binary downloads
+- ❌ **Compromised releases** - malicious binaries could be injected
+- ❌ **Manual version management** - outdated security tools
+
+**Solution Applied:**
+
+```yaml
+# SECURE - Official gitleaks action with built-in security:
+- name: Scan for secrets with gitleaks
+  uses: gitleaks/gitleaks-action@v2
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Security Benefits:**
+
+- ✅ **Official action security** - maintained by gitleaks team
+- ✅ **Integrated scanning** - secrets detected during releases
+- ✅ **GitHub Security tab** - centralized security reporting
+- ✅ **Auto-updates** - always uses compatible and secure versions
+- ✅ **Zero attack surface** - no manual binary downloads
 
 ### Release Format
 
@@ -281,6 +414,60 @@ The workflow now ensures that version-specific Docker images are automatically c
 
 ---
 
+## 🏷️ Pull Request Labeler
+
+**File:** `.github/workflows/labeler.yml`  
+**Purpose:** Automatically apply labels to pull requests based on file changes
+
+### 🔒 Critical Security Fix: Safe PR Trigger
+
+**Fixed Issue:** The labeler workflow was using a dangerous trigger that allowed potential malicious code execution
+
+**Previous Security Risk:**
+
+```yaml
+# DANGEROUS - Runs with write permissions for ANY external PR!
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+```
+
+**Security Problem:**
+
+- `pull_request_target` runs in the **main repo context** with **write permissions**
+- **External attackers** could create PRs that execute malicious code
+- Known GitHub security vulnerability pattern for supply chain attacks
+
+**Solution Applied:**
+
+```yaml
+# SAFE - Runs in fork context with limited permissions
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+```
+
+**Security Benefits:**
+
+- ✅ **Eliminates code execution risk** - no write access to main repo
+- ✅ **Follows GitHub security best practices** - uses safe PR triggers
+- ✅ **Prevents supply chain attacks** - malicious PRs can't compromise workflows
+- ✅ **Maintains labeler functionality** - automatic labeling still works perfectly
+
+### Triggers
+
+- Pull requests to `main` branch (safe trigger)
+- Labeling occurs on: opened, synchronize, reopened, edited
+
+### What It Does
+
+1. **Automatic Labeling** - Applies labels based on changed file patterns
+2. **Configuration-Based** - Uses `.github/labeler.yml` for label rules
+3. **Safe Execution** - Runs with limited permissions in fork context
+4. **PR Management** - Helps organize and categorize pull requests
+
+---
+
 ## 🐳 Docker Build
 
 **File:** `.github/workflows/docker-build.yml`  
@@ -326,6 +513,29 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:1.18.2
 docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ```
 
+### 🔄 Duplicate Build Prevention
+
+**Fixed Issue:** Release workflow was creating infinite loops due to multiple simultaneous Docker builds
+
+**Previous Problem:**
+
+- Version-and-release workflow pushes version bump commit → triggers Docker build #1
+- Version-and-release workflow pushes git tag → triggers Docker build #2
+- `lewagon/wait-on-check-action` waits for ALL `build-and-push` checks to complete
+- Results in infinite loop: "The requested checks aren't complete yet, will check back in 30 seconds..."
+
+**Solution Applied:** Enhanced commit message filtering in Docker build workflow
+
+- **Before:** `!startsWith(github.event.head_commit.message, 'bump version to v')`
+- **After:** `!contains(github.event.head_commit.message, 'bump version to v')`
+
+**Benefits:**
+
+- ✅ More reliable detection of version bump commits
+- ✅ Prevents race conditions between commit and tag builds
+- ✅ Fixes "allowed-conclusions: success" errors in releases
+- ✅ Eliminates infinite loops in release automation
+
 **⏭️ Skips Build:**
 
 - `docs:` commits (documentation only)
@@ -333,6 +543,7 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 - `test:` commits (test changes only)
 - `ci:` commits (workflow/CI changes)
 - `style:` commits (formatting only)
+- Version bump commits (prevents duplicate builds)
 
 ### What It Does
 

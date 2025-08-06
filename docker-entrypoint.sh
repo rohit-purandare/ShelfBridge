@@ -1,27 +1,31 @@
 #!/bin/sh
 set -e
 
+# Default to node user, which is 1000:1000
+export PUID=${PUID:-1000}
+export PGID=${PGID:-1000}
+
 # Function to check if all native modules are working
 check_native_modules() {
     echo "🔍 Checking native modules..."
-    
+
     # Check for any native modules in node_modules
     if find /app/node_modules -name "*.node" -type f 2>/dev/null | grep -q .; then
         echo "🔍 Found native modules, testing compatibility..."
-        
+
         # Test specific native modules that we actually use
         modules_to_test="better-sqlite3"
         working_modules=0
-        
+
         for module in $modules_to_test; do
             echo "   Testing $module..."
-            
+
             # Capture detailed error information
             error_output=$(node -e "
-                try { 
-                    const mod = require('$module'); 
-                    console.log('✅ $module: OK'); 
-                } catch(e) { 
+                try {
+                    const mod = require('$module');
+                    console.log('✅ $module: OK');
+                } catch(e) {
                     console.error('❌ $module: FAILED');
                     console.error('Error:', e.message);
                     if (e.message.includes('fcntl64')) {
@@ -32,9 +36,9 @@ check_native_modules() {
                     } else if (e.message.includes('cannot open shared object')) {
                         console.error('💡 Missing system dependencies');
                     }
-                    process.exit(1); 
+                    process.exit(1);
                 }" 2>&1)
-            
+
             if echo "$error_output" | grep -q "✅"; then
                 working_modules=$((working_modules + 1))
                 echo "   ✅ $module: Compatible"
@@ -50,16 +54,34 @@ check_native_modules() {
                 return 1
             fi
         done
-        
+
         echo "✅ All required native modules ($working_modules) are working correctly"
     else
         echo "ℹ️  No native modules found"
     fi
-    
+
     return 0
 }
 
+# Function to ensure directories exist and have the correct permissions
+create_and_verify_permissions() {
+    mkdir -p $1
 
+    # Only try to set permissions if the current user is root
+    # If the container is run as an unpriveleged user, it means a custom user has been provided to docker and the owner is
+    # responsible for making sure file ownership is correct. Running chown in that case (as non-root) will cause an error
+    if [ "$(id -u)" == "0" ]; then
+        if [ "$(stat -c %u $1)" != "${PUID}" ]; then
+            echo "Fixing $1 ownership..."
+            chown -R ${PUID}:${PGID} $1
+        fi
+    else
+        if [ "$(stat -c %u $1)" != "$(id -u)" ]; then
+            echo "You have specified a custom user via docker. Make sure that $1 is owned by that user."
+            exit 1
+        fi
+    fi
+}
 
 # Check native modules on startup - should never fail with proper Docker build
 if ! check_native_modules; then
@@ -79,9 +101,9 @@ if ! check_native_modules; then
 fi
 
 # Always ensure directories exist (both container and host-side for bind mounts)
-mkdir -p /app/config
-mkdir -p /app/data  
-mkdir -p /app/logs
+create_and_verify_permissions /app/config
+create_and_verify_permissions /app/data
+create_and_verify_permissions /app/logs
 
 # For bind mounts, ensure host directories are created by writing to them
 # This forces Docker to create the directories on the host side even if container exits early
@@ -130,7 +152,7 @@ echo ""
 # Check if config.yaml still contains placeholder values
 if [ -f "/app/config/config.yaml" ]; then
     echo "🔍 Checking configuration for placeholder values..."
-    
+
     # Check for common placeholder patterns
     if grep -q "your-audiobookshelf-server.com\|your_audiobookshelf_api_token\|your_hardcover_api_token\|your_username" /app/config/config.yaml; then
         echo ""
@@ -156,21 +178,13 @@ if [ -f "/app/config/config.yaml" ]; then
         echo "🚫 Exiting until configuration is updated..."
         exit 0
     fi
-    
+
     echo "✅ Configuration validation passed - no placeholder values found"
 fi
 
-# --- Permission Fix for Zero-Config Setup ---
-# Only fix if not already owned by node (UID 1000)
-if [ "$(stat -c %u /app/config)" != "1000" ]; then
-    echo "Fixing config volume ownership..."
-    chown -R node:node /app/config
+# Drop privileges when running as root, otherwise run as current user in order to support a custom specified docker user
+if [ "$(id -u)" == "0" ]; then
+    exec su-exec ${PUID}:${PGID} "$@"
+else
+    exec "$@"
 fi
-if [ "$(stat -c %u /app/data)" != "1000" ]; then
-    echo "Fixing data volume ownership..."
-    chown -R node:node /app/data
-fi
-# --- End Permission Fix ---
-
-# Drop privileges to node user and execute the original command
-exec su-exec node "$@" 
