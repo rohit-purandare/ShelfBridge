@@ -75,8 +75,37 @@ node src/main.js --help >/dev/null 2>&1
 ```yaml
 strategy:
   matrix:
-    node-version: [18.x, 20.x, 21.x]
+    node-version: [20.x, 22.x] # Updated: Node.js 20+ required by dependencies
 ```
+
+### 🔧 Node.js Version Update
+
+**Updated:** CI matrix to align with dependency requirements
+
+**Previous Configuration:**
+
+```yaml
+node-version: [18.x, 20.x, 21.x] # Node.js 18 causing EBADENGINE warnings
+```
+
+**Current Configuration:**
+
+```yaml
+node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
+```
+
+**Reason for Change:**
+
+- **better-sqlite3@12.2.0** requires Node.js 20+
+- **lint-staged@16.1.2** requires Node.js 20.17+
+- **commander@14.0.0** requires Node.js 20+
+- **Node.js 18 EOL:** April 2025 (packages dropping support)
+
+**Benefits:**
+
+- ✅ **No more EBADENGINE warnings** during npm install
+- ✅ **Future compatibility** with updated dependencies
+- ✅ **LTS alignment** with current Node.js support lifecycle
 
 ### Success Criteria
 
