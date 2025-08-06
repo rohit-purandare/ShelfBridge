@@ -8,7 +8,7 @@ import logger from './logger.js';
 import {
   extractAudioDurationFromAudiobookshelf,
   detectUserBookFormat,
-} from './utils.js';
+} from './matching/index.js';
 
 /**
  * Custom error class for progress validation issues

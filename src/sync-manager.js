@@ -3,17 +3,19 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
 import {
+  BookMatcher,
+  extractBookIdentifiers,
   normalizeIsbn,
   normalizeAsin,
-  extractIsbn,
-  extractAsin,
   extractTitle,
   extractAuthor,
   extractNarrator,
   extractAuthorFromSearchResult,
   calculateMatchingScore,
-  formatDurationForLogging,
-} from './utils.js';
+  extractIsbn,
+  extractAsin,
+} from './matching/index.js';
+import { formatDurationForLogging } from './utils.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
 
@@ -48,6 +50,13 @@ export class SyncManager {
 
     // Initialize cache
     this.cache = new BookCache();
+
+    // Initialize book matcher
+    this.bookMatcher = new BookMatcher(
+      this.hardcover,
+      this.cache,
+      globalConfig,
+    );
 
     // Timing data
     this.timingData = {};
@@ -179,6 +188,9 @@ export class SyncManager {
 
       // Store for cross-referencing in cache logic
       this.hardcoverBooks = hardcoverBooks;
+
+      // Update book matcher with user library for edition lookups
+      this.bookMatcher.setUserLibrary(hardcoverBooks);
 
       // Create identifier lookup
       const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
@@ -320,7 +332,7 @@ export class SyncManager {
    * @returns {Object|null} - Hardcover match object or null if not found
    */
   async _findBookInHardcover(absBook, identifierLookup) {
-    const identifiers = this._extractBookIdentifier(absBook);
+    const identifiers = extractBookIdentifiers(absBook);
     const title = extractTitle(absBook) || 'Unknown Title';
 
     logger.debug(`Searching for ${title} in Hardcover library`, {
@@ -1119,7 +1131,7 @@ export class SyncManager {
     }
 
     // Extract identifiers
-    const identifiers = this._extractBookIdentifier(absBook);
+    const identifiers = extractBookIdentifiers(absBook);
     syncResult.identifiers = identifiers;
     logger.debug(
       `[DEBUG] Extracted identifiers for '${title}': ISBN='${identifiers.isbn}', ASIN='${identifiers.asin}'`,
@@ -1157,9 +1169,10 @@ export class SyncManager {
     }
 
     // Try to find match in Hardcover using enhanced matching
-    const hardcoverMatch = await this._findBookInHardcover(
+    const hardcoverMatch = await this.bookMatcher.findMatch(
       absBook,
       identifierLookup,
+      this.userId,
     );
     let matchedIdentifierType = null;
 
@@ -1831,7 +1844,7 @@ export class SyncManager {
         });
 
         // Check if book was already marked as completed in cache to avoid re-processing
-        const identifier = this._extractBookIdentifier(absBook);
+        const identifier = extractBookIdentifiers(absBook);
         const identifierType = identifier.asin ? 'asin' : 'isbn';
         const identifierValue = identifier.asin || identifier.isbn;
 
@@ -1889,7 +1902,7 @@ export class SyncManager {
     const { userBook, edition } = hardcoverMatch;
 
     // Check cache first
-    const identifier = this._extractBookIdentifier(absBook);
+    const identifier = extractBookIdentifiers(absBook);
     const identifierType = identifier.asin ? 'asin' : 'isbn';
     const identifierValue = identifier.asin || identifier.isbn;
 
@@ -2040,7 +2053,7 @@ export class SyncManager {
         });
 
         // Store completion data in transaction
-        const identifier = this._extractBookIdentifier(absBook);
+        const identifier = extractBookIdentifiers(absBook);
         const identifierType = identifier.asin ? 'asin' : 'isbn';
         const identifierValue = identifier.asin || identifier.isbn;
 
@@ -2156,7 +2169,7 @@ export class SyncManager {
       let previousProgress = null;
 
       // Get previous progress for rollback
-      const identifier = this._extractBookIdentifier(absBook);
+      const identifier = extractBookIdentifiers(absBook);
       const identifierType = identifier.asin ? 'asin' : 'isbn';
       const identifierValue = identifier.asin || identifier.isbn;
 
