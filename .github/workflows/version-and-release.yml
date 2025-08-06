@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.19.4'
           cache: 'npm'
 
       - name: Install dependencies
@@ -324,7 +324,7 @@ jobs:
 
       - name: Wait for Docker build to complete
         if: steps.check_tag.outputs.skip == 'false'
-        uses: lewagon/wait-on-check-action@v1.3.4
+        uses: lewagon/wait-on-check-action@v1.4.0
         with:
           ref: v${{ steps.package_version.outputs.version }}
           check-name: 'build-and-push'
