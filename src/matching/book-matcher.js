@@ -9,10 +9,14 @@
 
 import logger from '../logger.js';
 import { extractBookIdentifiers } from './utils/identifier-extractor.js';
+import { createIdentifierLookup } from './utils/identifier-lookup.js';
 import { AsinMatcher } from './strategies/asin-matcher.js';
 import { IsbnMatcher } from './strategies/isbn-matcher.js';
 import { TitleAuthorMatcher } from './strategies/title-author-matcher.js';
-import { extractTitle } from './utils/audiobookshelf-extractor.js';
+import {
+  extractTitle,
+  extractAuthor,
+} from './utils/audiobookshelf-extractor.js';
 
 /**
  * Book Matcher - Orchestrates the multi-tier book matching process
@@ -23,13 +27,13 @@ export class BookMatcher {
    * @param {Object} hardcoverClient - Hardcover API client
    * @param {Object} cache - Book cache instance
    * @param {Object} config - Global configuration
-   * @param {Object} userLibrary - User's Hardcover library (for _findUserBookByEditionId)
    */
-  constructor(hardcoverClient, cache, config, userLibrary = null) {
+  constructor(hardcoverClient, cache, config) {
     this.hardcoverClient = hardcoverClient;
     this.cache = cache;
     this.config = config;
-    this.userLibrary = userLibrary;
+    this.userLibraryData = null;
+    this.formatMapper = null;
 
     // Initialize matching strategies
     this.strategies = [
@@ -40,28 +44,42 @@ export class BookMatcher {
 
     logger.debug('BookMatcher initialized', {
       strategiesCount: this.strategies.length,
-      hasUserLibrary: !!userLibrary,
     });
   }
 
   /**
    * Find a book match using the three-tier strategy
    * @param {Object} absBook - Audiobookshelf book object
-   * @param {Object} identifierLookup - Lookup table of identifiers to Hardcover books
    * @param {string} userId - User ID for caching and library access
-   * @returns {Object|null} - Hardcover match object or null if not found
+   * @returns {Object} - Result object containing { match, extractedMetadata }
+   *   - match: Hardcover match object or null if not found
+   *   - extractedMetadata: { title, author, identifiers } extracted from absBook
    */
-  async findMatch(absBook, identifierLookup, userId) {
-    const title = extractTitle(absBook) || 'Unknown Title';
+  async findMatch(absBook, userId) {
+    // Extract metadata once for use throughout matching process
+    const extractedMetadata = {
+      title: extractTitle(absBook) || 'Unknown Title',
+      author: extractAuthor(absBook) || 'Unknown Author',
+      identifiers: extractBookIdentifiers(absBook),
+    };
 
-    logger.debug(`Starting book matching for "${title}"`);
-
-    // Extract identifiers once for use across strategies
-    const identifiers = extractBookIdentifiers(absBook);
-
-    logger.debug(`Extracted identifiers for "${title}"`, {
-      identifiers: identifiers,
+    logger.debug(`Starting book matching for "${extractedMetadata.title}"`, {
+      metadata: extractedMetadata,
     });
+
+    // Create identifier lookup from user library data
+    if (!this.userLibraryData) {
+      logger.warn('No user library data available for book matching');
+      return {
+        match: null,
+        extractedMetadata,
+      };
+    }
+
+    const identifierLookup = createIdentifierLookup(
+      this.userLibraryData,
+      this.formatMapper,
+    );
 
     // Try each strategy in order (Tier 1, 2, 3)
     for (const strategy of this.strategies) {
@@ -69,20 +87,22 @@ export class BookMatcher {
         let match = null;
 
         logger.debug(
-          `Trying ${strategy.getName()} (Tier ${strategy.getTier()}) for "${title}"`,
+          `Trying ${strategy.getName()} (Tier ${strategy.getTier()}) for "${extractedMetadata.title}"`,
         );
 
         if (strategy.getTier() <= 2) {
           // Identifier-based strategies (ASIN, ISBN)
           match = await strategy.findMatch(
             absBook,
-            identifiers,
+            extractedMetadata.identifiers,
             identifierLookup,
           );
         } else {
           // Title/Author strategy
           if (this._isTitleAuthorMatchingEnabled()) {
-            logger.debug(`Attempting title/author matching for "${title}"`);
+            logger.debug(
+              `Attempting title/author matching for "${extractedMetadata.title}"`,
+            );
 
             // Pass user library lookup function to the strategy
             match = await strategy.findMatch(
@@ -95,7 +115,7 @@ export class BookMatcher {
 
         if (match) {
           logger.debug(
-            `Match found using ${strategy.getName()} for "${title}"`,
+            `Match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
             {
               strategy: strategy.getName(),
               tier: strategy.getTier(),
@@ -105,15 +125,18 @@ export class BookMatcher {
             },
           );
 
-          return match;
+          return {
+            match,
+            extractedMetadata,
+          };
         }
 
         logger.debug(
-          `No match found using ${strategy.getName()} for "${title}"`,
+          `No match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
         );
       } catch (error) {
         logger.warn(
-          `Error in ${strategy.getName()} for "${title}": ${error.message}`,
+          `Error in ${strategy.getName()} for "${extractedMetadata.title}": ${error.message}`,
           {
             strategy: strategy.getName(),
             error: error.message,
@@ -123,11 +146,17 @@ export class BookMatcher {
       }
     }
 
-    logger.debug(`No match found for "${title}" in Hardcover library`, {
-      searchedIdentifiers: identifiers,
-    });
+    logger.debug(
+      `No match found for "${extractedMetadata.title}" in Hardcover library`,
+      {
+        searchedIdentifiers: extractedMetadata.identifiers,
+      },
+    );
 
-    return null;
+    return {
+      match: null,
+      extractedMetadata,
+    };
   }
 
   /**
@@ -141,34 +170,41 @@ export class BookMatcher {
   }
 
   /**
-   * Find user book by edition ID in the user's library
+   * Find user book by edition ID using the injected lookup function
    * @param {string} editionId - Edition ID to find
    * @returns {Object|null} - User book or null if not found
    * @private
    */
   _findUserBookByEditionId(editionId) {
-    if (!this.userLibrary || !Array.isArray(this.userLibrary)) {
-      return null;
+    // This method is injected from SyncManager which owns the user library data
+    if (this._findUserBookByEditionIdImpl) {
+      return this._findUserBookByEditionIdImpl(editionId);
     }
 
-    for (const userBook of this.userLibrary) {
-      if (userBook.edition && userBook.edition.id === editionId) {
-        return userBook;
-      }
-    }
-
+    logger.warn('No user library lookup function available in BookMatcher');
     return null;
   }
 
   /**
-   * Set the user library for edition lookups
-   * @param {Array} userLibrary - User's Hardcover library
+   * Set the user library data for book matching
+   * @param {Array} userLibraryData - User's Hardcover library data
+   * @param {Function} formatMapper - Function to map edition formats (optional)
    */
-  setUserLibrary(userLibrary) {
-    this.userLibrary = userLibrary;
-    logger.debug('Updated user library for book matching', {
-      librarySize: userLibrary ? userLibrary.length : 0,
+  setUserLibrary(userLibraryData, formatMapper = null) {
+    this.userLibraryData = userLibraryData;
+    this.formatMapper = formatMapper;
+    logger.debug('Updated user library data for book matching', {
+      librarySize: userLibraryData ? userLibraryData.length : 0,
     });
+  }
+
+  /**
+   * Set the user library lookup function for edition lookups
+   * @param {Function} lookupFunction - Function to find user book by edition ID
+   */
+  setUserLibraryLookup(lookupFunction) {
+    this._findUserBookByEditionIdImpl = lookupFunction;
+    logger.debug('Updated user library lookup function for book matching');
   }
 
   /**

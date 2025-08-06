@@ -8,6 +8,7 @@
 export { BookMatcher } from './book-matcher.js';
 export { calculateMatchingScore } from './scoring/match-scorer.js';
 export { extractBookIdentifiers } from './utils/identifier-extractor.js';
+export { createIdentifierLookup } from './utils/identifier-lookup.js';
 
 // Export individual strategies if needed
 export { AsinMatcher } from './strategies/asin-matcher.js';

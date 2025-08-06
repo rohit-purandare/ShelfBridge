@@ -57,24 +57,3 @@ export function extractBookIdentifiers(absBook) {
 
   return identifiers;
 }
-
-/**
- * Generate a standardized cache key for title/author matching
- * @param {string} title - Book title
- * @param {string} author - Book author
- * @returns {string} - Standardized cache key
- */
-export function generateTitleAuthorIdentifier(title, author) {
-  // This should match the implementation in BookCache
-  // We'll need to import this or make it consistent
-  const normalizedTitle = (title || '')
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .trim();
-  const normalizedAuthor = (author || '')
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '')
-    .trim();
-
-  return `${normalizedTitle}_${normalizedAuthor}`;
-}

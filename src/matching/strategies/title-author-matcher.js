@@ -333,24 +333,15 @@ export class TitleAuthorMatcher {
   }
 
   /**
-   * Generate title/author identifier for caching
+   * Generate title/author identifier for caching using the authoritative cache implementation
    * @param {string} title - Book title
    * @param {string} author - Book author
    * @returns {string} - Cache identifier
    * @private
    */
   _generateTitleAuthorIdentifier(title, author) {
-    // This should match the cache implementation
-    const normalizedTitle = (title || '')
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .trim();
-    const normalizedAuthor = (author || '')
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .trim();
-
-    return `${normalizedTitle}_${normalizedAuthor}`;
+    // Use the authoritative implementation from BookCache
+    return this.cache.generateTitleAuthorIdentifier(title, author);
   }
 
   /**
@@ -366,7 +357,7 @@ export class TitleAuthorMatcher {
     }
 
     logger.warn(
-      'No user library lookup function available for edition ID lookup',
+      'No user library lookup function available in TitleAuthorMatcher',
     );
     return null;
   }
