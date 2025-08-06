@@ -92,6 +92,43 @@ strategy:
 **File:** `.github/workflows/code-quality.yml`  
 **Purpose:** Enforce coding standards and detect quality issues
 
+### 🔧 Performance Fix: Dependency Management
+
+**Fixed Issue:** The workflow was installing ESLint dependencies during runtime instead of using package.json versions
+
+**Previous Problem:**
+
+```yaml
+# REDUNDANT - Installing dependencies already in package.json:
+- name: Install ESLint
+  run: npm install --save-dev eslint@latest @eslint/js globals
+```
+
+**Issues with Runtime Installation:**
+
+- ❌ **Version drift** - CI uses `@latest`, development uses package.json versions
+- ❌ **Inconsistent behavior** - different ESLint versions between environments
+- ❌ **Slower builds** - unnecessary package downloads during CI
+- ❌ **Risk of breaks** - unexpected breaking changes from latest versions
+
+**Solution Applied:**
+
+```yaml
+# EFFICIENT - Use dependencies already installed by npm ci:
+- name: Install dependencies
+  run: npm ci
+
+- name: Run ESLint # Uses exact versions from package.json
+  run: npx eslint src/ --ext .js --max-warnings 0
+```
+
+**Benefits:**
+
+- ✅ **Consistent versions** - same ESLint version across all environments
+- ✅ **Faster CI builds** - no redundant package installations
+- ✅ **Predictable behavior** - eliminates version-related surprises
+- ✅ **Better dependency management** - single source of truth in package.json
+
 ### Triggers
 
 - Push to `main` branch
