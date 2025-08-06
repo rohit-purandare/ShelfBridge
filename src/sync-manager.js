@@ -13,7 +13,6 @@ import {
   extractAuthorFromSearchResult,
   calculateMatchingScore,
   formatDurationForLogging,
-  detectUserBookFormat,
 } from './utils.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
@@ -994,12 +993,31 @@ export class SyncManager {
   async _syncSingleBook(absBook, identifierLookup, sessionData) {
     const startTime = performance.now();
     const title = extractTitle(absBook) || 'Unknown Title';
-    const progressPercent =
-      ProgressManager.validateProgress(
-        absBook.progress_percentage,
-        `book "${title}" sync`,
-        { allowNull: false },
-      ) || 0;
+    // Validate progress with explicit error handling and position-based accuracy
+    const validatedProgress = ProgressManager.getValidatedProgress(
+      absBook,
+      `book "${title}" sync`,
+      { allowNull: false },
+    );
+
+    if (validatedProgress === null) {
+      logger.warn(`Skipping book "${title}" due to invalid progress data`, {
+        rawProgress: ProgressManager.extractProgressPercentage(absBook),
+        bookId: absBook.id,
+        userId: this.userId,
+      });
+      return {
+        title,
+        author: this._extractAuthorFromData(absBook, null),
+        status: 'skipped',
+        reason: 'Invalid progress data - cannot validate percentage',
+        progress: ProgressManager.extractProgressPercentage(absBook),
+        hardcover_status: 'unknown',
+        abs_id: absBook.id,
+      };
+    }
+
+    const progressPercent = validatedProgress;
 
     logger.debug(`Processing: ${title} (${progressPercent.toFixed(1)}%)`);
 
@@ -1539,7 +1557,8 @@ export class SyncManager {
             author: author,
           });
 
-          const currentProgress = absBook.progress_percentage || 0;
+          const currentProgress =
+            ProgressManager.extractProgressPercentage(absBook);
 
           // Store initial cache data
           await this.cache.storeBookSyncData(
@@ -1572,18 +1591,13 @@ export class SyncManager {
               };
 
               // Check if book should be marked as completed using ProgressManager
-              const isFinished =
-                absBook.is_finished === true || absBook.is_finished === 1;
-              const bookFormat = detectUserBookFormat(absBook);
-              const isComplete = ProgressManager.isComplete(currentProgress, {
-                // Note: No completion_threshold config option exists, using ProgressManager default
-                isFinished: isFinished,
-                context: `auto-added book "${title}" completion check`,
-                format: bookFormat,
-                bookData: absBook,
-              });
+              const isComplete = ProgressManager.isBookComplete(
+                absBook,
+                `auto-added book "${title}" completion check`,
+              );
 
               if (isComplete) {
+                const isFinished = ProgressManager.extractFinishedFlag(absBook);
                 await this._handleCompletionStatus(
                   addResult.id,
                   edition,
@@ -1660,7 +1674,7 @@ export class SyncManager {
     _identifier,
   ) {
     const title = extractTitle(absBook) || 'Unknown Title';
-    const progressPercent = absBook.progress_percentage || 0;
+    const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
 
     logger.debug(`Syncing existing book: ${title}`, {
@@ -1740,13 +1754,23 @@ export class SyncManager {
               latestRead.progress_seconds &&
               latestRead.edition.audio_seconds
             ) {
-              previousProgress =
-                (latestRead.progress_seconds /
-                  latestRead.edition.audio_seconds) *
-                100;
+              previousProgress = ProgressManager.calculateProgressFromPosition(
+                latestRead.progress_seconds,
+                latestRead.edition.audio_seconds,
+                {
+                  type: 'seconds',
+                  context: `book "${title}" previous progress calculation (audio)`,
+                },
+              );
             } else if (latestRead.progress_pages && latestRead.edition.pages) {
-              previousProgress =
-                (latestRead.progress_pages / latestRead.edition.pages) * 100;
+              previousProgress = ProgressManager.calculateProgressFromPosition(
+                latestRead.progress_pages,
+                latestRead.edition.pages,
+                {
+                  type: 'pages',
+                  context: `book "${title}" previous progress calculation (pages)`,
+                },
+              );
             }
           }
         }
@@ -1789,23 +1813,43 @@ export class SyncManager {
       }
 
       // Use centralized completion detection with ProgressManager
-      const isFinished =
-        absBook.is_finished === true || absBook.is_finished === 1;
-      const bookFormat = detectUserBookFormat(absBook);
-      const isComplete = ProgressManager.isComplete(progressPercent, {
-        // Note: No completion_threshold config option exists, using ProgressManager default
-        isFinished: isFinished,
-        context: `book "${title}" completion check`,
-        format: bookFormat,
-        bookData: absBook,
-      });
+      const isComplete = ProgressManager.isBookComplete(
+        absBook,
+        `book "${title}" completion check`,
+      );
 
       if (isComplete) {
+        const isFinished = ProgressManager.extractFinishedFlag(absBook);
         logger.debug(`Book ${title} is complete`, {
           isFinished: isFinished,
           progress: progressPercent,
           detectedBy: isFinished ? 'isFinished flag' : 'progress threshold',
         });
+
+        // Check if book was already marked as completed in cache to avoid re-processing
+        const identifier = this._extractBookIdentifier(absBook);
+        const identifierType = identifier.asin ? 'asin' : 'isbn';
+        const identifierValue = identifier.asin || identifier.isbn;
+
+        const cachedInfo = await this.cache.getCachedBookInfo(
+          this.userId,
+          identifierValue,
+          title,
+          identifierType,
+        );
+
+        if (cachedInfo.exists && cachedInfo.finished_at) {
+          logger.debug(
+            `Book ${title} already marked as completed, skipping re-processing`,
+            {
+              finishedAt: cachedInfo.finished_at,
+              lastSync: cachedInfo.last_sync,
+              userBookId: userBook.id,
+            },
+          );
+          return { status: 'completed', title, cached: true };
+        }
+
         return await this._handleCompletionStatus(
           userBook.id,
           selectedEdition,

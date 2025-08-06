@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Agent } from 'https';
 import { Agent as HttpAgent } from 'http';
 import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
+import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
@@ -237,9 +238,8 @@ export class AudiobookshelfClient {
               book.media.metadata.title) ||
             book.title ||
             'Unknown';
-          const isFinished =
-            book.is_finished === true || book.is_finished === 1;
-          const progress = book.progress_percentage || 0;
+          const isFinished = ProgressManager.extractFinishedFlag(book);
+          const progress = ProgressManager.extractProgressPercentage(book);
           return { title, isFinished, progress: progress.toFixed(1) + '%' };
         }),
       });
@@ -253,8 +253,8 @@ export class AudiobookshelfClient {
           (book.media && book.media.metadata && book.media.metadata.title) ||
           book.title ||
           'Unknown';
-        const isFinished = book.is_finished === true || book.is_finished === 1;
-        const progress = book.progress_percentage || 0;
+        const isFinished = ProgressManager.extractFinishedFlag(book);
+        const progress = ProgressManager.extractProgressPercentage(book);
 
         logger.debug(
           `Including book for sync consideration: ${title} (${progress.toFixed(1)}% progress, finished: ${isFinished})`,
@@ -266,7 +266,7 @@ export class AudiobookshelfClient {
       // Count filtering statistics
       const validBooks = progressResults.filter(Boolean);
       const allCompletedBooks = validBooks.filter(book => {
-        const isFinished = book.is_finished === true || book.is_finished === 1;
+        const isFinished = ProgressManager.extractFinishedFlag(book);
         return isFinished; // Count ALL completed books, regardless of progress
       });
 
@@ -286,7 +286,7 @@ export class AudiobookshelfClient {
 
       // Calculate accurate book categorization
       const inProgressBooks = validBooks.filter(book => {
-        const isFinished = book.is_finished === true || book.is_finished === 1;
+        const isFinished = ProgressManager.extractFinishedFlag(book);
         return !isFinished; // Books that are currently being read
       });
 
@@ -321,7 +321,7 @@ export class AudiobookshelfClient {
           (book.media && book.media.metadata && book.media.metadata.title) ||
           book.title ||
           'Unknown';
-        const progress = book.progress_percentage || 0;
+        const progress = ProgressManager.extractProgressPercentage(book);
         logger.debug('Book progress', { title, progress });
       });
 

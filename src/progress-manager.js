@@ -5,6 +5,10 @@
  * completion detection, and position calculations across all book formats.
  */
 import logger from './logger.js';
+import {
+  extractAudioDurationFromAudiobookshelf,
+  detectUserBookFormat,
+} from './utils.js';
 
 /**
  * Custom error class for progress validation issues
@@ -32,17 +36,221 @@ export class ProgressManager {
   static DEFAULT_ZERO_THRESHOLD = 5;
   static SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
 
+  // Precise completion thresholds
+  static COMPLETION_TIME_REMAINING_SECONDS = 120; // 2 minutes remaining for audiobooks
+  static COMPLETION_PAGES_REMAINING = 3; // 3 pages remaining for books
+
   /**
-   * Validate and normalize progress percentage
+   * Extract page count from Audiobookshelf book data
+   * @param {Object} bookData - Audiobookshelf book data
+   * @returns {number|null} Page count, or null if not available
+   * @private
+   */
+  static _extractPageCount(bookData) {
+    if (!bookData) return null;
+
+    // Check direct pages field
+    if (bookData.pages && bookData.pages > 0) {
+      return bookData.pages;
+    }
+
+    // Check media.pages
+    if (bookData.media && bookData.media.pages && bookData.media.pages > 0) {
+      return bookData.media.pages;
+    }
+
+    // Check metadata.pages
+    if (
+      bookData.media &&
+      bookData.media.metadata &&
+      bookData.media.metadata.pages &&
+      bookData.media.metadata.pages > 0
+    ) {
+      return bookData.media.metadata.pages;
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract current time position from Audiobookshelf book data
+   * @param {Object} bookData - Audiobookshelf book data
+   * @returns {number|null} Current time in seconds, or null if not available
+   * @private
+   */
+  static _extractCurrentTime(bookData) {
+    if (!bookData) return null;
+
+    // Check direct current_time field
+    if (
+      bookData.current_time !== null &&
+      bookData.current_time !== undefined &&
+      bookData.current_time >= 0
+    ) {
+      return bookData.current_time;
+    }
+
+    // Check media.current_time
+    if (
+      bookData.media &&
+      bookData.media.current_time !== null &&
+      bookData.media.current_time !== undefined &&
+      bookData.media.current_time >= 0
+    ) {
+      return bookData.media.current_time;
+    }
+
+    return null;
+  }
+
+  /**
+   * Calculate accurate progress from actual position data in bookData
+   * @param {Object} bookData - Audiobookshelf book data with position information
+   * @param {string} format - Book format ('audiobook', 'ebook', 'physical', 'unknown')
+   * @param {string} context - Context for logging
+   * @returns {number|null} - Calculated progress percentage or null if no position data
+   * @private
+   */
+  static _calculateProgressFromPosition(bookData, format, context) {
+    if (!bookData) return null;
+
+    if (format === 'audiobook') {
+      const currentTime = this._extractCurrentTime(bookData);
+      const totalDuration = extractAudioDurationFromAudiobookshelf(bookData);
+
+      if (currentTime !== null && totalDuration && totalDuration > 0) {
+        const calculatedProgress = this.calculateProgressFromPosition(
+          currentTime,
+          totalDuration,
+          { type: 'seconds', context },
+        );
+
+        logger.debug(`Calculated progress from position data in ${context}`, {
+          currentTime,
+          totalDuration,
+          calculatedProgress,
+          method: 'position-based',
+        });
+
+        return calculatedProgress;
+      }
+    }
+
+    // For books, we typically don't have current_page data from Audiobookshelf
+    // so we'll fall back to the provided progress percentage
+
+    return null; // No position data available
+  }
+
+  /**
+   * Validate and normalize progress percentage with position-based accuracy
    * @param {number|string|null|undefined} progress - Progress value to validate
    * @param {string} context - Context for error reporting (e.g., "user sync", "book title")
    * @param {Object} options - Validation options
    * @param {boolean} options.allowNull - Whether to allow null/undefined values (default: true)
    * @param {boolean} options.strict - Whether to throw on invalid values (default: false)
+   * @param {Object} options.bookData - Book metadata for position-based validation
+   * @param {string} options.format - Book format for position-based validation
+   * @param {boolean|number} options.isFinished - Explicit finished flag that takes priority over position calculations
    * @returns {number|null} - Validated progress percentage or null
    * @throws {ProgressValidationError} - When strict=true and validation fails
    */
   static validateProgress(progress, context = '', options = {}) {
+    const {
+      allowNull = true,
+      strict = false,
+      bookData = null,
+      format = 'unknown',
+      isFinished = null,
+    } = options;
+
+    // If explicitly marked as finished, trust that decision first
+    if (isFinished === true || isFinished === 1) {
+      const providedValidated = this._validateProgressNumber(
+        progress,
+        context,
+        { allowNull: true, strict: false },
+      );
+
+      // If provided progress is valid, use it (respecting user's explicit completion)
+      if (providedValidated !== null) {
+        // Still calculate position-based progress for discrepancy reporting
+        const calculatedProgress = this._calculateProgressFromPosition(
+          bookData,
+          format,
+          context,
+        );
+        if (calculatedProgress !== null) {
+          const discrepancy = Math.abs(providedValidated - calculatedProgress);
+          if (discrepancy > 1.0) {
+            // More than 1% difference
+            logger.warn(`Progress discrepancy detected in ${context}`, {
+              providedProgress: providedValidated,
+              calculatedProgress: calculatedProgress,
+              discrepancy,
+              source: 'finished-flag-override',
+            });
+          }
+        }
+
+        return providedValidated;
+      }
+
+      // If no valid provided progress but explicitly finished, assume 100%
+      return 100;
+    }
+
+    // Try to calculate accurate progress from position data
+    const calculatedProgress = this._calculateProgressFromPosition(
+      bookData,
+      format,
+      context,
+    );
+
+    if (calculatedProgress !== null) {
+      // We have accurate position data - use it as source of truth
+      const validatedCalculated = this._validateProgressNumber(
+        calculatedProgress,
+        context,
+        { allowNull: false, strict },
+      );
+
+      // Check for discrepancy with provided progress if available
+      if (progress !== null && progress !== undefined) {
+        const providedValidated = this._validateProgressNumber(
+          progress,
+          context,
+          { allowNull: true, strict: false },
+        );
+        if (providedValidated !== null) {
+          const discrepancy = Math.abs(validatedCalculated - providedValidated);
+          if (discrepancy > 1.0) {
+            // More than 1% difference
+            logger.warn(`Progress discrepancy detected in ${context}`, {
+              providedProgress: providedValidated,
+              calculatedProgress: validatedCalculated,
+              discrepancy,
+              source: 'position-data-override',
+            });
+          }
+        }
+      }
+
+      return validatedCalculated;
+    }
+
+    // No position data available - validate provided progress
+    return this._validateProgressNumber(progress, context, {
+      allowNull,
+      strict,
+    });
+  }
+
+  /**
+   * Core progress number validation (extracted for reuse)
+   * @private
+   */
+  static _validateProgressNumber(progress, context, options = {}) {
     const { allowNull = true, strict = false } = options;
 
     // Handle null/undefined values
@@ -123,7 +331,7 @@ export class ProgressManager {
    * @param {boolean} options.isFinished - Explicit finished flag from source system
    * @param {string} options.context - Context for logging
    * @param {string} options.format - Book format ('audiobook', 'ebook', 'physical', 'unknown')
-   * @param {Object} options.bookData - Additional book metadata for format-specific logic
+   * @param {Object} options.bookData - Additional book metadata for precise completion detection
    * @returns {boolean} - Whether the book is considered complete
    */
   static isComplete(progress, options = {}) {
@@ -132,7 +340,7 @@ export class ProgressManager {
       isFinished = null,
       context = '',
       format = 'unknown',
-      bookData = {},
+      _bookData = {}, // Book metadata for precise completion detection
     } = options;
 
     // Explicit finished flag takes precedence for ALL formats
@@ -155,8 +363,12 @@ export class ProgressManager {
       return false;
     }
 
-    // Validate progress percentage
-    const validatedProgress = this.validateProgress(progress, context);
+    // Validate progress percentage, passing isFinished flag to respect explicit completion
+    const validatedProgress = this.validateProgress(progress, context, {
+      bookData: _bookData,
+      format: format,
+      isFinished: isFinished,
+    });
     if (validatedProgress === null) {
       logger.debug(`Book not complete - invalid progress in ${context}`, {
         format,
@@ -165,13 +377,13 @@ export class ProgressManager {
       return false;
     }
 
-    // Apply format-aware completion logic
+    // Apply format-aware completion logic with precise position-based detection
     const isCompleteByProgress = this._isCompleteByFormat(
       validatedProgress,
       threshold,
       format,
-      bookData,
       context,
+      _bookData,
     );
 
     if (isCompleteByProgress) {
@@ -187,38 +399,113 @@ export class ProgressManager {
   }
 
   /**
-   * Format-aware completion detection with standardized criteria
+   * Format-aware completion detection with precise position-based criteria
    * @private
    */
-  static _isCompleteByFormat(progress, threshold, format, bookData, context) {
-    // Standardized completion criteria across all formats:
-    // - Progress >= threshold (default 95%) indicates completion
-    // - Format-specific adjustments for edge cases
+  static _isCompleteByFormat(
+    progress,
+    threshold,
+    format,
+    context,
+    bookData = null,
+  ) {
+    // Enhanced completion detection strategy:
+    // 1. Try precise position-based detection using actual duration/pages
+    // 2. Fall back to percentage-based detection if precise data unavailable
+
+    let preciseDetectionUsed = false;
 
     switch (format) {
       case 'audiobook':
-        // Audiobooks: Use standard threshold
-        // Account for potential silence/credits at end
+        // Try precise time-based completion first
+        if (bookData) {
+          const totalSeconds = extractAudioDurationFromAudiobookshelf(bookData);
+          if (totalSeconds && totalSeconds > 0) {
+            const currentSeconds = this.calculateCurrentPosition(
+              progress,
+              totalSeconds,
+              { type: 'seconds', context },
+            );
+            const timeRemaining = totalSeconds - currentSeconds;
+
+            if (timeRemaining <= this.COMPLETION_TIME_REMAINING_SECONDS) {
+              logger.debug(
+                `Audiobook complete by time remaining in ${context}`,
+                {
+                  currentSeconds,
+                  totalSeconds,
+                  timeRemaining,
+                  detectionMethod: 'precise-time-based',
+                },
+              );
+              preciseDetectionUsed = true;
+              return true;
+            }
+          }
+        }
+
+        // Fall back to percentage-based
+        if (!preciseDetectionUsed) {
+          logger.debug(
+            `Using percentage-based completion for audiobook in ${context}`,
+            {
+              progress,
+              threshold,
+              detectionMethod: 'percentage-fallback',
+            },
+          );
+        }
         return progress >= threshold;
 
       case 'ebook':
-        // Ebooks: Use standard threshold
-        // Account for appendices/glossaries that readers might skip
-        return progress >= threshold;
-
       case 'physical':
-        // Physical books: Use standard threshold
-        // Reader may not finish last few pages (index, etc.)
+        // Try precise page-based completion first
+        if (bookData) {
+          const totalPages = this._extractPageCount(bookData);
+          if (totalPages && totalPages > 0) {
+            const currentPage = this.calculateCurrentPosition(
+              progress,
+              totalPages,
+              { type: 'pages', context },
+            );
+            const pagesRemaining = totalPages - currentPage;
+
+            if (pagesRemaining <= this.COMPLETION_PAGES_REMAINING) {
+              logger.debug(`Book complete by pages remaining in ${context}`, {
+                currentPage,
+                totalPages,
+                pagesRemaining,
+                format,
+                detectionMethod: 'precise-page-based',
+              });
+              preciseDetectionUsed = true;
+              return true;
+            }
+          }
+        }
+
+        // Fall back to percentage-based
+        if (!preciseDetectionUsed) {
+          logger.debug(
+            `Using percentage-based completion for ${format} in ${context}`,
+            {
+              progress,
+              threshold,
+              detectionMethod: 'percentage-fallback',
+            },
+          );
+        }
         return progress >= threshold;
 
       case 'unknown':
       default:
-        // Unknown format: Use conservative standard threshold
+        // Unknown format: Use conservative percentage-based threshold
         logger.debug(
           `Using standard completion criteria for unknown format in ${context}`,
           {
             format,
             threshold,
+            detectionMethod: 'percentage-only',
           },
         );
         return progress >= threshold;
@@ -257,12 +544,34 @@ export class ProgressManager {
     const { threshold = this.SIGNIFICANT_CHANGE_THRESHOLD, context = '' } =
       options;
 
-    const oldValidated =
-      this.validateProgress(oldProgress, `${context} (old)`) || 0;
-    const newValidated =
-      this.validateProgress(newProgress, `${context} (new)`) || 0;
+    const oldValidated = this.validateProgress(oldProgress, `${context} (old)`);
+    const newValidated = this.validateProgress(newProgress, `${context} (new)`);
 
-    const absoluteChange = Math.abs(newValidated - oldValidated);
+    // Handle invalid data gracefully instead of defaulting to 0
+    if (oldValidated === null || newValidated === null) {
+      logger.warn(
+        `Cannot detect progress change due to invalid data in ${context}`,
+        {
+          oldProgress,
+          newProgress,
+          oldValid: oldValidated !== null,
+          newValid: newValidated !== null,
+        },
+      );
+      return {
+        hasChange: false,
+        oldProgress: oldValidated || 0,
+        newProgress: newValidated || 0,
+        absoluteChange: 0,
+        direction: 'none',
+        isRegression: false,
+        invalidData: true,
+      };
+    }
+
+    // Fix floating point precision issues by rounding to reasonable precision
+    const absoluteChange =
+      Math.round(Math.abs(newValidated - oldValidated) * 1000000) / 1000000;
     const isSignificant = absoluteChange >= threshold;
 
     // Direction should be 'none' if change is not significant
@@ -319,12 +628,14 @@ export class ProgressManager {
       return type === 'pages' ? 1 : 0; // Return minimum valid position
     }
 
-    const position = Math.round((validatedProgress / 100) * total);
-
-    // Pages are 1-based, seconds are 0-based
     if (type === 'pages') {
+      // For pages: N% progress = page N (with minimum of page 1)
+      // This creates perfect round-trip consistency
+      const position = Math.round((validatedProgress / 100) * total);
       return Math.max(1, Math.min(position, total));
     } else {
+      // For seconds: direct proportion, 0-based
+      const position = Math.round((validatedProgress / 100) * total);
       return Math.max(0, Math.min(position, total));
     }
   }
@@ -354,12 +665,19 @@ export class ProgressManager {
       return 0;
     }
 
-    // Adjust for 1-based pages
-    const adjustedPosition =
-      type === 'pages' ? Math.max(0, currentPosition - 1) : currentPosition;
+    let progress;
+    if (type === 'pages') {
+      // For pages: treat "page N" as "completed N pages" = N% of total
+      // This creates perfect round-trip consistency
+      progress = (currentPosition / total) * 100;
+    } else {
+      // For seconds: direct proportion
+      progress = (currentPosition / total) * 100;
+    }
 
-    const progress = (adjustedPosition / total) * 100;
-    return this.validateProgress(progress, context) || 0;
+    // Round to avoid floating point precision issues in round-trip calculations
+    const roundedProgress = Math.round(progress * 1000000) / 1000000;
+    return this.validateProgress(roundedProgress, context) || 0;
   }
 
   /**
@@ -379,16 +697,40 @@ export class ProgressManager {
       rereadThreshold = 30,
       highProgressThreshold = 85,
       blockThreshold = 50,
-      warnThreshold = 10, // Changed from 15 to 10 to match test expectations
+      warnThreshold = 15, // Align with config example and sync-manager expectations
       context = '',
     } = options;
 
-    const oldValidated =
-      this.validateProgress(oldProgress, `${context} (old)`) || 0;
-    const newValidated =
-      this.validateProgress(newProgress, `${context} (new)`) || 0;
+    const oldValidated = this.validateProgress(oldProgress, `${context} (old)`);
+    const newValidated = this.validateProgress(newProgress, `${context} (new)`);
 
-    const regressionAmount = oldValidated - newValidated;
+    // Handle invalid data gracefully instead of defaulting to 0
+    if (oldValidated === null || newValidated === null) {
+      logger.warn(
+        `Cannot analyze progress regression due to invalid data in ${context}`,
+        {
+          oldProgress,
+          newProgress,
+          oldValid: oldValidated !== null,
+          newValid: newValidated !== null,
+        },
+      );
+      return {
+        isRegression: false,
+        regressionAmount: 0,
+        oldProgress: oldValidated || 0,
+        newProgress: newValidated || 0,
+        shouldBlock: false,
+        shouldWarn: false,
+        reason: 'Cannot analyze regression - invalid progress data',
+        isPotentialReread: false,
+        invalidData: true,
+      };
+    }
+
+    // Fix floating point precision issues by rounding to reasonable precision
+    const regressionAmount =
+      Math.round((oldValidated - newValidated) * 1000000) / 1000000;
     const isRegression = regressionAmount > 0;
 
     const result = {
@@ -518,6 +860,76 @@ export class ProgressManager {
     }
 
     return summary;
+  }
+
+  /**
+   * Centralized method to extract and normalize the isFinished flag from book data
+   * @param {Object} bookData - Audiobookshelf book data
+   * @returns {boolean} - Normalized finished status
+   */
+  static extractFinishedFlag(bookData) {
+    if (!bookData) return false;
+    return bookData.is_finished === true || bookData.is_finished === 1;
+  }
+
+  /**
+   * Centralized method to extract raw progress percentage from book data
+   * @param {Object} bookData - Audiobookshelf book data
+   * @returns {number} - Raw progress percentage (0-100)
+   */
+  static extractProgressPercentage(bookData) {
+    if (!bookData) return 0;
+    return bookData.progress_percentage || 0;
+  }
+
+  /**
+   * Centralized method to get book format for progress calculations
+   * @param {Object} bookData - Audiobookshelf book data
+   * @returns {string} - Book format ('audiobook', 'ebook', 'physical', 'unknown')
+   */
+  static getBookFormat(bookData) {
+    return detectUserBookFormat(bookData);
+  }
+
+  /**
+   * Centralized method to get validated progress with all context
+   * @param {Object} bookData - Audiobookshelf book data
+   * @param {string} context - Context for logging
+   * @param {Object} options - Additional validation options
+   * @returns {number|null} - Validated progress percentage
+   */
+  static getValidatedProgress(bookData, context = '', options = {}) {
+    const isFinished = this.extractFinishedFlag(bookData);
+    const rawProgress = this.extractProgressPercentage(bookData);
+    const bookFormat = this.getBookFormat(bookData);
+
+    return this.validateProgress(rawProgress, context, {
+      ...options,
+      bookData,
+      format: bookFormat,
+      isFinished,
+    });
+  }
+
+  /**
+   * Centralized method to determine if a book is complete with all context
+   * @param {Object} bookData - Audiobookshelf book data
+   * @param {string} context - Context for logging
+   * @param {Object} options - Completion detection options
+   * @returns {boolean} - Whether the book is considered complete
+   */
+  static isBookComplete(bookData, context = '', options = {}) {
+    const isFinished = this.extractFinishedFlag(bookData);
+    const rawProgress = this.extractProgressPercentage(bookData);
+    const bookFormat = this.getBookFormat(bookData);
+
+    return this.isComplete(rawProgress, {
+      ...options,
+      isFinished,
+      context,
+      format: bookFormat,
+      bookData,
+    });
   }
 }
 
