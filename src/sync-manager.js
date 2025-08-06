@@ -1594,6 +1594,8 @@ export class SyncManager {
               const isComplete = ProgressManager.isBookComplete(
                 absBook,
                 `auto-added book "${title}" completion check`,
+                {},
+                edition, // Pass edition for consistent format detection
               );
 
               if (isComplete) {
@@ -1816,6 +1818,8 @@ export class SyncManager {
       const isComplete = ProgressManager.isBookComplete(
         absBook,
         `book "${title}" completion check`,
+        {},
+        edition, // Pass edition for consistent format detection
       );
 
       if (isComplete) {

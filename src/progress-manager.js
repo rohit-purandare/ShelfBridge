@@ -883,11 +883,54 @@ export class ProgressManager {
   }
 
   /**
-   * Centralized method to get book format for progress calculations
-   * @param {Object} bookData - Audiobookshelf book data
+   * Detect book format from Hardcover edition data (consistent with progress field determination)
+   * @param {Object} edition - Hardcover edition object
    * @returns {string} - Book format ('audiobook', 'ebook', 'physical', 'unknown')
    */
-  static getBookFormat(bookData) {
+  static getFormatFromEdition(edition) {
+    if (!edition) return 'unknown';
+
+    // Use same logic as sync-manager's useSeconds determination for consistency
+    if (edition.audio_seconds && edition.audio_seconds > 0) {
+      return 'audiobook';
+    }
+
+    // Check for explicit format from Hardcover
+    const hardcoverFormat = edition.reading_format?.format;
+    switch (hardcoverFormat) {
+      case 'Listened':
+        return 'audiobook';
+      case 'Ebook':
+        return 'ebook';
+      case 'Read':
+        return 'physical';
+      case 'Both':
+        // If both, prefer based on capabilities
+        return edition.audio_seconds && edition.audio_seconds > 0
+          ? 'audiobook'
+          : 'physical';
+      default:
+        // Fallback to capabilities
+        if (edition.pages && edition.pages > 0) {
+          return 'physical';
+        }
+        return 'unknown';
+    }
+  }
+
+  /**
+   * Centralized method to get book format for progress calculations
+   * @param {Object} bookData - Audiobookshelf book data
+   * @param {Object} edition - Optional Hardcover edition object (preferred for consistency)
+   * @returns {string} - Book format ('audiobook', 'ebook', 'physical', 'unknown')
+   */
+  static getBookFormat(bookData, edition = null) {
+    // Prefer edition-based detection for consistency with progress field determination
+    if (edition) {
+      return this.getFormatFromEdition(edition);
+    }
+
+    // Fallback to AudiobookShelf data detection
     return detectUserBookFormat(bookData);
   }
 
@@ -896,12 +939,18 @@ export class ProgressManager {
    * @param {Object} bookData - Audiobookshelf book data
    * @param {string} context - Context for logging
    * @param {Object} options - Additional validation options
+   * @param {Object} edition - Optional Hardcover edition object (preferred for format detection)
    * @returns {number|null} - Validated progress percentage
    */
-  static getValidatedProgress(bookData, context = '', options = {}) {
+  static getValidatedProgress(
+    bookData,
+    context = '',
+    options = {},
+    edition = null,
+  ) {
     const isFinished = this.extractFinishedFlag(bookData);
     const rawProgress = this.extractProgressPercentage(bookData);
-    const bookFormat = this.getBookFormat(bookData);
+    const bookFormat = this.getBookFormat(bookData, edition);
 
     return this.validateProgress(rawProgress, context, {
       ...options,
@@ -916,12 +965,13 @@ export class ProgressManager {
    * @param {Object} bookData - Audiobookshelf book data
    * @param {string} context - Context for logging
    * @param {Object} options - Completion detection options
+   * @param {Object} edition - Optional Hardcover edition object (preferred for format detection)
    * @returns {boolean} - Whether the book is considered complete
    */
-  static isBookComplete(bookData, context = '', options = {}) {
+  static isBookComplete(bookData, context = '', options = {}, edition = null) {
     const isFinished = this.extractFinishedFlag(bookData);
     const rawProgress = this.extractProgressPercentage(bookData);
-    const bookFormat = this.getBookFormat(bookData);
+    const bookFormat = this.getBookFormat(bookData, edition);
 
     return this.isComplete(rawProgress, {
       ...options,
