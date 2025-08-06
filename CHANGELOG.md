@@ -31,6 +31,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.27] - 2025-08-06
+
+### Added
+- ci: add missing security-scan job for required status check
+- chore: implement conservative dependency update strategy
+- chore: add Renovate configuration to replace Dependabot
+
+### Changed
+- Allow specifying a custom user (#41)
+- build(deps): migrate config renovate.json (#31)
+- chore: fix Renovate deprecation warnings
+- chore: make conservative dependency strategy comprehensive
+- chore: correct Renovate configuration errors
+- chore: remove fresh-install-test directory
+- chore: remove Dependabot configuration, replaced with Renovate
+- ci: synchronize release creation with Docker build completion
+
+### Improved
+- chore: improve Renovate configuration
+
+
 ## [1.18.26] - 2025-07-30
 
 ### Changed
@@ -489,7 +510,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.26...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.27...HEAD
+[1.18.27]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...v1.18.25
 [1.18.24]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.23...v1.18.24
