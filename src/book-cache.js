@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import logger from './logger.js';
+import ProgressManager from './progress-manager.js';
 
 export class BookCache {
   constructor(cacheFile = 'data/.book_cache.db') {
@@ -517,16 +518,16 @@ export class BookCache {
       errors.push('identifierType must be either "isbn" or "asin"');
     }
 
-    // Validate progress if provided
+    // Validate progress if provided using ProgressManager
     if (progressPercent !== null && progressPercent !== undefined) {
-      if (
-        typeof progressPercent !== 'number' ||
-        isNaN(progressPercent) ||
-        !isFinite(progressPercent)
-      ) {
-        errors.push('progressPercent must be a valid number');
-      } else if (progressPercent < 0 || progressPercent > 100) {
-        errors.push('progressPercent must be between 0 and 100');
+      const validatedProgress = ProgressManager.validateProgress(
+        progressPercent,
+        'book cache validation',
+        { allowNull: false, strict: false },
+      );
+
+      if (validatedProgress === null) {
+        errors.push('progressPercent must be a valid number between 0 and 100');
       }
     }
 
@@ -933,7 +934,17 @@ export class BookCache {
       }
 
       const cachedProgress = result.progress_percent;
-      const hasChanged = Math.abs(cachedProgress - currentProgress) > 0.01; // 0.01% tolerance
+
+      // Use ProgressManager for centralized change detection
+      const changeResult = ProgressManager.detectProgressChange(
+        cachedProgress,
+        currentProgress,
+        {
+          threshold: 0.01, // 0.01% tolerance
+          context: `${title} cache change detection`,
+        },
+      );
+      const hasChanged = changeResult.hasChange;
 
       if (hasChanged) {
         logger.debug(

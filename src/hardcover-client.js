@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Agent } from 'https';
 import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
+import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
@@ -516,9 +517,16 @@ export class HardcoverClient {
 
     if (useSeconds && latestRead.progress_seconds) {
       if (edition && edition.audio_seconds) {
-        // Accurate calculation with total duration
+        // Accurate calculation with total duration using ProgressManager
         previousProgressPercentage =
-          (latestRead.progress_seconds / edition.audio_seconds) * 100;
+          ProgressManager.calculateProgressFromPosition(
+            latestRead.progress_seconds,
+            edition.audio_seconds,
+            {
+              type: 'seconds',
+              context: 'hardcover re-read detection (audio)',
+            },
+          );
       } else {
         // Heuristic: if previous progress is significantly higher than new progress
         const progressRatio =
@@ -529,9 +537,16 @@ export class HardcoverClient {
       }
     } else if (!useSeconds && latestRead.progress_pages) {
       if (edition && edition.pages) {
-        // Accurate calculation with total pages
+        // Accurate calculation with total pages using ProgressManager
         previousProgressPercentage =
-          (latestRead.progress_pages / edition.pages) * 100;
+          ProgressManager.calculateProgressFromPosition(
+            latestRead.progress_pages,
+            edition.pages,
+            {
+              type: 'pages',
+              context: 'hardcover re-read detection (pages)',
+            },
+          );
       } else {
         // Heuristic: if previous progress is significantly higher than new progress
         const progressRatio =
@@ -542,23 +557,28 @@ export class HardcoverClient {
       }
     }
 
+    // Use ProgressManager for centralized regression analysis
+    const regressionAnalysis = ProgressManager.analyzeProgressRegression(
+      previousProgressPercentage,
+      newProgressPercentage,
+      {
+        rereadThreshold: REREAD_THRESHOLD,
+        highProgressThreshold: HIGH_PROGRESS_THRESHOLD,
+        warnThreshold: REGRESSION_WARNING_THRESHOLD,
+        blockThreshold: 50, // Use default block threshold
+        context: 'hardcover re-read session detection',
+      },
+    );
+
     // Case 2: Significant progress regression indicating re-reading
-    if (
-      previousProgressPercentage >= HIGH_PROGRESS_THRESHOLD &&
-      newProgressPercentage <= REREAD_THRESHOLD
-    ) {
+    if (regressionAnalysis.isPotentialReread) {
       result.createNew = true;
-      result.reason = `Significant progress regression detected: ${previousProgressPercentage.toFixed(1)}% → ${newProgressPercentage.toFixed(1)}% (likely re-reading)`;
+      result.reason = regressionAnalysis.reason;
       return result;
     }
 
     // Case 3: Progress regression protection (warn but don't create new session)
-    if (
-      previousProgressPercentage > 0 &&
-      previousProgressPercentage - newProgressPercentage >
-        REGRESSION_WARNING_THRESHOLD &&
-      previousProgressPercentage >= HIGH_PROGRESS_THRESHOLD
-    ) {
+    if (regressionAnalysis.shouldWarn) {
       result.isRegression = true;
       result.reason = `Progress regression: ${previousProgressPercentage.toFixed(1)}% → ${newProgressPercentage.toFixed(1)}%`;
     }
