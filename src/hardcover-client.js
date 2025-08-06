@@ -306,72 +306,28 @@ export class HardcoverClient {
       progressInfo.latest_read &&
       progressInfo.latest_read.id
     ) {
-      // Update existing progress - only send started_at if Hardcover doesn't have one
+      // Update existing progress - send started_at if we have one and Hardcover needs it
       const readId = progressInfo.latest_read.id;
-      const hasExistingStartDate =
-        progressInfo.latest_read.started_at &&
-        progressInfo.latest_read.started_at.trim() !== '';
+      const hardcoverStartDate = progressInfo.latest_read.started_at;
+      const hasValidHardcoverStartDate =
+        hardcoverStartDate &&
+        hardcoverStartDate.trim() !== '' &&
+        hardcoverStartDate !== 'null' &&
+        hardcoverStartDate !== '0000-00-00';
+
+      const shouldSendStartDate = startedAt && !hasValidHardcoverStartDate;
 
       let mutation, variables;
 
-      if (hasExistingStartDate) {
-        // Preserve existing start date - don't send started_at
-        mutation = useSeconds
-          ? `
-                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_seconds: $seconds,
-                          edition_id: $editionId,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_seconds
-                              edition_id
-                              started_at
+      logger.debug('Start date handling decision', {
+        hardcoverStartDate: hardcoverStartDate,
+        hasValidHardcoverStartDate: hasValidHardcoverStartDate,
+        providedStartDate: startedAt,
+        shouldSendStartDate: shouldSendStartDate,
+      });
 
-                          }
-                      }
-                  }
-              `
-          : `
-                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_pages: $pages,
-                          edition_id: $editionId,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_pages
-                              edition_id
-                              started_at
-
-                          }
-                      }
-                  }
-              `;
-        variables = useSeconds
-          ? {
-              id: safeParseInt(readId, 'readId'),
-              seconds: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            }
-          : {
-              id: safeParseInt(readId, 'readId'),
-              pages: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            };
-
-        logger.debug(
-          `Preserving existing start date: ${progressInfo.latest_read.started_at}`,
-        );
-      } else {
-        // No existing start date - send started_at
+      if (shouldSendStartDate) {
+        // Send start date since Hardcover doesn't have a valid one
         mutation = useSeconds
           ? `
                   mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
@@ -428,8 +384,62 @@ export class HardcoverClient {
             };
 
         logger.debug(
-          `Setting new start date: ${startedAt ? startedAt.slice(0, 10) : 'null'}`,
+          `Setting start date (Hardcover missing): ${startedAt ? startedAt.slice(0, 10) : 'null'}`,
         );
+      } else {
+        // Preserve existing start date - don't send started_at
+        mutation = useSeconds
+          ? `
+                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $readingFormatId: Int) {
+                      update_user_book_read(id: $id, object: {
+                          progress_seconds: $seconds,
+                          edition_id: $editionId,
+                          reading_format_id: $readingFormatId
+                      }) {
+                          error
+                          user_book_read {
+                              id
+                              progress_seconds
+                              edition_id
+                              started_at
+
+                          }
+                      }
+                  }
+              `
+          : `
+                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $readingFormatId: Int) {
+                      update_user_book_read(id: $id, object: {
+                          progress_pages: $pages,
+                          edition_id: $editionId,
+                          reading_format_id: $readingFormatId
+                      }) {
+                          error
+                          user_book_read {
+                              id
+                              progress_pages
+                              edition_id
+                              started_at
+
+                          }
+                      }
+                  }
+              `;
+        variables = useSeconds
+          ? {
+              id: safeParseInt(readId, 'readId'),
+              seconds: safeParseInt(currentProgress, 'currentProgress'),
+              editionId: safeParseInt(editionId, 'editionId'),
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
+            }
+          : {
+              id: safeParseInt(readId, 'readId'),
+              pages: safeParseInt(currentProgress, 'currentProgress'),
+              editionId: safeParseInt(editionId, 'editionId'),
+              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
+            };
+
+        logger.debug(`Preserving existing start date: ${hardcoverStartDate}`);
       }
       try {
         const result = await this._executeQuery(mutation, variables);

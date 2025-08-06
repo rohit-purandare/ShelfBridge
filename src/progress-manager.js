@@ -184,7 +184,7 @@ export class ProgressManager {
           const discrepancy = Math.abs(providedValidated - calculatedProgress);
           if (discrepancy > 1.0) {
             // More than 1% difference
-            logger.warn(`Progress discrepancy detected in ${context}`, {
+            logger.debug(`Progress discrepancy detected in ${context}`, {
               providedProgress: providedValidated,
               calculatedProgress: calculatedProgress,
               discrepancy,
@@ -226,7 +226,7 @@ export class ProgressManager {
           const discrepancy = Math.abs(validatedCalculated - providedValidated);
           if (discrepancy > 1.0) {
             // More than 1% difference
-            logger.warn(`Progress discrepancy detected in ${context}`, {
+            logger.debug(`Progress discrepancy detected in ${context}`, {
               providedProgress: providedValidated,
               calculatedProgress: validatedCalculated,
               discrepancy,
