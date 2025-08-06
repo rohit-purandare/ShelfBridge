@@ -29,6 +29,31 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 **File:** `.github/workflows/ci.yml`  
 **Purpose:** Ensure code works across multiple Node.js versions
 
+### 🔧 Critical Bug Fix: Main Entry Point Test
+
+**Fixed Issue:** The main entry point test was using malformed command syntax that gave false positives
+
+**Previous Problem:**
+
+```bash
+# BROKEN - This didn't actually test the application:
+node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help
+```
+
+**Solution Applied:**
+
+```bash
+# CORRECT - Actually tests if the app's --help command works:
+node src/main.js --help >/dev/null 2>&1
+```
+
+**Benefits:**
+
+- ✅ Actually validates application functionality across Node.js versions
+- ✅ Catches real entry point failures instead of false positives
+- ✅ Proper error handling and clean output
+- ✅ Ensures CI reliability for critical application testing
+
 ### Triggers
 
 - Push to `main` branch

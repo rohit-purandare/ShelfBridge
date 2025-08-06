@@ -74,7 +74,7 @@ jobs:
         run: |
           echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
           echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
-          if ! node -e "console.log('✅ Main entry point loads successfully')" src/main.js --help; then
+          if ! node src/main.js --help >/dev/null 2>&1; then
             echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
             echo "🚫 BLOCKING BUILD - Fix required before merge"
             exit 1
