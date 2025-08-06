@@ -214,6 +214,47 @@ The workflow intelligently determines when to create releases:
 7. **GitHub Release Creation** - Creates tagged release with notes only after Docker images are available
 8. **Docker Coordination** - Ensures Docker images are built and published before users see the release
 
+### 🔒 Security Fix: Safe Binary Installation
+
+**Fixed Issue:** The workflow was downloading gitleaks binary without security verification during releases
+
+**Previous Security Risk:**
+
+```yaml
+# DANGEROUS - Unverified binary download:
+- name: Install gitleaks for pre-commit hooks
+  run: |
+    wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+    tar xzf gitleaks_8.18.4_linux_x64.tar.gz
+    sudo mv gitleaks /usr/local/bin/
+    chmod +x /usr/local/bin/gitleaks
+```
+
+**Security Problems:**
+
+- ❌ **Supply chain attack vector** - no checksum verification
+- ❌ **Man-in-the-middle risk** - unverified binary downloads
+- ❌ **Compromised releases** - malicious binaries could be injected
+- ❌ **Manual version management** - outdated security tools
+
+**Solution Applied:**
+
+```yaml
+# SECURE - Official gitleaks action with built-in security:
+- name: Scan for secrets with gitleaks
+  uses: gitleaks/gitleaks-action@v2
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Security Benefits:**
+
+- ✅ **Official action security** - maintained by gitleaks team
+- ✅ **Integrated scanning** - secrets detected during releases
+- ✅ **GitHub Security tab** - centralized security reporting
+- ✅ **Auto-updates** - always uses compatible and secure versions
+- ✅ **Zero attack surface** - no manual binary downloads
+
 ### Release Format
 
 ```
