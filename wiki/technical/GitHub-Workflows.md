@@ -14,13 +14,14 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 ## 🔄 Workflow Summary
 
-| Workflow                                  | Trigger                           | Purpose                      | Status    |
-| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation) | Functional commits to main        | Smart release creation       | ✅ Active |
-| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
-| [Security Scan](#security-scan)           | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
+| Workflow                                      | Trigger                           | Purpose                      | Status    |
+| --------------------------------------------- | --------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
+| [Release Automation](#release-automation)     | Functional commits to main        | Smart release creation       | ✅ Active |
+| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
+| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
+| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
 
 ---
 
@@ -303,6 +304,60 @@ The workflow now ensures that version-specific Docker images are automatically c
 - **Branch-specific Logic** - Only enforces on main and release branches
 - **Push Blocking** - Prevents pushes with stale documentation
 - **Clear Guidance** - Provides specific instructions for fixing documentation gaps
+
+---
+
+## 🏷️ Pull Request Labeler
+
+**File:** `.github/workflows/labeler.yml`  
+**Purpose:** Automatically apply labels to pull requests based on file changes
+
+### 🔒 Critical Security Fix: Safe PR Trigger
+
+**Fixed Issue:** The labeler workflow was using a dangerous trigger that allowed potential malicious code execution
+
+**Previous Security Risk:**
+
+```yaml
+# DANGEROUS - Runs with write permissions for ANY external PR!
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+```
+
+**Security Problem:**
+
+- `pull_request_target` runs in the **main repo context** with **write permissions**
+- **External attackers** could create PRs that execute malicious code
+- Known GitHub security vulnerability pattern for supply chain attacks
+
+**Solution Applied:**
+
+```yaml
+# SAFE - Runs in fork context with limited permissions
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+```
+
+**Security Benefits:**
+
+- ✅ **Eliminates code execution risk** - no write access to main repo
+- ✅ **Follows GitHub security best practices** - uses safe PR triggers
+- ✅ **Prevents supply chain attacks** - malicious PRs can't compromise workflows
+- ✅ **Maintains labeler functionality** - automatic labeling still works perfectly
+
+### Triggers
+
+- Pull requests to `main` branch (safe trigger)
+- Labeling occurs on: opened, synchronize, reopened, edited
+
+### What It Does
+
+1. **Automatic Labeling** - Applies labels based on changed file patterns
+2. **Configuration-Based** - Uses `.github/labeler.yml` for label rules
+3. **Safe Execution** - Runs with limited permissions in fork context
+4. **PR Management** - Helps organize and categorize pull requests
 
 ---
 
