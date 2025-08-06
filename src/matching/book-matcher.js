@@ -68,6 +68,10 @@ export class BookMatcher {
       try {
         let match = null;
 
+        logger.debug(
+          `Trying ${strategy.getName()} (Tier ${strategy.getTier()}) for "${title}"`,
+        );
+
         if (strategy.getTier() <= 2) {
           // Identifier-based strategies (ASIN, ISBN)
           match = await strategy.findMatch(
@@ -80,11 +84,12 @@ export class BookMatcher {
           if (this._isTitleAuthorMatchingEnabled()) {
             logger.debug(`Attempting title/author matching for "${title}"`);
 
-            // Set up the title/author matcher with user library access
-            strategy._findUserBookByEditionId =
-              this._findUserBookByEditionId.bind(this);
-
-            match = await strategy.findMatch(absBook, userId);
+            // Pass user library lookup function to the strategy
+            match = await strategy.findMatch(
+              absBook,
+              userId,
+              this._findUserBookByEditionId.bind(this),
+            );
           }
         }
 

@@ -29,9 +29,13 @@ export class TitleAuthorMatcher {
    * Attempt to match a book using title and author search
    * @param {Object} absBook - Audiobookshelf book object
    * @param {string} userId - User ID for caching
+   * @param {Function} findUserBookByEditionId - Function to find user books by edition ID
    * @returns {Object|null} - Hardcover match object or null if not found
    */
-  async findMatch(absBook, userId) {
+  async findMatch(absBook, userId, findUserBookByEditionId = null) {
+    // Store the user library lookup function for use in this matching session
+    this._findUserBookByEditionIdImpl = findUserBookByEditionId;
+
     const title = extractTitle(absBook);
     const author = extractAuthor(absBook);
     const narrator = extractNarrator(absBook);
@@ -49,6 +53,14 @@ export class TitleAuthorMatcher {
     try {
       // 1. Check existing cache for successful title/author match
       const titleAuthorId = this._generateTitleAuthorIdentifier(title, author);
+      logger.debug(
+        `Checking cache for title/author: "${title}" by "${author}"`,
+        {
+          titleAuthorId: titleAuthorId,
+          userId: userId,
+        },
+      );
+
       const cachedBookInfo = await this.cache.getCachedBookInfo(
         userId,
         titleAuthorId,
@@ -57,11 +69,19 @@ export class TitleAuthorMatcher {
       );
 
       if (cachedBookInfo && cachedBookInfo.edition_id) {
+        logger.debug(`Found cached title/author match for "${title}"`, {
+          editionId: cachedBookInfo.edition_id,
+        });
+
         return await this._handleCachedMatch(
           cachedBookInfo,
           title,
           titleAuthorId,
         );
+      } else {
+        logger.debug(`No cached title/author match found for "${title}"`, {
+          cachedBookInfo: cachedBookInfo,
+        });
       }
 
       // 2. Cache miss - perform API search
@@ -334,14 +354,20 @@ export class TitleAuthorMatcher {
   }
 
   /**
-   * Find user book by edition ID (placeholder - needs access to user library)
-   * @param {string} _editionId - Edition ID to find
+   * Find user book by edition ID using the provided implementation
+   * @param {string} editionId - Edition ID to find
    * @returns {Object|null} - User book or null
    * @private
    */
-  _findUserBookByEditionId(_editionId) {
-    // This method needs to be provided by the BookMatcher
-    // as it requires access to the user's library data
+  _findUserBookByEditionId(editionId) {
+    // Use the implementation provided by BookMatcher if available
+    if (this._findUserBookByEditionIdImpl) {
+      return this._findUserBookByEditionIdImpl(editionId);
+    }
+
+    logger.warn(
+      'No user library lookup function available for edition ID lookup',
+    );
     return null;
   }
 

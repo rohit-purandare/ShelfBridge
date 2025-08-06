@@ -142,11 +142,46 @@ export function extractAuthor(bookData) {
 
   for (const field of authorFields) {
     if (bookData[field]) {
+      // Debug: Check the type and value of the author field
+      const authorValue = bookData[field];
+
       // Handle array of authors
-      if (Array.isArray(bookData[field])) {
-        return bookData[field].join(', ');
+      if (Array.isArray(authorValue)) {
+        return authorValue
+          .map(author => {
+            if (typeof author === 'object' && author !== null) {
+              return author.name || author.displayName || '[Unknown Author]';
+            }
+            return author.toString();
+          })
+          .join(', ');
       }
-      return bookData[field].trim();
+
+      // Handle object case (extract name or convert to string)
+      if (typeof authorValue === 'object' && authorValue !== null) {
+        // If object has a name property, use it
+        if (authorValue.name) {
+          return authorValue.name.toString().trim();
+        }
+        // If object has a displayName property, use it
+        if (authorValue.displayName) {
+          return authorValue.displayName.toString().trim();
+        }
+        // Log warning and skip this field
+        console.warn(
+          `Author field '${field}' is an object without name/displayName:`,
+          authorValue,
+        );
+        continue;
+      }
+
+      // Handle string case
+      if (typeof authorValue === 'string') {
+        return authorValue.trim();
+      }
+
+      // Handle other types by converting to string
+      return authorValue.toString().trim();
     }
   }
 
@@ -154,10 +189,38 @@ export function extractAuthor(bookData) {
   if (bookData.metadata) {
     for (const field of authorFields) {
       if (bookData.metadata[field]) {
-        if (Array.isArray(bookData.metadata[field])) {
-          return bookData.metadata[field].join(', ');
+        const authorValue = bookData.metadata[field];
+
+        if (Array.isArray(authorValue)) {
+          return authorValue
+            .map(author => {
+              if (typeof author === 'object' && author !== null) {
+                return author.name || author.displayName || '[Unknown Author]';
+              }
+              return author.toString();
+            })
+            .join(', ');
         }
-        return bookData.metadata[field].trim();
+
+        if (typeof authorValue === 'object' && authorValue !== null) {
+          if (authorValue.name) {
+            return authorValue.name.toString().trim();
+          }
+          if (authorValue.displayName) {
+            return authorValue.displayName.toString().trim();
+          }
+          console.warn(
+            `Metadata author field '${field}' is an object without name/displayName:`,
+            authorValue,
+          );
+          continue;
+        }
+
+        if (typeof authorValue === 'string') {
+          return authorValue.trim();
+        }
+
+        return authorValue.toString().trim();
       }
     }
   }
@@ -166,10 +229,38 @@ export function extractAuthor(bookData) {
   if (bookData.media && bookData.media.metadata) {
     for (const field of authorFields) {
       if (bookData.media.metadata[field]) {
-        if (Array.isArray(bookData.media.metadata[field])) {
-          return bookData.media.metadata[field].join(', ');
+        const authorValue = bookData.media.metadata[field];
+
+        if (Array.isArray(authorValue)) {
+          return authorValue
+            .map(author => {
+              if (typeof author === 'object' && author !== null) {
+                return author.name || author.displayName || '[Unknown Author]';
+              }
+              return author.toString();
+            })
+            .join(', ');
         }
-        return bookData.media.metadata[field].trim();
+
+        if (typeof authorValue === 'object' && authorValue !== null) {
+          if (authorValue.name) {
+            return authorValue.name.toString().trim();
+          }
+          if (authorValue.displayName) {
+            return authorValue.displayName.toString().trim();
+          }
+          console.warn(
+            `Media metadata author field '${field}' is an object without name/displayName:`,
+            authorValue,
+          );
+          continue;
+        }
+
+        if (typeof authorValue === 'string') {
+          return authorValue.trim();
+        }
+
+        return authorValue.toString().trim();
       }
     }
   }
