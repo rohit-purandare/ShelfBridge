@@ -58,7 +58,7 @@ export class RateLimiter {
     });
 
     // Clean up old request counts every minute
-    setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this._cleanupOldCounts();
     }, 60000);
 
@@ -144,5 +144,15 @@ export class RateLimiter {
       utilizationPercent: Math.round((currentCount / this.maxRequests) * 100),
       warningThreshold: this.warningThreshold,
     };
+  }
+
+  /**
+   * Cleanup resources (for testing or shutdown)
+   */
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 }
