@@ -4,13 +4,15 @@ This page documents all automated workflows that run on the ShelfBridge reposito
 
 ## 📋 Overview
 
-ShelfBridge uses **5 GitHub Actions workflows** to automate:
+ShelfBridge uses **7 GitHub Actions workflows** to automate:
 
 - **Code Quality** - ESLint, security checks, dependency audits
 - **Testing** - Cross-platform Node.js testing
 - **Security** - Secret scanning, vulnerability detection
 - **Releases** - Automated version tagging and changelog generation
-- **Deployment** - Docker image building and publishing
+- **Docker Build** - Container image building and basic validation
+- **Docker Test** - Comprehensive container testing including PR support
+- **Docker Publish** - Multi-platform publishing and attestation
 
 ## 🔄 Workflow Summary
 
@@ -19,7 +21,9 @@ ShelfBridge uses **5 GitHub Actions workflows** to automate:
 | [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
 | [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
 | [Release Automation](#release-automation)     | Conventional commits to main      | Release Please automation    | ✅ Active |
-| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
+| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Build and basic validation   | ✅ Active |
+| [Docker Test](#docker-test)                   | After Docker Build, PRs           | Comprehensive testing        | ✅ Active |
+| [Docker Publish](#docker-publish)             | After Docker Test passes          | Multi-platform publishing    | ✅ Active |
 | [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
 | [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
 
@@ -482,7 +486,7 @@ on:
 ## 🐳 Docker Build
 
 **File:** `.github/workflows/docker-build.yml`  
-**Purpose:** Build and publish Docker container images for functional changes
+**Purpose:** Build Docker container images and perform basic validation (Part 1 of 3-stage process)
 
 ### Triggers
 
@@ -648,6 +652,104 @@ This prevents broken releases from reaching users and ensures:
 - ✅ **Release tag builds** → Tagged with versions + `latest` (if from main)
 
 This ensures that `latest` always points to the most recent stable build from the main branch.
+
+---
+
+## 🧪 Docker Test
+
+**File:** `.github/workflows/docker-test.yml`  
+**Purpose:** Comprehensive testing of Docker container images (Part 2 of 3-stage process)
+
+### Triggers
+
+- `workflow_run` from Docker Build completion
+- Pull requests to `main` (builds image locally for testing)
+- Manual `workflow_call` with image tags
+
+### What It Does
+
+1. **Image Acquisition**
+   - For workflow_run: Downloads image artifact from Docker Build
+   - For pull requests: Builds image locally for testing
+   - For workflow_call: Uses provided image tags
+
+2. **🛡️ Comprehensive Testing Suite**
+   - **Native Module Compatibility** - Tests better-sqlite3 and other native modules
+   - **Database Operations** - Comprehensive SQLite functionality testing
+   - **Application Startup** - Validates main application entry point
+   - **Configuration Validation** - Tests config system with environment variables
+   - **Health Check Testing** - Validates Docker HEALTHCHECK functionality
+   - **Cache/Database Integration** - Tests BookCache initialization and operations
+
+3. **Pull Request Support**
+   - Builds images locally for PR testing (no registry push needed)
+   - Ensures PR changes don't break container functionality
+   - Provides feedback on Docker compatibility before merge
+
+### Testing Strategy
+
+**Critical Tests** (failure blocks deployment):
+
+- ✅ Native modules load correctly (prevents GLIBC issues)
+- ✅ Database operations function properly
+- ✅ Application starts without crashes
+- ✅ Configuration system is operational
+- ✅ Health monitoring works
+- ✅ Core functionality is validated
+
+### Security Improvements
+
+- Uses GitHub secrets with fallback values for test credentials
+- No hardcoded test tokens in workflow files
+- Supports both authenticated and fallback testing scenarios
+
+---
+
+## 🚀 Docker Publish
+
+**File:** `.github/workflows/docker-publish.yml`  
+**Purpose:** Multi-platform publishing and attestation (Part 3 of 3-stage process)
+
+### Triggers
+
+- `workflow_run` from Docker Test completion (non-PR events only)
+- Manual `workflow_call` with image metadata
+
+### What It Does
+
+1. **Multi-Platform Build**
+   - Builds for linux/amd64 and linux/arm64
+   - Uses Docker Buildx for cross-platform compilation
+   - Maintains build cache for faster subsequent builds
+
+2. **Image Publishing**
+   - Pushes to GitHub Container Registry (ghcr.io)
+   - Creates semantic version tags automatically
+   - Updates latest tag for main branch builds
+
+3. **Security & Attestation**
+   - Generates image attestation for main/release builds
+   - Provides build provenance information
+   - Creates SLSA-compliant security metadata
+
+4. **Verification & Cleanup**
+   - Verifies published images can be pulled
+   - Performs smoke tests on published images
+   - Cleans up temporary artifacts and local images
+
+### Generated Image Tags
+
+Based on trigger type:
+
+- **Feature branches**: `ghcr.io/rohit-purandare/shelfbridge:feature-branch-name`
+- **Main branch**: `ghcr.io/rohit-purandare/shelfbridge:main` + `:latest`
+- **Release tags**: `ghcr.io/rohit-purandare/shelfbridge:v1.2.3` + `:1.2` + `:1` + `:latest`
+
+### Pull Request Handling
+
+- **Pull requests DO NOT trigger publishing** (security best practice)
+- Images are built and tested but not pushed to registry
+- Prevents unauthorized image publication from external PRs
 
 ---
 
@@ -829,17 +931,26 @@ graph TD
     A --> D[Security Scan]
     A --> E[Docker Build]
 
-    F[Version Change] --> G[Release Automation]
-    G --> H[GitHub Release]
-    E --> I[Docker Images]
+    E --> F[Docker Test]
+    F --> G[Docker Publish]
 
-    B --> J[✅ Tests Pass]
-    C --> K[✅ Quality Gates]
-    D --> L[🔒 Security Clear]
+    H[Version Change] --> I[Release Automation]
+    I --> J[GitHub Release]
+    G --> K[Docker Images Available]
 
-    J --> M[Ready for Release]
-    K --> M
-    L --> M
+    B --> L[✅ Tests Pass]
+    C --> M[✅ Quality Gates]
+    D --> N[🔒 Security Clear]
+    G --> O[✅ Images Published]
+
+    L --> P[Ready for Release]
+    M --> P
+    N --> P
+    O --> P
+
+    style E fill:#e1f5fe
+    style F fill:#fff3e0
+    style G fill:#e8f5e8
 ```
 
 ## 🎯 Best Practices
