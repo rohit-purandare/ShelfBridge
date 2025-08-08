@@ -1,4 +1,5 @@
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
+import { TaskQueue } from './utils/task-queue.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
@@ -6,6 +7,7 @@ import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
+import { Transaction } from './utils/transaction.js';
 
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
@@ -14,6 +16,10 @@ export class SyncManager {
     this.globalConfig = globalConfig;
     this.dryRun = dryRun;
     this.verbose = verbose;
+    // Initialize per-user task queue respecting global worker limits
+    const workers = this.globalConfig.workers || 3;
+    this.taskQueue = new TaskQueue({ concurrency: workers });
+    this.abortController = new AbortController();
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -453,26 +459,20 @@ export class SyncManager {
   }
 
   async _syncBooksParallel(booksToProcess, result, sessionData) {
-    const workers = this.globalConfig.workers || 3;
-    const chunks = [];
+    const promises = booksToProcess.map(book =>
+      this.taskQueue.enqueue(
+        async () => {
+          const syncResult = await this._syncSingleBook(book, sessionData);
+          // Update shared result as soon as each book finishes
+          this._updateResult(result, syncResult);
+          return syncResult;
+        },
+        { signal: this.abortController.signal },
+      ),
+    );
 
-    // Split books into chunks for parallel processing
-    for (let i = 0; i < booksToProcess.length; i += workers) {
-      chunks.push(booksToProcess.slice(i, i + workers));
-    }
-
-    // Process chunks sequentially, books within chunks in parallel
-    for (const chunk of chunks) {
-      const promises = chunk.map(book =>
-        this._syncSingleBook(book, sessionData),
-      );
-      const chunkResults = await Promise.all(promises);
-
-      // Update results with all chunk results
-      chunkResults.forEach(syncResult => {
-        this._updateResult(result, syncResult);
-      });
-    }
+    // Wait for all queued tasks to complete
+    await Promise.all(promises);
   }
 
   async _syncBooksSequential(booksToProcess, result, sessionData) {
@@ -1052,8 +1052,8 @@ export class SyncManager {
         return { status: 'auto_added', title, bookId, editionId };
       }
 
-      // Prepare rollback callback in case API fails
-      const rollbackCallbacks = [];
+      // Start transaction for auto-add operation
+      const transaction = new Transaction(`auto-add: ${title}`);
       const _apiRollbackNeeded = false;
 
       logger.debug(`Adding ${title} to Hardcover library`, {
@@ -1080,7 +1080,7 @@ export class SyncManager {
 
         // Add API rollback callback
         const _apiRollbackNeeded = true;
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back auto-add for ${title}`);
           // Note: Hardcover doesn't have a remove from library API, so we log the issue
           logger.warn(
@@ -1179,6 +1179,7 @@ export class SyncManager {
             }
           }
 
+          await transaction.commit();
           return { status: 'auto_added', title, userBookId: addResult.id };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -1186,10 +1187,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          // Execute rollback callbacks
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -1569,8 +1567,8 @@ export class SyncManager {
         rawFinishedAt: absBook.finished_at,
       });
 
-      // Prepare rollback callback for API failure
-      const rollbackCallbacks = [];
+      // Start transaction for completion operation
+      const transaction = new Transaction(`complete: ${title}`);
       const _apiSuccess = false;
 
       const success = await this.hardcover.markBookCompleted(
@@ -1591,7 +1589,7 @@ export class SyncManager {
         const _apiSuccess = true;
 
         // Add API rollback callback
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back completion status for ${title}`);
           // Try to revert the completion (this may not always be possible)
           try {
@@ -1625,6 +1623,7 @@ export class SyncManager {
             absBook.finished_at,
           );
 
+          await transaction.commit();
           return { status: 'completed', title };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -1632,9 +1631,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -1716,8 +1713,8 @@ export class SyncManager {
         },
       );
 
-      // Prepare rollback callback for API failure
-      const rollbackCallbacks = [];
+      // Start transaction for progress operation
+      const transaction = new Transaction(`progress: ${title}`);
       let previousProgress = null;
 
       // Get previous progress for rollback
@@ -1763,7 +1760,7 @@ export class SyncManager {
         });
 
         // Add API rollback callback
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back progress update for ${title}`);
           if (previousProgress !== null) {
             try {
@@ -1825,6 +1822,7 @@ export class SyncManager {
             absBook,
           );
 
+          await transaction.commit();
           return { status: 'synced', title };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -1832,9 +1830,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -1951,6 +1947,14 @@ export class SyncManager {
       }
       if (this.hardcover && this.hardcover.cleanup) {
         this.hardcover.cleanup();
+      }
+
+      // Abort any pending queued tasks and clear queue
+      if (this.taskQueue) {
+        this.taskQueue.clear();
+      }
+      if (this.abortController) {
+        this.abortController.abort();
       }
 
       // Clean up database connection

@@ -44,10 +44,20 @@ export async function dumpFailedSyncBooks(
   for (const [index, book] of failedBooks.entries()) {
     output.push(`${index + 1}. ${book.title || 'Unknown Title'}`);
     output.push(`   Author: ${book.author || 'Unknown Author'}`);
-    output.push(`   Error: ${book.error || 'Unknown Error'}`);
-    output.push(`   Progress: ${book.progress || 0}%`);
-    if (book.identifiers) {
+    output.push(`   Status: ${book.status || 'Unknown'}`);
+    output.push(`   Error: ${book.reason || 'Unknown Error'}`);
+    if (book.progress) {
+      const progressBefore =
+        book.progress.before !== null ? `${book.progress.before}%` : 'N/A';
+      const progressAfter =
+        book.progress.after !== null ? `${book.progress.after}%` : 'N/A';
+      output.push(`   Progress: ${progressBefore} → ${progressAfter}`);
+    }
+    if (book.identifiers && Object.keys(book.identifiers).length > 0) {
       output.push(`   Identifiers: ${JSON.stringify(book.identifiers)}`);
+    }
+    if (book.errors && book.errors.length > 0) {
+      output.push(`   Additional Errors: ${book.errors.join(', ')}`);
     }
     output.push('');
   }
