@@ -7,10 +7,22 @@ import { currentVersion } from './version.js';
 // Get the version from shared utility
 const version = currentVersion;
 
-// Create logs directory if it doesn't exist
-const logsDir = 'logs';
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+// Determine logs directory and whether file logging is available
+const logsDir = path.resolve('logs');
+let fileLoggingEnabled = true;
+
+try {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  const testFile = path.join(logsDir, `.write-test-${Date.now()}`);
+  fs.writeFileSync(testFile, 'ok');
+  fs.unlinkSync(testFile);
+} catch (_e) {
+  fileLoggingEnabled = false;
+  console.warn(
+    `[logging] Falling back to console-only logging. Directory not writable: ${logsDir}`,
+  );
 }
 
 // Custom format for structured logging
@@ -48,52 +60,63 @@ const logger = winston.createLogger({
     version: version,
   },
   transports: [
-    // Console transport
     new winston.transports.Console({
       format: consoleFormat,
       level: process.env.LOG_LEVEL || 'info',
     }),
-
-    // Daily rotating file transport for all logs
-    new DailyRotateFile({
-      filename: path.join(logsDir, 'shelfbridge-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '14d',
-      level: 'debug',
-    }),
-
-    // Separate error log file
-    new DailyRotateFile({
-      filename: path.join(logsDir, 'shelfbridge-error-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '30d',
-      level: 'error',
-    }),
+    ...(fileLoggingEnabled
+      ? [
+          new DailyRotateFile({
+            filename: path.join(logsDir, 'shelfbridge-%DATE%.log'),
+            datePattern: 'YYYY-MM-DD',
+            zippedArchive: true,
+            maxSize: '20m',
+            maxFiles: '14d',
+            level: 'debug',
+          }),
+          new DailyRotateFile({
+            filename: path.join(logsDir, 'shelfbridge-error-%DATE%.log'),
+            datePattern: 'YYYY-MM-DD',
+            zippedArchive: true,
+            maxSize: '20m',
+            maxFiles: '30d',
+            level: 'error',
+          }),
+        ]
+      : []),
   ],
-  // Handle uncaught exceptions
-  exceptionHandlers: [
-    new DailyRotateFile({
-      filename: path.join(logsDir, 'shelfbridge-exception-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '30d',
-    }),
-  ],
-  // Handle unhandled promise rejections
-  rejectionHandlers: [
-    new DailyRotateFile({
-      filename: path.join(logsDir, 'shelfbridge-rejection-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '30d',
-    }),
-  ],
+  exceptionHandlers: fileLoggingEnabled
+    ? [
+        new DailyRotateFile({
+          filename: path.join(logsDir, 'shelfbridge-exception-%DATE%.log'),
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '30d',
+        }),
+      ]
+    : [
+        new winston.transports.Console({
+          format: consoleFormat,
+          level: 'error',
+        }),
+      ],
+  rejectionHandlers: fileLoggingEnabled
+    ? [
+        new DailyRotateFile({
+          filename: path.join(logsDir, 'shelfbridge-rejection-%DATE%.log'),
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '30d',
+        }),
+      ]
+    : [
+        new winston.transports.Console({
+          format: consoleFormat,
+          level: 'error',
+        }),
+      ],
 });
 
 // Add context methods for structured logging
