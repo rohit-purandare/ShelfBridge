@@ -42,6 +42,16 @@ jobs:
           fi
           echo "✅ Application tests passed on Node ${{ matrix.node-version }}"
 
+      - name: Run API connection smoke tests (non-blocking)
+        env:
+          SHELFBRIDGE_USER_0_ID: 'test_user'
+          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
+          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
+          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
+        run: |
+          echo "🔌 Running API connection smoke tests on Node ${{ matrix.node-version }}"
+          # Allow failures so external service downtime doesn't block PRs
+          npm run test:connections || echo "⚠️  API connection tests failed – non-blocking"
       - name: Test native modules compatibility (CRITICAL)
         run: |
           echo "🧪 CRITICAL: Testing native modules compatibility on Node ${{ matrix.node-version }}"

@@ -1,21 +1,13 @@
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
+import { TaskQueue } from './utils/task-queue.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
-import {
-  normalizeIsbn,
-  normalizeAsin,
-  extractIsbn,
-  extractAsin,
-  extractTitle,
-  extractAuthor,
-  extractNarrator,
-  extractAuthorFromSearchResult,
-  calculateMatchingScore,
-  formatDurationForLogging,
-} from './utils.js';
+import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
+import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
+import { Transaction } from './utils/transaction.js';
 
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
@@ -24,6 +16,10 @@ export class SyncManager {
     this.globalConfig = globalConfig;
     this.dryRun = dryRun;
     this.verbose = verbose;
+    // Initialize per-user task queue respecting global worker limits
+    const workers = this.globalConfig.workers || 3;
+    this.taskQueue = new TaskQueue({ concurrency: workers });
+    this.abortController = new AbortController();
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -49,11 +45,18 @@ export class SyncManager {
     // Initialize cache
     this.cache = new BookCache();
 
+    // Initialize book matcher
+    this.bookMatcher = new BookMatcher(
+      this.hardcover,
+      this.cache,
+      globalConfig,
+    );
+
     // Timing data
     this.timingData = {};
 
     logger.debug('SyncManager initialized', {
-      userId: this.userId,
+      user_id: this.userId,
       dryRun: this.dryRun,
       timezone: this.timezone,
       libraryConfig: libraryConfig,
@@ -180,8 +183,14 @@ export class SyncManager {
       // Store for cross-referencing in cache logic
       this.hardcoverBooks = hardcoverBooks;
 
-      // Create identifier lookup
-      const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
+      // Update book matcher with user library data and lookup function
+      this.bookMatcher.setUserLibrary(
+        hardcoverBooks,
+        this._mapHardcoverFormatToInternal.bind(this),
+      );
+      this.bookMatcher.setUserLibraryLookup(
+        this._findUserBookByEditionId.bind(this),
+      );
 
       logger.debug(
         `Processing ${booksToProcess.length} books from Audiobookshelf`,
@@ -197,20 +206,10 @@ export class SyncManager {
         logger.debug('Using parallel processing', {
           workers: this.globalConfig.workers || 3,
         });
-        await this._syncBooksParallel(
-          booksToProcess,
-          identifierLookup,
-          result,
-          null,
-        );
+        await this._syncBooksParallel(booksToProcess, result, null);
       } else {
         logger.debug('Using sequential processing');
-        await this._syncBooksSequential(
-          booksToProcess,
-          identifierLookup,
-          result,
-          null,
-        );
+        await this._syncBooksSequential(booksToProcess, result, null);
       }
 
       // Log final summary with book details
@@ -237,7 +236,7 @@ export class SyncManager {
       logger.error('Sync failed', {
         error: error.message,
         stack: error.stack,
-        userId: this.userId,
+        user_id: this.userId,
       });
       result.errors.push(error.message);
       console.log(
@@ -245,49 +244,6 @@ export class SyncManager {
       );
       return result;
     }
-  }
-
-  _createIdentifierLookup(hardcoverBooks) {
-    const lookup = {};
-
-    for (const userBook of hardcoverBooks) {
-      const book = userBook.book;
-      if (!book || !book.editions) continue;
-
-      for (const edition of book.editions) {
-        // Extract format from reading_format for consistent format detection
-        const editionWithFormat = {
-          ...edition,
-          format: this._mapHardcoverFormatToInternal(edition),
-        };
-
-        // Add ISBN-10
-        if (edition.isbn_10) {
-          const normalizedIsbn = normalizeIsbn(edition.isbn_10);
-          if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
-          }
-        }
-
-        // Add ISBN-13
-        if (edition.isbn_13) {
-          const normalizedIsbn = normalizeIsbn(edition.isbn_13);
-          if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
-          }
-        }
-
-        // Add ASIN
-        if (edition.asin) {
-          const normalizedAsin = normalizeAsin(edition.asin);
-          if (normalizedAsin) {
-            lookup[normalizedAsin] = { userBook, edition: editionWithFormat };
-          }
-        }
-      }
-    }
-
-    return lookup;
   }
 
   /**
@@ -311,446 +267,6 @@ export class SyncManager {
     }
 
     return null;
-  }
-
-  /**
-   * Find a book in the Hardcover library using identifiers and title/author matching
-   * @param {Object} absBook - Audiobookshelf book object
-   * @param {Object} identifierLookup - Lookup table of identifiers to Hardcover books
-   * @returns {Object|null} - Hardcover match object or null if not found
-   */
-  async _findBookInHardcover(absBook, identifierLookup) {
-    const identifiers = this._extractBookIdentifier(absBook);
-    const title = extractTitle(absBook) || 'Unknown Title';
-
-    logger.debug(`Searching for ${title} in Hardcover library`, {
-      identifiers: identifiers,
-    });
-
-    // 1. Try ASIN first (for audiobooks)
-    if (identifiers.asin && identifierLookup[identifiers.asin]) {
-      const match = identifierLookup[identifiers.asin];
-      logger.debug(`Found ASIN match for ${title}`, {
-        asin: identifiers.asin,
-        hardcoverTitle: match.userBook.book.title,
-        userBookId: match.userBook.id,
-        editionId: match.edition.id,
-      });
-      return match;
-    }
-
-    // 2. Fall back to ISBN
-    if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
-      const match = identifierLookup[identifiers.isbn];
-      logger.debug(`Found ISBN match for ${title}`, {
-        isbn: identifiers.isbn,
-        hardcoverTitle: match.userBook.book.title,
-        userBookId: match.userBook.id,
-        editionId: match.edition.id,
-      });
-      return match;
-    }
-
-    // 3. NEW: Try title/author matching if enabled
-    const titleAuthorConfig = this.globalConfig.title_author_matching || {};
-    if (titleAuthorConfig.enabled !== false) {
-      // Default enabled
-      logger.debug(`Attempting title/author matching for ${title}`);
-      const titleAuthorMatch = await this._findBookByTitleAuthor(absBook);
-      if (titleAuthorMatch) {
-        return titleAuthorMatch;
-      }
-    }
-
-    logger.debug(`No match found for ${title} in Hardcover library`, {
-      searchedIdentifiers: identifiers,
-    });
-    return null;
-  }
-
-  /**
-   * Find a book using title/author matching via Hardcover search API
-   * @param {Object} absBook - Audiobookshelf book object
-   * @returns {Object|null} - Hardcover match object or null if not found
-   */
-  async _findBookByTitleAuthor(absBook) {
-    const title = extractTitle(absBook);
-    const author = extractAuthor(absBook);
-    const narrator = extractNarrator(absBook);
-
-    if (!title) {
-      logger.debug('Cannot perform title/author matching: no title found');
-      return null;
-    }
-
-    // Get configuration
-    const config = this.globalConfig.title_author_matching || {};
-    const confidenceThreshold = config.confidence_threshold || 0.7; // Raised from 0.6 to 0.7 for better precision
-    const maxResults = config.max_search_results || 5;
-
-    try {
-      // 1. Check existing cache for successful title/author match
-      const titleAuthorId = this.cache.generateTitleAuthorIdentifier(
-        title,
-        author,
-      );
-      const cachedBookInfo = await this.cache.getCachedBookInfo(
-        this.userId,
-        titleAuthorId,
-        title,
-        'title_author',
-      );
-
-      if (cachedBookInfo && cachedBookInfo.edition_id) {
-        logger.debug(`Title/author cache HIT for "${title}"`, {
-          identifier: titleAuthorId,
-          editionId: cachedBookInfo.edition_id,
-          cached: 'CACHE_HIT',
-        });
-
-        // Check if this cached edition already exists in user's current Hardcover library
-        const existingUserBook = this._findUserBookByEditionId(
-          cachedBookInfo.edition_id,
-        );
-
-        if (existingUserBook) {
-          // Book is already in library - use real user book ID
-          logger.debug(
-            `Cached edition found in current library for "${title}"`,
-            {
-              editionId: cachedBookInfo.edition_id,
-              realUserBookId: existingUserBook.id,
-              libraryTitle: existingUserBook.book.title,
-            },
-          );
-
-          return {
-            userBook: existingUserBook,
-            edition: {
-              id: cachedBookInfo.edition_id,
-              format: 'audiobook', // We'll determine actual format later
-            },
-            _isSearchResult: false, // Not a search result, it's already in library
-            _matchingScore: { totalScore: 85, confidence: 'high' },
-            _needsBookIdLookup: false, // We already have the real user book ID
-          };
-        } else {
-          // Book not in current library - needs auto-add (existing behavior)
-          logger.debug(
-            `Cached edition NOT found in current library for "${title}"`,
-            {
-              editionId: cachedBookInfo.edition_id,
-              willAutoAdd: true,
-            },
-          );
-
-          return {
-            userBook: {
-              id: cachedBookInfo.edition_id,
-              book: { title: cachedBookInfo.title },
-            },
-            edition: {
-              id: cachedBookInfo.edition_id,
-              format: 'audiobook', // We'll determine actual format later
-            },
-            _isSearchResult: true,
-            _matchingScore: { totalScore: 85, confidence: 'high' },
-            _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
-          };
-        }
-      }
-
-      // 2. Cache miss - perform API search
-      logger.debug(
-        `Title/author cache miss for "${title}" - calling edition search API`,
-      );
-      const searchResults = await this.hardcover.searchEditionsByTitleAuthor(
-        title,
-        author,
-        narrator,
-        maxResults,
-      );
-
-      if (searchResults.length === 0) {
-        logger.debug(`No search results found for "${title}"`);
-        return null;
-      }
-
-      // Score and rank results
-      const scoredResults = searchResults.map(result => {
-        const score = calculateMatchingScore(
-          result,
-          title,
-          author,
-          narrator,
-          absBook,
-        );
-        return {
-          ...result,
-          _matchingScore: score,
-        };
-      });
-
-      // Sort by confidence score
-      scoredResults.sort(
-        (a, b) => b._matchingScore.totalScore - a._matchingScore.totalScore,
-      );
-
-      // Find best match above threshold
-      const bestMatch = scoredResults[0];
-      if (
-        bestMatch &&
-        bestMatch._matchingScore.totalScore >= confidenceThreshold * 100
-      ) {
-        // Clean user-facing log
-        logger.info(`📚 Found "${title}" in Hardcover by title/author search`, {
-          match: bestMatch.title,
-          confidence: `${bestMatch._matchingScore.totalScore.toFixed(1)}%`,
-        });
-
-        // Detailed breakdown for debugging only
-        logger.debug(`Title/author match details for "${title}"`, {
-          confidence: bestMatch._matchingScore.totalScore,
-          breakdown: bestMatch._matchingScore.breakdown,
-          searchMetadata: bestMatch._searchMetadata,
-        });
-
-        // 3. Cache successful match in existing books table for future performance
-        try {
-          await this.cache.storeEditionMapping(
-            this.userId,
-            titleAuthorId,
-            title, // Use the original book title from Audiobookshelf
-            bestMatch.id, // edition_id
-            'title_author',
-            extractAuthorFromSearchResult(bestMatch) || author || '',
-          );
-          logger.debug(`Cached title/author match for "${title}"`, {
-            identifier: titleAuthorId,
-            editionId: bestMatch.id,
-          });
-        } catch (cacheError) {
-          logger.warn(
-            `Failed to cache title/author match for "${title}": ${cacheError.message}`,
-          );
-          // Continue anyway - caching failure shouldn't break sync
-        }
-
-        // Convert search result to match format compatible with existing code
-        const convertedMatch = this._convertSearchResultToMatch(bestMatch);
-
-        // Check if conversion was successful (should be rare now with lookup strategy)
-        if (!convertedMatch) {
-          logger.error(
-            `Failed to convert search result to match format for "${title}" - no valid edition ID found`,
-            {
-              bestMatchId: bestMatch.id,
-              bestMatchTitle: bestMatch.title,
-              hasBookObject: !!bestMatch.book,
-              bookKeys: bestMatch.book ? Object.keys(bestMatch.book) : [],
-            },
-          );
-          return null;
-        }
-
-        // Log if we'll need to lookup book ID (this is normal and expected in some cases)
-        if (convertedMatch._needsBookIdLookup) {
-          logger.debug(
-            `Title/author match will require book ID lookup for "${title}"`,
-            {
-              editionId: bestMatch.id,
-              title: bestMatch.title,
-              reason: 'book.id missing from search result',
-            },
-          );
-        }
-
-        return convertedMatch;
-      } else {
-        const bestScore = bestMatch ? bestMatch._matchingScore.totalScore : 0;
-        logger.debug(`Best title/author match for "${title}" below threshold`, {
-          bestScore: bestScore,
-          threshold: confidenceThreshold * 100,
-          hardcoverTitle: bestMatch ? bestMatch.title : 'N/A',
-        });
-        return null;
-      }
-    } catch (error) {
-      logger.warn(
-        `Title/author search failed for "${title}": ${error.message}`,
-      );
-      return null; // Graceful fallback
-    }
-  }
-
-  /**
-   * Convert search result to match format compatible with existing matching code
-   * @param {Object} searchResult - Hardcover search result with matching score
-   * @returns {Object} - Match object in expected format
-   */
-  _convertSearchResultToMatch(searchResult) {
-    // Create a simplified match object that works with existing code
-    // Note: This won't have the full userBook structure since it's from search, not user library
-
-    const editionId = searchResult.id;
-    // CRITICAL: The book ID must come from searchResult.book.id, not from searchResult.id
-    // searchResult.id is the edition ID, searchResult.book.id is the book ID
-    const bookId = searchResult.book?.id;
-
-    logger.debug('Converting search result to match format', {
-      originalSearchResult: {
-        id: searchResult.id,
-        title: searchResult.title,
-        bookId: searchResult.book?.id,
-        format: searchResult.format,
-        hasBookObject: !!searchResult.book,
-      },
-      extractedIds: {
-        bookId: bookId,
-        editionId: editionId,
-      },
-    });
-
-    // Validate that we have at least an edition ID
-    if (!editionId) {
-      logger.error(
-        'Search result missing edition ID - cannot create valid match',
-        {
-          searchResult: {
-            id: searchResult.id,
-            title: searchResult.title,
-            hasBook: !!searchResult.book,
-            bookKeys: searchResult.book ? Object.keys(searchResult.book) : [],
-            fullBookObject: searchResult.book,
-          },
-        },
-      );
-      return null;
-    }
-
-    // Note: We allow bookId to be missing here - it will be resolved later if needed
-    return {
-      edition: {
-        id: editionId,
-        format: searchResult.format || 'unknown',
-        pages: searchResult.pages || null,
-        audio_seconds: searchResult.audio_seconds || null,
-        isbn_10: searchResult.isbn_10 || null,
-        isbn_13: searchResult.isbn_13 || null,
-        asin: searchResult.asin || null,
-      },
-      userBook: {
-        id: null, // Will be created during auto-add process
-        book: {
-          id: bookId, // May be null - will be resolved later if needed
-          title: searchResult.title,
-          contributions: searchResult.contributions || [],
-        },
-      },
-      _isSearchResult: true, // Flag to indicate this came from search, not user library
-      _matchingScore: searchResult._matchingScore,
-      _needsBookIdLookup: !bookId, // Flag to indicate if we need to lookup book ID
-    };
-  }
-
-  /**
-   * Extract book identifiers (ISBN and ASIN) from Audiobookshelf book object
-   * @param {Object} absBook - Audiobookshelf book object
-   * @returns {Object} - Object containing isbn and asin properties
-   */
-  _extractBookIdentifier(absBook) {
-    const identifiers = {
-      isbn: null,
-      asin: null,
-    };
-
-    try {
-      // Extract ISBN
-      const isbn = extractIsbn(absBook);
-      if (isbn) {
-        const normalizedIsbn = normalizeIsbn(isbn);
-        if (normalizedIsbn) {
-          identifiers.isbn = normalizedIsbn;
-        }
-      }
-
-      // Extract ASIN
-      const asin = extractAsin(absBook);
-      if (asin) {
-        const normalizedAsin = normalizeAsin(asin);
-        if (normalizedAsin) {
-          identifiers.asin = normalizedAsin;
-        }
-      }
-
-      logger.debug('Extracted book identifiers', {
-        title: extractTitle(absBook),
-        isbn: identifiers.isbn,
-        asin: identifiers.asin,
-      });
-    } catch (error) {
-      logger.error('Error extracting book identifiers', {
-        error: error.message,
-        title: extractTitle(absBook),
-      });
-    }
-
-    return identifiers;
-  }
-
-  /**
-   * Extract author information from book data
-   * @param {Object} absBook - Audiobookshelf book object
-   * @param {Object} hardcoverMatch - Hardcover match object (optional)
-   * @returns {string|null} - Author name or null if not found
-   */
-  _extractAuthorFromData(absBook, hardcoverMatch = null) {
-    let author = null;
-
-    try {
-      // First try to get author from Audiobookshelf
-      if (absBook) {
-        author = extractAuthor(absBook);
-        if (author) {
-          logger.debug('Extracted author from Audiobookshelf', {
-            title: extractTitle(absBook),
-            author: author,
-          });
-          return author;
-        }
-      }
-
-      // Fall back to Hardcover data if available
-      if (
-        hardcoverMatch &&
-        hardcoverMatch.userBook &&
-        hardcoverMatch.userBook.book
-      ) {
-        const book = hardcoverMatch.userBook.book;
-        if (book.contributions && book.contributions.length > 0) {
-          const authorContribution = book.contributions.find(c => c.author);
-          if (authorContribution && authorContribution.author) {
-            author = authorContribution.author.name;
-            logger.debug('Extracted author from Hardcover', {
-              title: book.title,
-              author: author,
-            });
-            return author;
-          }
-        }
-      }
-
-      logger.debug('No author found in book data', {
-        title: absBook ? extractTitle(absBook) : 'Unknown',
-      });
-    } catch (error) {
-      logger.error('Error extracting author from book data', {
-        error: error.message,
-        title: absBook ? extractTitle(absBook) : 'Unknown',
-      });
-    }
-
-    return author;
   }
 
   /**
@@ -872,53 +388,67 @@ export class SyncManager {
     if (!dateValue) return null;
 
     try {
-      let date;
-
-      if (typeof dateValue === 'number') {
-        // Handle timestamp (milliseconds)
-        date = new Date(dateValue);
-      } else if (typeof dateValue === 'string') {
-        // Handle ISO string or other date formats
-        if (dateValue.includes('T') || dateValue.includes('-')) {
-          // Already a date string, try to parse it
-          date = new Date(dateValue);
-        } else {
-          // Might be a timestamp as string
-          const timestamp = parseInt(dateValue);
-          if (!isNaN(timestamp)) {
-            date = new Date(timestamp);
-          } else {
-            date = new Date(dateValue);
+      // If we already have an ISO string with timezone, return the local day directly
+      if (typeof dateValue === 'string') {
+        // Common case: we previously set `absBook.started_at = startedAtLocal.toISO()`
+        if (dateValue.includes('T')) {
+          const isoDate = DateTime.fromISO(dateValue);
+          if (isoDate.isValid) {
+            const local = isoDate.setZone(this.timezone || 'UTC');
+            const output = local.toISODate();
+            logger.debug('Formatted date for Hardcover (ISO string)', {
+              input: dateValue,
+              output,
+              timezone: this.timezone,
+            });
+            return output;
           }
         }
-      } else {
-        logger.warn('Invalid date format', {
-          dateValue,
-          type: typeof dateValue,
+
+        // Try parsing as SQL or generic date
+        const sql = DateTime.fromSQL(dateValue, {
+          zone: this.timezone || 'UTC',
         });
-        return null;
+        if (sql.isValid) {
+          return sql.toISODate();
+        }
+
+        const parsed = DateTime.fromJSDate(new Date(dateValue), {
+          zone: this.timezone || 'UTC',
+        });
+        if (parsed.isValid) {
+          return parsed.toISODate();
+        }
       }
 
-      // Validate the date
-      if (isNaN(date.getTime())) {
-        logger.warn('Invalid date value', { dateValue });
-        return null;
+      // If value is milliseconds (number or numeric string)
+      const millis =
+        typeof dateValue === 'number'
+          ? dateValue
+          : typeof dateValue === 'string' && /^\d+$/.test(dateValue)
+            ? parseInt(dateValue, 10)
+            : null;
+
+      if (millis !== null && !isNaN(millis)) {
+        const local = DateTime.fromMillis(millis, {
+          zone: this.timezone || 'UTC',
+        });
+        if (local.isValid) {
+          const output = local.toISODate();
+          logger.debug('Formatted date for Hardcover (millis)', {
+            input: dateValue,
+            output,
+            timezone: this.timezone,
+          });
+          return output;
+        }
       }
 
-      // Format as YYYY-MM-DD
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-
-      const formattedDate = `${year}-${month}-${day}`;
-
-      logger.debug('Formatted date for Hardcover', {
-        input: dateValue,
-        inputType: typeof dateValue,
-        output: formattedDate,
+      logger.warn('Unable to format date for Hardcover', {
+        value: dateValue,
+        type: typeof dateValue,
       });
-
-      return formattedDate;
+      return null;
     } catch (error) {
       logger.error('Error formatting date for Hardcover', {
         dateValue: dateValue,
@@ -928,56 +458,40 @@ export class SyncManager {
     }
   }
 
-  async _syncBooksParallel(
-    booksToProcess,
-    identifierLookup,
-    result,
-    sessionData,
-  ) {
-    const workers = this.globalConfig.workers || 3;
-    const chunks = [];
+  async _syncBooksParallel(booksToProcess, result, sessionData) {
+    const promises = booksToProcess.map(book =>
+      this.taskQueue.enqueue(
+        async () => {
+          const syncResult = await this._syncSingleBook(book, sessionData);
+          // Update shared result as soon as each book finishes
+          this._updateResult(result, syncResult);
+          return syncResult;
+        },
+        { signal: this.abortController.signal },
+      ),
+    );
 
-    // Split books into chunks for parallel processing
-    for (let i = 0; i < booksToProcess.length; i += workers) {
-      chunks.push(booksToProcess.slice(i, i + workers));
-    }
-
-    // Process chunks sequentially, books within chunks in parallel
-    for (const chunk of chunks) {
-      const promises = chunk.map(book =>
-        this._syncSingleBook(book, identifierLookup, sessionData),
-      );
-      const chunkResults = await Promise.all(promises);
-
-      // Update results with all chunk results
-      chunkResults.forEach(syncResult => {
-        this._updateResult(result, syncResult);
-      });
-    }
+    // Wait for all queued tasks to complete
+    await Promise.all(promises);
   }
 
-  async _syncBooksSequential(
-    booksToProcess,
-    identifierLookup,
-    result,
-    sessionData,
-  ) {
+  async _syncBooksSequential(booksToProcess, result, sessionData) {
     for (const book of booksToProcess) {
       result.books_processed++;
 
-      // Show progress for verbose output
+      // Show progress for verbose output (basic title for display only)
       if (this.verbose) {
-        const title = extractTitle(book) || 'Unknown Title';
+        const displayTitle =
+          book.title ||
+          book.metadata?.title ||
+          book.media?.metadata?.title ||
+          'Unknown Title';
         console.log(
-          `  → [${result.books_processed}/${booksToProcess.length}] ${title}`,
+          `  → [${result.books_processed}/${booksToProcess.length}] ${displayTitle}`,
         );
       }
 
-      const syncResult = await this._syncSingleBook(
-        book,
-        identifierLookup,
-        sessionData,
-      );
+      const syncResult = await this._syncSingleBook(book, sessionData);
       this._updateResult(result, syncResult);
     }
   }
@@ -990,9 +504,16 @@ export class SyncManager {
     return chunks;
   }
 
-  async _syncSingleBook(absBook, identifierLookup, sessionData) {
+  async _syncSingleBook(absBook, sessionData) {
     const startTime = performance.now();
-    const title = extractTitle(absBook) || 'Unknown Title';
+
+    // Get metadata from BookMatcher upfront for consistent use throughout sync
+    const matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
+    const { match: hardcoverMatch, extractedMetadata } = matchResult;
+    const title = extractedMetadata.title;
+    const author = extractedMetadata.author;
+    const identifiers = extractedMetadata.identifiers;
+
     // Validate progress with explicit error handling and position-based accuracy
     const validatedProgress = ProgressManager.getValidatedProgress(
       absBook,
@@ -1004,11 +525,11 @@ export class SyncManager {
       logger.warn(`Skipping book "${title}" due to invalid progress data`, {
         rawProgress: ProgressManager.extractProgressPercentage(absBook),
         bookId: absBook.id,
-        userId: this.userId,
+        user_id: this.userId,
       });
       return {
         title,
-        author: this._extractAuthorFromData(absBook, null),
+        author: author,
         status: 'skipped',
         reason: 'Invalid progress data - cannot validate percentage',
         progress: ProgressManager.extractProgressPercentage(absBook),
@@ -1024,7 +545,7 @@ export class SyncManager {
     // Initialize detailed result tracking
     const syncResult = {
       title: title,
-      author: this._extractAuthorFromData(absBook, null),
+      author: author,
       status: 'unknown',
       reason: null,
       progress_before: progressPercent,
@@ -1118,8 +639,7 @@ export class SyncManager {
       );
     }
 
-    // Extract identifiers
-    const identifiers = this._extractBookIdentifier(absBook);
+    // Use identifiers from metadata (already extracted by BookMatcher)
     syncResult.identifiers = identifiers;
     logger.debug(
       `[DEBUG] Extracted identifiers for '${title}': ISBN='${identifiers.isbn}', ASIN='${identifiers.asin}'`,
@@ -1156,18 +676,17 @@ export class SyncManager {
       });
     }
 
-    // Try to find match in Hardcover using enhanced matching
-    const hardcoverMatch = await this._findBookInHardcover(
-      absBook,
-      identifierLookup,
-    );
+    // Determine how the match was found using BookMatcher's metadata
     let matchedIdentifierType = null;
-
-    // Determine how the match was found and add appropriate sync result info
     if (hardcoverMatch) {
-      if (hardcoverMatch._isSearchResult) {
+      // Use the match type provided by BookMatcher strategies
+      matchedIdentifierType = hardcoverMatch._matchType || 'unknown';
+
+      if (
+        hardcoverMatch._matchType === 'title_author' ||
+        hardcoverMatch._isSearchResult
+      ) {
         // This was found via title/author matching
-        matchedIdentifierType = 'title_author';
         const confidence = hardcoverMatch._matchingScore
           ? Math.round(hardcoverMatch._matchingScore.totalScore)
           : 'unknown';
@@ -1179,17 +698,15 @@ export class SyncManager {
         );
         syncResult.matching_method = 'title_author';
         syncResult.confidence_score = confidence;
-      } else if (identifiers.asin && identifierLookup[identifiers.asin]) {
+      } else if (hardcoverMatch._matchType === 'asin') {
         // Found by ASIN
-        matchedIdentifierType = 'asin';
         logger.debug(`Found ASIN match for ${title}: ${identifiers.asin}`);
         syncResult.actions.push(
           `Found in Hardcover by ASIN: ${identifiers.asin}`,
         );
         syncResult.matching_method = 'asin';
-      } else if (identifiers.isbn && identifierLookup[identifiers.isbn]) {
+      } else if (hardcoverMatch._matchType === 'isbn') {
         // Found by ISBN
-        matchedIdentifierType = 'isbn';
         logger.debug(`Found ISBN match for ${title}: ${identifiers.isbn}`);
         syncResult.actions.push(
           `Found in Hardcover by ISBN: ${identifiers.isbn}`,
@@ -1201,7 +718,12 @@ export class SyncManager {
     if (!hardcoverMatch) {
       // Try to auto-add the book
       syncResult.actions.push(`Not found in Hardcover library`);
-      const autoAddResult = await this._tryAutoAddBook(absBook, identifiers);
+      const autoAddResult = await this._tryAutoAddBook(
+        absBook,
+        identifiers,
+        title,
+        author,
+      );
       syncResult.status = autoAddResult.status;
       syncResult.reason = autoAddResult.reason;
       syncResult.timing = performance.now() - startTime;
@@ -1415,6 +937,8 @@ export class SyncManager {
       hardcoverMatch,
       matchedIdentifierType,
       identifier,
+      title,
+      author,
     );
 
     // Merge results
@@ -1431,8 +955,7 @@ export class SyncManager {
     return syncResult;
   }
 
-  async _tryAutoAddBook(absBook, identifiers) {
-    const title = extractTitle(absBook) || 'Unknown Title';
+  async _tryAutoAddBook(absBook, identifiers, title, author) {
     logger.info(`Attempting to auto-add ${title} to Hardcover`, {
       identifiers: identifiers,
       title: title,
@@ -1478,15 +1001,34 @@ export class SyncManager {
       }
 
       if (searchResults.length === 0) {
-        logger.info(`Could not find ${title} in Hardcover database`, {
-          searchedIdentifiers: identifiers,
-          dryRun: this.dryRun,
-        });
-        return {
-          status: 'skipped',
-          reason: 'Book not found in Hardcover',
-          title,
-        };
+        if (this.globalConfig.force_sync) {
+          logger.warn(
+            `Force sync: Book ${title} not found in Hardcover database - attempting more aggressive matching`,
+            {
+              searchedIdentifiers: identifiers,
+              dryRun: this.dryRun,
+              forceSync: true,
+            },
+          );
+          // For force sync, we could try additional matching strategies here
+          // For now, still return skipped but with force context
+          return {
+            status: 'skipped',
+            reason: 'Book not found in Hardcover (force sync attempted)',
+            title,
+            forceSync: true,
+          };
+        } else {
+          logger.info(`Could not find ${title} in Hardcover database`, {
+            searchedIdentifiers: identifiers,
+            dryRun: this.dryRun,
+          });
+          return {
+            status: 'skipped',
+            reason: 'Book not found in Hardcover',
+            title,
+          };
+        }
       }
 
       // Add the first result to library
@@ -1510,8 +1052,8 @@ export class SyncManager {
         return { status: 'auto_added', title, bookId, editionId };
       }
 
-      // Prepare rollback callback in case API fails
-      const rollbackCallbacks = [];
+      // Start transaction for auto-add operation
+      const transaction = new Transaction(`auto-add: ${title}`);
       const _apiRollbackNeeded = false;
 
       logger.debug(`Adding ${title} to Hardcover library`, {
@@ -1534,14 +1076,11 @@ export class SyncManager {
         // Store cache data in transaction
         const identifier = identifiers.asin || identifiers.isbn;
         const identifierType = identifiers.asin ? 'asin' : 'isbn';
-        const author = this._extractAuthorFromData(absBook, {
-          userBook: null,
-          edition,
-        });
+        // Use author from metadata (already extracted)
 
         // Add API rollback callback
         const _apiRollbackNeeded = true;
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back auto-add for ${title}`);
           // Note: Hardcover doesn't have a remove from library API, so we log the issue
           logger.warn(
@@ -1621,6 +1160,7 @@ export class SyncManager {
                   title,
                   currentProgress,
                   absBook,
+                  author,
                 );
                 logger.info(`Auto-added book progress synced`, {
                   title: title,
@@ -1639,6 +1179,7 @@ export class SyncManager {
             }
           }
 
+          await transaction.commit();
           return { status: 'auto_added', title, userBookId: addResult.id };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -1646,10 +1187,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          // Execute rollback callbacks
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -1674,8 +1212,9 @@ export class SyncManager {
     hardcoverMatch,
     _identifierType,
     _identifier,
+    title,
+    author,
   ) {
-    const title = extractTitle(absBook) || 'Unknown Title';
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
 
@@ -1692,6 +1231,7 @@ export class SyncManager {
         absBook,
         hardcoverMatch,
         title,
+        author,
       );
       if (!selectedEdition) {
         logger.error(`No suitable edition found for ${title}`, {
@@ -1831,7 +1371,7 @@ export class SyncManager {
         });
 
         // Check if book was already marked as completed in cache to avoid re-processing
-        const identifier = this._extractBookIdentifier(absBook);
+        const identifier = extractBookIdentifiers(absBook);
         const identifierType = identifier.asin ? 'asin' : 'isbn';
         const identifierValue = identifier.asin || identifier.isbn;
 
@@ -1842,7 +1382,11 @@ export class SyncManager {
           identifierType,
         );
 
-        if (cachedInfo.exists && cachedInfo.finished_at) {
+        if (
+          cachedInfo.exists &&
+          cachedInfo.finished_at &&
+          !this.globalConfig.force_sync
+        ) {
           logger.debug(
             `Book ${title} already marked as completed, skipping re-processing`,
             {
@@ -1852,6 +1396,17 @@ export class SyncManager {
             },
           );
           return { status: 'completed', title, cached: true };
+        } else if (
+          cachedInfo.exists &&
+          cachedInfo.finished_at &&
+          this.globalConfig.force_sync
+        ) {
+          logger.debug(`Force sync: Re-processing completed book ${title}`, {
+            finishedAt: cachedInfo.finished_at,
+            lastSync: cachedInfo.last_sync,
+            userBookId: userBook.id,
+            forceSync: true,
+          });
         }
 
         return await this._handleCompletionStatus(
@@ -1874,6 +1429,7 @@ export class SyncManager {
         title,
         progressPercent,
         absBook,
+        author,
       );
     } catch (error) {
       logger.error(`Error syncing existing book ${title}`, {
@@ -1885,11 +1441,17 @@ export class SyncManager {
     }
   }
 
-  async _selectEditionWithCache(absBook, hardcoverMatch, title) {
+  async _selectEditionWithCache(
+    absBook,
+    hardcoverMatch,
+    title,
+    bookAuthor = 'Unknown Author',
+  ) {
     const { userBook, edition } = hardcoverMatch;
+    const author = bookAuthor; // Ensure author is available in function scope
 
     // Check cache first
-    const identifier = this._extractBookIdentifier(absBook);
+    const identifier = extractBookIdentifiers(absBook);
     const identifierType = identifier.asin ? 'asin' : 'isbn';
     const identifierValue = identifier.asin || identifier.isbn;
 
@@ -1906,7 +1468,7 @@ export class SyncManager {
       if (book && book.editions) {
         const cachedEdition = book.editions.find(e => e.id === cachedEditionId);
         if (cachedEdition) {
-          // Apply format extraction like we do in _createIdentifierLookup
+          // Apply format extraction consistently
           return {
             ...cachedEdition,
             format: this._mapHardcoverFormatToInternal(cachedEdition),
@@ -1917,7 +1479,7 @@ export class SyncManager {
 
     // Use the matched edition and cache it in transaction
     if (edition) {
-      const author = this._extractAuthorFromData(absBook, hardcoverMatch);
+      // Use author from metadata (already extracted)
 
       try {
         // Store edition mapping in transaction
@@ -2005,8 +1567,8 @@ export class SyncManager {
         rawFinishedAt: absBook.finished_at,
       });
 
-      // Prepare rollback callback for API failure
-      const rollbackCallbacks = [];
+      // Start transaction for completion operation
+      const transaction = new Transaction(`complete: ${title}`);
       const _apiSuccess = false;
 
       const success = await this.hardcover.markBookCompleted(
@@ -2027,7 +1589,7 @@ export class SyncManager {
         const _apiSuccess = true;
 
         // Add API rollback callback
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back completion status for ${title}`);
           // Try to revert the completion (this may not always be possible)
           try {
@@ -2040,7 +1602,7 @@ export class SyncManager {
         });
 
         // Store completion data in transaction
-        const identifier = this._extractBookIdentifier(absBook);
+        const identifier = extractBookIdentifiers(absBook);
         const identifierType = identifier.asin ? 'asin' : 'isbn';
         const identifierValue = identifier.asin || identifier.isbn;
 
@@ -2061,6 +1623,7 @@ export class SyncManager {
             absBook.finished_at,
           );
 
+          await transaction.commit();
           return { status: 'completed', title };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -2068,9 +1631,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -2100,6 +1661,7 @@ export class SyncManager {
     title,
     progressPercent,
     absBook,
+    author,
   ) {
     logger.info(`Updating progress for ${title}`, {
       progress: progressPercent,
@@ -2151,12 +1713,12 @@ export class SyncManager {
         },
       );
 
-      // Prepare rollback callback for API failure
-      const rollbackCallbacks = [];
+      // Start transaction for progress operation
+      const transaction = new Transaction(`progress: ${title}`);
       let previousProgress = null;
 
       // Get previous progress for rollback
-      const identifier = this._extractBookIdentifier(absBook);
+      const identifier = extractBookIdentifiers(absBook);
       const identifierType = identifier.asin ? 'asin' : 'isbn';
       const identifierValue = identifier.asin || identifier.isbn;
 
@@ -2198,7 +1760,7 @@ export class SyncManager {
         });
 
         // Add API rollback callback
-        rollbackCallbacks.push(async () => {
+        transaction.add(async () => {
           logger.info(`Rolling back progress update for ${title}`);
           if (previousProgress !== null) {
             try {
@@ -2249,25 +1811,18 @@ export class SyncManager {
         });
 
         try {
-          logger.debug(`Caching progress data for ${title}`, {
-            identifier: identifierValue,
-            identifierType: identifierType,
-            progress: progressPercent,
-          });
-
-          // Store progress data in transaction
-          await this.cache.storeBookSyncData(
-            this.userId,
+          // Store progress data using helper method to avoid scoping issues
+          await this._storeProgressData(
             identifierValue,
-            title,
-            edition.id,
             identifierType,
-            this._extractAuthorFromData(absBook, { userBook: null, edition }),
+            title,
+            author,
+            edition.id,
             progressPercent,
-            absBook.last_listened_at,
-            absBook.started_at,
+            absBook,
           );
 
+          await transaction.commit();
           return { status: 'synced', title };
         } catch (cacheError) {
           // Cache transaction failed, rollback API changes
@@ -2275,9 +1830,7 @@ export class SyncManager {
             error: cacheError.message,
             stack: cacheError.stack,
           });
-          for (const callback of rollbackCallbacks) {
-            await callback();
-          }
+          await transaction.rollback(logger);
           throw cacheError;
         }
       } else {
@@ -2396,6 +1949,14 @@ export class SyncManager {
         this.hardcover.cleanup();
       }
 
+      // Abort any pending queued tasks and clear queue
+      if (this.taskQueue) {
+        this.taskQueue.clear();
+      }
+      if (this.abortController) {
+        this.abortController.abort();
+      }
+
       // Clean up database connection
       if (this.cache) {
         this.cache.close();
@@ -2457,5 +2018,37 @@ export class SyncManager {
     });
 
     return breakdown;
+  }
+
+  /**
+   * Helper method to store progress data in cache
+   * Extracted to avoid scoping issues in complex nested functions
+   */
+  async _storeProgressData(
+    identifierValue,
+    identifierType,
+    title,
+    author,
+    editionId,
+    progressPercent,
+    absBook,
+  ) {
+    logger.debug(`Caching progress data for ${title}`, {
+      identifier: identifierValue,
+      identifierType: identifierType,
+      progress: progressPercent,
+    });
+
+    await this.cache.storeBookSyncData(
+      this.userId,
+      identifierValue,
+      title,
+      editionId,
+      identifierType,
+      author,
+      progressPercent,
+      absBook.last_listened_at,
+      absBook.started_at,
+    );
   }
 }

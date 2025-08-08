@@ -90,6 +90,8 @@ schema-detail.out
 
 # Test files
 test/
+test-output/
+test-reports/
 
 # Performance analysis reports (can be large)
 reports/

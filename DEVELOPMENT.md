@@ -44,6 +44,7 @@ BREAKING CHANGE: Configuration format has changed
 ### Skipped Commits
 
 These commit types are excluded from releases:
+
 - `docs:` - Documentation changes
 - `chore:` - Maintenance tasks
 - `test:` - Test-only changes
@@ -99,11 +100,13 @@ node src/main.js sync --dry-run
 ### 3. Release Process
 
 **Automatic (Recommended):**
+
 1. Merge PR to `main`
 2. Automation handles version bump and changelog
 3. GitHub release created automatically
 
 **Manual (If needed):**
+
 1. Update version: `npm version patch|minor|major`
 2. Update changelog: `npm run changelog`
 3. Commit and push
@@ -118,7 +121,7 @@ node src/main.js sync --dry-run
 npm start              # Start scheduled sync
 npm run sync           # Run sync once
 npm run interactive    # Interactive CLI mode
-npm test              # Test configuration
+npm test               # Run unit/integration tests
 
 # Development
 npm run dev           # Development mode with auto-restart
@@ -240,4 +243,4 @@ For major releases, verify:
 - **API Reference**: `wiki/technical/CLI-Reference.md`
 - **Troubleshooting**: `wiki/troubleshooting/`
 
-Keep documentation updated with code changes! 
+Keep documentation updated with code changes!

@@ -9,7 +9,8 @@
     "interactive": "node src/main.js interactive",
     "cron": "node src/main.js cron",
     "sync": "node src/main.js sync",
-    "test": "node src/main.js test",
+    "test": "node --test tests/network-utilities.test.js tests/progress-manager.test.js tests/task-queue-basic.test.js tests/transaction.test.js tests/utilities.test.js",
+    "test:connections": "node src/main.js test",
     "test:native": "node scripts/test-native-modules.js",
     "validate:sqlite": "node scripts/validate-better-sqlite3.js",
     "pre-flight": "node scripts/pre-flight-check.js",
@@ -45,7 +46,8 @@
     "node-cron": "^3.0.3",
     "rate-limiter-flexible": "^7.1.1",
     "winston": "^3.11.0",
-    "winston-daily-rotate-file": "^4.7.1"
+    "winston-daily-rotate-file": "^4.7.1",
+    "p-queue": "^8.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",

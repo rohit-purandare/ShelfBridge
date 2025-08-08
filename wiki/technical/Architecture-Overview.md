@@ -11,7 +11,7 @@ graph TB
         CONFIG[Configuration<br/>config.js + validator]
         SYNC[Sync Manager<br/>sync-manager.js]
         CACHE[Book Cache<br/>SQLite Database]
-        UTILS[Utilities<br/>Rate Limiting & Helpers]
+        UTILS[Utilities<br/>Modular Helper Functions]
         LOG[Logging System<br/>winston]
     end
 
@@ -180,18 +180,24 @@ flowchart TD
     MORE -->|No| COMPLETE[Complete Sync]
 ```
 
-### 6. **Utility Layer (utils.js)**
+### 6. **Utility Layer (src/utils/)**
 
-- **Purpose**: Shared functionality and helpers
-- **Components**:
-  - **Semaphore**: Concurrency control
-  - **RateLimiter**: API rate limiting using rate-limiter-flexible
-  - **ISBN/ASIN Normalization**: Book identifier standardization
-  - **Enhanced Author Extraction**: Hierarchical data processing with multi-author support
-  - **Narrator Detection**: Role-based extraction with explicit label support
-  - **Text Similarity**: Target-based matching for collaborative works
-  - **Data Extraction**: Book metadata parsing with contributions support
-  - **Connection Testing**: Shared API validation
+- **Purpose**: Modular utility functions organized by domain
+- **Architecture**: Domain-specific modules with dependency injection pattern
+- **Modules**:
+  - **time.js**: Duration formatting, parsing, and timing utilities
+  - **network.js**: HTTP agents, token normalization, retry logic with exponential backoff
+  - **concurrency.js**: Semaphore and RateLimiter classes for rate limiting and resource control
+  - **data.js**: Safe parsing functions for integers, floats, and booleans with error handling
+  - **debug.js**: Debugging utilities and failed sync diagnostics
+  - **api-testing.js**: API connection validation and testing
+  - **index.js**: Centralized re-exports for convenient importing
+
+- **Design Principles**:
+  - **No global config access**: Utilities receive configuration via dependency injection
+  - **Pure functions**: Time and data utilities avoid side effects
+  - **Explicit dependencies**: All configuration flows through constructor parameters
+  - **Easy testing**: Clean interfaces enable isolated unit testing
 
 ### 7. **Logging System (logger.js)**
 

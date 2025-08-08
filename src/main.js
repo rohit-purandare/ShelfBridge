@@ -7,10 +7,12 @@ import { SyncManager } from './sync-manager.js';
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
-import { dumpFailedSyncBooks, testApiConnections } from './utils.js';
+import { dumpFailedSyncBooks } from './utils/debug.js';
+import { testApiConnections } from './utils/api-testing.js';
 import { currentVersion } from './version.js';
 import cron from 'node-cron';
 import logger from './logger.js';
+import { Semaphore } from './utils/concurrency.js';
 import inquirer from 'inquirer';
 import cronstrue from 'cronstrue';
 
@@ -175,8 +177,25 @@ program
         await syncUser(user, globalConfig, program.opts().verbose);
       } else {
         // Sync all users
-        for (const user of users) {
-          await syncUser(user, globalConfig, program.opts().verbose);
+        if (globalConfig.parallel) {
+          const workers = globalConfig.workers || 3;
+          logger.debug('Running user syncs in parallel mode', { workers });
+          const semaphore = new Semaphore(workers);
+
+          await Promise.all(
+            users.map(async user => {
+              await semaphore.acquire();
+              try {
+                await syncUser(user, globalConfig, program.opts().verbose);
+              } finally {
+                semaphore.release();
+              }
+            }),
+          );
+        } else {
+          for (const user of users) {
+            await syncUser(user, globalConfig, program.opts().verbose);
+          }
         }
       }
 
@@ -723,7 +742,7 @@ program
         await debugUser(user);
       } else {
         for (const user of users) {
-          logger.info('Starting debug for user', { userId: user.id });
+          logger.info('Starting debug for user', { user_id: user.id });
           await debugUser(user);
         }
       }
@@ -769,7 +788,7 @@ async function syncUser(user, globalConfig, verbose = false) {
     const duration = (Date.now() - startTime) / 1000;
 
     logger.debug('Sync completed for user', {
-      userId: user.id,
+      user_id: user.id,
       summary: {
         duration: `${duration.toFixed(1)}s`,
         books_processed: result.books_processed,
@@ -1167,22 +1186,27 @@ async function syncUser(user, globalConfig, verbose = false) {
       // Dump failed sync books to file if enabled
       if (globalConfig.dump_failed_books !== false) {
         try {
-          const dumpFilePath = await dumpFailedSyncBooks(result, user.id);
-          console.log(`\n📄 Error details saved to: ${dumpFilePath}`);
+          // Extract failed books from book_details
+          const failedBooks =
+            result.book_details?.filter(book => book.status === 'error') || [];
+          const dumpFilePath = await dumpFailedSyncBooks(user.id, failedBooks);
+          if (dumpFilePath) {
+            console.log(`\n📄 Error details saved to: ${dumpFilePath}`);
+          }
         } catch (dumpError) {
           console.log(
             `\n⚠️  Failed to save error details: ${dumpError.message}`,
           );
           logger.error('Failed to dump error details', {
             error: dumpError.message,
-            userId: user.id,
+            user_id: user.id,
           });
         }
       }
     }
   } catch (error) {
     logger.error('Sync failed for user', {
-      userId: user.id,
+      user_id: user.id,
       error: error.message,
       stack: error.stack,
     });
@@ -1525,9 +1549,29 @@ async function runScheduledSync(config) {
 
     logger.info('Starting scheduled sync', { userCount: users.length });
 
-    for (const user of users) {
-      logger.info('Starting scheduled sync for user', { userId: user.id });
-      await syncUser(user, globalConfig, program.opts().verbose);
+    if (globalConfig.parallel) {
+      const workers = globalConfig.workers || 3;
+      logger.debug('Running user syncs in parallel mode', { workers });
+      const semaphore = new Semaphore(workers);
+
+      await Promise.all(
+        users.map(async user => {
+          await semaphore.acquire();
+          try {
+            logger.info('Starting scheduled sync for user', {
+              user_id: user.id,
+            });
+            await syncUser(user, globalConfig, program.opts().verbose);
+          } finally {
+            semaphore.release();
+          }
+        }),
+      );
+    } else {
+      for (const user of users) {
+        logger.info('Starting scheduled sync for user', { user_id: user.id });
+        await syncUser(user, globalConfig, program.opts().verbose);
+      }
     }
 
     logger.info('Scheduled sync completed', { userCount: users.length });
@@ -1562,9 +1606,28 @@ async function runInteractiveMode() {
     ]);
     switch (action) {
       case 'sync_all':
-        for (const user of users) {
-          console.log(`\n=== Syncing user: ${user.id} ===`);
-          await syncUser(user, globalConfig, program.opts().verbose);
+        if (globalConfig.parallel) {
+          const workers = globalConfig.workers || 3;
+          console.log(
+            `\n🔄 Syncing all users in parallel with ${workers} workers...`,
+          );
+          const semaphore = new Semaphore(workers);
+          await Promise.all(
+            users.map(async user => {
+              await semaphore.acquire();
+              try {
+                console.log(`\n=== Syncing user: ${user.id} ===`);
+                await syncUser(user, globalConfig, program.opts().verbose);
+              } finally {
+                semaphore.release();
+              }
+            }),
+          );
+        } else {
+          for (const user of users) {
+            console.log(`\n=== Syncing user: ${user.id} ===`);
+            await syncUser(user, globalConfig, program.opts().verbose);
+          }
         }
         break;
       case 'sync_user': {

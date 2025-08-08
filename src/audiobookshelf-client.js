@@ -1,7 +1,6 @@
 import axios from 'axios';
-import { Agent } from 'https';
-import { Agent as HttpAgent } from 'http';
-import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
+import { RateLimiter, Semaphore } from './utils/concurrency.js';
+import { normalizeApiToken, createHttpAgent } from './utils/network.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
@@ -29,21 +28,11 @@ export class AudiobookshelfClient {
 
     // Create HTTP agents with keep-alive for connection reuse
     const isHttps = this.baseUrl.startsWith('https');
-    const agent = isHttps
-      ? new Agent({
-          keepAlive: true,
-          maxSockets: 10,
-          maxFreeSockets: 5,
-          timeout: 60000,
-          freeSocketTimeout: 30000, // Keep connections alive for 30s
-        })
-      : new HttpAgent({
-          keepAlive: true,
-          maxSockets: 10,
-          maxFreeSockets: 5,
-          timeout: 60000,
-          freeSocketTimeout: 30000,
-        });
+    const agent = createHttpAgent(isHttps, {
+      maxSockets: 10,
+      maxFreeSockets: 5,
+      freeSocketTimeout: 30000, // Keep connections alive for 30s
+    });
 
     // Create axios instance with default config
     this.axios = axios.create({

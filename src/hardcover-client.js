@@ -1,31 +1,11 @@
 import axios from 'axios';
-import { Agent } from 'https';
-import { RateLimiter, Semaphore, normalizeApiToken } from './utils.js';
+import { RateLimiter, Semaphore } from './utils/concurrency.js';
+import { normalizeApiToken, createHttpAgent } from './utils/network.js';
+import { safeParseInt } from './utils/data.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
 // Remove the global semaphore, make it per-instance
-
-/**
- * Safely convert a value to integer for GraphQL, handling null/undefined cases
- * @param {any} value - Value to convert
- * @param {string} fieldName - Field name for error logging
- * @returns {number|null} - Integer value or null
- */
-function safeParseInt(value, fieldName = 'unknown') {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'number' && Number.isInteger(value)) {
-    return value;
-  }
-  const parsed = parseInt(value);
-  if (isNaN(parsed)) {
-    logger.warn(`Invalid integer value for ${fieldName}: ${value}`);
-    return null;
-  }
-  return parsed;
-}
 
 export class HardcoverClient {
   constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
@@ -36,11 +16,9 @@ export class HardcoverClient {
     this.semaphore = new Semaphore(semaphoreConcurrency);
 
     // Create HTTPS agent with keep-alive for connection reuse (Hardcover is always HTTPS)
-    this._httpsAgent = new Agent({
-      keepAlive: true,
+    this._httpsAgent = createHttpAgent(true, {
       maxSockets: 5,
       maxFreeSockets: 2,
-      timeout: 60000,
       freeSocketTimeout: 30000, // Keep connections alive for 30s
     });
 
@@ -51,7 +29,7 @@ export class HardcoverClient {
         Authorization: `Bearer ${this.token}`,
         'Content-Type': 'application/json',
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 60000, // 60 second timeout
       httpsAgent: this._httpsAgent,
       // Optimize for GraphQL requests
       maxRedirects: 3,
@@ -262,7 +240,7 @@ export class HardcoverClient {
     rereadConfig = null,
     readingFormatId = null,
   ) {
-    // Check for existing progress
+    // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
 
     // Enhanced re-reading detection
@@ -289,6 +267,7 @@ export class HardcoverClient {
         editionId,
         startDate,
         useSeconds,
+        readingFormatId,
       );
     }
 
@@ -306,141 +285,68 @@ export class HardcoverClient {
       progressInfo.latest_read &&
       progressInfo.latest_read.id
     ) {
-      // Update existing progress - send started_at if we have one and Hardcover needs it
+      // Update existing progress - ALWAYS send our start date if provided (Option A)
       const readId = progressInfo.latest_read.id;
-      const hardcoverStartDate = progressInfo.latest_read.started_at;
-      const hasValidHardcoverStartDate =
-        hardcoverStartDate &&
-        hardcoverStartDate.trim() !== '' &&
-        hardcoverStartDate !== 'null' &&
-        hardcoverStartDate !== '0000-00-00';
 
-      const shouldSendStartDate = startedAt && !hasValidHardcoverStartDate;
+      const mutation = useSeconds
+        ? `
+                mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+                    update_user_book_read(id: $id, object: {
+                        progress_seconds: $seconds,
+                        edition_id: $editionId,
+                        started_at: $startedAt,
+                        reading_format_id: $readingFormatId
+                    }) {
+                        error
+                        user_book_read {
+                            id
+                            progress_seconds
+                            edition_id
+                            started_at
 
-      let mutation, variables;
+                        }
+                    }
+                }
+            `
+        : `
+                mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+                    update_user_book_read(id: $id, object: {
+                        progress_pages: $pages,
+                        edition_id: $editionId,
+                        started_at: $startedAt,
+                        reading_format_id: $readingFormatId
+                    }) {
+                        error
+                        user_book_read {
+                            id
+                            progress_pages
+                            edition_id
+                            started_at
 
-      logger.debug('Start date handling decision', {
-        hardcoverStartDate: hardcoverStartDate,
-        hasValidHardcoverStartDate: hasValidHardcoverStartDate,
-        providedStartDate: startedAt,
-        shouldSendStartDate: shouldSendStartDate,
-      });
+                        }
+                    }
+                }
+            `;
 
-      if (shouldSendStartDate) {
-        // Send start date since Hardcover doesn't have a valid one
-        mutation = useSeconds
-          ? `
-                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_seconds: $seconds,
-                          edition_id: $editionId,
-                          started_at: $startedAt,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_seconds
-                              edition_id
-                              started_at
+      const variables = useSeconds
+        ? {
+            id: safeParseInt(readId, 'readId'),
+            seconds: safeParseInt(currentProgress, 'currentProgress'),
+            editionId: safeParseInt(editionId, 'editionId'),
+            startedAt: startedAt ? startedAt.slice(0, 10) : null,
+            readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
+          }
+        : {
+            id: safeParseInt(readId, 'readId'),
+            pages: safeParseInt(currentProgress, 'currentProgress'),
+            editionId: safeParseInt(editionId, 'editionId'),
+            startedAt: startedAt ? startedAt.slice(0, 10) : null,
+            readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
+          };
 
-                          }
-                      }
-                  }
-              `
-          : `
-                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_pages: $pages,
-                          edition_id: $editionId,
-                          started_at: $startedAt,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_pages
-                              edition_id
-                              started_at
-
-                          }
-                      }
-                  }
-              `;
-        variables = useSeconds
-          ? {
-              id: safeParseInt(readId, 'readId'),
-              seconds: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              startedAt: startedAt ? startedAt.slice(0, 10) : null,
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            }
-          : {
-              id: safeParseInt(readId, 'readId'),
-              pages: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              startedAt: startedAt ? startedAt.slice(0, 10) : null,
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            };
-
-        logger.debug(
-          `Setting start date (Hardcover missing): ${startedAt ? startedAt.slice(0, 10) : 'null'}`,
-        );
-      } else {
-        // Preserve existing start date - don't send started_at
-        mutation = useSeconds
-          ? `
-                  mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_seconds: $seconds,
-                          edition_id: $editionId,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_seconds
-                              edition_id
-                              started_at
-
-                          }
-                      }
-                  }
-              `
-          : `
-                  mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $readingFormatId: Int) {
-                      update_user_book_read(id: $id, object: {
-                          progress_pages: $pages,
-                          edition_id: $editionId,
-                          reading_format_id: $readingFormatId
-                      }) {
-                          error
-                          user_book_read {
-                              id
-                              progress_pages
-                              edition_id
-                              started_at
-
-                          }
-                      }
-                  }
-              `;
-        variables = useSeconds
-          ? {
-              id: safeParseInt(readId, 'readId'),
-              seconds: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            }
-          : {
-              id: safeParseInt(readId, 'readId'),
-              pages: safeParseInt(currentProgress, 'currentProgress'),
-              editionId: safeParseInt(editionId, 'editionId'),
-              readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
-            };
-
-        logger.debug(`Preserving existing start date: ${hardcoverStartDate}`);
-      }
+      logger.debug(
+        `Setting start date on update: ${startedAt ? startedAt.slice(0, 10) : 'null'}`,
+      );
       try {
         const result = await this._executeQuery(mutation, variables);
         if (
@@ -450,7 +356,7 @@ export class HardcoverClient {
         ) {
           const updatedRecord = result.update_user_book_read.user_book_read;
           logger.debug(
-            `Updated progress - preserved original start date: ${updatedRecord.started_at}`,
+            `Updated progress - start date now: ${updatedRecord.started_at}`,
           );
           return updatedRecord;
         }
@@ -1452,76 +1358,100 @@ export class HardcoverClient {
   async _executeQuery(query, variables = null) {
     // Use single identifier for all Hardcover requests to respect 55/minute total limit
     const identifier = 'hardcover-api';
+    const maxRetries = 2; // Number of *additional* retries on time-out (total attempts = maxRetries + 1)
     await this.semaphore.acquire();
     try {
-      await this.rateLimiter.waitIfNeeded(identifier);
+      let attempt = 0;
 
-      // Restore requestType for logging
-      const requestType = query.trim().startsWith('mutation')
-        ? 'mutation'
-        : 'query';
+      while (true) {
+        // Respect global rate-limit before every attempt
+        await this.rateLimiter.waitIfNeeded(identifier);
 
-      // Debug logging for mutations
-      if (requestType === 'mutation') {
-        logger.debug('🔍 [DEBUG] Hardcover Mutation:');
-        logger.debug('Query:', query);
-        logger.debug('Variables:', JSON.stringify(variables, null, 2));
-      }
+        // Determine query type for logging
+        const requestType = query.trim().startsWith('mutation')
+          ? 'mutation'
+          : 'query';
 
-      try {
-        const requestData = {
-          query,
-          variables,
-        };
-
-        const response = await this.client.post('', requestData);
-
-        // Validate response
-        if (!response || !response.data) {
-          throw new Error('Invalid response from GraphQL API');
+        // Log mutation details only on the first attempt to avoid noisy logs on retries
+        if (requestType === 'mutation' && attempt === 0) {
+          logger.debug('🔍 [DEBUG] Hardcover Mutation:');
+          logger.debug('Query:', query);
+          logger.debug('Variables:', JSON.stringify(variables, null, 2));
         }
 
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(
-            `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
-          );
-        }
+        try {
+          const requestData = { query, variables };
+          const response = await this.client.post('', requestData);
 
-        logger.debug(`GraphQL query executed successfully`);
+          // Validate response structure
+          if (!response || !response.data) {
+            throw new Error('Invalid response from GraphQL API');
+          }
 
-        if (response.data.errors) {
-          logger.error('GraphQL errors:', response.data.errors);
-          throw new Error(
-            `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
-          );
-        }
+          if (response.status < 200 || response.status >= 300) {
+            throw new Error(
+              `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
+            );
+          }
 
-        if (!response.data.data) {
-          throw new Error('GraphQL response contains no data');
-        }
+          logger.debug('GraphQL query executed successfully');
 
-        // Debug logging for mutation responses
-        if (query.trim().startsWith('mutation')) {
-          logger.debug('🔍 [DEBUG] Hardcover Response:');
-          logger.debug(JSON.stringify(response.data, null, 2));
-        }
+          if (response.data.errors) {
+            logger.error('GraphQL errors:', response.data.errors);
+            throw new Error(
+              `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
+            );
+          }
 
-        return response.data.data;
-      } catch (error) {
-        if (error.response) {
-          logger.error(
-            `HTTP ${error.response.status} error:`,
-            error.response.data,
-          );
-          throw new Error(
-            `HTTP ${error.response.status}: ${error.response.data?.message || error.message}`,
-          );
-        } else if (error.request) {
-          logger.error('Network error:', error.message);
-          throw new Error(`Network error: ${error.message}`);
-        } else {
-          logger.error('Request error:', error.message);
-          throw error;
+          if (!response.data.data) {
+            throw new Error('GraphQL response contains no data');
+          }
+
+          // Debug logging for mutation responses
+          if (requestType === 'mutation') {
+            logger.debug('🔍 [DEBUG] Hardcover Response:');
+            logger.debug(JSON.stringify(response.data, null, 2));
+          }
+
+          return response.data.data; // ✅ Success – exit loop
+        } catch (error) {
+          const isTimeout =
+            !error.response &&
+            (error.code === 'ECONNABORTED' ||
+              (error.message &&
+                error.message.toLowerCase().includes('timeout')));
+
+          // Retry logic for network timeouts only
+          if (isTimeout && attempt < maxRetries) {
+            const backoffMs = 1000 * 2 ** attempt; // 1s, 2s, ...
+            logger.warn(
+              `Network timeout contacting Hardcover (attempt ${attempt + 1}/$${
+                maxRetries + 1
+              }). Retrying in ${backoffMs} ms…`,
+            );
+            await new Promise(res => setTimeout(res, backoffMs));
+            attempt += 1;
+            continue; // ↩︎ Retry
+          }
+
+          // === Non-retriable or retries exhausted ===
+          if (error.response) {
+            logger.error(
+              `HTTP ${error.response.status} error:`,
+              error.response.data,
+            );
+            throw new Error(
+              `HTTP ${error.response.status}: ${
+                error.response.data?.message || error.message
+              }`,
+            );
+          } else if (error.request) {
+            logger.error('Network error:', error.message);
+            throw new Error(`Network error: ${error.message}`);
+          } else {
+            logger.error('Request error:', error.message);
+            throw error;
+          }
         }
       }
     } finally {
