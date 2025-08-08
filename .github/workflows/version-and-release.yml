@@ -330,7 +330,7 @@ jobs:
           check-name: 'build-and-push'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 30
-          allowed-conclusions: success
+          allowed-conclusions: success,skipped
 
       - name: Create Release
         if: steps.check_tag.outputs.skip == 'false'
