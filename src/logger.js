@@ -15,9 +15,27 @@ try {
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
   }
+  // Ensure directory itself is writable
+  fs.accessSync(logsDir, fs.constants.W_OK);
   const testFile = path.join(logsDir, `.write-test-${Date.now()}`);
   fs.writeFileSync(testFile, 'ok');
   fs.unlinkSync(testFile);
+
+  // Also verify that any existing log files for today are writable
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const candidates = [
+    path.join(logsDir, `shelfbridge-${today}.log`),
+    path.join(logsDir, `shelfbridge-error-${today}.log`),
+    path.join(logsDir, `shelfbridge-exception-${today}.log`),
+    path.join(logsDir, `shelfbridge-rejection-${today}.log`),
+  ];
+  for (const file of candidates) {
+    if (fs.existsSync(file)) {
+      fs.accessSync(file, fs.constants.W_OK);
+    }
+  }
 } catch (_e) {
   fileLoggingEnabled = false;
   console.warn(
