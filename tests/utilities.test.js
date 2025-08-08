@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { RateLimiter, Semaphore } from '../src/utils/concurrency.js';
-import { safeParseInt, safeParseFloat } from '../src/utils/data.js';
+import { safeParseInt, safeParseFloat, safeParseBoolean } from '../src/utils/data.js';
 import { formatDuration, formatDurationForLogging, parseDurationString, sleep } from '../src/utils/time.js';
 
 /**
@@ -153,6 +153,132 @@ describe('Data Utilities', () => {
       assert.equal(safeParseFloat('0', 'test'), 0);
       assert.equal(safeParseFloat(Infinity, 'test'), Infinity);
       assert.equal(safeParseFloat(-Infinity, 'test'), -Infinity);
+    });
+
+    it('handles scientific notation', () => {
+      assert.equal(safeParseFloat('1e5', 'test'), 100000);
+      assert.equal(safeParseFloat('1.5e-3', 'test'), 0.0015);
+      assert.equal(safeParseFloat('-2.5E2', 'test'), -250);
+    });
+
+    it('handles large numbers', () => {
+      assert.equal(safeParseFloat('999999999999999999999', 'test'), 999999999999999999999);
+      assert.equal(safeParseFloat(Number.MAX_VALUE, 'test'), Number.MAX_VALUE);
+      assert.equal(safeParseFloat(Number.MIN_VALUE, 'test'), Number.MIN_VALUE);
+    });
+
+    it('handles whitespace and formatting edge cases', () => {
+      assert.equal(safeParseFloat('  42.5  ', 'test'), 42.5);
+      assert.equal(safeParseFloat('\t123.45\n', 'test'), 123.45);
+      assert.equal(safeParseFloat('+42.5', 'test'), 42.5);
+    });
+  });
+
+  describe('safeParseBoolean', () => {
+    it('returns boolean values unchanged', () => {
+      assert.equal(safeParseBoolean(true), true);
+      assert.equal(safeParseBoolean(false), false);
+    });
+
+    it('parses truthy string values correctly', () => {
+      assert.equal(safeParseBoolean('true'), true);
+      assert.equal(safeParseBoolean('TRUE'), true);
+      assert.equal(safeParseBoolean('True'), true);
+      assert.equal(safeParseBoolean('1'), true);
+      assert.equal(safeParseBoolean('yes'), true);
+      assert.equal(safeParseBoolean('YES'), true);
+      assert.equal(safeParseBoolean('Yes'), true);
+    });
+
+    it('parses falsy string values correctly', () => {
+      assert.equal(safeParseBoolean('false'), false);
+      assert.equal(safeParseBoolean('FALSE'), false);
+      assert.equal(safeParseBoolean('False'), false);
+      assert.equal(safeParseBoolean('0'), false);
+      assert.equal(safeParseBoolean('no'), false);
+      assert.equal(safeParseBoolean('NO'), false);
+      assert.equal(safeParseBoolean('anything-else'), false);
+      assert.equal(safeParseBoolean(''), false);
+    });
+
+    it('handles string whitespace correctly', () => {
+      assert.equal(safeParseBoolean('  true  '), true);
+      assert.equal(safeParseBoolean('\t1\n'), true);
+      assert.equal(safeParseBoolean('  false  '), false);
+      assert.equal(safeParseBoolean('\tno\n'), false);
+    });
+
+    it('converts numbers to booleans correctly', () => {
+      assert.equal(safeParseBoolean(1), true);
+      assert.equal(safeParseBoolean(42), true);
+      assert.equal(safeParseBoolean(-5), true);
+      assert.equal(safeParseBoolean(0.5), true);
+      assert.equal(safeParseBoolean(0), false);
+      assert.equal(safeParseBoolean(-0), false);
+    });
+
+    it('handles null and undefined with default value', () => {
+      assert.equal(safeParseBoolean(null), false);
+      assert.equal(safeParseBoolean(undefined), false);
+      assert.equal(safeParseBoolean(null, true), true);
+      assert.equal(safeParseBoolean(undefined, true), true);
+    });
+
+    it('uses custom default value for invalid inputs', () => {
+      assert.equal(safeParseBoolean({}, true), true);
+      assert.equal(safeParseBoolean([], true), true);
+      assert.equal(safeParseBoolean(Symbol('test'), false), false);
+      assert.equal(safeParseBoolean(function() {}, true), true);
+    });
+
+    it('handles edge cases for numbers', () => {
+      assert.equal(safeParseBoolean(Infinity), true);
+      assert.equal(safeParseBoolean(-Infinity), true);
+      // NaN is a number type, so it evaluates to true (non-zero)
+      assert.equal(safeParseBoolean(NaN), true);
+    });
+
+    it('handles complex objects with custom defaults', () => {
+      const obj = { value: true };
+      const arr = [1, 2, 3];
+      
+      assert.equal(safeParseBoolean(obj, true), true);
+      assert.equal(safeParseBoolean(obj, false), false);
+      assert.equal(safeParseBoolean(arr, true), true);
+      assert.equal(safeParseBoolean(arr, false), false);
+    });
+  });
+
+  describe('Additional edge cases for safeParseInt', () => {
+    it('handles hex and octal strings', () => {
+      // parseInt behavior - hex strings actually work in parseInt
+      assert.equal(safeParseInt('0x10', 'test'), 16); // parseInt parses hex correctly
+      assert.equal(safeParseInt('010', 'test'), 10); // Decimal parsing
+      assert.equal(safeParseInt('0b1010', 'test'), 0); // parseInt stops at 'b'
+    });
+
+    it('handles string numbers with trailing characters', () => {
+      assert.equal(safeParseInt('42px', 'test'), 42);
+      assert.equal(safeParseInt('100%', 'test'), 100);
+      assert.equal(safeParseInt('3.14159', 'test'), 3);
+    });
+
+    it('handles very large numbers', () => {
+      assert.equal(safeParseInt('999999999999999999999', 'test'), 999999999999999999999);
+      assert.equal(safeParseInt(Number.MAX_SAFE_INTEGER, 'test'), Number.MAX_SAFE_INTEGER);
+      assert.equal(safeParseInt(Number.MIN_SAFE_INTEGER, 'test'), Number.MIN_SAFE_INTEGER);
+    });
+
+    it('handles whitespace correctly', () => {
+      assert.equal(safeParseInt('  42  ', 'test'), 42);
+      assert.equal(safeParseInt('\t123\n', 'test'), 123);
+      assert.equal(safeParseInt('+42', 'test'), 42);
+    });
+
+    it('handles array and object inputs', () => {
+      assert.equal(safeParseInt([42], 'test'), 42); // Array toString gives "42"
+      assert.equal(safeParseInt([1, 2, 3], 'test'), 1); // Array toString gives "1,2,3"
+      assert.equal(safeParseInt({}, 'test'), null); // Object toString gives "[object Object]"
     });
   });
 });
