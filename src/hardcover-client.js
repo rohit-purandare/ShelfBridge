@@ -29,7 +29,7 @@ export class HardcoverClient {
         Authorization: `Bearer ${this.token}`,
         'Content-Type': 'application/json',
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 60000, // 60 second timeout
       httpsAgent: this._httpsAgent,
       // Optimize for GraphQL requests
       maxRedirects: 3,
@@ -1358,76 +1358,100 @@ export class HardcoverClient {
   async _executeQuery(query, variables = null) {
     // Use single identifier for all Hardcover requests to respect 55/minute total limit
     const identifier = 'hardcover-api';
+    const maxRetries = 2; // Number of *additional* retries on time-out (total attempts = maxRetries + 1)
     await this.semaphore.acquire();
     try {
-      await this.rateLimiter.waitIfNeeded(identifier);
+      let attempt = 0;
 
-      // Restore requestType for logging
-      const requestType = query.trim().startsWith('mutation')
-        ? 'mutation'
-        : 'query';
+      while (true) {
+        // Respect global rate-limit before every attempt
+        await this.rateLimiter.waitIfNeeded(identifier);
 
-      // Debug logging for mutations
-      if (requestType === 'mutation') {
-        logger.debug('🔍 [DEBUG] Hardcover Mutation:');
-        logger.debug('Query:', query);
-        logger.debug('Variables:', JSON.stringify(variables, null, 2));
-      }
+        // Determine query type for logging
+        const requestType = query.trim().startsWith('mutation')
+          ? 'mutation'
+          : 'query';
 
-      try {
-        const requestData = {
-          query,
-          variables,
-        };
-
-        const response = await this.client.post('', requestData);
-
-        // Validate response
-        if (!response || !response.data) {
-          throw new Error('Invalid response from GraphQL API');
+        // Log mutation details only on the first attempt to avoid noisy logs on retries
+        if (requestType === 'mutation' && attempt === 0) {
+          logger.debug('🔍 [DEBUG] Hardcover Mutation:');
+          logger.debug('Query:', query);
+          logger.debug('Variables:', JSON.stringify(variables, null, 2));
         }
 
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(
-            `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
-          );
-        }
+        try {
+          const requestData = { query, variables };
+          const response = await this.client.post('', requestData);
 
-        logger.debug(`GraphQL query executed successfully`);
+          // Validate response structure
+          if (!response || !response.data) {
+            throw new Error('Invalid response from GraphQL API');
+          }
 
-        if (response.data.errors) {
-          logger.error('GraphQL errors:', response.data.errors);
-          throw new Error(
-            `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
-          );
-        }
+          if (response.status < 200 || response.status >= 300) {
+            throw new Error(
+              `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
+            );
+          }
 
-        if (!response.data.data) {
-          throw new Error('GraphQL response contains no data');
-        }
+          logger.debug('GraphQL query executed successfully');
 
-        // Debug logging for mutation responses
-        if (query.trim().startsWith('mutation')) {
-          logger.debug('🔍 [DEBUG] Hardcover Response:');
-          logger.debug(JSON.stringify(response.data, null, 2));
-        }
+          if (response.data.errors) {
+            logger.error('GraphQL errors:', response.data.errors);
+            throw new Error(
+              `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
+            );
+          }
 
-        return response.data.data;
-      } catch (error) {
-        if (error.response) {
-          logger.error(
-            `HTTP ${error.response.status} error:`,
-            error.response.data,
-          );
-          throw new Error(
-            `HTTP ${error.response.status}: ${error.response.data?.message || error.message}`,
-          );
-        } else if (error.request) {
-          logger.error('Network error:', error.message);
-          throw new Error(`Network error: ${error.message}`);
-        } else {
-          logger.error('Request error:', error.message);
-          throw error;
+          if (!response.data.data) {
+            throw new Error('GraphQL response contains no data');
+          }
+
+          // Debug logging for mutation responses
+          if (requestType === 'mutation') {
+            logger.debug('🔍 [DEBUG] Hardcover Response:');
+            logger.debug(JSON.stringify(response.data, null, 2));
+          }
+
+          return response.data.data; // ✅ Success – exit loop
+        } catch (error) {
+          const isTimeout =
+            !error.response &&
+            (error.code === 'ECONNABORTED' ||
+              (error.message &&
+                error.message.toLowerCase().includes('timeout')));
+
+          // Retry logic for network timeouts only
+          if (isTimeout && attempt < maxRetries) {
+            const backoffMs = 1000 * 2 ** attempt; // 1s, 2s, ...
+            logger.warn(
+              `Network timeout contacting Hardcover (attempt ${attempt + 1}/$${
+                maxRetries + 1
+              }). Retrying in ${backoffMs} ms…`,
+            );
+            await new Promise(res => setTimeout(res, backoffMs));
+            attempt += 1;
+            continue; // ↩︎ Retry
+          }
+
+          // === Non-retriable or retries exhausted ===
+          if (error.response) {
+            logger.error(
+              `HTTP ${error.response.status} error:`,
+              error.response.data,
+            );
+            throw new Error(
+              `HTTP ${error.response.status}: ${
+                error.response.data?.message || error.message
+              }`,
+            );
+          } else if (error.request) {
+            logger.error('Network error:', error.message);
+            throw new Error(`Network error: ${error.message}`);
+          } else {
+            logger.error('Request error:', error.message);
+            throw error;
+          }
         }
       }
     } finally {
