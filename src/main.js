@@ -724,7 +724,7 @@ program
         await debugUser(user);
       } else {
         for (const user of users) {
-          logger.info('Starting debug for user', { userId: user.id });
+          logger.info('Starting debug for user', { user_id: user.id });
           await debugUser(user);
         }
       }
@@ -770,7 +770,7 @@ async function syncUser(user, globalConfig, verbose = false) {
     const duration = (Date.now() - startTime) / 1000;
 
     logger.debug('Sync completed for user', {
-      userId: user.id,
+      user_id: user.id,
       summary: {
         duration: `${duration.toFixed(1)}s`,
         books_processed: result.books_processed,
@@ -1176,14 +1176,14 @@ async function syncUser(user, globalConfig, verbose = false) {
           );
           logger.error('Failed to dump error details', {
             error: dumpError.message,
-            userId: user.id,
+            user_id: user.id,
           });
         }
       }
     }
   } catch (error) {
     logger.error('Sync failed for user', {
-      userId: user.id,
+      user_id: user.id,
       error: error.message,
       stack: error.stack,
     });
@@ -1527,7 +1527,7 @@ async function runScheduledSync(config) {
     logger.info('Starting scheduled sync', { userCount: users.length });
 
     for (const user of users) {
-      logger.info('Starting scheduled sync for user', { userId: user.id });
+      logger.info('Starting scheduled sync for user', { user_id: user.id });
       await syncUser(user, globalConfig, program.opts().verbose);
     }
 

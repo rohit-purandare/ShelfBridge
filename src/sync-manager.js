@@ -50,7 +50,7 @@ export class SyncManager {
     this.timingData = {};
 
     logger.debug('SyncManager initialized', {
-      userId: this.userId,
+      user_id: this.userId,
       dryRun: this.dryRun,
       timezone: this.timezone,
       libraryConfig: libraryConfig,
@@ -230,7 +230,7 @@ export class SyncManager {
       logger.error('Sync failed', {
         error: error.message,
         stack: error.stack,
-        userId: this.userId,
+        user_id: this.userId,
       });
       result.errors.push(error.message);
       console.log(
@@ -525,7 +525,7 @@ export class SyncManager {
       logger.warn(`Skipping book "${title}" due to invalid progress data`, {
         rawProgress: ProgressManager.extractProgressPercentage(absBook),
         bookId: absBook.id,
-        userId: this.userId,
+        user_id: this.userId,
       });
       return {
         title,

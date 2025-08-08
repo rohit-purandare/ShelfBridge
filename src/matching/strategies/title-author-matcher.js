@@ -57,7 +57,7 @@ export class TitleAuthorMatcher {
         `Checking cache for title/author: "${title}" by "${author}"`,
         {
           titleAuthorId: titleAuthorId,
-          userId: userId,
+          user_id: userId,
         },
       );
 

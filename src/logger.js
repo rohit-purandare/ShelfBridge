@@ -153,7 +153,7 @@ logger.withContext = context => {
 
 // Add user-specific logging
 logger.forUser = userId => {
-  return logger.withContext({ userId });
+  return logger.withContext({ user_id: userId });
 };
 
 // Add operation-specific logging
@@ -196,7 +196,7 @@ logger.measureTime = async (operation, fn) => {
 // Sync progress logging helper
 logger.logSyncProgress = (user, stats) => {
   logger.info('Sync completed', {
-    userId: user.id,
+    user_id: user.id,
     booksProcessed: stats.books_processed,
     booksSynced: stats.books_synced,
     booksCompleted: stats.books_completed,
@@ -209,7 +209,7 @@ logger.logSyncProgress = (user, stats) => {
   if (stats.errors.length > 0) {
     stats.errors.forEach((error, index) => {
       logger.error(`Sync error ${index + 1}`, {
-        userId: user.id,
+        user_id: user.id,
         error: error.message || error,
       });
     });
@@ -225,7 +225,7 @@ logger.logApiRequest = (method, url, statusCode, duration, userId = null) => {
     statusCode,
     duration,
     durationMs: duration,
-    userId,
+    user_id: userId,
   });
 };
 
