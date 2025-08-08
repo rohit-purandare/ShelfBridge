@@ -382,53 +382,67 @@ export class SyncManager {
     if (!dateValue) return null;
 
     try {
-      let date;
-
-      if (typeof dateValue === 'number') {
-        // Handle timestamp (milliseconds)
-        date = new Date(dateValue);
-      } else if (typeof dateValue === 'string') {
-        // Handle ISO string or other date formats
-        if (dateValue.includes('T') || dateValue.includes('-')) {
-          // Already a date string, try to parse it
-          date = new Date(dateValue);
-        } else {
-          // Might be a timestamp as string
-          const timestamp = parseInt(dateValue);
-          if (!isNaN(timestamp)) {
-            date = new Date(timestamp);
-          } else {
-            date = new Date(dateValue);
+      // If we already have an ISO string with timezone, return the local day directly
+      if (typeof dateValue === 'string') {
+        // Common case: we previously set `absBook.started_at = startedAtLocal.toISO()`
+        if (dateValue.includes('T')) {
+          const isoDate = DateTime.fromISO(dateValue);
+          if (isoDate.isValid) {
+            const local = isoDate.setZone(this.timezone || 'UTC');
+            const output = local.toISODate();
+            logger.debug('Formatted date for Hardcover (ISO string)', {
+              input: dateValue,
+              output,
+              timezone: this.timezone,
+            });
+            return output;
           }
         }
-      } else {
-        logger.warn('Invalid date format', {
-          dateValue,
-          type: typeof dateValue,
+
+        // Try parsing as SQL or generic date
+        const sql = DateTime.fromSQL(dateValue, {
+          zone: this.timezone || 'UTC',
         });
-        return null;
+        if (sql.isValid) {
+          return sql.toISODate();
+        }
+
+        const parsed = DateTime.fromJSDate(new Date(dateValue), {
+          zone: this.timezone || 'UTC',
+        });
+        if (parsed.isValid) {
+          return parsed.toISODate();
+        }
       }
 
-      // Validate the date
-      if (isNaN(date.getTime())) {
-        logger.warn('Invalid date value', { dateValue });
-        return null;
+      // If value is milliseconds (number or numeric string)
+      const millis =
+        typeof dateValue === 'number'
+          ? dateValue
+          : typeof dateValue === 'string' && /^\d+$/.test(dateValue)
+            ? parseInt(dateValue, 10)
+            : null;
+
+      if (millis !== null && !isNaN(millis)) {
+        const local = DateTime.fromMillis(millis, {
+          zone: this.timezone || 'UTC',
+        });
+        if (local.isValid) {
+          const output = local.toISODate();
+          logger.debug('Formatted date for Hardcover (millis)', {
+            input: dateValue,
+            output,
+            timezone: this.timezone,
+          });
+          return output;
+        }
       }
 
-      // Format as YYYY-MM-DD
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-
-      const formattedDate = `${year}-${month}-${day}`;
-
-      logger.debug('Formatted date for Hardcover', {
-        input: dateValue,
-        inputType: typeof dateValue,
-        output: formattedDate,
+      logger.warn('Unable to format date for Hardcover', {
+        value: dateValue,
+        type: typeof dateValue,
       });
-
-      return formattedDate;
+      return null;
     } catch (error) {
       logger.error('Error formatting date for Hardcover', {
         dateValue: dateValue,

@@ -95,6 +95,12 @@ Processing 150 books from Audiobookshelf...
 ═══════════════════════════════════════════════════════
 ```
 
+#### Start Date Handling
+
+- ShelfBridge now always sends a start date to Hardcover when one is available from Audiobookshelf.
+- Dates are derived in the configured timezone and transmitted as `YYYY-MM-DD`.
+- This removes any dependency on whether Hardcover previously stored a start date, ensuring the UI does not display unknown dates (e.g., `? - ?`).
+
 ### `test` - API Connection Testing
 
 Tests connectivity to both Audiobookshelf and Hardcover APIs.
