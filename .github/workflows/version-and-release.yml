@@ -50,11 +50,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Wait for Docker build to complete
+      - name: Wait for Docker publish to complete
         uses: lewagon/wait-on-check-action@v1.4.0
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
-          check-name: 'build-and-push'
+          check-name: 'publish'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 30
           allowed-conclusions: success,skipped
