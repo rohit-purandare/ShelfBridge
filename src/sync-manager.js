@@ -6,6 +6,7 @@ import ProgressManager from './progress-manager.js';
 import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
+import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Transaction } from './utils/transaction.js';
 
@@ -20,6 +21,13 @@ export class SyncManager {
     const workers = this.globalConfig.workers || 3;
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
+
+    // Increase max listeners for AbortSignal to handle parallel processing
+    // This prevents MaxListenersExceededWarning when processing many books
+    const maxBooks = this.globalConfig.max_books_to_fetch || 500;
+    const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
+    setMaxListeners(requiredListeners, this.abortController.signal);
+
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
