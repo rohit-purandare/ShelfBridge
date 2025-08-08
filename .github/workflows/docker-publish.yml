@@ -14,6 +14,7 @@ on:
         'fix/*',
         'hotfix/*',
         'release/*',
+        'ci/*',
       ]
   workflow_call:
     inputs:
