@@ -31,6 +31,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.28] - 2025-08-06
+
+### Added
+- **implement centralized ProgressManager for standardized progress handling**
+- **implement reading_format_id support in GraphQL mutations**
+
+### Changed
+- chore: update Node.js requirements to align with dependencies
+- ci: replace insecure gitleaks download with official action
+- ci: remove redundant ESLint runtime installation
+- ci: fix critical security vulnerability in labeler workflow
+- ci: correct broken CI main entry point test
+- ci: adopt industry-standard automated release workflow
+- ci: remove conflicting release-on-merge workflow
+- ci: prevent duplicate Docker builds from version bump commits
+- centralize progress change detection and regression analysis
+- chore: remove obsolete deep scan architecture
+
+### Fixed
+- ensure consistent format detection between ProgressManager and sync operations
+- improve start date handling and reduce log noise
+- centralize progress logic and prevent duplicate completion processing
+- resolve cache logic bug and dry-run display inconsistency
+- improve dry-run sync summary display for clarity
+- implement consistent format detection across all book matching methods
+- preserve existing start dates and fix edition format detection
+- add missing edition metadata to getBookFromEdition GraphQL query
+- ensure completion detection runs on every sync
+
+
 ## [1.18.27] - 2025-08-06
 
 ### Added
@@ -510,7 +540,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.27...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.28...HEAD
+[1.18.28]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.27...v1.18.28
 [1.18.27]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.24...v1.18.25
