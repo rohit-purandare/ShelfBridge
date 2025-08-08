@@ -1,3 +1,18 @@
+## [1.19.1] - 2025-08-08
+
+### Fixed
+- 🔧 **MaxListenersExceededWarning Resolution**: Fixed memory leak warning when processing many books
+  - Configure dynamic listener limits in SyncManager based on max_books_to_fetch configuration
+  - Set global unlimited listeners in main.js for multi-user parallel scenarios
+  - Prevents 'Possible EventTarget memory leak detected' warnings during parallel operations
+  - Maintains proper cleanup and backward compatibility while scaling with configuration settings
+- 🔄 **Enhanced Server Error Handling**: Improved reliability for Hardcover API interactions
+  - Added automatic retry logic for HTTP 5xx server errors (502, 503, 504, etc.)
+  - Extended existing timeout retry logic to cover temporary server issues
+  - Uses exponential backoff strategy (1s, 2s, 4s) with configurable max retries
+  - Better error logging distinguishes between timeout and server error types
+  - Significantly improves sync reliability when Hardcover API experiences temporary outages
+
 ## [1.18.21] - 2025-07-26
 
 ### Fixed
