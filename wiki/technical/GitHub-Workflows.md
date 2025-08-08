@@ -4,7 +4,7 @@ This page documents all automated workflows that run on the ShelfBridge reposito
 
 ## 📋 Overview
 
-ShelfBridge uses **6 GitHub Actions workflows** to automate:
+ShelfBridge uses **5 GitHub Actions workflows** to automate:
 
 - **Code Quality** - ESLint, security checks, dependency audits
 - **Testing** - Cross-platform Node.js testing
@@ -18,7 +18,7 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 | --------------------------------------------- | --------------------------------- | ---------------------------- | --------- |
 | [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
 | [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation)     | Functional commits to main        | Smart release creation       | ✅ Active |
+| [Release Automation](#release-automation)     | Conventional commits to main      | Release Please automation    | ✅ Active |
 | [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
 | [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
 | [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
@@ -204,23 +204,34 @@ node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
 ## 🚀 Release Automation
 
 **File:** `.github/workflows/version-and-release.yml`  
-**Purpose:** Automate GitHub releases for functional code changes
+**Purpose:** Industry-standard automated releases using Google's Release Please
 
-### Triggers
+### What is Release Please?
 
-- Push to `main` branch
-- **Excludes:** Documentation-only and non-functional commits
+**Release Please** is Google's battle-tested automation tool that handles releases while respecting branch protection rules. Used by Google, Angular, Firebase, and thousands of open-source projects.
 
-### Smart Release Logic
+### How It Works
 
-The workflow intelligently determines when to create releases:
+#### **Phase 1: Release PR Creation**
 
-**✅ Triggers Release:**
+- **Trigger:** Push to `main` branch with conventional commits
+- **Action:** Creates/updates a Release PR with version bump and changelog
+- **Respects:** Branch protection rules (no direct pushes to main)
 
-- `feat:` or `feature:` commits (minor version bump)
-- `fix:` or `bug:` commits (patch version bump)
-- Commits with `BREAKING CHANGE` (major version bump)
-- Any other functional commits (patch version bump)
+#### **Phase 2: Actual Release**
+
+- **Trigger:** Manual merge of Release PR
+- **Action:** Creates Git tag and GitHub release automatically
+- **Integration:** Triggers Docker builds and other workflows
+
+### Version Bump Logic
+
+Based on **Conventional Commits** standard:
+
+- `fix:` commits → **patch** version bump (1.19.0 → 1.19.1)
+- `feat:` commits → **minor** version bump (1.19.0 → 1.20.0)
+- `BREAKING CHANGE:` → **major** version bump (1.19.0 → 2.0.0)
+- Other commits → **patch** version bump
 
 **⏭️ Skips Release:**
 
