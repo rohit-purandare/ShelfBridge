@@ -31,6 +31,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2025-08-08
+
+### Added
+- **complete modular book matching architecture with comprehensive testing**
+- chore: add comprehensive test coverage for utilities and core modules
+- chore: add comprehensive unit test suite with proper cleanup
+- **implement ACID-style transactions for sync operations**
+
+### Changed
+- build(deps): update GitHub Actions (#36)
+- standardize logging key to user_id for consistent structured logging
+- extract utilities into focused modules and fix force sync issues
+- complete function separation and eliminate duplicate matching logic
+- extract book matching into modular architecture
+
+### Fixed
+- update npm test script to explicitly list test files
+- fully guard all rotating log targets; disable file transports if dir or existing log files are not writable
+- fallback to console-only when logs/ is not writable; avoid EACCES on exception/rejection handlers
+- always send started_at to Hardcover; correct timezone date formatting
+- resolve author extraction object handling in matching module
+
+### Improved
+- chore: add automated testing and improve network resilience
+
+
 ## [1.18.28] - 2025-08-06
 
 ### Added
@@ -540,7 +566,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. **Performance & Reliability** (v1.8.0 - v1.12.0)
 4. **Advanced Features** (v1.13.0 - v1.16.0)
 
-[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.28...HEAD
+[Unreleased]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.28...v1.19.0
 [1.18.28]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.27...v1.18.28
 [1.18.27]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.18.25...v1.18.26
