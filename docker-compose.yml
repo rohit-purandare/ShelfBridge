@@ -92,7 +92,6 @@ services:
       # Library fetching
       # SHELFBRIDGE_MAX_BOOKS_TO_FETCH: ""             # Max books to fetch from ABS (optional, no default)
       # SHELFBRIDGE_PAGE_SIZE: "100"                   # Books per API request (25-200, default: 100)
-      # SHELFBRIDGE_DEEP_SCAN_INTERVAL: "10"           # Deep scan every N syncs (default: 10)
 
       # Debugging
       # SHELFBRIDGE_DUMP_FAILED_BOOKS: "true"          # Create error reports (true/false, default: true)

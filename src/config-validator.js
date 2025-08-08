@@ -153,14 +153,6 @@ export class ConfigValidator {
           optional: true,
           description: 'Number of books to fetch per API call',
         },
-        deep_scan_interval: {
-          type: 'number',
-          min: 1,
-          max: 100,
-          default: 10,
-          optional: true,
-          description: 'Number of syncs between deep scans (1-100)',
-        },
         dump_failed_books: {
           type: 'boolean',
           default: true,

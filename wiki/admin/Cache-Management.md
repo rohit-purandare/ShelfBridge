@@ -5,6 +5,7 @@ ShelfBridge uses a simple SQLite-based cache system to optimize performance and 
 ## 🎯 What is the Cache?
 
 The cache stores:
+
 - ✅ **Book metadata** from Audiobookshelf and Hardcover
 - ✅ **Previous sync results** to detect changes
 - ✅ **User library information** for faster lookups
@@ -59,6 +60,7 @@ node src/main.js cache --stats
 ```
 
 **Sample output:**
+
 ```
 === Cache Statistics ===
 Total books: 127
@@ -147,13 +149,12 @@ CREATE TABLE books (
 CREATE TABLE sync_tracking (
     user_id TEXT PRIMARY KEY,
     sync_count INTEGER DEFAULT 0,
-    last_deep_scan_date TIMESTAMP,
     total_syncs INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Library stats table  
+-- Library stats table
 CREATE TABLE library_stats (
     user_id TEXT NOT NULL,
     total_books INTEGER,
@@ -166,17 +167,18 @@ CREATE TABLE library_stats (
 
 ### Cache File Locations
 
-| Installation | Cache Location |
-|--------------|----------------|
+| Installation       | Cache Location                            |
+| ------------------ | ----------------------------------------- |
 | **Docker Compose** | `/app/data/.book_cache.db` (in container) |
-| **Node.js** | `data/.book_cache.db` (in project) |
-| **Manual Docker** | Depends on volume mount |
+| **Node.js**        | `data/.book_cache.db` (in project)        |
+| **Manual Docker**  | Depends on volume mount                   |
 
 ## 🔍 Cache Troubleshooting
 
 ### Common Cache Issues
 
 **Issue: Cache corruption**
+
 ```bash
 # Symptoms
 - "Database is locked" errors
@@ -188,6 +190,7 @@ docker exec -it shelfbridge node src/main.js cache --clear
 ```
 
 **Issue: Cache too large**
+
 ```bash
 # Symptoms
 - Disk space warnings
@@ -198,6 +201,7 @@ docker exec -it shelfbridge node src/main.js cache --clear
 ```
 
 **Issue: No performance improvement**
+
 ```bash
 # Symptoms
 - Every sync takes the same amount of time
@@ -225,6 +229,7 @@ docker exec -it shelfbridge node src/main.js cache --clear
 ### User Data Isolation
 
 The cache automatically separates data by user ID:
+
 - Each user's books are stored with their `user_id`
 - Sync tracking is per-user
 - Library stats are per-user
@@ -241,12 +246,14 @@ The cache automatically separates data by user ID:
 The following features are **not implemented** but may be added in future versions:
 
 **Configuration Options:**
+
 - Cache expiration settings
 - Maximum cache size limits
 - Automatic cleanup schedules
 - Performance tuning options
 
 **Advanced Commands:**
+
 - Import from JSON (`--import`)
 - Cache health checks (`--health`)
 - Database compaction (`--compact`)
@@ -254,6 +261,7 @@ The following features are **not implemented** but may be added in future versio
 - User-specific operations (`--user <userId>`)
 
 **Performance Features:**
+
 - Cache hit rate analysis
 - Automatic optimization
 - Size-based cleanup
@@ -271,7 +279,7 @@ The following features are **not implemented** but may be added in future versio
 ### When to Clear Cache
 
 - **Troubleshooting**: If sync results seem inconsistent
-- **Major config changes**: Changing user IDs or sync behavior  
+- **Major config changes**: Changing user IDs or sync behavior
 - **Fresh start**: Want to re-sync everything from scratch
 - **Database errors**: If you see SQLite corruption warnings
 
@@ -297,8 +305,9 @@ docker exec -it shelfbridge node src/main.js interactive
 ```
 
 Available options:
+
 - Show cache stats
-- Show cache contents  
+- Show cache contents
 - Clear cache
 - Export cache to JSON
 
@@ -316,4 +325,4 @@ Available options:
 
 ---
 
-**Simple cache management for reliable sync performance!** 💾⚡ 
+**Simple cache management for reliable sync performance!** 💾⚡

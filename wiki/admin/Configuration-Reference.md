@@ -336,18 +336,6 @@ global:
   - Smaller values = more API calls, smaller responses (better for slow connections)
   - Larger values = fewer API calls, larger responses (better for fast connections)
 
-#### `deep_scan_interval`
-
-- **Type**: Number (1-100)
-- **Default**: `10`
-- **YAML**: `deep_scan_interval: 10`
-- **Environment**: `SHELFBRIDGE_DEEP_SCAN_INTERVAL=10`
-- **Description**: Number of syncs between deep scans
-- **Behavior**:
-  - Deep scans check the entire library
-  - Fast scans only check books in progress
-  - Set to 1 for always full scan
-
 ### Debugging Settings
 
 #### `dump_failed_books`
@@ -483,7 +471,6 @@ Environment variables are automatically parsed:
 | `SHELFBRIDGE_AUDIOBOOKSHELF_RATE_LIMIT`   | Number (60-1200) | 600            | `audiobookshelf_rate_limit`   |
 | `SHELFBRIDGE_MAX_BOOKS_TO_FETCH`          | Number           | (none)         | `max_books_to_fetch`          |
 | `SHELFBRIDGE_PAGE_SIZE`                   | Number (25-200)  | 100            | `page_size`                   |
-| `SHELFBRIDGE_DEEP_SCAN_INTERVAL`          | Number           | 10             | `deep_scan_interval`          |
 | `SHELFBRIDGE_DUMP_FAILED_BOOKS`           | Boolean          | true           | `dump_failed_books`           |
 
 ### User Environment Variables
@@ -685,7 +672,6 @@ global:
 | `audiobookshelf_rate_limit`   | Number  | 60-1200                       | No       |
 | `max_books_to_fetch`          | Number  | 1-10000 or null               | No       |
 | `page_size`                   | Number  | 25-200                        | No       |
-| `deep_scan_interval`          | Number  | 1-100                         | No       |
 | `dump_failed_books`           | Boolean | true/false                    | No       |
 | `libraries.include`           | Array   | Min length 1, strings         | No       |
 | `libraries.exclude`           | Array   | Min length 1, strings         | No       |
@@ -706,7 +692,6 @@ global:
   workers: 5
   parallel: true
   page_size: 150
-  deep_scan_interval: 15
 
   # Reliability settings
   prevent_progress_regression: true
@@ -789,7 +774,6 @@ global:
 
   # Conservative performance
   page_size: 25
-  deep_scan_interval: 1 # Always do full scan for testing
 
 users:
   - id: test_user

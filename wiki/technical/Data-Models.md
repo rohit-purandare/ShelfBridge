@@ -295,7 +295,6 @@ interface CachedBookInfo {
 CREATE TABLE sync_tracking (
   user_id TEXT PRIMARY KEY,
   sync_count INTEGER DEFAULT 0,
-  last_deep_scan_date TIMESTAMP,
   total_syncs INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

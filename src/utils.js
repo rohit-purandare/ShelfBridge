@@ -6,6 +6,7 @@ import { Agent } from 'https';
 import { Agent as HttpAgent } from 'http';
 import logger from './logger.js';
 import { currentVersion } from './version.js';
+import ProgressManager from './progress-manager.js';
 
 /**
  * Semaphore class for managing concurrent access to shared resources
@@ -288,15 +289,14 @@ export function extractAuthor(bookData) {
  * @param {number} percentage - Progress percentage (0-100)
  * @param {number} totalPages - Total pages in the book
  * @returns {number} - Calculated current page
+ * @deprecated Use ProgressManager.calculateCurrentPosition instead
  */
 export function calculateCurrentPage(percentage, totalPages) {
-  if (!totalPages || totalPages <= 0) return 0;
-
-  // Clamp percentage to valid range
-  const clampedPercentage = Math.max(0, Math.min(100, percentage));
-
-  const currentPage = Math.round((clampedPercentage / 100) * totalPages);
-  return Math.max(1, Math.min(currentPage, totalPages));
+  // Delegate to ProgressManager for consistency
+  return ProgressManager.calculateCurrentPosition(percentage, totalPages, {
+    type: 'pages',
+    context: 'legacy calculateCurrentPage function',
+  });
 }
 
 /**
@@ -304,15 +304,14 @@ export function calculateCurrentPage(percentage, totalPages) {
  * @param {number} percentage - Progress percentage (0-100)
  * @param {number} totalSeconds - Total seconds in the audiobook
  * @returns {number} - Calculated current seconds
+ * @deprecated Use ProgressManager.calculateCurrentPosition instead
  */
 export function calculateCurrentSeconds(percentage, totalSeconds) {
-  if (!totalSeconds || totalSeconds <= 0) return 0;
-
-  // Clamp percentage to valid range
-  const clampedPercentage = Math.max(0, Math.min(100, percentage));
-
-  const currentSeconds = Math.round((clampedPercentage / 100) * totalSeconds);
-  return Math.max(0, Math.min(currentSeconds, totalSeconds));
+  // Delegate to ProgressManager for consistency
+  return ProgressManager.calculateCurrentPosition(percentage, totalSeconds, {
+    type: 'seconds',
+    context: 'legacy calculateCurrentSeconds function',
+  });
 }
 
 /**

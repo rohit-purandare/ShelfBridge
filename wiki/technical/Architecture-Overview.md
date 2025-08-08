@@ -81,7 +81,7 @@ graph TB
 - **Features**:
   - HTTP connection pooling with keep-alive
   - Rate limiting (default: 600 requests/minute)
-  - Progress fetching with deep/fast scan modes
+  - Comprehensive progress fetching
   - Pagination support
   - Comprehensive error handling
 
@@ -127,11 +127,10 @@ books (
   UNIQUE(user_id, identifier, title)
 );
 
--- Sync tracking table - tracks sync frequency and deep scan timing
+-- Sync tracking table - tracks sync frequency
 sync_tracking (
   user_id TEXT PRIMARY KEY,
   sync_count INTEGER,
-  last_deep_scan_date TIMESTAMP,
   total_syncs INTEGER,
   created_at TIMESTAMP,
   updated_at TIMESTAMP
@@ -154,7 +153,6 @@ library_stats (
 - **Purpose**: Core business logic for progress synchronization
 - **Architecture**: Class-based with dependency injection
 - **Key Features**:
-  - Deep vs fast scan intelligence
   - Progress regression protection
   - Re-reading detection
   - Auto-add functionality
@@ -166,12 +164,8 @@ library_stats (
 ```mermaid
 flowchart TD
     START[Start Sync] --> INIT[Initialize Clients]
-    INIT --> CHECK[Check Scan Type]
-    CHECK --> DEEP{Deep Scan?}
-    DEEP -->|Yes| FETCH_ALL[Fetch All Books]
-    DEEP -->|No| FETCH_CHANGED[Fetch Changed Books Only]
-    FETCH_ALL --> PROCESS[Process Books]
-    FETCH_CHANGED --> PROCESS
+    INIT --> FETCH[Fetch All Books]
+    FETCH --> PROCESS[Process Books]
     PROCESS --> MATCH[Match with Hardcover]
     MATCH --> FOUND{Found in Hardcover?}
     FOUND -->|Yes| SYNC_EXISTING[Sync Existing Book]
@@ -231,9 +225,7 @@ Progress Update → BookCache → SQLite Database
 ### 3. **Caching Strategy**
 
 ```
-First Sync: Deep Scan → Cache All Books → Store Library Stats
-Subsequent Syncs: Fast Scan → Check Cache → Update Changed Only
-Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
+Every Sync: Fetch All Books → Update Cache → Store Fresh Library Stats
 ```
 
 ## Performance Optimizations
@@ -254,7 +246,6 @@ Every 10th Sync: Deep Scan → Refresh Cache → Update Stats
 
 - SQLite WAL mode for concurrent access
 - Indexes on frequently queried columns
-- Intelligent deep vs fast scanning
 - Library statistics caching
 
 ### 4. **Memory Management**

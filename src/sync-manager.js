@@ -1,6 +1,7 @@
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
+import ProgressManager from './progress-manager.js';
 import {
   normalizeIsbn,
   normalizeAsin,
@@ -10,8 +11,6 @@ import {
   extractAuthor,
   extractNarrator,
   extractAuthorFromSearchResult,
-  calculateCurrentPage,
-  calculateCurrentSeconds,
   calculateMatchingScore,
   formatDurationForLogging,
 } from './utils.js';
@@ -62,18 +61,11 @@ export class SyncManager {
   }
 
   _isZeroProgress(progressValue) {
-    // Consider undefined, null, or values below threshold as "zero progress"
-    // Note: 0% should be considered zero progress for auto-add decisions
-    if (progressValue === undefined || progressValue === null) {
-      return true;
-    }
-
-    if (typeof progressValue === 'number') {
-      // Values at or below threshold are considered zero progress
-      return progressValue <= (this.globalConfig.min_progress_threshold || 5.0);
-    }
-
-    return true;
+    // Use centralized ProgressManager for consistent zero progress detection
+    return ProgressManager.isZeroProgress(progressValue, {
+      threshold: this.globalConfig.min_progress_threshold || 5.0,
+      context: `user ${this.userId} zero progress check`,
+    });
   }
 
   async syncProgress() {
@@ -81,30 +73,11 @@ export class SyncManager {
     logger.debug(`Starting sync for user: ${this.userId}`);
     console.log(`🔄 Starting sync for ${this.userId}`);
 
-    // Increment sync count and check if deep scan is needed
-    const syncTracking = await this.cache.incrementSyncCount(this.userId);
-    const shouldDeepScan =
-      this.globalConfig.force_sync ||
-      (await this.cache.shouldPerformDeepScan(
-        this.userId,
-        this.globalConfig.deep_scan_interval || 10,
-      ));
+    // Increment sync count (for tracking purposes)
+    const _syncTracking = await this.cache.incrementSyncCount(this.userId);
 
-    if (shouldDeepScan) {
-      if (
-        syncTracking.sync_count >= (this.globalConfig.deep_scan_interval || 10)
-      ) {
-        console.log(
-          `🔍 Performing deep scan (periodic sync #${syncTracking.sync_count})`,
-        );
-      } else if (this.globalConfig.force_sync) {
-        console.log(`🔍 Performing deep scan (forced)`);
-      } else {
-        console.log(`🔍 Performing deep scan (initial sync)`);
-      }
-    } else {
-      console.log(`⚡ Performing fast sync`);
-    }
+    // Simple unified sync message (completion detection now always runs)
+    console.log(`🔄 Starting sync...`);
 
     const result = {
       books_processed: 0,
@@ -115,18 +88,11 @@ export class SyncManager {
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
-      deep_scan_performed: shouldDeepScan,
     };
 
     try {
       // Get books from Audiobookshelf
-      const absBooks =
-        await this.audiobookshelf.getReadingProgress(shouldDeepScan);
-
-      // Record the deep scan to reset counter if one was performed
-      if (shouldDeepScan) {
-        await this.cache.recordDeepScan(this.userId);
-      }
+      const absBooks = await this.audiobookshelf.getReadingProgress();
 
       if (!absBooks || absBooks.length === 0) {
         logger.debug('No books found in Audiobookshelf');
@@ -153,48 +119,27 @@ export class SyncManager {
           result.library_filtering = filteringStats.libraryFiltering;
         }
 
-        // Store stats in cache if this was a deep scan
-        if (shouldDeepScan) {
-          await this.cache.storeLibraryStats(this.userId, filteringStats);
-          result.stats_source = 'deep_scan';
-        } else {
-          result.stats_source = 'realtime';
-        }
+        // Always store fresh stats from scan
+        await this.cache.storeLibraryStats(this.userId, filteringStats);
+        result.stats_source = 'realtime';
       } else {
-        // Fast scan - try to get cached library stats
-        if (!shouldDeepScan) {
-          const cachedStats = await this.cache.getLibraryStats(this.userId);
-          if (cachedStats) {
-            result.total_books_in_library = cachedStats.totalBooksInLibrary;
-            result.books_with_progress = cachedStats.totalWithProgress;
-            result.books_in_progress = cachedStats.inProgressBooks;
-            result.all_completed_books = cachedStats.allCompletedBooks;
-            result.books_never_started = cachedStats.booksNeverStarted;
-            result.stats_source = 'cached';
-            result.stats_last_updated = cachedStats.lastUpdated;
-
-            logger.debug(
-              `Using cached library stats for user ${this.userId}`,
-              cachedStats,
-            );
-          } else {
-            result.stats_source = 'none';
-          }
-        }
-      }
-
-      // For fast scans, enhance realtime data with cached completed book counts
-      if (!shouldDeepScan && filteringStats) {
+        // No stats from scan - try to get cached library stats
         const cachedStats = await this.cache.getLibraryStats(this.userId);
-        if (cachedStats && cachedStats.allCompletedBooks > 0) {
-          // Update the completed books count from cache since fast scan doesn't find them
+        if (cachedStats) {
+          result.total_books_in_library = cachedStats.totalBooksInLibrary;
+          result.books_with_progress = cachedStats.totalWithProgress;
+          result.books_in_progress = cachedStats.inProgressBooks;
           result.all_completed_books = cachedStats.allCompletedBooks;
-          result.stats_source = 'mixed'; // Indicate mixed data source
+          result.books_never_started = cachedStats.booksNeverStarted;
+          result.stats_source = 'cached';
           result.stats_last_updated = cachedStats.lastUpdated;
 
           logger.debug(
-            `Enhanced fast scan with cached completed books: ${cachedStats.allCompletedBooks}`,
+            `Using cached library stats for user ${this.userId}`,
+            cachedStats,
           );
+        } else {
+          result.stats_source = 'none';
         }
       }
 
@@ -231,6 +176,9 @@ export class SyncManager {
       if (!hardcoverBooks || hardcoverBooks.length === 0) {
         logger.warn('No books found in Hardcover library');
       }
+
+      // Store for cross-referencing in cache logic
+      this.hardcoverBooks = hardcoverBooks;
 
       // Create identifier lookup
       const identifierLookup = this._createIdentifierLookup(hardcoverBooks);
@@ -307,11 +255,17 @@ export class SyncManager {
       if (!book || !book.editions) continue;
 
       for (const edition of book.editions) {
+        // Extract format from reading_format for consistent format detection
+        const editionWithFormat = {
+          ...edition,
+          format: this._mapHardcoverFormatToInternal(edition),
+        };
+
         // Add ISBN-10
         if (edition.isbn_10) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_10);
           if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition };
+            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
           }
         }
 
@@ -319,7 +273,7 @@ export class SyncManager {
         if (edition.isbn_13) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_13);
           if (normalizedIsbn) {
-            lookup[normalizedIsbn] = { userBook, edition };
+            lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
           }
         }
 
@@ -327,13 +281,36 @@ export class SyncManager {
         if (edition.asin) {
           const normalizedAsin = normalizeAsin(edition.asin);
           if (normalizedAsin) {
-            lookup[normalizedAsin] = { userBook, edition };
+            lookup[normalizedAsin] = { userBook, edition: editionWithFormat };
           }
         }
       }
     }
 
     return lookup;
+  }
+
+  /**
+   * Find a user book in the current Hardcover library that contains the given edition ID
+   * @param {number} editionId - Edition ID to search for
+   * @returns {Object|null} - User book object if found, null otherwise
+   */
+  _findUserBookByEditionId(editionId) {
+    if (!this.hardcoverBooks || !Array.isArray(this.hardcoverBooks)) {
+      return null;
+    }
+
+    for (const userBook of this.hardcoverBooks) {
+      if (!userBook.book || !userBook.book.editions) continue;
+
+      for (const edition of userBook.book.editions) {
+        if (edition.id === editionId) {
+          return userBook;
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -431,20 +408,56 @@ export class SyncManager {
           cached: 'CACHE_HIT',
         });
 
-        // Convert cached edition to match format
-        return {
-          userBook: {
-            id: cachedBookInfo.edition_id,
-            book: { title: cachedBookInfo.title },
-          },
-          edition: {
-            id: cachedBookInfo.edition_id,
-            format: 'audiobook', // We'll determine actual format later
-          },
-          _isSearchResult: true,
-          _matchingScore: { totalScore: 85, confidence: 'high' }, // Cached results are trusted
-          _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
-        };
+        // Check if this cached edition already exists in user's current Hardcover library
+        const existingUserBook = this._findUserBookByEditionId(
+          cachedBookInfo.edition_id,
+        );
+
+        if (existingUserBook) {
+          // Book is already in library - use real user book ID
+          logger.debug(
+            `Cached edition found in current library for "${title}"`,
+            {
+              editionId: cachedBookInfo.edition_id,
+              realUserBookId: existingUserBook.id,
+              libraryTitle: existingUserBook.book.title,
+            },
+          );
+
+          return {
+            userBook: existingUserBook,
+            edition: {
+              id: cachedBookInfo.edition_id,
+              format: 'audiobook', // We'll determine actual format later
+            },
+            _isSearchResult: false, // Not a search result, it's already in library
+            _matchingScore: { totalScore: 85, confidence: 'high' },
+            _needsBookIdLookup: false, // We already have the real user book ID
+          };
+        } else {
+          // Book not in current library - needs auto-add (existing behavior)
+          logger.debug(
+            `Cached edition NOT found in current library for "${title}"`,
+            {
+              editionId: cachedBookInfo.edition_id,
+              willAutoAdd: true,
+            },
+          );
+
+          return {
+            userBook: {
+              id: cachedBookInfo.edition_id,
+              book: { title: cachedBookInfo.title },
+            },
+            edition: {
+              id: cachedBookInfo.edition_id,
+              format: 'audiobook', // We'll determine actual format later
+            },
+            _isSearchResult: true,
+            _matchingScore: { totalScore: 85, confidence: 'high' },
+            _needsBookIdLookup: true, // Cached results don't include book ID, need lookup
+          };
+        }
       }
 
       // 2. Cache miss - perform API search
@@ -741,6 +754,60 @@ export class SyncManager {
   }
 
   /**
+   * Map Hardcover's reading_format.format to our internal format system
+   * @param {Object} edition - Edition object with reading_format and audio_seconds
+   * @returns {string} - Internal format: "audiobook", "ebook", "book", or "mixed"
+   */
+  _mapHardcoverFormatToInternal(edition) {
+    // Use Hardcover's format classification as source of truth
+    const hardcoverFormat = edition.reading_format?.format;
+
+    // Map Hardcover formats to our internal system
+    switch (hardcoverFormat) {
+      case 'Listened':
+        return 'audiobook';
+      case 'Ebook':
+        return 'ebook';
+      case 'Read':
+        return 'book';
+      case 'Both':
+        return 'mixed';
+      default:
+        // Fallback to edition capabilities if no explicit format
+        if (edition.audio_seconds && edition.audio_seconds > 0) {
+          return 'audiobook';
+        }
+        return 'book'; // Default for text-based books
+    }
+  }
+
+  /**
+   * Get Hardcover's reading_format_id for mutations
+   * @param {Object} edition - Edition object with reading_format
+   * @returns {number} - Reading format ID: 1=Read, 2=Listened, 3=Both, 4=Ebook
+   */
+  _getReadingFormatId(edition) {
+    const hardcoverFormat = edition.reading_format?.format;
+
+    switch (hardcoverFormat) {
+      case 'Read':
+        return 1;
+      case 'Listened':
+        return 2;
+      case 'Both':
+        return 3;
+      case 'Ebook':
+        return 4;
+      default:
+        // Fallback based on edition capabilities
+        if (edition.audio_seconds && edition.audio_seconds > 0) {
+          return 2; // Listened (audiobook)
+        }
+        return 1; // Read (default for text-based books)
+    }
+  }
+
+  /**
    * Format timestamp for display using configured timezone
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
    * @returns {string} - Formatted date string for display
@@ -926,7 +993,31 @@ export class SyncManager {
   async _syncSingleBook(absBook, identifierLookup, sessionData) {
     const startTime = performance.now();
     const title = extractTitle(absBook) || 'Unknown Title';
-    const progressPercent = absBook.progress_percentage || 0;
+    // Validate progress with explicit error handling and position-based accuracy
+    const validatedProgress = ProgressManager.getValidatedProgress(
+      absBook,
+      `book "${title}" sync`,
+      { allowNull: false },
+    );
+
+    if (validatedProgress === null) {
+      logger.warn(`Skipping book "${title}" due to invalid progress data`, {
+        rawProgress: ProgressManager.extractProgressPercentage(absBook),
+        bookId: absBook.id,
+        userId: this.userId,
+      });
+      return {
+        title,
+        author: this._extractAuthorFromData(absBook, null),
+        status: 'skipped',
+        reason: 'Invalid progress data - cannot validate percentage',
+        progress: ProgressManager.extractProgressPercentage(absBook),
+        hardcover_status: 'unknown',
+        abs_id: absBook.id,
+      };
+    }
+
+    const progressPercent = validatedProgress;
 
     logger.debug(`Processing: ${title} (${progressPercent.toFixed(1)}%)`);
 
@@ -1141,6 +1232,31 @@ export class SyncManager {
             hardcoverMatch.userBook.book.contributions =
               bookInfo.contributions ||
               hardcoverMatch.userBook.book.contributions;
+
+            // Update edition metadata if available
+            if (bookInfo.edition) {
+              Object.assign(hardcoverMatch.edition, bookInfo.edition);
+
+              // Determine correct format using Hardcover as source of truth
+              const detectedFormat = this._mapHardcoverFormatToInternal(
+                bookInfo.edition,
+              );
+
+              // Update the format in the edition object
+              hardcoverMatch.edition.format = detectedFormat;
+
+              logger.debug(
+                `Updated edition format for ${title}: ${detectedFormat}`,
+                {
+                  editionId: editionId,
+                  pages: bookInfo.edition.pages,
+                  audioSeconds: bookInfo.edition.audio_seconds,
+                  physicalFormat: bookInfo.edition.physical_format,
+                  readingFormat: bookInfo.edition.reading_format?.format,
+                },
+              );
+            }
+
             hardcoverMatch._needsBookIdLookup = false;
 
             logger.debug(
@@ -1258,22 +1374,37 @@ export class SyncManager {
     }
 
     // Check if progress has changed (unless force sync is enabled)
-    if (
-      !this.globalConfig.force_sync &&
-      !(await this.cache.hasProgressChanged(
+    if (!this.globalConfig.force_sync) {
+      const hasChanged = await this.cache.hasProgressChanged(
         this.userId,
         identifier,
         title,
         progressPercent,
         identifierType,
-      ))
-    ) {
-      // Remove the verbose console log - keep only debug logging
-      logger.debug(`Skipping ${title}: Progress unchanged`);
-      syncResult.status = 'skipped';
-      syncResult.reason = 'Progress unchanged';
-      syncResult.timing = performance.now() - startTime;
-      return syncResult;
+      );
+
+      if (!hasChanged) {
+        logger.debug(`Skipping ${title}: Progress unchanged`);
+        syncResult.status = 'skipped';
+        syncResult.reason = 'Progress unchanged';
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      } else {
+        syncResult.progress_changed = true;
+        // Log progress change details for debugging
+        const previousProgress = await this.cache.getLastProgress(
+          this.userId,
+          identifier,
+          title,
+          identifierType,
+        );
+        const changeAnalysis = ProgressManager.detectProgressChange(
+          previousProgress,
+          progressPercent,
+          { context: `book "${title}" change detection` },
+        );
+        logger.debug(`Progress change detected for ${title}`, changeAnalysis);
+      }
     } else {
       syncResult.progress_changed = true;
     }
@@ -1426,7 +1557,8 @@ export class SyncManager {
             author: author,
           });
 
-          const currentProgress = absBook.progress_percentage || 0;
+          const currentProgress =
+            ProgressManager.extractProgressPercentage(absBook);
 
           // Store initial cache data
           await this.cache.storeBookSyncData(
@@ -1458,10 +1590,16 @@ export class SyncManager {
                 edition: edition,
               };
 
-              // Check if book should be marked as completed
-              const isFinished =
-                absBook.is_finished === true || absBook.is_finished === 1;
-              if (isFinished) {
+              // Check if book should be marked as completed using ProgressManager
+              const isComplete = ProgressManager.isBookComplete(
+                absBook,
+                `auto-added book "${title}" completion check`,
+                {},
+                edition, // Pass edition for consistent format detection
+              );
+
+              if (isComplete) {
+                const isFinished = ProgressManager.extractFinishedFlag(absBook);
                 await this._handleCompletionStatus(
                   addResult.id,
                   edition,
@@ -1472,20 +1610,10 @@ export class SyncManager {
                 );
                 logger.info(`Auto-added book marked as completed`, {
                   title: title,
+                  detectedBy: isFinished
+                    ? 'isFinished flag'
+                    : 'progress threshold',
                 });
-              } else if (currentProgress >= 95) {
-                await this._handleCompletionStatus(
-                  addResult.id,
-                  edition,
-                  title,
-                  currentProgress,
-                  absBook,
-                  false,
-                );
-                logger.info(
-                  `Auto-added book marked as completed (high progress)`,
-                  { title: title },
-                );
               } else {
                 await this._handleProgressStatus(
                   addResult.id,
@@ -1548,7 +1676,7 @@ export class SyncManager {
     _identifier,
   ) {
     const title = extractTitle(absBook) || 'Unknown Title';
-    const progressPercent = absBook.progress_percentage || 0;
+    const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
 
     logger.debug(`Syncing existing book: ${title}`, {
@@ -1611,38 +1739,121 @@ export class SyncManager {
       }
 
       if (shouldProtectAgainstRegression) {
-        const regressionCheck = await this._checkProgressRegression(
+        // Get current progress from Hardcover for regression analysis
+        const progressInfo = await this.hardcover.getBookCurrentProgress(
           userBook.id,
-          progressPercent,
-          title,
         );
-        if (regressionCheck.shouldBlock) {
+        let previousProgress = null;
+
+        if (
+          progressInfo &&
+          progressInfo.has_progress &&
+          progressInfo.latest_read
+        ) {
+          const latestRead = progressInfo.latest_read;
+          if (latestRead.edition) {
+            if (
+              latestRead.progress_seconds &&
+              latestRead.edition.audio_seconds
+            ) {
+              previousProgress = ProgressManager.calculateProgressFromPosition(
+                latestRead.progress_seconds,
+                latestRead.edition.audio_seconds,
+                {
+                  type: 'seconds',
+                  context: `book "${title}" previous progress calculation (audio)`,
+                },
+              );
+            } else if (latestRead.progress_pages && latestRead.edition.pages) {
+              previousProgress = ProgressManager.calculateProgressFromPosition(
+                latestRead.progress_pages,
+                latestRead.edition.pages,
+                {
+                  type: 'pages',
+                  context: `book "${title}" previous progress calculation (pages)`,
+                },
+              );
+            }
+          }
+        }
+
+        // Use ProgressManager for regression analysis
+        const regressionAnalysis = ProgressManager.analyzeProgressRegression(
+          previousProgress,
+          progressPercent,
+          {
+            rereadThreshold:
+              this.globalConfig.reread_detection?.reread_threshold || 30,
+            highProgressThreshold:
+              this.globalConfig.reread_detection?.high_progress_threshold || 85,
+            blockThreshold:
+              this.globalConfig.reread_detection?.regression_block_threshold ||
+              50,
+            warnThreshold:
+              this.globalConfig.reread_detection?.regression_warn_threshold ||
+              15,
+            context: `book "${title}" regression check`,
+          },
+        );
+
+        if (regressionAnalysis.shouldBlock) {
           logger.warn(
-            `Blocking potential progress regression for ${title}: ${regressionCheck.reason}`,
+            `Blocking progress regression for ${title}: ${regressionAnalysis.reason}`,
           );
           return {
             status: 'skipped',
-            reason: `Progress regression protection: ${regressionCheck.reason}`,
+            reason: `Progress regression protection: ${regressionAnalysis.reason}`,
             title,
           };
         }
-        if (regressionCheck.shouldWarn) {
+
+        if (regressionAnalysis.shouldWarn) {
           logger.warn(
-            `Progress regression detected for ${title}: ${regressionCheck.reason}`,
+            `Progress regression detected for ${title}: ${regressionAnalysis.reason}`,
           );
         }
       }
 
-      // Use Audiobookshelf's is_finished flag if present, prioritize it over percentage
-      const isFinished =
-        absBook.is_finished === true || absBook.is_finished === 1;
+      // Use centralized completion detection with ProgressManager
+      const isComplete = ProgressManager.isBookComplete(
+        absBook,
+        `book "${title}" completion check`,
+        {},
+        edition, // Pass edition for consistent format detection
+      );
 
-      // Prioritize is_finished flag, then fall back to progress percentage
-      if (isFinished) {
-        logger.debug(`Book ${title} is marked as finished in Audiobookshelf`, {
+      if (isComplete) {
+        const isFinished = ProgressManager.extractFinishedFlag(absBook);
+        logger.debug(`Book ${title} is complete`, {
           isFinished: isFinished,
           progress: progressPercent,
+          detectedBy: isFinished ? 'isFinished flag' : 'progress threshold',
         });
+
+        // Check if book was already marked as completed in cache to avoid re-processing
+        const identifier = this._extractBookIdentifier(absBook);
+        const identifierType = identifier.asin ? 'asin' : 'isbn';
+        const identifierValue = identifier.asin || identifier.isbn;
+
+        const cachedInfo = await this.cache.getCachedBookInfo(
+          this.userId,
+          identifierValue,
+          title,
+          identifierType,
+        );
+
+        if (cachedInfo.exists && cachedInfo.finished_at) {
+          logger.debug(
+            `Book ${title} already marked as completed, skipping re-processing`,
+            {
+              finishedAt: cachedInfo.finished_at,
+              lastSync: cachedInfo.last_sync,
+              userBookId: userBook.id,
+            },
+          );
+          return { status: 'completed', title, cached: true };
+        }
+
         return await this._handleCompletionStatus(
           userBook.id,
           selectedEdition,
@@ -1650,19 +1861,6 @@ export class SyncManager {
           progressPercent,
           absBook,
           isFinished,
-        );
-      } else if (progressPercent >= 95) {
-        logger.debug(`Book ${title} is completed based on high progress`, {
-          isFinished: isFinished,
-          progress: progressPercent,
-        });
-        return await this._handleCompletionStatus(
-          userBook.id,
-          selectedEdition,
-          title,
-          progressPercent,
-          absBook,
-          false,
         );
       }
 
@@ -1687,94 +1885,6 @@ export class SyncManager {
     }
   }
 
-  /**
-   * Check for progress regression and determine if sync should be blocked
-   * @param {number} userBookId - Hardcover user book ID
-   * @param {number} newProgressPercent - New progress percentage
-   * @param {string} title - Book title for logging
-   * @returns {Object} Result with shouldBlock, shouldWarn, and reason
-   */
-  async _checkProgressRegression(userBookId, newProgressPercent, title) {
-    const result = {
-      shouldBlock: false,
-      shouldWarn: false,
-      reason: '',
-    };
-
-    try {
-      // Get current progress from Hardcover
-      const progressInfo =
-        await this.hardcover.getBookCurrentProgress(userBookId);
-
-      if (
-        !progressInfo ||
-        !progressInfo.has_progress ||
-        !progressInfo.latest_read
-      ) {
-        return result; // No existing progress to compare
-      }
-
-      const latestRead = progressInfo.latest_read;
-
-      // If book was completed (has finished_at), block any progress updates
-      if (latestRead.finished_at) {
-        // Get reread threshold from config
-        const rereadThreshold =
-          this.globalConfig.reread_detection?.reread_threshold || 30;
-
-        // Check if this might be a re-reading scenario
-        if (newProgressPercent <= rereadThreshold) {
-          result.shouldWarn = true;
-          result.reason = `Book was completed on ${latestRead.finished_at}, but new progress is ${newProgressPercent}% (possible re-reading)`;
-        } else {
-          result.shouldBlock = true;
-          result.reason = `Book was completed on ${latestRead.finished_at}, blocking regression to ${newProgressPercent}%`;
-        }
-        return result;
-      }
-
-      // Calculate previous progress percentage if we have edition info
-      let previousProgressPercent = 0;
-      if (latestRead.edition) {
-        if (latestRead.progress_seconds && latestRead.edition.audio_seconds) {
-          previousProgressPercent =
-            (latestRead.progress_seconds / latestRead.edition.audio_seconds) *
-            100;
-        } else if (latestRead.progress_pages && latestRead.edition.pages) {
-          previousProgressPercent =
-            (latestRead.progress_pages / latestRead.edition.pages) * 100;
-        }
-      }
-
-      // Get thresholds from config
-      const HIGH_PROGRESS_THRESHOLD =
-        this.globalConfig.reread_detection?.high_progress_threshold || 85;
-      const REGRESSION_BLOCK_THRESHOLD =
-        this.globalConfig.reread_detection?.regression_block_threshold || 50;
-      const REGRESSION_WARN_THRESHOLD =
-        this.globalConfig.reread_detection?.regression_warn_threshold || 15;
-
-      if (previousProgressPercent >= HIGH_PROGRESS_THRESHOLD) {
-        const progressDrop = previousProgressPercent - newProgressPercent;
-
-        if (progressDrop >= REGRESSION_BLOCK_THRESHOLD) {
-          result.shouldBlock = true;
-          result.reason = `Significant progress regression: ${previousProgressPercent.toFixed(1)}% → ${newProgressPercent.toFixed(1)}%`;
-        } else if (progressDrop >= REGRESSION_WARN_THRESHOLD) {
-          result.shouldWarn = true;
-          result.reason = `Progress regression: ${previousProgressPercent.toFixed(1)}% → ${newProgressPercent.toFixed(1)}%`;
-        }
-      }
-    } catch (error) {
-      logger.error(`Error checking progress regression for ${title}`, {
-        error: error.message,
-        userBookId,
-      });
-    }
-
-    return result;
-  }
-
   async _selectEditionWithCache(absBook, hardcoverMatch, title) {
     const { userBook, edition } = hardcoverMatch;
 
@@ -1796,7 +1906,11 @@ export class SyncManager {
       if (book && book.editions) {
         const cachedEdition = book.editions.find(e => e.id === cachedEditionId);
         if (cachedEdition) {
-          return cachedEdition;
+          // Apply format extraction like we do in _createIdentifierLookup
+          return {
+            ...cachedEdition,
+            format: this._mapHardcoverFormatToInternal(cachedEdition),
+          };
         }
       }
     }
@@ -2007,13 +2121,24 @@ export class SyncManager {
       let useSeconds = false;
 
       if (edition.audio_seconds) {
-        currentProgress = calculateCurrentSeconds(
+        currentProgress = ProgressManager.calculateCurrentPosition(
           progressPercent,
           edition.audio_seconds,
+          {
+            type: 'seconds',
+            context: `book "${title}" audio progress calculation`,
+          },
         );
         useSeconds = true;
       } else if (edition.pages) {
-        currentProgress = calculateCurrentPage(progressPercent, edition.pages);
+        currentProgress = ProgressManager.calculateCurrentPosition(
+          progressPercent,
+          edition.pages,
+          {
+            type: 'pages',
+            context: `book "${title}" page progress calculation`,
+          },
+        );
       }
 
       logger.debug(
@@ -2022,7 +2147,7 @@ export class SyncManager {
           [useSeconds ? 'progress' : 'progress']: useSeconds
             ? `${formatDurationForLogging(currentProgress)} of ${formatDurationForLogging(edition.audio_seconds)}`
             : `page ${currentProgress} of ${edition.pages}`,
-          format: useSeconds ? 'audiobook' : 'ebook',
+          format: edition.format || (useSeconds ? 'audiobook' : 'book'),
         },
       );
 
@@ -2048,6 +2173,9 @@ export class SyncManager {
         format: useSeconds ? 'audiobook (seconds)' : 'text (pages)',
       });
 
+      // Get reading format ID for enhanced accuracy
+      const readingFormatId = this._getReadingFormatId(edition);
+
       const result = await this.hardcover.updateReadingProgress(
         userBookId,
         currentProgress,
@@ -2056,6 +2184,7 @@ export class SyncManager {
         useSeconds,
         this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
         this.globalConfig.reread_detection, // Pass reread configuration
+        readingFormatId, // Enhanced format accuracy
       );
 
       if (result && result.id) {
@@ -2074,11 +2203,22 @@ export class SyncManager {
           if (previousProgress !== null) {
             try {
               const rollbackCurrentProgress = useSeconds
-                ? calculateCurrentSeconds(
+                ? ProgressManager.calculateCurrentPosition(
                     previousProgress,
                     edition.audio_seconds || 0,
+                    {
+                      type: 'seconds',
+                      context: `book "${title}" rollback calculation`,
+                    },
                   )
-                : calculateCurrentPage(previousProgress, edition.pages || 0);
+                : ProgressManager.calculateCurrentPosition(
+                    previousProgress,
+                    edition.pages || 0,
+                    {
+                      type: 'pages',
+                      context: `book "${title}" rollback calculation`,
+                    },
+                  );
 
               logger.debug(`Rolling back to previous progress`, {
                 [useSeconds ? 'rollback_seconds' : 'rollback_pages']: useSeconds
@@ -2086,6 +2226,9 @@ export class SyncManager {
                   : rollbackCurrentProgress,
                 previousProgressPercent: previousProgress,
               });
+
+              // Get reading format ID for rollback accuracy
+              const rollbackReadingFormatId = this._getReadingFormatId(edition);
 
               await this.hardcover.updateReadingProgress(
                 userBookId,
@@ -2095,6 +2238,7 @@ export class SyncManager {
                 useSeconds,
                 this._formatDateForHardcover(absBook.started_at),
                 this.globalConfig.reread_detection,
+                rollbackReadingFormatId, // Enhanced format accuracy
               );
             } catch (rollbackError) {
               logger.error(`Failed to rollback progress for ${title}`, {
