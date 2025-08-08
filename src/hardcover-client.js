@@ -1421,11 +1421,18 @@ export class HardcoverClient {
               (error.message &&
                 error.message.toLowerCase().includes('timeout')));
 
-          // Retry logic for network timeouts only
-          if (isTimeout && attempt < maxRetries) {
+          // Check for retryable server errors (5xx status codes)
+          const isRetryableServerError = 
+            error.response && 
+            error.response.status >= 500 && 
+            error.response.status < 600;
+
+          // Retry logic for network timeouts and server errors
+          if ((isTimeout || isRetryableServerError) && attempt < maxRetries) {
             const backoffMs = 1000 * 2 ** attempt; // 1s, 2s, ...
+            const errorType = isTimeout ? 'Network timeout' : `Server error (${error.response?.status})`;
             logger.warn(
-              `Network timeout contacting Hardcover (attempt ${attempt + 1}/$${
+              `${errorType} contacting Hardcover (attempt ${attempt + 1}/${
                 maxRetries + 1
               }). Retrying in ${backoffMs} ms…`,
             );
