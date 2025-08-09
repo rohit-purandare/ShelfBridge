@@ -121,7 +121,7 @@ export class BookMatcher {
         }
 
         if (match) {
-          logger.info(
+          logger.debug(
             `✅ Match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
             {
               strategy: strategy.getName(),
@@ -161,7 +161,7 @@ export class BookMatcher {
       }
     }
 
-    logger.info(
+    logger.debug(
       `🚫 No match found for "${extractedMetadata.title}" using any matching strategy`,
       {
         availableIdentifiers: extractedMetadata.identifiers,
