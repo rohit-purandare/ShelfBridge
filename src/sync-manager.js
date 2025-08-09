@@ -747,8 +747,48 @@ export class SyncManager {
     }
 
     if (!hardcoverMatch) {
-      // Try to auto-add the book
-      syncResult.actions.push(`Not found in Hardcover library`);
+      // Check if auto-add is enabled and book meets minimum progress threshold
+      if (!this.globalConfig.auto_add_books) {
+        syncResult.actions.push(`Not found in Hardcover library`);
+        syncResult.status = 'skipped';
+        syncResult.reason =
+          'Book not in Hardcover library and auto_add_books disabled';
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      // Check if book meets minimum progress threshold before auto-adding
+      if (this._isZeroProgress(progressPercent)) {
+        logger.info(
+          `Skipping auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
+          {
+            title: title,
+            progress: progressPercent,
+            threshold: this.globalConfig.min_progress_threshold,
+            reason: 'below_progress_threshold',
+          },
+        );
+        syncResult.actions.push(
+          `Not found in Hardcover library - progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason = `Progress below auto-add threshold (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      // Try to auto-add the book (progress meets threshold)
+      logger.info(
+        `Auto-adding ${title}: Progress ${progressPercent.toFixed(1)}% meets threshold ${this.globalConfig.min_progress_threshold}%`,
+        {
+          title: title,
+          progress: progressPercent,
+          threshold: this.globalConfig.min_progress_threshold,
+        },
+      );
+      syncResult.actions.push(
+        `Not found in Hardcover library - auto-adding (progress ${progressPercent.toFixed(1)}% meets threshold)`,
+      );
       const autoAddResult = await this._tryAutoAddBook(
         absBook,
         identifiers,
@@ -765,7 +805,31 @@ export class SyncManager {
     if (hardcoverMatch._isSearchResult) {
       // This book was found via search but isn't in the user's library yet
       // We need to add it to the library first, then sync progress
-      logger.debug(`Title/author match requires auto-add to library: ${title}`);
+
+      // Check if book meets minimum progress threshold before auto-adding title/author match
+      if (this._isZeroProgress(progressPercent)) {
+        logger.info(
+          `Skipping title/author match auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
+          {
+            title: title,
+            progress: progressPercent,
+            threshold: this.globalConfig.min_progress_threshold,
+            matchType: 'title_author',
+            reason: 'below_progress_threshold',
+          },
+        );
+        syncResult.actions.push(
+          `Title/author match found but progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason = `Progress below auto-add threshold for title/author match (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      logger.debug(
+        `Title/author match requires auto-add to library: ${title} (progress: ${progressPercent.toFixed(1)}%)`,
+      );
 
       let bookId = hardcoverMatch.userBook.book.id;
       const editionId = hardcoverMatch.edition.id;
