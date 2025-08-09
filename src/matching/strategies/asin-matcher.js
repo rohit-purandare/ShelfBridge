@@ -23,11 +23,15 @@ export class AsinMatcher {
   async findMatch(absBook, identifiers, identifierLookup) {
     const title = extractTitle(absBook) || 'Unknown Title';
 
-    if (!identifiers.asin || !identifierLookup[identifiers.asin]) {
-      logger.debug(`No ASIN match available for ${title}`, {
-        asin: identifiers.asin,
-        hasLookup: !!identifierLookup[identifiers.asin],
-      });
+    if (!identifiers.asin) {
+      logger.debug(`❌ No ASIN available for ${title}`);
+      return null;
+    }
+
+    if (!identifierLookup[identifiers.asin]) {
+      logger.debug(
+        `❌ ASIN ${identifiers.asin} not found in user's Hardcover library for ${title}`,
+      );
       return null;
     }
 

@@ -63,8 +63,11 @@ export class BookMatcher {
       identifiers: extractBookIdentifiers(absBook),
     };
 
-    logger.debug(`Starting book matching for "${extractedMetadata.title}"`, {
-      metadata: extractedMetadata,
+    logger.debug(`🔍 Starting book matching for "${extractedMetadata.title}"`, {
+      identifiers: extractedMetadata.identifiers,
+      hasAsin: !!extractedMetadata.identifiers.asin,
+      hasIsbn: !!extractedMetadata.identifiers.isbn,
+      author: extractedMetadata.author,
     });
 
     // Create identifier lookup from user library data
@@ -87,7 +90,7 @@ export class BookMatcher {
         let match = null;
 
         logger.debug(
-          `Trying ${strategy.getName()} (Tier ${strategy.getTier()}) for "${extractedMetadata.title}"`,
+          `📍 Tier ${strategy.getTier()}: Trying ${strategy.getName()} for "${extractedMetadata.title}"`,
         );
 
         if (strategy.getTier() <= 2) {
@@ -101,7 +104,7 @@ export class BookMatcher {
           // Title/Author strategy
           if (this._isTitleAuthorMatchingEnabled()) {
             logger.debug(
-              `Attempting title/author matching for "${extractedMetadata.title}"`,
+              `📚 Attempting title/author matching for "${extractedMetadata.title}" (no identifiers available)`,
             );
 
             // Pass user library lookup function to the strategy
@@ -110,18 +113,23 @@ export class BookMatcher {
               userId,
               this._findUserBookByEditionId.bind(this),
             );
+          } else {
+            logger.debug(
+              `⚠️ Title/Author matching disabled for "${extractedMetadata.title}" - check config.title_author_matching.enabled`,
+            );
           }
         }
 
         if (match) {
           logger.debug(
-            `Match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
+            `✅ Match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
             {
               strategy: strategy.getName(),
               tier: strategy.getTier(),
               matchType: match._matchType,
               userBookId: match.userBook?.id,
               editionId: match.edition?.id,
+              confidence: match._matchingScore?.totalScore || 'N/A',
             },
           );
 
@@ -132,14 +140,21 @@ export class BookMatcher {
         }
 
         logger.debug(
-          `No match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
+          `❌ No match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
         );
       } catch (error) {
         logger.warn(
           `Error in ${strategy.getName()} for "${extractedMetadata.title}": ${error.message}`,
           {
             strategy: strategy.getName(),
+            tier: strategy.getTier(),
             error: error.message,
+            stack: error.stack,
+            book: {
+              title: extractedMetadata.title,
+              author: extractedMetadata.author,
+              identifiers: extractedMetadata.identifiers,
+            },
           },
         );
         // Continue to next strategy
@@ -147,9 +162,11 @@ export class BookMatcher {
     }
 
     logger.debug(
-      `No match found for "${extractedMetadata.title}" in Hardcover library`,
+      `🚫 No match found for "${extractedMetadata.title}" using any matching strategy`,
       {
-        searchedIdentifiers: extractedMetadata.identifiers,
+        availableIdentifiers: extractedMetadata.identifiers,
+        strategiesTried: this.strategies.map(s => s.getName()),
+        titleAuthorEnabled: this._isTitleAuthorMatchingEnabled(),
       },
     );
 

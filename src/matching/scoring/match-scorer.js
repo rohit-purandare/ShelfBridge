@@ -113,7 +113,7 @@ export function calculateMatchingScore(
     score: seriesResult.score,
     weight: 0.12,
     reason: seriesResult.reason,
-    comparison: `"${targetSeries.name || 'N/A'}" vs "${resultSeries.name || 'N/A'}"`,
+    comparison: `"${targetSeries?.name || 'N/A'}" vs "${resultSeries?.name || 'N/A'}"`,
   };
 
   // 4. Format Score (10% weight) - Relevant for audiobook matching
