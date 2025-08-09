@@ -21,13 +21,13 @@ export class SyncManager {
     const workers = this.globalConfig.workers || 3;
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
-    
+
     // Increase max listeners for AbortSignal to handle parallel processing
     // This prevents MaxListenersExceededWarning when processing many books
     const maxBooks = this.globalConfig.max_books_to_fetch || 500;
     const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
     setMaxListeners(requiredListeners, this.abortController.signal);
-    
+
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -652,17 +652,40 @@ export class SyncManager {
     logger.debug(
       `[DEBUG] Extracted identifiers for '${title}': ISBN='${identifiers.isbn}', ASIN='${identifiers.asin}'`,
     );
-    if (!identifiers.isbn && !identifiers.asin) {
-      logger.info(`Skipping ${title}: No ISBN or ASIN found`);
+
+    // Check if we have identifiers OR a successful match (e.g., title/author)
+    if (!identifiers.isbn && !identifiers.asin && !hardcoverMatch) {
+      logger.info(
+        `Skipping ${title}: No ISBN, ASIN, or title/author match found`,
+      );
       syncResult.status = 'skipped';
-      syncResult.reason = 'No ISBN or ASIN';
+      syncResult.reason = 'No identifiers or successful match';
       syncResult.timing = performance.now() - startTime;
       return syncResult;
     }
 
+    // Log successful matching strategy
+    if (hardcoverMatch && !identifiers.isbn && !identifiers.asin) {
+      logger.info(
+        `${title}: Using title/author match (no identifiers available)`,
+        {
+          matchType: hardcoverMatch._matchType,
+          userBookId: hardcoverMatch.userBook?.id,
+          editionId: hardcoverMatch.edition?.id,
+        },
+      );
+    }
+
     // Check cache for existing sync data
-    const identifier = identifiers.asin || identifiers.isbn;
-    const identifierType = identifiers.asin ? 'asin' : 'isbn';
+    // For title/author matches without identifiers, use a generated cache key
+    let identifier = identifiers.asin || identifiers.isbn;
+    let identifierType = identifiers.asin ? 'asin' : 'isbn';
+
+    if (!identifier && hardcoverMatch) {
+      // Generate cache key for title/author matches without identifiers
+      identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
+      identifierType = 'title_author';
+    }
 
     try {
       const cachedInfo = await this.cache.getCachedBookInfo(
