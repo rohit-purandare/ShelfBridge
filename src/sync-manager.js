@@ -676,8 +676,77 @@ export class SyncManager {
       );
     }
 
-    // Check cache for existing sync data
-    // For title/author matches without identifiers, use a generated cache key
+    // Multi-key cache lookup - check all possible identifiers for this book
+    // This handles cases where a book's matching method changes (e.g., title/author -> ISBN)
+    const possibleCacheKeys = [];
+
+    // Add identifier-based keys (highest priority)
+    if (identifiers.asin) {
+      possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
+    }
+    if (identifiers.isbn) {
+      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+    }
+
+    // Add title/author key if we have a match (fallback)
+    if (
+      hardcoverMatch &&
+      hardcoverMatch.userBook?.id &&
+      hardcoverMatch.edition?.id
+    ) {
+      const titleAuthorKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
+      possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
+    }
+
+    let cachedInfo = { exists: false };
+    let cacheSource = null;
+
+    try {
+      // Try each possible cache key until we find a match
+      for (const { key, type } of possibleCacheKeys) {
+        logger.debug(`Checking cache with ${type} key: ${key}`, {
+          title: title,
+          keyType: type,
+        });
+
+        const cacheResult = await this.cache.getCachedBookInfo(
+          this.userId,
+          key,
+          title,
+          type,
+        );
+
+        if (cacheResult.exists) {
+          cachedInfo = cacheResult;
+          cacheSource = type;
+          logger.debug(`Cache hit with ${type} key for "${title}"`, {
+            key: key,
+            lastSync: cachedInfo.last_sync,
+          });
+          break;
+        }
+      }
+
+      if (cachedInfo.exists) {
+        syncResult.cache_found = true;
+        syncResult.cache_last_sync = cachedInfo.last_sync;
+        syncResult.actions.push(
+          `Found in cache via ${cacheSource} (last synced: ${new Date(cachedInfo.last_sync).toLocaleDateString()})`,
+        );
+      } else {
+        logger.debug(`No cache entries found for "${title}"`, {
+          keysChecked: possibleCacheKeys.map(k => `${k.type}:${k.key}`),
+        });
+      }
+    } catch (cacheError) {
+      logger.warn(`Cache lookup failed for ${title}`, {
+        error: cacheError.message,
+        keysAttempted: possibleCacheKeys.length,
+      });
+    }
+
+    // Set cache storage preferences for new entries
+    // Use the best available identifier in priority order: ASIN > ISBN > title_author
     let identifier = identifiers.asin || identifiers.isbn;
     let identifierType = identifiers.asin ? 'asin' : 'isbn';
 
@@ -685,26 +754,6 @@ export class SyncManager {
       // Generate cache key for title/author matches without identifiers
       identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
       identifierType = 'title_author';
-    }
-
-    try {
-      const cachedInfo = await this.cache.getCachedBookInfo(
-        this.userId,
-        identifier,
-        title,
-        identifierType,
-      );
-      if (cachedInfo.exists) {
-        syncResult.cache_found = true;
-        syncResult.cache_last_sync = cachedInfo.last_sync;
-        syncResult.actions.push(
-          `Found in cache (last synced: ${new Date(cachedInfo.last_sync).toLocaleDateString()})`,
-        );
-      }
-    } catch (cacheError) {
-      logger.warn(`Cache lookup failed for ${title}`, {
-        error: cacheError.message,
-      });
     }
 
     // Determine how the match was found using BookMatcher's metadata
