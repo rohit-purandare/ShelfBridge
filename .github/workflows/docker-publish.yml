@@ -1,31 +1,12 @@
-name: Docker Publish
+name: Docker Publish (Deprecated)
 
 on:
-  workflow_run:
-    workflows: ['Docker Test']
-    types:
-      - completed
-    branches:
-      [
-        main,
-        'feature/*',
-        'feat/*',
-        'bugfix/*',
-        'fix/*',
-        'hotfix/*',
-        'release/*',
-        'ci/*',
-      ]
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      image-tags:
-        description: 'Docker image tags to publish'
+      reason:
+        description: 'Reason for manual publish (deprecated)'
         required: true
-        type: string
-      image-labels:
-        description: 'Docker image labels'
-        required: true
-        type: string
+        default: 'Use docker-build.yml which now handles publish'
 
 env:
   REGISTRY: ghcr.io
@@ -40,8 +21,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    # Only run if the Docker Test workflow succeeded (workflow_run events don't include PRs)
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call' }}
+    if: false # Fully disabled; superseded by docker-build.yml
 
     steps:
       - name: Checkout repository
@@ -132,6 +112,7 @@ jobs:
       # For PRs, we already built the image in docker-build, so we can build and push directly
       - name: Build and push Docker image (multi-platform)
         id: publish
+        if: false
         uses: docker/build-push-action@v6
         with:
           context: .

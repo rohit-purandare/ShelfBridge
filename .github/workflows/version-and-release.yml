@@ -37,32 +37,10 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.RELEASE_TOKEN || github.token }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.4'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Wait for Docker publish to complete
-        uses: lewagon/wait-on-check-action@v1.4.0
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-          check-name: 'publish'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          allowed-conclusions: success,skipped
-
       - name: Success message
         run: |
           echo "✅ Release ${{ needs.release-please.outputs.tag_name }} created successfully"
           echo "🏷️ Tag ${{ needs.release-please.outputs.tag_name }} pushed"
-          echo "🐳 Docker images built and pushed successfully"
+          echo "🐳 Docker images will be built and pushed by the 'Docker Build' workflow"
           echo "📦 Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release-please.outputs.tag_name }}"
-          echo "🚀 All Docker images are ready for immediate use"
+          echo "🚀 Multi-arch Docker images will be available shortly after the workflow completes"
