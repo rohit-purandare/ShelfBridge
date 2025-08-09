@@ -104,17 +104,40 @@ export class TitleAuthorMatcher {
 
       // Score and rank results
       const scoredResults = searchResults.map(result => {
-        const score = calculateMatchingScore(
-          result,
-          title,
-          author,
-          narrator,
-          absBook,
-        );
-        return {
-          ...result,
-          _matchingScore: score,
-        };
+        try {
+          const score = calculateMatchingScore(
+            result,
+            title,
+            author,
+            narrator,
+            absBook,
+          );
+          return {
+            ...result,
+            _matchingScore: score,
+          };
+        } catch (error) {
+          logger.warn(
+            `Error scoring search result for "${title}": ${error.message}`,
+            {
+              error: error.message,
+              result: {
+                id: result.id,
+                title: result.title,
+                book: result.book?.title,
+              },
+            },
+          );
+          // Return result with minimum score so it's not selected
+          return {
+            ...result,
+            _matchingScore: {
+              totalScore: 0,
+              breakdown: {},
+              confidence: 'error',
+            },
+          };
+        }
       });
 
       // Sort by confidence score
@@ -182,6 +205,13 @@ export class TitleAuthorMatcher {
     } catch (error) {
       logger.warn(
         `Title/author search failed for "${title}": ${error.message}`,
+        {
+          error: error.message,
+          stack: error.stack,
+          targetTitle: title,
+          targetAuthor: author,
+          targetNarrator: narrator,
+        },
       );
       return null;
     }

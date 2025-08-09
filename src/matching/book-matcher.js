@@ -147,7 +147,14 @@ export class BookMatcher {
           `Error in ${strategy.getName()} for "${extractedMetadata.title}": ${error.message}`,
           {
             strategy: strategy.getName(),
+            tier: strategy.getTier(),
             error: error.message,
+            stack: error.stack,
+            book: {
+              title: extractedMetadata.title,
+              author: extractedMetadata.author,
+              identifiers: extractedMetadata.identifiers,
+            },
           },
         );
         // Continue to next strategy
