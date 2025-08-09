@@ -732,6 +732,29 @@ This ensures that `latest` always points to the most recent stable build from th
    - Provides build provenance information
    - Creates SLSA-compliant security metadata
 
+### 🔧 Attestation Permissions Fix
+
+**Fixed Issue:** The workflow was failing during attestation generation with "Unable to get ACTIONS_ID_TOKEN_REQUEST_URL" error
+
+**Root Cause:** Missing permissions required for GitHub's OIDC token generation and attestation creation
+
+**Solution Applied:**
+
+```yaml
+permissions:
+  contents: read # Read repository contents
+  packages: write # Push to GitHub Container Registry
+  id-token: write # ← NEW: Generate OIDC tokens for attestations
+  attestations: write # ← NEW: Create build provenance attestations
+```
+
+**Benefits:**
+
+- ✅ **Supply Chain Security** - Cryptographic proof of image build process
+- ✅ **Build Provenance** - Verifiable record of build environment and dependencies
+- ✅ **Compliance Ready** - Meets SLSA (Supply-chain Levels for Software Artifacts) requirements
+- ✅ **Image Verification** - Users can verify images haven't been tampered with
+
 4. **Verification & Cleanup**
    - Verifies published images can be pulled
    - Performs smoke tests on published images

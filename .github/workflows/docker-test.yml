@@ -49,30 +49,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find Docker Build workflow run
+      - name: Set Docker Build run ID
         if: github.event_name == 'workflow_run'
         id: find-build-run
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Finding Docker Build workflow run for this commit..."
-
-          # Get the commit SHA from the triggering workflow
-          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-          echo "Looking for Docker Build run for commit: $COMMIT_SHA"
-
-          # Find the Docker Build workflow run for this commit
-          BUILD_RUN_ID=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs" \
-            --jq ".workflow_runs[] | select(.head_sha == \"$COMMIT_SHA\") | .id" \
-            | head -1)
-
-          if [ -z "$BUILD_RUN_ID" ]; then
-            echo "❌ Could not find Docker Build run for commit $COMMIT_SHA"
-            exit 1
-          fi
-
-          echo "✅ Found Docker Build run ID: $BUILD_RUN_ID"
+          echo "🔍 Using triggering Docker Build workflow run..."
+          
+          # For Docker Test, the triggering workflow IS the Docker Build run
+          BUILD_RUN_ID="${{ github.event.workflow_run.id }}"
+          echo "✅ Using Docker Build run ID: $BUILD_RUN_ID"
           echo "build-run-id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
 
       - name: Download image artifact

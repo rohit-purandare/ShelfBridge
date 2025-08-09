@@ -21,6 +21,20 @@ ShelfBridge uses a sophisticated three-tier fallback system for maximum accuracy
 | **2nd** | **ISBN Matching**         | International book number match    | ~70% for books without ASIN             |
 | **3rd** | **Title/Author Matching** | AI-powered edition-specific search | ~60% for books with incomplete metadata |
 
+### 🔧 **Fixed: Title/Author Fallback Now Works!**
+
+**Previous Issue:** Books without ISBN/ASIN identifiers were being skipped entirely, even when title/author matching could find them.
+
+**Now Fixed:** The system properly falls back to title/author matching when identifiers are missing:
+
+```
+Book: "Peace Talks" (no ISBN/ASIN in Audiobookshelf)
+✅ Tier 1: ASIN Matching → No ASIN available
+✅ Tier 2: ISBN Matching → No ISBN available
+✅ Tier 3: Title/Author Matching → Match found with 87% confidence
+✅ Result: Book synced successfully using title/author match
+```
+
 ### Enhanced Third-Tier Matching (New!)
 
 The title/author fallback now uses **edition-specific search** with intelligent scoring:
@@ -395,13 +409,53 @@ Matching Logic:
 
 ## 🚨 Advanced Troubleshooting
 
-### Issue 1: Third-Tier Matching Not Working
+### 📝 **New: Enhanced Matching Logs**
 
-**Symptoms:**
+With the improved logging system, you can now easily see what's happening during matching:
 
-- Books with ASIN/ISBN missing are skipped
-- No title/author fallback attempted
-- Missing confidence scores in logs
+```bash
+# Run sync with verbose logging to see matching details
+docker exec -it shelfbridge node src/main.js sync --user --verbose
+```
+
+**Look for these log messages:**
+
+```
+🔍 Starting book matching for "Peace Talks"
+📍 Tier 1: Trying ASIN Matcher for "Peace Talks"
+❌ No ASIN available for Peace Talks
+📍 Tier 2: Trying ISBN Matcher for "Peace Talks"
+❌ No ISBN available for Peace Talks
+📍 Tier 3: Trying Title/Author Matcher for "Peace Talks"
+📚 Attempting title/author matching for "Peace Talks" (no identifiers available)
+✅ Match found using Title/Author Matcher for "Peace Talks" (confidence: 87.5)
+```
+
+### 🚫 **Common Skip Reasons**
+
+Books are now skipped only when **all three tiers fail**:
+
+- `❌ No ASIN available` → Missing ASIN identifier
+- `❌ ASIN XXX not found in user's Hardcover library` → ASIN not in your library
+- `❌ No ISBN available` → Missing ISBN identifier
+- `❌ ISBN XXX not found in user's Hardcover library` → ISBN not in your library
+- `🚫 No match found using any matching strategy` → All three tiers failed
+- `⚠️ Title/Author matching disabled` → Check `config.title_author_matching.enabled`
+
+### Issue 1: Third-Tier Matching Not Working (FIXED!)
+
+**Previous Symptoms:**
+
+- ❌ Books with ASIN/ISBN missing were skipped entirely
+- ❌ No title/author fallback attempted
+- ❌ Message: "Skipping [book]: No ISBN or ASIN found"
+
+**Now Fixed:**
+
+- ✅ Books without identifiers properly fall back to title/author matching
+- ✅ Title/author matches are processed and synced
+- ✅ Clear logging shows each tier being attempted
+- ✅ Message: "[book]: Using title/author match (no identifiers available)"
 
 **Debug Steps:**
 

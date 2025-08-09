@@ -21,13 +21,13 @@ export class SyncManager {
     const workers = this.globalConfig.workers || 3;
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
-    
+
     // Increase max listeners for AbortSignal to handle parallel processing
     // This prevents MaxListenersExceededWarning when processing many books
     const maxBooks = this.globalConfig.max_books_to_fetch || 500;
     const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
     setMaxListeners(requiredListeners, this.abortController.signal);
-    
+
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -652,36 +652,108 @@ export class SyncManager {
     logger.debug(
       `[DEBUG] Extracted identifiers for '${title}': ISBN='${identifiers.isbn}', ASIN='${identifiers.asin}'`,
     );
-    if (!identifiers.isbn && !identifiers.asin) {
-      logger.info(`Skipping ${title}: No ISBN or ASIN found`);
+
+    // Check if we have identifiers OR a successful match (e.g., title/author)
+    if (!identifiers.isbn && !identifiers.asin && !hardcoverMatch) {
+      logger.info(
+        `Skipping ${title}: No ISBN, ASIN, or title/author match found`,
+      );
       syncResult.status = 'skipped';
-      syncResult.reason = 'No ISBN or ASIN';
+      syncResult.reason = 'No identifiers or successful match';
       syncResult.timing = performance.now() - startTime;
       return syncResult;
     }
 
-    // Check cache for existing sync data
-    const identifier = identifiers.asin || identifiers.isbn;
-    const identifierType = identifiers.asin ? 'asin' : 'isbn';
+    // Log successful matching strategy
+    if (hardcoverMatch && !identifiers.isbn && !identifiers.asin) {
+      logger.info(
+        `${title}: Using title/author match (no identifiers available)`,
+        {
+          matchType: hardcoverMatch._matchType,
+          userBookId: hardcoverMatch.userBook?.id,
+          editionId: hardcoverMatch.edition?.id,
+        },
+      );
+    }
+
+    // Multi-key cache lookup - check all possible identifiers for this book
+    // This handles cases where a book's matching method changes (e.g., title/author -> ISBN)
+    const possibleCacheKeys = [];
+
+    // Add identifier-based keys (highest priority)
+    if (identifiers.asin) {
+      possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
+    }
+    if (identifiers.isbn) {
+      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+    }
+
+    // Add title/author key if we have a match (fallback)
+    if (
+      hardcoverMatch &&
+      hardcoverMatch.userBook?.id &&
+      hardcoverMatch.edition?.id
+    ) {
+      const titleAuthorKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
+      possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
+    }
+
+    let cachedInfo = { exists: false };
+    let cacheSource = null;
 
     try {
-      const cachedInfo = await this.cache.getCachedBookInfo(
-        this.userId,
-        identifier,
-        title,
-        identifierType,
-      );
+      // Try each possible cache key until we find a match
+      for (const { key, type } of possibleCacheKeys) {
+        logger.debug(`Checking cache with ${type} key: ${key}`, {
+          title: title,
+          keyType: type,
+        });
+
+        const cacheResult = await this.cache.getCachedBookInfo(
+          this.userId,
+          key,
+          title,
+          type,
+        );
+
+        if (cacheResult.exists) {
+          cachedInfo = cacheResult;
+          cacheSource = type;
+          logger.debug(`Cache hit with ${type} key for "${title}"`, {
+            key: key,
+            lastSync: cachedInfo.last_sync,
+          });
+          break;
+        }
+      }
+
       if (cachedInfo.exists) {
         syncResult.cache_found = true;
         syncResult.cache_last_sync = cachedInfo.last_sync;
         syncResult.actions.push(
-          `Found in cache (last synced: ${new Date(cachedInfo.last_sync).toLocaleDateString()})`,
+          `Found in cache via ${cacheSource} (last synced: ${new Date(cachedInfo.last_sync).toLocaleDateString()})`,
         );
+      } else {
+        logger.debug(`No cache entries found for "${title}"`, {
+          keysChecked: possibleCacheKeys.map(k => `${k.type}:${k.key}`),
+        });
       }
     } catch (cacheError) {
       logger.warn(`Cache lookup failed for ${title}`, {
         error: cacheError.message,
+        keysAttempted: possibleCacheKeys.length,
       });
+    }
+
+    // Set cache storage preferences for new entries
+    // Use the best available identifier in priority order: ASIN > ISBN > title_author
+    let identifier = identifiers.asin || identifiers.isbn;
+    let identifierType = identifiers.asin ? 'asin' : 'isbn';
+
+    if (!identifier && hardcoverMatch) {
+      // Generate cache key for title/author matches without identifiers
+      identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
+      identifierType = 'title_author';
     }
 
     // Determine how the match was found using BookMatcher's metadata
@@ -724,8 +796,48 @@ export class SyncManager {
     }
 
     if (!hardcoverMatch) {
-      // Try to auto-add the book
-      syncResult.actions.push(`Not found in Hardcover library`);
+      // Check if auto-add is enabled and book meets minimum progress threshold
+      if (!this.globalConfig.auto_add_books) {
+        syncResult.actions.push(`Not found in Hardcover library`);
+        syncResult.status = 'skipped';
+        syncResult.reason =
+          'Book not in Hardcover library and auto_add_books disabled';
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      // Check if book meets minimum progress threshold before auto-adding
+      if (this._isZeroProgress(progressPercent)) {
+        logger.info(
+          `Skipping auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
+          {
+            title: title,
+            progress: progressPercent,
+            threshold: this.globalConfig.min_progress_threshold,
+            reason: 'below_progress_threshold',
+          },
+        );
+        syncResult.actions.push(
+          `Not found in Hardcover library - progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason = `Progress below auto-add threshold (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      // Try to auto-add the book (progress meets threshold)
+      logger.info(
+        `Auto-adding ${title}: Progress ${progressPercent.toFixed(1)}% meets threshold ${this.globalConfig.min_progress_threshold}%`,
+        {
+          title: title,
+          progress: progressPercent,
+          threshold: this.globalConfig.min_progress_threshold,
+        },
+      );
+      syncResult.actions.push(
+        `Not found in Hardcover library - auto-adding (progress ${progressPercent.toFixed(1)}% meets threshold)`,
+      );
       const autoAddResult = await this._tryAutoAddBook(
         absBook,
         identifiers,
@@ -742,7 +854,31 @@ export class SyncManager {
     if (hardcoverMatch._isSearchResult) {
       // This book was found via search but isn't in the user's library yet
       // We need to add it to the library first, then sync progress
-      logger.debug(`Title/author match requires auto-add to library: ${title}`);
+
+      // Check if book meets minimum progress threshold before auto-adding title/author match
+      if (this._isZeroProgress(progressPercent)) {
+        logger.info(
+          `Skipping title/author match auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
+          {
+            title: title,
+            progress: progressPercent,
+            threshold: this.globalConfig.min_progress_threshold,
+            matchType: 'title_author',
+            reason: 'below_progress_threshold',
+          },
+        );
+        syncResult.actions.push(
+          `Title/author match found but progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason = `Progress below auto-add threshold for title/author match (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+
+      logger.debug(
+        `Title/author match requires auto-add to library: ${title} (progress: ${progressPercent.toFixed(1)}%)`,
+      );
 
       let bookId = hardcoverMatch.userBook.book.id;
       const editionId = hardcoverMatch.edition.id;
