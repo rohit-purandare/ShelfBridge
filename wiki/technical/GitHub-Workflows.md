@@ -509,6 +509,15 @@ Docker builds are optimized to only run when necessary:
 - Pull requests (for testing)
 - Any commits not starting with excluded prefixes
 
+### Build Step Reliability
+
+**Fixed Issue:** Resolved YAML syntax error that was preventing the Docker Build workflow from executing:
+
+- ✅ **Duplicate ID fix** - Fixed duplicate `id: build` that caused workflow parsing errors
+- ✅ **Proper step isolation** - PR builds use `id: build`, push builds use `id: build-push`
+- ✅ **Output handling** - Dynamic output references handle both PR and push scenarios
+- ✅ **Status check reliability** - Workflow now properly reports "Docker Build / build" status
+
 ### Version-Specific Docker Images
 
 **Fixed Issue:** The workflow now ensures that version-specific Docker images are created for every release:

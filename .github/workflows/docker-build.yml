@@ -44,7 +44,7 @@ jobs:
     # Always build on branch pushes and tags to ensure images are available for testing
 
     outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
+      image-digest: ${{ steps.build.outputs.digest || steps.build-push.outputs.digest }}
       image-tags: ${{ steps.meta.outputs.tags }}
       image-labels: ${{ steps.meta.outputs.labels }}
 
@@ -107,7 +107,7 @@ jobs:
 
       - name: Build and push Docker image (multi-arch)
         if: github.event_name != 'pull_request'
-        id: build
+        id: build-push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -177,5 +177,5 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
