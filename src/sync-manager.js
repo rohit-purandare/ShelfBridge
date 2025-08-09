@@ -21,13 +21,13 @@ export class SyncManager {
     const workers = this.globalConfig.workers || 3;
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
-    
+
     // Increase max listeners for AbortSignal to handle parallel processing
     // This prevents MaxListenersExceededWarning when processing many books
     const maxBooks = this.globalConfig.max_books_to_fetch || 500;
     const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
     setMaxListeners(requiredListeners, this.abortController.signal);
-    
+
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -1415,6 +1415,7 @@ export class SyncManager {
             userBookId: userBook.id,
             forceSync: true,
           });
+          // Force sync of completed book - still need to handle completion
         }
 
         return await this._handleCompletionStatus(
