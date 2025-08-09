@@ -52,6 +52,8 @@ jobs:
       - name: Find Docker Build workflow run
         if: github.event_name == 'workflow_run'
         id: find-build-run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🔍 Finding Docker Build workflow run for this commit..."
 
