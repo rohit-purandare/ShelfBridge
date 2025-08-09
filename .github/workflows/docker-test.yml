@@ -55,7 +55,7 @@ jobs:
         run: |
           echo "🔍 Using triggering Docker Build workflow run..."
           
-          # The triggering workflow run IS the Docker Build run we need
+          # For Docker Test, the triggering workflow IS the Docker Build run
           BUILD_RUN_ID="${{ github.event.workflow_run.id }}"
           echo "✅ Using Docker Build run ID: $BUILD_RUN_ID"
           echo "build-run-id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
