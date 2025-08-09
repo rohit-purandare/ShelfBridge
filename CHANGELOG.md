@@ -13,6 +13,17 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.19.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.1...v1.19.2) (2025-08-09)
+
+
+### Bug Fixes
+
+* enable title/author matching when identifiers are missing and improve logging ([5461de8](https://github.com/rohit-purandare/ShelfBridge/commit/5461de8d6b6cc7c0ee0d713da8414025e63ef253))
+* implement multi-key cache lookup for identifier transitions ([80b502c](https://github.com/rohit-purandare/ShelfBridge/commit/80b502c469412e6a7659c5f690182e93bcb7b69f))
+* prevent auto-add when progress below min_progress_threshold ([0cb2fc5](https://github.com/rohit-purandare/ShelfBridge/commit/0cb2fc53f8403a6320ad551a23b78efac7063f3d))
+* prevent undefined property access errors in title/author matching ([b22ad5c](https://github.com/rohit-purandare/ShelfBridge/commit/b22ad5c6e8dafb668e389a46fe7aa2fcf38927ff))
+* reduce log verbosity for book matching success messages ([6a11e04](https://github.com/rohit-purandare/ShelfBridge/commit/6a11e04db24537311e0a24c89ad062464b82612a))
+
 ## [1.18.21] - 2025-07-26
 
 ### Fixed
@@ -637,4 +648,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.2.0]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v1.0.0
-[0.1.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v0.1.0 
+[0.1.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v0.1.0
