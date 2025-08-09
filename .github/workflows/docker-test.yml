@@ -3,8 +3,7 @@ name: Docker Test
 on:
   workflow_run:
     workflows: ['Docker Build']
-    types:
-      - completed
+    types: [completed]
     branches:
       [
         main,
@@ -36,7 +35,7 @@ jobs:
       contents: read
       packages: read
     # Only run if the Docker Build workflow succeeded, or this is a PR, or workflow_call
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call' || github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_call' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
 
     steps:
       - name: Checkout repository
@@ -49,36 +48,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set Docker Build run ID
+      - name: Determine image tag to test (workflow_run)
         if: github.event_name == 'workflow_run'
-        id: find-build-run
+        id: set-image-tag
         run: |
-          echo "🔍 Using triggering Docker Build workflow run..."
-          
-          # For Docker Test, the triggering workflow IS the Docker Build run
-          BUILD_RUN_ID="${{ github.event.workflow_run.id }}"
-          echo "✅ Using Docker Build run ID: $BUILD_RUN_ID"
-          echo "build-run-id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
+          echo "🔍 Determining image tag to test from workflow_run..."
 
-      - name: Download image artifact
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp/
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.find-build-run.outputs.build-run-id }}
+          # Lowercase repository for GHCR compatibility
+          LOWER_REPO=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
 
-      - name: Load Docker image
-        if: github.event_name == 'workflow_run'
-        run: |
-          echo "Loading Docker image from artifact..."
-          docker load < /tmp/docker-image.tar
+          # Use the head SHA from the triggering build (short 7 chars)
+          SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
 
-          # Get the loaded image tag
-          TAG=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep -E "ghcr.io.*shelfbridge" | head -n1)
-          echo "Loaded image: $TAG"
-          echo "IMAGE_TAG=$TAG" >> $GITHUB_ENV
+          IMAGE_TAG="ghcr.io/${LOWER_REPO}:sha-${SHORT_SHA}"
+          echo "Testing image: ${IMAGE_TAG}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Build image for PR testing
         if: github.event_name == 'pull_request'

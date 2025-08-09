@@ -4,28 +4,27 @@ This page documents all automated workflows that run on the ShelfBridge reposito
 
 ## 📋 Overview
 
-ShelfBridge uses **7 GitHub Actions workflows** to automate:
+ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 - **Code Quality** - ESLint, security checks, dependency audits
 - **Testing** - Cross-platform Node.js testing
 - **Security** - Secret scanning, vulnerability detection
 - **Releases** - Automated version tagging and changelog generation
-- **Docker Build** - Container image building and basic validation
+- **Docker Build** - Container image building, testing, and publishing (consolidated)
 - **Docker Test** - Comprehensive container testing including PR support
-- **Docker Publish** - Multi-platform publishing and attestation
 
 ## 🔄 Workflow Summary
 
-| Workflow                                      | Trigger                           | Purpose                      | Status    |
-| --------------------------------------------- | --------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation)     | Conventional commits to main      | Release Please automation    | ✅ Active |
-| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Build and basic validation   | ✅ Active |
-| [Docker Test](#docker-test)                   | After Docker Build, PRs           | Comprehensive testing        | ✅ Active |
-| [Docker Publish](#docker-publish)             | After Docker Test passes          | Multi-platform publishing    | ✅ Active |
-| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
-| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
+| Workflow                                      | Trigger                           | Purpose                      | Status        |
+| --------------------------------------------- | --------------------------------- | ---------------------------- | ------------- |
+| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active     |
+| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active     |
+| [Release Automation](#release-automation)     | Conventional commits to main      | Release Please automation    | ✅ Active     |
+| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Build, test, and publish     | ✅ Active     |
+| [Docker Test](#docker-test)                   | After Docker Build, PRs           | Comprehensive testing        | ✅ Active     |
+| [Docker Publish](#docker-publish)             | Manual dispatch only              | Legacy workflow (deprecated) | ⚠️ Deprecated |
+| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active     |
+| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active     |
 
 ---
 
@@ -486,12 +485,12 @@ on:
 ## 🐳 Docker Build
 
 **File:** `.github/workflows/docker-build.yml`  
-**Purpose:** Build Docker container images and perform basic validation (Part 1 of 3-stage process)
+**Purpose:** Build, test, and publish Docker container images with comprehensive validation (consolidated workflow)
 
 ### Triggers
 
 - Push to `main` branch (**excludes non-functional commits**)
-- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`)
+- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`)
 - Push of version tags (`v*`)
 - Pull requests to `main` (build-only, all commits)
 
@@ -559,6 +558,32 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 - `ci:` commits (workflow/CI changes)
 - `style:` commits (formatting only)
 - Version bump commits (prevents duplicate builds)
+
+### 🔄 Workflow Consolidation Update
+
+**Major Change:** The Docker workflows have been consolidated and standardized for better reliability and maintainability.
+
+**Previous Architecture:** Three separate workflows (Build → Test → Publish)
+
+- `docker-build.yml` - Build images only
+- `docker-test.yml` - Test images separately
+- `docker-publish.yml` - Publish after testing
+
+**New Consolidated Architecture:** Streamlined two-workflow approach
+
+- `docker-build.yml` - **Build, validate, and publish** (primary workflow)
+- `docker-test.yml` - Additional comprehensive testing for complex scenarios
+- `docker-publish.yml` - **Deprecated** (legacy, manual dispatch only)
+
+**Benefits of Consolidation:**
+
+- ✅ **Simplified CI/CD pipeline** - fewer interdependencies between workflows
+- ✅ **Faster feedback** - build and publish happen in single workflow
+- ✅ **Reduced complexity** - easier to maintain and debug
+- ✅ **Better reliability** - fewer potential failure points
+- ✅ **Standardized permissions** - consistent security model across workflows
+
+**Migration Status:** Complete - all functionality preserved in consolidated workflows
 
 ### What It Does
 
@@ -705,15 +730,22 @@ This ensures that `latest` always points to the most recent stable build from th
 
 ---
 
-## 🚀 Docker Publish
+## 🚀 Docker Publish (Deprecated)
 
 **File:** `.github/workflows/docker-publish.yml`  
-**Purpose:** Multi-platform publishing and attestation (Part 3 of 3-stage process)
+**Status:** ⚠️ **DEPRECATED** - Superseded by consolidated `docker-build.yml` workflow  
+**Purpose:** Legacy multi-platform publishing workflow (no longer used in normal operations)
+
+### ⚠️ Deprecation Notice
+
+**This workflow has been deprecated** as part of the workflow consolidation effort. All publishing functionality has been moved to the `docker-build.yml` workflow for better reliability and simpler maintenance.
+
+**Migration Complete:** All multi-platform builds, publishing, and attestation are now handled by `docker-build.yml`
 
 ### Triggers
 
-- `workflow_run` from Docker Test completion (non-PR events only)
-- Manual `workflow_call` with image metadata
+- Manual `workflow_dispatch` only (for emergency/legacy scenarios)
+- All automatic triggers have been disabled (`if: false` condition)
 
 ### What It Does
 
@@ -952,19 +984,19 @@ graph TD
     A[Code Push] --> B[CI Pipeline]
     A --> C[Code Quality]
     A --> D[Security Scan]
-    A --> E[Docker Build]
+    A --> E[Docker Build & Publish]
 
     E --> F[Docker Test]
-    F --> G[Docker Publish]
+    G[Docker Publish - Deprecated]
 
     H[Version Change] --> I[Release Automation]
     I --> J[GitHub Release]
-    G --> K[Docker Images Available]
+    E --> K[Docker Images Available]
 
     B --> L[✅ Tests Pass]
     C --> M[✅ Quality Gates]
     D --> N[🔒 Security Clear]
-    G --> O[✅ Images Published]
+    E --> O[✅ Images Published]
 
     L --> P[Ready for Release]
     M --> P
@@ -973,7 +1005,7 @@ graph TD
 
     style E fill:#e1f5fe
     style F fill:#fff3e0
-    style G fill:#e8f5e8
+    style G fill:#ffebee,stroke:#f44336,stroke-dasharray: 5 5
 ```
 
 ## 🎯 Best Practices

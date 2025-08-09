@@ -11,6 +11,7 @@ on:
         'fix/*',
         'hotfix/*',
         'release/*',
+        'ci/*',
       ]
     tags: ['v*']
   pull_request:
@@ -32,20 +33,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: docker-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
-    # Skip Docker builds for non-functional commits (docs, chore, test, ci, style)
-    # Skip version bump commits to avoid duplicate builds (tag push will build)
-    # But ALWAYS build for tag pushes (releases) regardless of commit message
-    if: ${{ github.event_name != 'push' ||
-      startsWith(github.ref, 'refs/tags/') ||
-      (!startsWith(github.event.head_commit.message, 'docs:') &&
-      !startsWith(github.event.head_commit.message, 'chore:') &&
-      !startsWith(github.event.head_commit.message, 'test:') &&
-      !startsWith(github.event.head_commit.message, 'ci:') &&
-      !startsWith(github.event.head_commit.message, 'style:') &&
-      !contains(github.event.head_commit.message, 'bump version to v')) }}
+      id-token: write
+      attestations: write
+    # Always build on branch pushes and tags to ensure images are available for testing
 
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -77,15 +73,20 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
+            type=sha
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' && github.ref_name == 'main' }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker image (PR validation)
+        if: github.event_name == 'pull_request'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -104,15 +105,33 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
-      - name: Basic image validation
+      - name: Build and push Docker image (multi-arch)
+        if: github.event_name != 'pull_request'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: |
+            type=gha,scope=build
+            type=gha,scope=build-${{ github.ref_name }}
+          cache-to: |
+            type=gha,mode=max,scope=build
+            type=gha,mode=max,scope=build-${{ github.ref_name }}
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Basic image validation (PRs)
+        if: github.event_name == 'pull_request'
         run: |
           echo "🔍 Running basic Docker image validation..."
 
-          # Get the first tag (usually the PR or branch tag)
           TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
           echo "Validating image: $TAG"
 
-          # Basic image structure validation
           if docker run --rm --entrypoint="" $TAG node --version; then
             echo "✅ Node.js runtime available"
           else
@@ -120,7 +139,6 @@ jobs:
             exit 1
           fi
 
-          # Verify main entry point exists
           if docker run --rm --entrypoint="" $TAG ls src/main.js >/dev/null 2>&1; then
             echo "✅ Main entry point exists"
           else
@@ -130,20 +148,34 @@ jobs:
 
           echo "✅ Basic image validation passed"
 
-      - name: Export image for testing
+      - name: Verify published images (non-PR)
         if: github.event_name != 'pull_request'
         run: |
-          # Get the first tag for export
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Exporting image: $TAG"
+          echo "🔍 Verifying published Docker images..."
 
-          # Save image as tar for use in subsequent workflows
-          docker save $TAG > /tmp/docker-image.tar
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Verifying published image: $tag"
+              if docker pull $tag >/dev/null 2>&1; then
+                echo "✅ Successfully verified: $tag"
+              else
+                echo "❌ CRITICAL FAILURE: Could not pull published image: $tag"
+                exit 1
+              fi
 
-      - name: Upload image artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+              if docker run --rm --entrypoint="" $tag node --version >/dev/null 2>&1; then
+                echo "✅ Smoke test passed for: $tag"
+              else
+                echo "❌ CRITICAL FAILURE: Smoke test failed for: $tag"
+                exit 1
+              fi
+            fi
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+      - name: Generate image attestation
+        if: github.event_name != 'pull_request' && (github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/'))
+        uses: actions/attest-build-provenance@v1
         with:
-          name: docker-image
-          path: /tmp/docker-image.tar
-          retention-days: 1
+          subject-name: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
