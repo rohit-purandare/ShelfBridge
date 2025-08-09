@@ -38,6 +38,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     # Only run if the Docker Test workflow succeeded (workflow_run events don't include PRs)
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_call' }}
 
@@ -80,22 +82,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🔍 Finding Docker Build run for the original commit..."
-          
+
           # Use the commit SHA from the original push event
           COMMIT_SHA="${{ github.sha }}"
           echo "Looking for Docker Build run for commit: $COMMIT_SHA"
-          
+
           # Find the Docker Build workflow run for this commit
           BUILD_RUN_ID=$(gh api \
             "repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs" \
             --jq ".workflow_runs[] | select(.head_sha == \"$COMMIT_SHA\") | .id" \
             | head -1)
-          
+
           if [ -z "$BUILD_RUN_ID" ]; then
             echo "❌ Could not find Docker Build run for commit $COMMIT_SHA"
             exit 1
           fi
-          
+
           echo "✅ Found Docker Build run ID: $BUILD_RUN_ID"
           echo "build-run-id=$BUILD_RUN_ID" >> $GITHUB_OUTPUT
 

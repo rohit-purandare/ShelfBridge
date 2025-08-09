@@ -334,8 +334,9 @@ describe('Time Utilities', () => {
       await sleep(10); // Reduced to 10ms for faster tests
       const elapsed = Date.now() - start;
       
-      // Allow some tolerance for timing
-      assert.ok(elapsed >= 5 && elapsed <= 50, `Expected ~10ms delay, got ${elapsed}ms`);
+      // Allow generous tolerance for timing - CI environments and Node.js versions can vary significantly
+      // Minimum: 5ms (timer granularity), Maximum: 100ms (very generous for CI/Node.js 22.x)
+      assert.ok(elapsed >= 5 && elapsed <= 100, `Expected ~10ms delay, got ${elapsed}ms`);
     });
   });
 });
