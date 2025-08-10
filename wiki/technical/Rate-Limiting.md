@@ -416,6 +416,7 @@ Consider adding these options in future versions:
 - [rate-limiter-flexible Documentation](https://github.com/animir/node-rate-limiter-flexible)
 - [ShelfBridge Configuration Guide](../admin/Configuration-Reference.md)
 - [API Client Documentation](../technical/Architecture-Overview.md)
+- [RetryManager Implementation](../../src/utils/retry-manager.js)
 
 ---
 

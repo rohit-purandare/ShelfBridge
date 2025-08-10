@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { RateLimiter, Semaphore } from './utils/concurrency.js';
 import { normalizeApiToken, createHttpAgent } from './utils/network.js';
+import { AudiobookshelfRetryManager } from './utils/retry-manager.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
@@ -25,6 +26,7 @@ export class AudiobookshelfClient {
     this.pageSize = pageSize;
     this.rereadConfig = rereadConfig;
     this.libraryConfig = libraryConfig;
+    this.retryManager = AudiobookshelfRetryManager;
 
     // Create HTTP agents with keep-alive for connection reuse
     const isHttps = this.baseUrl.startsWith('https');
@@ -869,9 +871,9 @@ export class AudiobookshelfClient {
   async _makeRequest(method, endpoint, data = null, suppressErrors = []) {
     await this.semaphore.acquire();
     try {
-      await this.rateLimiter.waitIfNeeded('audiobookshelf');
+      return await this.retryManager.executeWithRetry(async () => {
+        await this.rateLimiter.waitIfNeeded('audiobookshelf');
 
-      try {
         const config = {
           method,
           url: endpoint,
@@ -911,33 +913,7 @@ export class AudiobookshelfClient {
         }
 
         return response.data;
-      } catch (error) {
-        if (error.response) {
-          const status = error.response.status;
-
-          if (suppressErrors.includes(status)) {
-            return null;
-          }
-
-          logger.error(`HTTP ${status} error for ${method} ${endpoint}`, {
-            status,
-            data: error.response.data,
-          });
-          throw new Error(
-            `HTTP ${status}: ${error.response.data?.message || error.message}`,
-          );
-        } else if (error.request) {
-          logger.error(`Network error for ${method} ${endpoint}`, {
-            error: error.message,
-          });
-          throw new Error(`Network error: ${error.message}`);
-        } else {
-          logger.error(`Request error for ${method} ${endpoint}`, {
-            error: error.message,
-          });
-          throw error;
-        }
-      }
+      });
     } finally {
       this.semaphore.release();
     }
