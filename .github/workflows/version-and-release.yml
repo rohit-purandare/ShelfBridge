@@ -31,6 +31,12 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     uses: ./.github/workflows/docker-build.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    secrets: inherit
     with:
       ref: ${{ needs.release-please.outputs.tag_name }}
       is_release: true
