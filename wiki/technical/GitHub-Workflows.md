@@ -392,7 +392,7 @@ The workflow now ensures that version-specific Docker images are automatically c
 **How It Works:**
 
 1. Release Please creates release and pushes tag
-2. Version workflow directly calls Docker build workflow via `workflow_call`
+2. Version workflow directly calls Docker build workflow via `workflow_call` with `secrets: inherit`
 3. Docker build completes with all image tags before release notification
 4. Release notification includes actual built image tags for immediate use
 
