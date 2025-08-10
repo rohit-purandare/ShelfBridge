@@ -373,35 +373,34 @@ The workflow now ensures that version-specific Docker images are automatically c
 - ✅ **Version-specific images** - Creates `ghcr.io/owner/repo:1.18.2` style tags automatically
 - ✅ **No manual intervention** - Everything happens automatically on functional commits
 
-**Previous Issue:** Redundant Docker builds were occurring - once in release workflow and again via tag triggers
-**Fix Applied:** Removed Docker build from version-and-release workflow; now relies solely on docker-build.yml
+**Previous Issue:** Duplicate Docker builds were occurring during releases - once for the release commit and again for the tag creation
+**Fix Applied:** Optimized workflow architecture to use `workflow_call` for single, coordinated builds
 
 **Technical Details:**
 
-- Docker images are built by `docker-build.yml` when tags are pushed (cleaner separation of concerns)
-- Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags via docker-build.yml
-- Eliminates redundant builds and follows industry-standard CI/CD practices
-- Version workflow focuses on versioning; Docker workflow focuses on container builds
+- Docker builds now triggered via `workflow_call` from version-and-release.yml (eliminates duplicate triggers)
+- Single build produces all necessary image tags: version-specific, major.minor, major, and latest
+- Multi-platform builds (linux/amd64, linux/arm64) with proper semver tag management
+- Version workflow calls Docker workflow directly instead of relying on tag push triggers
+- Resource efficient: one build per release instead of two identical builds
 
-**NEW: Release Timing Synchronization Fix** - **Fixed race condition between release creation and Docker image availability**
+**Release Timing Synchronization** - **Coordinated build and release process**
 
-**Previous Issue:** Releases were created immediately after tag push, but before Docker images were actually built and available in the registry. This caused "image not found" errors for users trying to pull Docker images immediately after seeing a release announcement.
-
-**Fix Applied:** Added synchronization step using `lewagon/wait-on-check-action` that waits for the Docker build workflow to complete successfully before creating the GitHub release.
+**Current Implementation:** Direct workflow coordination eliminates timing issues
 
 **How It Works:**
 
-1. Version workflow pushes git tag (triggers Docker build in parallel)
-2. **NEW: Wait step** monitors `build-and-push` job status until completion
-3. Release is created only after Docker images are confirmed available
-4. Users see releases with guaranteed Docker image availability
+1. Release Please creates release and pushes tag
+2. Version workflow directly calls Docker build workflow via `workflow_call`
+3. Docker build completes with all image tags before release notification
+4. Release notification includes actual built image tags for immediate use
 
 **Benefits:**
 
-- ✅ No more "image not found" errors for immediate Docker pulls
-- ✅ Reliable Docker installation instructions in releases
-- ✅ Better user experience with guaranteed artifact availability
-- ✅ Maintains existing workflow logic while fixing timing issues
+- ✅ Synchronous process ensures images are available when release is announced
+- ✅ No race conditions between release creation and image availability
+- ✅ Users can immediately pull Docker images after seeing release
+- ✅ Release notification includes actual published image tags
 
 ### Development Workflow Improvements
 
@@ -489,10 +488,9 @@ on:
 
 ### Triggers
 
-- Push to `main` branch (**excludes non-functional commits**)
 - Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`)
-- Push of version tags (`v*`)
 - Pull requests to `main` (build-only, all commits)
+- **Workflow call** from `version-and-release.yml` (for release builds)
 
 ### Case Sensitivity Fix
 
@@ -536,28 +534,31 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:1.18.2
 docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ```
 
-### 🔄 Duplicate Build Prevention
+### 🔄 Duplicate Build Prevention (RESOLVED)
 
-**Fixed Issue:** Release workflow was creating infinite loops due to multiple simultaneous Docker builds
+**Fixed Issue:** Eliminated duplicate Docker builds during release process
 
 **Previous Problem:**
 
-- Version-and-release workflow pushes version bump commit → triggers Docker build #1
-- Version-and-release workflow pushes git tag → triggers Docker build #2
-- `lewagon/wait-on-check-action` waits for ALL `build-and-push` checks to complete
-- Results in infinite loop: "The requested checks aren't complete yet, will check back in 30 seconds..."
+- When Release Please created a release, it triggered the docker-build workflow twice:
+  1. Once on the main branch push (release commit)
+  2. Again on the new tag creation
+- This caused wasteful duplicate builds of identical code
 
-**Solution Applied:** Enhanced commit message filtering in Docker build workflow
+**Solution Applied:** Optimized workflow architecture
 
-- **Before:** `!startsWith(github.event.head_commit.message, 'bump version to v')`
-- **After:** `!contains(github.event.head_commit.message, 'bump version to v')`
+- **Removed tag triggers** from docker-build.yml to prevent automatic duplicate builds
+- **Added workflow_call support** to docker-build.yml with release-specific parameters
+- **Updated version-and-release.yml** to directly call docker-build workflow with the release tag
+- **Single build** now gets tagged with all appropriate version tags (semver + latest)
 
 **Benefits:**
 
-- ✅ More reliable detection of version bump commits
-- ✅ Prevents race conditions between commit and tag builds
-- ✅ Fixes "allowed-conclusions: success" errors in releases
-- ✅ Eliminates infinite loops in release automation
+- ✅ **Eliminates duplicate builds** - only one Docker build per release
+- ✅ **Proper tag management** - single build gets all appropriate tags applied
+- ✅ **Faster releases** - reduced CI time and resource usage
+- ✅ **Cleaner workflow logs** - easier to track build status
+- ✅ **Better resource efficiency** - no redundant image builds
 
 **⏭️ Skips Build:**
 
