@@ -378,11 +378,12 @@ The workflow now ensures that version-specific Docker images are automatically c
 
 **Technical Details:**
 
-- Docker builds now triggered via `workflow_call` from version-and-release.yml (eliminates duplicate triggers)
-- Single build produces all necessary image tags: version-specific, major.minor, major, and latest
+- Docker builds triggered via `workflow_call` from version-and-release.yml for releases (eliminates duplicate triggers)
+- Smart conditional logic skips Release Please commits on main branch to prevent duplication
+- Regular main branch commits still trigger Docker builds with `:latest` tag
+- Single release build produces all necessary image tags: version-specific, major.minor, major, and latest
 - Multi-platform builds (linux/amd64, linux/arm64) with proper semver tag management
-- Version workflow calls Docker workflow directly instead of relying on tag push triggers
-- Resource efficient: one build per release instead of two identical builds
+- Resource efficient: one build per release, normal builds for regular commits
 
 **Release Timing Synchronization** - **Coordinated build and release process**
 
@@ -488,6 +489,7 @@ on:
 
 ### Triggers
 
+- Push to `main` branch (regular commits only, skips Release Please commits)
 - Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`)
 - Pull requests to `main` (build-only, all commits)
 - **Workflow call** from `version-and-release.yml` (for release builds)
@@ -545,12 +547,13 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
   2. Again on the new tag creation
 - This caused wasteful duplicate builds of identical code
 
-**Solution Applied:** Optimized workflow architecture
+**Solution Applied:** Optimized workflow architecture with smart triggering
 
 - **Removed tag triggers** from docker-build.yml to prevent automatic duplicate builds
 - **Added workflow_call support** to docker-build.yml with release-specific parameters
 - **Updated version-and-release.yml** to directly call docker-build workflow with the release tag
-- **Single build** now gets tagged with all appropriate version tags (semver + latest)
+- **Smart main branch logic** - skips builds for Release Please commits, allows regular commits
+- **Single build per release** now gets tagged with all appropriate version tags (semver + latest)
 
 **Benefits:**
 

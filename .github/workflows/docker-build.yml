@@ -4,6 +4,7 @@ on:
   push:
     branches:
       [
+        main,
         'feature/*',
         'feat/*',
         'bugfix/*',
@@ -50,7 +51,13 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    # Always build on branch pushes and tags to ensure images are available for testing
+    # Skip build for Release Please commits on main (handled by version-and-release.yml)
+    # Always build for workflow_call, feature branches, and non-release commits
+    if: |
+      github.event_name == 'workflow_call' || 
+      github.event_name == 'pull_request' ||
+      github.ref_name != 'main' ||
+      !contains(github.event.head_commit.message, 'chore(main): release')
 
     outputs:
       image-digest: ${{ steps.build.outputs.digest || steps.build-push.outputs.digest }}
