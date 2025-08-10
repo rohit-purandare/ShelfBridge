@@ -9,7 +9,6 @@
 
 import logger from '../logger.js';
 import { extractBookIdentifiers } from './utils/identifier-extractor.js';
-import { createIdentifierLookup } from './utils/identifier-lookup.js';
 import { AsinMatcher } from './strategies/asin-matcher.js';
 import { IsbnMatcher } from './strategies/isbn-matcher.js';
 import { TitleAuthorMatcher } from './strategies/title-author-matcher.js';
@@ -17,6 +16,7 @@ import {
   extractTitle,
   extractAuthor,
 } from './utils/audiobookshelf-extractor.js';
+import { normalizeIsbn, normalizeAsin } from './utils/normalization.js';
 
 /**
  * Book Matcher - Orchestrates the multi-tier book matching process
@@ -35,8 +35,9 @@ export class BookMatcher {
     this.userLibraryData = null;
     this.formatMapper = null;
 
-    // Memoization cache for identifier lookup
+    // Memoization caches for lookup tables
     this._identifierLookupCache = null;
+    this._editionLookupCache = null;
     this._lastLibraryDataHash = null;
 
     // Initialize matching strategies
@@ -52,46 +53,72 @@ export class BookMatcher {
   }
 
   /**
-   * Get or create identifier lookup table with memoization
-   * @returns {Object} - Cached identifier lookup table
+   * Get or create both identifier and edition lookup tables with memoization
+   * @returns {Object} - Object containing both cached lookup tables
    * @private
    */
-  _getIdentifierLookup() {
+  _getLookupTables() {
     // Create a simple hash of the library data to detect changes
     const currentDataHash = this._hashLibraryData();
 
-    // Return cached lookup if available and current
+    // Return cached lookups if available and current
     if (
       this._identifierLookupCache &&
+      this._editionLookupCache &&
       this._lastLibraryDataHash === currentDataHash
     ) {
-      logger.debug('Using cached identifier lookup table', {
+      logger.debug('Using cached lookup tables', {
         librarySize: this.userLibraryData ? this.userLibraryData.length : 0,
         cacheHash: currentDataHash,
       });
-      return this._identifierLookupCache;
+      return {
+        identifierLookup: this._identifierLookupCache,
+        editionLookup: this._editionLookupCache,
+      };
     }
 
-    // Build new lookup table and cache it
-    logger.debug('Building new identifier lookup table', {
+    // Build new lookup tables and cache them
+    logger.debug('Building new lookup tables', {
       librarySize: this.userLibraryData ? this.userLibraryData.length : 0,
       previousHash: this._lastLibraryDataHash,
       newHash: currentDataHash,
     });
 
-    this._identifierLookupCache = createIdentifierLookup(
-      this.userLibraryData,
-      this.formatMapper,
-    );
+    const lookupTables = this._createLookupTables();
+    this._identifierLookupCache = lookupTables.identifierLookup;
+    this._editionLookupCache = lookupTables.editionLookup;
     this._lastLibraryDataHash = currentDataHash;
 
-    const lookupSize = Object.keys(this._identifierLookupCache).length;
-    logger.debug('Identifier lookup table built and cached', {
-      identifierCount: lookupSize,
+    const identifierCount = Object.keys(this._identifierLookupCache).length;
+    const editionCount = Object.keys(this._editionLookupCache).length;
+    logger.debug('Lookup tables built and cached', {
+      identifierCount,
+      editionCount,
       cacheHash: currentDataHash,
     });
 
-    return this._identifierLookupCache;
+    return {
+      identifierLookup: this._identifierLookupCache,
+      editionLookup: this._editionLookupCache,
+    };
+  }
+
+  /**
+   * Get cached identifier lookup table (for backwards compatibility)
+   * @returns {Object} - Cached identifier lookup table
+   * @private
+   */
+  _getIdentifierLookup() {
+    return this._getLookupTables().identifierLookup;
+  }
+
+  /**
+   * Get cached edition lookup table
+   * @returns {Object} - Cached edition lookup table
+   * @private
+   */
+  _getEditionLookup() {
+    return this._getLookupTables().editionLookup;
   }
 
   /**
@@ -116,6 +143,77 @@ export class BookMatcher {
     const formatMapperHash = this.formatMapper ? 'with-mapper' : 'no-mapper';
 
     return `${librarySize}-${sampleIds}-${formatMapperHash}`;
+  }
+
+  /**
+   * Create both identifier and edition lookup tables in a single pass
+   * @returns {Object} - Object containing both lookup tables
+   * @private
+   */
+  _createLookupTables() {
+    const identifierLookup = {};
+    const editionLookup = {};
+
+    if (!this.userLibraryData) {
+      return { identifierLookup, editionLookup };
+    }
+
+    // Single pass through library data to build both tables
+    for (const userBook of this.userLibraryData) {
+      const book = userBook.book;
+      if (!book || !book.editions) continue;
+
+      for (const edition of book.editions) {
+        // Apply format mapping if provided
+        const editionWithFormat = this.formatMapper
+          ? {
+              ...edition,
+              format: this.formatMapper(edition),
+            }
+          : edition;
+
+        // Build identifier lookup table (ISBN, ASIN)
+        // Add ISBN-10
+        if (edition.isbn_10) {
+          const normalizedIsbn = normalizeIsbn(edition.isbn_10);
+          if (normalizedIsbn) {
+            identifierLookup[normalizedIsbn] = {
+              userBook,
+              edition: editionWithFormat,
+            };
+          }
+        }
+
+        // Add ISBN-13
+        if (edition.isbn_13) {
+          const normalizedIsbn = normalizeIsbn(edition.isbn_13);
+          if (normalizedIsbn) {
+            identifierLookup[normalizedIsbn] = {
+              userBook,
+              edition: editionWithFormat,
+            };
+          }
+        }
+
+        // Add ASIN
+        if (edition.asin) {
+          const normalizedAsin = normalizeAsin(edition.asin);
+          if (normalizedAsin) {
+            identifierLookup[normalizedAsin] = {
+              userBook,
+              edition: editionWithFormat,
+            };
+          }
+        }
+
+        // Build edition lookup table (edition ID -> user book)
+        if (edition.id) {
+          editionLookup[edition.id] = userBook;
+        }
+      }
+    }
+
+    return { identifierLookup, editionLookup };
   }
 
   /**
@@ -175,11 +273,11 @@ export class BookMatcher {
               `📚 Attempting title/author matching for "${extractedMetadata.title}" (no identifiers available)`,
             );
 
-            // Pass user library lookup function to the strategy
+            // Pass optimized user library lookup function to the strategy
             match = await strategy.findMatch(
               absBook,
               userId,
-              this._findUserBookByEditionId.bind(this),
+              this.findUserBookByEditionId.bind(this),
             );
           } else {
             logger.debug(
@@ -255,22 +353,6 @@ export class BookMatcher {
   }
 
   /**
-   * Find user book by edition ID using the injected lookup function
-   * @param {string} editionId - Edition ID to find
-   * @returns {Object|null} - User book or null if not found
-   * @private
-   */
-  _findUserBookByEditionId(editionId) {
-    // This method is injected from SyncManager which owns the user library data
-    if (this._findUserBookByEditionIdImpl) {
-      return this._findUserBookByEditionIdImpl(editionId);
-    }
-
-    logger.warn('No user library lookup function available in BookMatcher');
-    return null;
-  }
-
-  /**
    * Set the user library data for book matching
    * @param {Array} userLibraryData - User's Hardcover library data
    * @param {Function} formatMapper - Function to map edition formats (optional)
@@ -289,22 +371,24 @@ export class BookMatcher {
   }
 
   /**
-   * Invalidate the cached identifier lookup table
+   * Invalidate all cached lookup tables
    * @private
    */
   _invalidateCache() {
     this._identifierLookupCache = null;
+    this._editionLookupCache = null;
     this._lastLibraryDataHash = null;
-    logger.debug('Identifier lookup cache invalidated');
+    logger.debug('All lookup caches invalidated');
   }
 
   /**
-   * Set the user library lookup function for edition lookups
-   * @param {Function} lookupFunction - Function to find user book by edition ID
+   * Find user book by edition ID using cached lookup table (optimized)
+   * @param {string|number} editionId - Edition ID to find
+   * @returns {Object|null} - User book or null if not found
    */
-  setUserLibraryLookup(lookupFunction) {
-    this._findUserBookByEditionIdImpl = lookupFunction;
-    logger.debug('Updated user library lookup function for book matching');
+  findUserBookByEditionId(editionId) {
+    const editionLookup = this._getEditionLookup();
+    return editionLookup[editionId] || null;
   }
 
   /**

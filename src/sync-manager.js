@@ -191,13 +191,10 @@ export class SyncManager {
       // Store for cross-referencing in cache logic
       this.hardcoverBooks = hardcoverBooks;
 
-      // Update book matcher with user library data and lookup function
+      // Update book matcher with user library data
       this.bookMatcher.setUserLibrary(
         hardcoverBooks,
         this._mapHardcoverFormatToInternal.bind(this),
-      );
-      this.bookMatcher.setUserLibraryLookup(
-        this._findUserBookByEditionId.bind(this),
       );
 
       logger.debug(
