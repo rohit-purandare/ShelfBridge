@@ -13,22 +13,24 @@ The Hardcover client is configured with a **configurable rate limit** (default: 
 ```javascript
 // src/hardcover-client.js
 export class HardcoverClient {
-    constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
-        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
-        // ... rest of constructor
-    }
+  constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
+    this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+    // ... rest of constructor
+  }
 }
 ```
 
 **Configuration Options**:
+
 ```yaml
 global:
-  hardcover_rate_limit: 55  # Default: 55 requests/minute (range: 10-60)
+  hardcover_rate_limit: 55 # Default: 55 requests/minute (range: 10-60)
 ```
 
 **Use Cases**:
+
 - **Conservative**: Set to 30-40 for shared accounts or frequent rate limiting
-- **Default**: 55 requests/minute works well for most users  
+- **Default**: 55 requests/minute works well for most users
 - **Aggressive**: 60 requests/minute if you have confirmed higher API limits
 
 ### Audiobookshelf API Rate Limiting
@@ -38,10 +40,17 @@ The Audiobookshelf client uses a **configurable rate limit** (default: 600 reque
 ```javascript
 // src/audiobookshelf-client.js
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600) {
-        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
-        // ... rest of constructor
-    }
+  constructor(
+    baseUrl,
+    token,
+    semaphoreConcurrency = 1,
+    maxBooksToFetch = null,
+    pageSize = 100,
+    rateLimitPerMinute = 600,
+  ) {
+    this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+    // ... rest of constructor
+  }
 }
 
 // All Audiobookshelf requests use the 'audiobookshelf' identifier
@@ -49,12 +58,14 @@ await this.rateLimiter.waitIfNeeded('audiobookshelf');
 ```
 
 **Configuration Options**:
+
 ```yaml
 global:
-  audiobookshelf_rate_limit: 600  # Default: 600 requests/minute (range: 60-1200)
+  audiobookshelf_rate_limit: 600 # Default: 600 requests/minute (range: 60-1200)
 ```
 
 **Use Cases**:
+
 - **Raspberry Pi/slow servers**: Set to 120-300 for resource-constrained hosts
 - **Default**: 600 requests/minute works well for most self-hosted servers
 - **Powerful servers**: 900-1200 requests/minute for high-performance local setups
@@ -69,12 +80,14 @@ The `RateLimiter` class in `src/utils.js` provides:
 1. **Intelligent Queueing**: Requests are queued and processed at the appropriate rate instead of being dropped
 2. **Warning System**: Logs warnings when approaching rate limits (80% of maximum)
 3. **Automatic Retry**: Automatically waits and retries when limits are exceeded
-4. **Request Tracking**: Tracks request patterns with unique identifiers
-5. **Even Distribution**: Spreads requests evenly across time windows using `execEvenly: true`
+4. **Exponential Backoff**: Implements intelligent retry strategies for different error types
+5. **Request Tracking**: Tracks request patterns with unique identifiers
+6. **Even Distribution**: Spreads requests evenly across time windows using `execEvenly: true`
 
 ### Key Methods
 
 #### `waitIfNeeded(identifier)`
+
 The primary method for rate limiting. Call this before making any API request.
 
 ```javascript
@@ -83,7 +96,9 @@ await this.rateLimiter.waitIfNeeded('hardcover-api');
 ```
 
 #### `getStatus(identifier)`
+
 Returns current rate limit status including:
+
 - `requestsUsed`: Number of requests made in current window
 - `maxRequests`: Maximum allowed requests per window
 - `remainingRequests`: Remaining requests in current window
@@ -91,6 +106,7 @@ Returns current rate limit status including:
 - `isNearLimit`: Whether approaching the warning threshold
 
 #### `reset(identifier)`
+
 Resets the rate limit counter for a specific identifier.
 
 ## Rate Limiting Logic
@@ -101,7 +117,33 @@ Resets the rate limit counter for a specific identifier.
 2. **Log Warnings**: When usage exceeds 80% of the limit, log a warning
 3. **Queue Requests**: If limit is exceeded, queue the request for later processing
 4. **Even Distribution**: Spread requests evenly across the time window
-5. **Automatic Retry**: Automatically retry after the appropriate wait time
+
+### Retry and Backoff Strategy
+
+ShelfBridge implements intelligent exponential backoff for different types of errors:
+
+#### Client Errors (4xx Status Codes)
+
+All client errors are retried with exponential backoff:
+
+- **429 Too Many Requests**: Aggressive backoff (2s → 4s → 8s)
+- **Other 4xx errors**: Standard backoff (1s → 2s → 4s)
+- **Retryable errors include**: 400, 401, 403, 404, 408, 409, 423, 429
+
+#### Server Errors (5xx Status Codes)
+
+- **All 5xx errors**: Standard backoff (1s → 2s → 4s)
+- **Includes**: 500, 502, 503, 504, etc.
+
+#### Network Errors
+
+- **Timeouts**: Standard backoff (1s → 2s → 4s)
+- **Connection failures**: Standard backoff (1s → 2s → 4s)
+
+#### Maximum Retries
+
+- **Default**: 2 additional retries (3 total attempts)
+- **Configurable**: Can be adjusted via configuration (future enhancement)
 
 ### Warning Thresholds
 
@@ -112,7 +154,7 @@ The system logs warnings when request usage reaches 80% of the configured limit:
 // For 55 requests/minute limit (Hardcover default)
 warningThreshold = Math.ceil(55 * 0.8) = 44 requests
 
-// For 600 requests/minute limit (Audiobookshelf default)  
+// For 600 requests/minute limit (Audiobookshelf default)
 warningThreshold = Math.ceil(600 * 0.8) = 480 requests
 
 // Warning logged when >= threshold requests used in current minute
@@ -126,6 +168,7 @@ Requests are tracked using identifiers that help distinguish between different s
 - `audiobookshelf`: All Audiobookshelf API calls
 
 **Important**: Each service uses its own identifier to ensure separate rate limit buckets:
+
 - Hardcover: Configurable (default: 55, range: 10-60 requests per minute)
 - Audiobookshelf: Configurable (default: 600, range: 60-1200 requests per minute)
 
@@ -137,8 +180,8 @@ This prevents conflicts between different API services and ensures accurate rate
 
 ```javascript
 const rateLimiter = new RateLimiter(
-    maxRequestsPerMinute = 55,  // Maximum requests per minute
-    keyPrefix = 'rate-limiter'  // Prefix for internal keys
+  (maxRequestsPerMinute = 55), // Maximum requests per minute
+  (keyPrefix = 'rate-limiter'), // Prefix for internal keys
 );
 ```
 
@@ -168,20 +211,20 @@ The underlying rate limiter is configured with:
 ```javascript
 // Warning when approaching limit
 logger.warn('Rate limit warning: 44/55 requests used in the current minute', {
-    service: 'shelfbridge',
-    version: '1.7.2',  // Dynamically read from package.json
-    identifier: 'hardcover-api',
-    remainingRequests: 11,
-    resetTime: '2024-01-01T12:01:00.000Z'
+  service: 'shelfbridge',
+  version: '1.7.2', // Dynamically read from package.json
+  identifier: 'hardcover-api',
+  remainingRequests: 11,
+  resetTime: '2024-01-01T12:01:00.000Z',
 });
 
 // When limit is exceeded
 logger.warn('Rate limit exceeded. Waiting 60s before next request', {
-    service: 'shelfbridge',
-    version: '1.7.2',  // Dynamically read from package.json
-    identifier: 'hardcover-api',
-    remainingRequests: 0,
-    resetTime: '2024-01-01T12:01:00.000Z'
+  service: 'shelfbridge',
+  version: '1.7.2', // Dynamically read from package.json
+  identifier: 'hardcover-api',
+  remainingRequests: 0,
+  resetTime: '2024-01-01T12:01:00.000Z',
 });
 ```
 
@@ -198,19 +241,23 @@ LOG_LEVEL=verbose node your-script.js
 ```
 
 ### What Gets Logged
+
 - Every rate limit check (even if allowed)
 - Every allowed request
 - Every delayed (rate-limited) request
 - Identifier, key, requests used/remaining, reset time, action, and timestamp
 
 ### Sample Log Entry
+
 ```
 [verbose]: [RateLimiter] waitIfNeeded check service="shelfbridge" version="1.8.2" identifier="hardcover-api" key="hardcover-api-1752607778730:hardcover-api" requestsUsed=1 remainingRequests=54 resetTime="2025-07-15T19:30:38.731Z" action="check"
 [verbose]: [RateLimiter] request allowed service="shelfbridge" version="1.8.2" identifier="hardcover-api" key="hardcover-api-1752607778730:hardcover-api" requestsUsed=2 remainingRequests=53 resetTime="2025-07-15T19:30:39.824Z" action="allowed"
 ```
 
 ### When to Use
+
 Enable verbose logging if you are:
+
 - Diagnosing unexpected rate limiting
 - Wanting to see all rate limiting decisions
 - Tracking which identifiers are being used
@@ -249,7 +296,7 @@ Check status periodically in long-running operations:
 ```javascript
 const status = await this.rateLimiter.getStatus('hardcover-api');
 if (status.isNearLimit) {
-    logger.info('Approaching rate limit, slowing down operations');
+  logger.info('Approaching rate limit, slowing down operations');
 }
 ```
 
@@ -275,6 +322,7 @@ node test/rate-limiter-test.js
 ### Performance Testing
 
 The rate limiter is designed for high performance:
+
 - Average request processing: ~1ms overhead
 - Concurrent request handling: Properly queued
 - Memory usage: Minimal with automatic cleanup
@@ -303,9 +351,10 @@ The rate limiter is designed for high performance:
 
 **Root Cause**: Audiobookshelf and Hardcover clients were sharing the same rate limit bucket due to using the default identifier.
 
-**Solution**: 
+**Solution**:
+
 - Audiobookshelf client now uses `'audiobookshelf'` identifier
-- Hardcover client uses `'hardcover-api'` identifier  
+- Hardcover client uses `'hardcover-api'` identifier
 - Each service has its own separate rate limit bucket
 - Enhanced logging with service and version information
 
@@ -321,6 +370,7 @@ If you experience rate limiting warnings immediately after container restart:
 4. **Monitor** subsequent sync operations for normal behavior
 
 **Expected behavior after fix**:
+
 - Rate limiting warnings should show correct counts per service
 - Container restarts should not cause immediate rate limit issues
 - Each service should respect its own limits independently
@@ -369,4 +419,4 @@ Consider adding these options in future versions:
 
 ---
 
-**Note**: This rate limiting implementation is designed to be respectful of third-party API limits while maintaining optimal performance for ShelfBridge users. Always monitor your API usage and adjust limits as needed. 
+**Note**: This rate limiting implementation is designed to be respectful of third-party API limits while maintaining optimal performance for ShelfBridge users. Always monitor your API usage and adjust limits as needed.

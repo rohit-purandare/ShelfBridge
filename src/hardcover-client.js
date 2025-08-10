@@ -1422,15 +1422,43 @@ export class HardcoverClient {
                 error.message.toLowerCase().includes('timeout')));
 
           // Check for retryable server errors (5xx status codes)
-          const isRetryableServerError = 
-            error.response && 
-            error.response.status >= 500 && 
+          const isRetryableServerError =
+            error.response &&
+            error.response.status >= 500 &&
             error.response.status < 600;
 
-          // Retry logic for network timeouts and server errors
-          if ((isTimeout || isRetryableServerError) && attempt < maxRetries) {
-            const backoffMs = 1000 * 2 ** attempt; // 1s, 2s, ...
-            const errorType = isTimeout ? 'Network timeout' : `Server error (${error.response?.status})`;
+          // Check for client errors (all 4xx status codes)
+          const isClientError =
+            error.response &&
+            error.response.status >= 400 &&
+            error.response.status < 500;
+
+          // Retry logic for network timeouts, server errors, and all client errors
+          if (
+            (isTimeout || isRetryableServerError || isClientError) &&
+            attempt < maxRetries
+          ) {
+            let backoffMs;
+            let errorType;
+
+            if (isClientError) {
+              if (error.response.status === 429) {
+                // Aggressive backoff for rate limits: 2s, 4s, 8s
+                backoffMs = 2000 * 2 ** attempt;
+                errorType = 'Rate limit (429)';
+              } else {
+                // Standard backoff for other 4xx errors: 1s, 2s, 4s
+                backoffMs = 1000 * 2 ** attempt;
+                errorType = `Client error (${error.response.status})`;
+              }
+            } else {
+              // Standard exponential backoff for timeouts and server errors: 1s, 2s, 4s
+              backoffMs = 1000 * 2 ** attempt;
+              errorType = isTimeout
+                ? 'Network timeout'
+                : `Server error (${error.response?.status})`;
+            }
+
             logger.warn(
               `${errorType} contacting Hardcover (attempt ${attempt + 1}/${
                 maxRetries + 1

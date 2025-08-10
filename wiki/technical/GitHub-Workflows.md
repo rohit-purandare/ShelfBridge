@@ -15,16 +15,16 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 ## 🔄 Workflow Summary
 
-| Workflow                                      | Trigger                           | Purpose                      | Status        |
-| --------------------------------------------- | --------------------------------- | ---------------------------- | ------------- |
-| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active     |
-| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active     |
-| [Release Automation](#release-automation)     | Conventional commits to main      | Release Please automation    | ✅ Active     |
-| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Build, test, and publish     | ✅ Active     |
-| [Docker Test](#docker-test)                   | After Docker Build, PRs           | Comprehensive testing        | ✅ Active     |
-| [Docker Publish](#docker-publish)             | Manual dispatch only              | Legacy workflow (deprecated) | ⚠️ Deprecated |
-| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active     |
-| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active     |
+| Workflow                                  | Trigger                           | Purpose                      | Status    |
+| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
+| [Release Automation](#release-automation) | Conventional commits to main      | Release Please automation    | ✅ Active |
+| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Build, test, and publish     | ✅ Active |
+| [Docker Test](#docker-test)               | After Docker Build, PRs           | Comprehensive testing        | ✅ Active |
+
+| [Security Scan](#security-scan) | Push/PR, weekly schedule | Security auditing | ✅ Active |
+| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main | Automatic PR labeling | ✅ Active |
 
 ---
 
@@ -576,13 +576,11 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 
 - `docker-build.yml` - Build images only
 - `docker-test.yml` - Test images separately
-- `docker-publish.yml` - Publish after testing
 
 **New Consolidated Architecture:** Streamlined two-workflow approach
 
 - `docker-build.yml` - **Build, validate, and publish** (primary workflow)
 - `docker-test.yml` - Additional comprehensive testing for complex scenarios
-- `docker-publish.yml` - **Deprecated** (legacy, manual dispatch only)
 
 **Benefits of Consolidation:**
 
@@ -736,84 +734,6 @@ This ensures that `latest` always points to the most recent stable build from th
 - Uses GitHub secrets with fallback values for test credentials
 - No hardcoded test tokens in workflow files
 - Supports both authenticated and fallback testing scenarios
-
----
-
-## 🚀 Docker Publish (Deprecated)
-
-**File:** `.github/workflows/docker-publish.yml`  
-**Status:** ⚠️ **DEPRECATED** - Superseded by consolidated `docker-build.yml` workflow  
-**Purpose:** Legacy multi-platform publishing workflow (no longer used in normal operations)
-
-### ⚠️ Deprecation Notice
-
-**This workflow has been deprecated** as part of the workflow consolidation effort. All publishing functionality has been moved to the `docker-build.yml` workflow for better reliability and simpler maintenance.
-
-**Migration Complete:** All multi-platform builds, publishing, and attestation are now handled by `docker-build.yml`
-
-### Triggers
-
-- Manual `workflow_dispatch` only (for emergency/legacy scenarios)
-- All automatic triggers have been disabled (`if: false` condition)
-
-### What It Does
-
-1. **Multi-Platform Build**
-   - Builds for linux/amd64 and linux/arm64
-   - Uses Docker Buildx for cross-platform compilation
-   - Maintains build cache for faster subsequent builds
-
-2. **Image Publishing**
-   - Pushes to GitHub Container Registry (ghcr.io)
-   - Creates semantic version tags automatically
-   - Updates latest tag for main branch builds
-
-3. **Security & Attestation**
-   - Generates image attestation for main/release builds
-   - Provides build provenance information
-   - Creates SLSA-compliant security metadata
-
-### 🔧 Attestation Permissions Fix
-
-**Fixed Issue:** The workflow was failing during attestation generation with "Unable to get ACTIONS_ID_TOKEN_REQUEST_URL" error
-
-**Root Cause:** Missing permissions required for GitHub's OIDC token generation and attestation creation
-
-**Solution Applied:**
-
-```yaml
-permissions:
-  contents: read # Read repository contents
-  packages: write # Push to GitHub Container Registry
-  id-token: write # ← NEW: Generate OIDC tokens for attestations
-  attestations: write # ← NEW: Create build provenance attestations
-```
-
-**Benefits:**
-
-- ✅ **Supply Chain Security** - Cryptographic proof of image build process
-- ✅ **Build Provenance** - Verifiable record of build environment and dependencies
-- ✅ **Compliance Ready** - Meets SLSA (Supply-chain Levels for Software Artifacts) requirements
-- ✅ **Image Verification** - Users can verify images haven't been tampered with
-
-4. **Verification & Cleanup**
-   - Verifies published images can be pulled
-   - Performs smoke tests on published images
-   - Cleans up temporary artifacts and local images
-
-### Generated Image Tags
-
-Based on trigger type:
-
-- **Feature branches**: `ghcr.io/rohit-purandare/shelfbridge:feature-branch-name`
-- **Main branch**: `ghcr.io/rohit-purandare/shelfbridge:main` + `:latest`
-- **Release tags**: `ghcr.io/rohit-purandare/shelfbridge:v1.2.3` + `:1.2` + `:1` + `:latest`
-
-### Pull Request Handling
-
-- **Pull requests DO NOT trigger publishing** (security best practice)
-- Images are built and tested but not pushed to registry
-- Prevents unauthorized image publication from external PRs
 
 ---
 
