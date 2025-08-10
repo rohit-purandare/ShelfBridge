@@ -23,11 +23,15 @@ export class IsbnMatcher {
   async findMatch(absBook, identifiers, identifierLookup) {
     const title = extractTitle(absBook) || 'Unknown Title';
 
-    if (!identifiers.isbn || !identifierLookup[identifiers.isbn]) {
-      logger.debug(`No ISBN match available for ${title}`, {
-        isbn: identifiers.isbn,
-        hasLookup: !!identifierLookup[identifiers.isbn],
-      });
+    if (!identifiers.isbn) {
+      logger.debug(`❌ No ISBN available for ${title}`);
+      return null;
+    }
+
+    if (!identifierLookup[identifiers.isbn]) {
+      logger.debug(
+        `❌ ISBN ${identifiers.isbn} not found in user's Hardcover library for ${title}`,
+      );
       return null;
     }
 

@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Docker Build
 
 on:
   push:
@@ -11,37 +11,64 @@ on:
         'fix/*',
         'hotfix/*',
         'release/*',
+        'ci/*',
       ]
-    tags: ['v*']
+    # Remove tags trigger to avoid duplicate builds during releases
+    # Tags will be handled via workflow_call from version-and-release.yml
   pull_request:
     branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to build (branch, tag, or commit)'
+        type: string
+        default: ''
+      is_release:
+        description: 'Whether this is a release build'
+        type: boolean
+        default: false
+    outputs:
+      image-digest:
+        description: 'Docker image digest'
+        value: ${{ jobs.build.outputs.image-digest }}
+      image-tags:
+        description: 'Docker image tags'
+        value: ${{ jobs.build.outputs.image-tags }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
+    concurrency:
+      group: docker-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
-    # Skip Docker builds for non-functional commits (docs, chore, test, ci, style)
-    # Skip version bump commits to avoid duplicate builds (tag push will build)
-    # But ALWAYS build for tag pushes (releases) regardless of commit message
-    if: ${{ github.event_name != 'push' ||
-      startsWith(github.ref, 'refs/tags/') ||
-      (!startsWith(github.event.head_commit.message, 'docs:') &&
-      !startsWith(github.event.head_commit.message, 'chore:') &&
-      !startsWith(github.event.head_commit.message, 'test:') &&
-      !startsWith(github.event.head_commit.message, 'ci:') &&
-      !startsWith(github.event.head_commit.message, 'style:') &&
-      !contains(github.event.head_commit.message, 'bump version to v')) }}
+      id-token: write
+      attestations: write
+    # Skip build for Release Please commits on main (handled by version-and-release.yml)
+    # Always build for workflow_call, feature branches, and non-release commits
+    if: |
+      github.event_name == 'workflow_call' || 
+      github.event_name == 'pull_request' ||
+      github.ref_name != 'main' ||
+      !contains(github.event.head_commit.message, 'chore(main): release')
+
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest || steps.build-push.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+      image-labels: ${{ steps.meta.outputs.labels }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -64,15 +91,21 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=sha
+            type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ (inputs.is_release || github.ref_name == 'main') && github.event_name != 'pull_request' }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image (test only)
+      - name: Build Docker image (PR validation)
+        if: github.event_name == 'pull_request'
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -81,227 +114,20 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
-            type=gha,scope=build
-            type=gha,scope=build-${{ github.ref_name }}
+            type=gha,scope=build-pr
+            type=gha,scope=build-pr-${{ github.ref_name }}
+          cache-to: |
+            type=gha,mode=max,scope=build-pr
+            type=gha,mode=max,scope=build-pr-${{ github.ref_name }}
           platforms: linux/amd64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+          provenance: false
+          sbom: false
 
-      # CRITICAL: Test the built image BEFORE pushing - FAILS BUILD IF BROKEN
-      - name: Test Docker image native modules (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing Docker image native modules compatibility..."
-          echo "⚠️  BUILD WILL FAIL if native modules don't work - blocking push"
-
-          # Get the first tag (usually the PR or branch tag)
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing image: $TAG"
-
-          # Test native modules in the container - this MUST succeed or build fails
-          if docker run --rm \
-            -e SHELFBRIDGE_USER_0_ID=test_user \
-            -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
-            -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
-            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN=test_hc_token_1234567890 \
-            --entrypoint="" \
-            $TAG \
-            npm run test:native; then
-            echo "✅ Docker image native modules test passed - proceeding with database tests"
-          else
-            echo "❌ CRITICAL FAILURE: Native modules are broken in Docker image"
-            echo "🚫 BLOCKING DEPLOYMENT - Fix required before merge/release"
-            echo "🚫 IMAGE WILL NOT BE PUSHED TO REGISTRY"
-            exit 1
-          fi
-
-      - name: Test Docker image better-sqlite3 functionality (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing better-sqlite3 database operations in Docker..."
-          echo "⚠️  This test would have caught the GLIBC issue"
-
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing database operations in image: $TAG"
-
-          # Test comprehensive better-sqlite3 functionality
-          if docker run --rm --entrypoint="" $TAG node -e "
-            console.log('🔍 Testing better-sqlite3 comprehensive functionality...');
-            const db = require('better-sqlite3')(':memory:');
-            
-            // Test 1: Table creation
-            db.exec('CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value REAL)');
-            console.log('✅ Table creation successful');
-            
-            // Test 2: Insert operations
-            const insert = db.prepare('INSERT INTO test_table (name, value) VALUES (?, ?)');
-            insert.run('test1', 123.45);
-            insert.run('test2', 678.90);
-            console.log('✅ Insert operations successful');
-            
-            // Test 3: Query operations
-            const rows = db.prepare('SELECT * FROM test_table ORDER BY id').all();
-            if (rows.length !== 2 || rows[0].name !== 'test1') {
-              throw new Error('Query verification failed');
-            }
-            console.log('✅ Query operations successful');
-            
-            // Test 4: Transaction support
-            const transaction = db.transaction(() => {
-              insert.run('test3', 999.99);
-              insert.run('test4', 111.11);
-            });
-            transaction();
-            const count = db.prepare('SELECT COUNT(*) as count FROM test_table').get().count;
-            if (count !== 4) {
-              throw new Error('Transaction test failed');
-            }
-            console.log('✅ Transaction support successful');
-            
-            // Test 5: File database operations
-            const fileDb = require('better-sqlite3')('/tmp/test-file.db');
-            fileDb.exec('CREATE TABLE file_test (id INTEGER)');
-            fileDb.exec('INSERT INTO file_test (id) VALUES (1)');
-            const fileCount = fileDb.prepare('SELECT COUNT(*) as count FROM file_test').get().count;
-            fileDb.close();
-            if (fileCount !== 1) {
-              throw new Error('File database test failed');
-            }
-            console.log('✅ File database operations successful');
-            
-            db.close();
-            console.log('🎉 ALL better-sqlite3 tests passed - database is fully functional!');
-          "; then
-            echo "✅ better-sqlite3 comprehensive testing passed"
-          else
-            echo "❌ CRITICAL FAILURE: better-sqlite3 database operations failed"
-            echo "🚨 This indicates a GLIBC, musl, or native module compilation issue"
-            echo "🚫 BLOCKING DEPLOYMENT - Database functionality is broken"
-            exit 1
-          fi
-
-      - name: Test Docker image application startup (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing full application startup in Docker..."
-          echo "⚠️  Verifying ShelfBridge can initialize without crashes"
-
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing application startup in image: $TAG"
-
-          # Test application version and help commands
-          if docker run --rm --entrypoint="" $TAG node src/main.js --version; then
-            echo "✅ Application version command passed"
-          else
-            echo "❌ CRITICAL FAILURE: Application version command failed"
-            echo "🚫 BLOCKING DEPLOYMENT - Basic app functionality broken"
-            exit 1
-          fi
-
-          if docker run --rm --entrypoint="" $TAG node src/main.js --help >/dev/null 2>&1; then
-            echo "✅ Application help command passed"
-          else
-            echo "❌ CRITICAL FAILURE: Application help command failed"
-            echo "🚫 BLOCKING DEPLOYMENT - Basic app functionality broken"
-            exit 1
-          fi
-
-          echo "✅ Application startup tests passed"
-
-      - name: Test Docker image configuration validation (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing configuration validation in Docker..."
-          echo "⚠️  Ensuring config system works with database"
-
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing configuration in image: $TAG"
-
-          # Test configuration validation with environment variables
-          if docker run --rm \
-            -e SHELFBRIDGE_USER_0_ID=test_user \
-            -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
-            -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
-            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN=test_hc_token_1234567890 \
-            --entrypoint="" \
-            $TAG \
-            node src/main.js validate >/dev/null 2>&1; then
-            echo "✅ Configuration validation tests passed"
-          else
-            echo "❌ CRITICAL FAILURE: Configuration validation failed"
-            echo "🚫 BLOCKING DEPLOYMENT - Config system broken"
-            exit 1
-          fi
-
-      - name: Test Docker image health check (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing Docker health check functionality..."
-          echo "⚠️  Verifying built-in health checks work correctly"
-
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing health check in image: $TAG"
-
-          # Test the health check command that's defined in Dockerfile
-          if docker run --rm --entrypoint="" $TAG node -e "
-            try {
-              const db = require('better-sqlite3')(':memory:');
-              db.exec('CREATE TABLE health_check (id INTEGER PRIMARY KEY, timestamp TEXT)');
-              const stmt = db.prepare('INSERT INTO health_check (timestamp) VALUES (?)');
-              stmt.run(new Date().toISOString());
-              const count = db.prepare('SELECT COUNT(*) as count FROM health_check').get().count;
-              if (count !== 1) throw new Error('Health check failed');
-              db.close();
-              console.log('✅ Health check passed');
-            } catch (e) {
-              console.error('❌ Health check failed:', e.message);
-              process.exit(1);
-            }
-          "; then
-            echo "✅ Health check functionality verified"
-          else
-            echo "❌ CRITICAL FAILURE: Health check is broken"
-            echo "🚫 BLOCKING DEPLOYMENT - Health monitoring will fail"
-            exit 1
-          fi
-
-      - name: Test Docker image cache functionality (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing cache/database functionality in Docker..."
-          echo "⚠️  Verifying BookCache can initialize and operate"
-
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "Testing cache functionality in image: $TAG"
-
-          # Test cache functionality with proper environment
-          if docker run --rm \
-            -e SHELFBRIDGE_USER_0_ID=test_user \
-            -e SHELFBRIDGE_USER_0_ABS_URL=https://test.audiobookshelf.com \
-            -e SHELFBRIDGE_USER_0_ABS_TOKEN=test_abs_token_1234567890 \
-            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN=test_hc_token_1234567890 \
-            --entrypoint="" \
-            $TAG \
-            npm run cache -- --show >/dev/null 2>&1; then
-            echo "✅ Cache functionality tests passed"
-          else
-            echo "❌ CRITICAL FAILURE: Cache functionality is broken"
-            echo "🚫 BLOCKING DEPLOYMENT - Database operations will fail"
-            exit 1
-          fi
-
-      - name: Comprehensive Docker image validation summary
-        run: |
-          echo "🎉 ALL CRITICAL DOCKER TESTS PASSED!"
-          echo ""
-          echo "✅ Tests completed successfully:"
-          echo "  • Native modules compatibility"
-          echo "  • better-sqlite3 database operations (GLIBC/musl compatibility)"
-          echo "  • Application startup and basic functionality"
-          echo "  • Configuration validation and environment handling"
-          echo "  • Health check functionality"
-          echo "  • Cache/database initialization and operations"
-          echo ""
-          echo "🚀 Docker image is verified and ready for deployment"
-          echo "🔒 These tests prevent broken releases like GLIBC compatibility issues"
-
-      # Only push if ALL tests pass - this ensures no broken images reach users
-      - name: Push Docker image to registry
+      - name: Build and push Docker image (multi-arch)
         if: github.event_name != 'pull_request'
+        id: build-push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -309,11 +135,69 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
-            type=gha,scope=build
-            type=gha,scope=build-${{ github.ref_name }}
+            type=gha,scope=build-multiarch
+            type=gha,scope=build-multiarch-${{ github.ref_name }}
           cache-to: |
-            type=gha,mode=max,scope=build
-            type=gha,mode=max,scope=build-${{ github.ref_name }}
+            type=gha,mode=max,scope=build-multiarch
+            type=gha,mode=max,scope=build-multiarch-${{ github.ref_name }}
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+          provenance: false
+          sbom: false
+
+      - name: Basic image validation (PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "🔍 Running basic Docker image validation..."
+
+          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Validating image: $TAG"
+
+          if docker run --rm --entrypoint="" $TAG node --version; then
+            echo "✅ Node.js runtime available"
+          else
+            echo "❌ CRITICAL FAILURE: Node.js runtime not available"
+            exit 1
+          fi
+
+          if docker run --rm --entrypoint="" $TAG ls src/main.js >/dev/null 2>&1; then
+            echo "✅ Main entry point exists"
+          else
+            echo "❌ CRITICAL FAILURE: Main entry point missing"
+            exit 1
+          fi
+
+          echo "✅ Basic image validation passed"
+
+      - name: Verify published images (non-PR)
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "🔍 Verifying published Docker images..."
+
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Verifying published image: $tag"
+              if docker pull $tag >/dev/null 2>&1; then
+                echo "✅ Successfully verified: $tag"
+              else
+                echo "❌ CRITICAL FAILURE: Could not pull published image: $tag"
+                exit 1
+              fi
+
+              if docker run --rm --entrypoint="" $tag node --version >/dev/null 2>&1; then
+                echo "✅ Smoke test passed for: $tag"
+              else
+                echo "❌ CRITICAL FAILURE: Smoke test failed for: $tag"
+                exit 1
+              fi
+            fi
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+      - name: Generate image attestation
+        if: github.event_name != 'pull_request' && (inputs.is_release || github.ref_name == 'main' || startsWith(github.ref, 'refs/tags/'))
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          push-to-registry: true

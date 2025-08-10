@@ -1,3 +1,37 @@
+## [1.19.1] - 2025-08-08
+
+### Fixed
+- 🔧 **MaxListenersExceededWarning Resolution**: Fixed memory leak warning when processing many books
+  - Configure dynamic listener limits in SyncManager based on max_books_to_fetch configuration
+  - Set global unlimited listeners in main.js for multi-user parallel scenarios
+  - Prevents 'Possible EventTarget memory leak detected' warnings during parallel operations
+  - Maintains proper cleanup and backward compatibility while scaling with configuration settings
+- 🔄 **Enhanced Server Error Handling**: Improved reliability for Hardcover API interactions
+  - Added automatic retry logic for HTTP 5xx server errors (502, 503, 504, etc.)
+  - Extended existing timeout retry logic to cover temporary server issues
+  - Uses exponential backoff strategy (1s, 2s, 4s) with configurable max retries
+  - Better error logging distinguishes between timeout and server error types
+  - Significantly improves sync reliability when Hardcover API experiences temporary outages
+
+## [1.19.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.2...v1.19.3) (2025-08-10)
+
+
+### Bug Fixes
+
+* add memoization to eliminate duplicate ISBN lookup table creation ([3ed2419](https://github.com/rohit-purandare/ShelfBridge/commit/3ed24190d92dc01b23073c8ec5eefcf1a67c868c))
+* eliminate duplicate ISBN/ASIN lookups with combined memoization ([e300799](https://github.com/rohit-purandare/ShelfBridge/commit/e300799aac82e186c2a0739d6829c02515496ffd)), closes [#65](https://github.com/rohit-purandare/ShelfBridge/issues/65)
+
+## [1.19.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.1...v1.19.2) (2025-08-09)
+
+
+### Bug Fixes
+
+* enable title/author matching when identifiers are missing and improve logging ([5461de8](https://github.com/rohit-purandare/ShelfBridge/commit/5461de8d6b6cc7c0ee0d713da8414025e63ef253))
+* implement multi-key cache lookup for identifier transitions ([80b502c](https://github.com/rohit-purandare/ShelfBridge/commit/80b502c469412e6a7659c5f690182e93bcb7b69f))
+* prevent auto-add when progress below min_progress_threshold ([0cb2fc5](https://github.com/rohit-purandare/ShelfBridge/commit/0cb2fc53f8403a6320ad551a23b78efac7063f3d))
+* prevent undefined property access errors in title/author matching ([b22ad5c](https://github.com/rohit-purandare/ShelfBridge/commit/b22ad5c6e8dafb668e389a46fe7aa2fcf38927ff))
+* reduce log verbosity for book matching success messages ([6a11e04](https://github.com/rohit-purandare/ShelfBridge/commit/6a11e04db24537311e0a24c89ad062464b82612a))
+
 ## [1.18.21] - 2025-07-26
 
 ### Fixed
@@ -622,4 +656,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.2.0]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/rohit-purandare/ShelfBridge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v1.0.0
-[0.1.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v0.1.0 
+[0.1.0]: https://github.com/rohit-purandare/ShelfBridge/releases/tag/v0.1.0

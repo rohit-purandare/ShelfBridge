@@ -2,6 +2,7 @@ import axios from 'axios';
 import { RateLimiter, Semaphore } from './utils/concurrency.js';
 import { normalizeApiToken, createHttpAgent } from './utils/network.js';
 import { safeParseInt } from './utils/data.js';
+import { HardcoverRetryManager } from './utils/retry-manager.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
@@ -14,6 +15,7 @@ export class HardcoverClient {
     this.baseUrl = 'https://api.hardcover.app/v1/graphql';
     this.rateLimiter = new RateLimiter(rateLimitPerMinute);
     this.semaphore = new Semaphore(semaphoreConcurrency);
+    this.retryManager = HardcoverRetryManager;
 
     // Create HTTPS agent with keep-alive for connection reuse (Hardcover is always HTTPS)
     this._httpsAgent = createHttpAgent(true, {
@@ -1358,12 +1360,10 @@ export class HardcoverClient {
   async _executeQuery(query, variables = null) {
     // Use single identifier for all Hardcover requests to respect 55/minute total limit
     const identifier = 'hardcover-api';
-    const maxRetries = 2; // Number of *additional* retries on time-out (total attempts = maxRetries + 1)
+
     await this.semaphore.acquire();
     try {
-      let attempt = 0;
-
-      while (true) {
+      return await this.retryManager.executeWithRetry(async () => {
         // Respect global rate-limit before every attempt
         await this.rateLimiter.waitIfNeeded(identifier);
 
@@ -1372,88 +1372,48 @@ export class HardcoverClient {
           ? 'mutation'
           : 'query';
 
-        // Log mutation details only on the first attempt to avoid noisy logs on retries
-        if (requestType === 'mutation' && attempt === 0) {
+        // Log mutation details - RetryManager will handle retry-specific logging
+        if (requestType === 'mutation') {
           logger.debug('🔍 [DEBUG] Hardcover Mutation:');
           logger.debug('Query:', query);
           logger.debug('Variables:', JSON.stringify(variables, null, 2));
         }
 
-        try {
-          const requestData = { query, variables };
-          const response = await this.client.post('', requestData);
+        const requestData = { query, variables };
+        const response = await this.client.post('', requestData);
 
-          // Validate response structure
-          if (!response || !response.data) {
-            throw new Error('Invalid response from GraphQL API');
-          }
-
-          if (response.status < 200 || response.status >= 300) {
-            throw new Error(
-              `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
-            );
-          }
-
-          logger.debug('GraphQL query executed successfully');
-
-          if (response.data.errors) {
-            logger.error('GraphQL errors:', response.data.errors);
-            throw new Error(
-              `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
-            );
-          }
-
-          if (!response.data.data) {
-            throw new Error('GraphQL response contains no data');
-          }
-
-          // Debug logging for mutation responses
-          if (requestType === 'mutation') {
-            logger.debug('🔍 [DEBUG] Hardcover Response:');
-            logger.debug(JSON.stringify(response.data, null, 2));
-          }
-
-          return response.data.data; // ✅ Success – exit loop
-        } catch (error) {
-          const isTimeout =
-            !error.response &&
-            (error.code === 'ECONNABORTED' ||
-              (error.message &&
-                error.message.toLowerCase().includes('timeout')));
-
-          // Retry logic for network timeouts only
-          if (isTimeout && attempt < maxRetries) {
-            const backoffMs = 1000 * 2 ** attempt; // 1s, 2s, ...
-            logger.warn(
-              `Network timeout contacting Hardcover (attempt ${attempt + 1}/$${
-                maxRetries + 1
-              }). Retrying in ${backoffMs} ms…`,
-            );
-            await new Promise(res => setTimeout(res, backoffMs));
-            attempt += 1;
-            continue; // ↩︎ Retry
-          }
-
-          // === Non-retriable or retries exhausted ===
-          if (error.response) {
-            logger.error(
-              `HTTP ${error.response.status} error:`,
-              error.response.data,
-            );
-            throw new Error(
-              `HTTP ${error.response.status}: ${
-                error.response.data?.message || error.message
-              }`,
-            );
-          } else if (error.request) {
-            logger.error('Network error:', error.message);
-            throw new Error(`Network error: ${error.message}`);
-          } else {
-            logger.error('Request error:', error.message);
-            throw error;
-          }
+        // Validate response structure
+        if (!response || !response.data) {
+          throw new Error('Invalid response from GraphQL API');
         }
-      }
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(
+            `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
+          );
+        }
+
+        logger.debug('GraphQL query executed successfully');
+
+        if (response.data.errors) {
+          logger.error('GraphQL errors:', response.data.errors);
+          throw new Error(
+            `GraphQL errors: ${response.data.errors.map(e => e.message).join(', ')}`,
+          );
+        }
+
+        if (!response.data.data) {
+          throw new Error('GraphQL response contains no data');
+        }
+
+        // Debug logging for mutation responses
+        if (requestType === 'mutation') {
+          logger.debug('🔍 [DEBUG] Hardcover Response:');
+          logger.debug(JSON.stringify(response.data, null, 2));
+        }
+
+        return response.data.data;
+      });
     } finally {
       this.semaphore.release();
     }

@@ -10,18 +10,21 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 - **Testing** - Cross-platform Node.js testing
 - **Security** - Secret scanning, vulnerability detection
 - **Releases** - Automated version tagging and changelog generation
-- **Deployment** - Docker image building and publishing
+- **Docker Build** - Container image building, testing, and publishing (consolidated)
+- **Docker Test** - Comprehensive container testing including PR support
 
 ## 🔄 Workflow Summary
 
-| Workflow                                      | Trigger                           | Purpose                      | Status    |
-| --------------------------------------------- | --------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)                   | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)                 | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation)     | Functional commits to main        | Smart release creation       | ✅ Active |
-| [Docker Build](#docker-build)                 | Main, feature branches, tags, PRs | Smart container builds       | ✅ Active |
-| [Security Scan](#security-scan)               | Push/PR, weekly schedule          | Security auditing            | ✅ Active |
-| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main             | Automatic PR labeling        | ✅ Active |
+| Workflow                                  | Trigger                           | Purpose                      | Status    |
+| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
+| [Release Automation](#release-automation) | Conventional commits to main      | Release Please automation    | ✅ Active |
+| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Build, test, and publish     | ✅ Active |
+| [Docker Test](#docker-test)               | After Docker Build, PRs           | Comprehensive testing        | ✅ Active |
+
+| [Security Scan](#security-scan) | Push/PR, weekly schedule | Security auditing | ✅ Active |
+| [Pull Request Labeler](#pull-request-labeler) | Pull requests to main | Automatic PR labeling | ✅ Active |
 
 ---
 
@@ -204,23 +207,34 @@ node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
 ## 🚀 Release Automation
 
 **File:** `.github/workflows/version-and-release.yml`  
-**Purpose:** Automate GitHub releases for functional code changes
+**Purpose:** Industry-standard automated releases using Google's Release Please
 
-### Triggers
+### What is Release Please?
 
-- Push to `main` branch
-- **Excludes:** Documentation-only and non-functional commits
+**Release Please** is Google's battle-tested automation tool that handles releases while respecting branch protection rules. Used by Google, Angular, Firebase, and thousands of open-source projects.
 
-### Smart Release Logic
+### How It Works
 
-The workflow intelligently determines when to create releases:
+#### **Phase 1: Release PR Creation**
 
-**✅ Triggers Release:**
+- **Trigger:** Push to `main` branch with conventional commits
+- **Action:** Creates/updates a Release PR with version bump and changelog
+- **Respects:** Branch protection rules (no direct pushes to main)
 
-- `feat:` or `feature:` commits (minor version bump)
-- `fix:` or `bug:` commits (patch version bump)
-- Commits with `BREAKING CHANGE` (major version bump)
-- Any other functional commits (patch version bump)
+#### **Phase 2: Actual Release**
+
+- **Trigger:** Manual merge of Release PR
+- **Action:** Creates Git tag and GitHub release automatically
+- **Integration:** Triggers Docker builds and other workflows
+
+### Version Bump Logic
+
+Based on **Conventional Commits** standard:
+
+- `fix:` commits → **patch** version bump (1.19.0 → 1.19.1)
+- `feat:` commits → **minor** version bump (1.19.0 → 1.20.0)
+- `BREAKING CHANGE:` → **major** version bump (1.19.0 → 2.0.0)
+- Other commits → **patch** version bump
 
 **⏭️ Skips Release:**
 
@@ -359,35 +373,35 @@ The workflow now ensures that version-specific Docker images are automatically c
 - ✅ **Version-specific images** - Creates `ghcr.io/owner/repo:1.18.2` style tags automatically
 - ✅ **No manual intervention** - Everything happens automatically on functional commits
 
-**Previous Issue:** Redundant Docker builds were occurring - once in release workflow and again via tag triggers
-**Fix Applied:** Removed Docker build from version-and-release workflow; now relies solely on docker-build.yml
+**Previous Issue:** Duplicate Docker builds were occurring during releases - once for the release commit and again for the tag creation
+**Fix Applied:** Optimized workflow architecture to use `workflow_call` for single, coordinated builds
 
 **Technical Details:**
 
-- Docker images are built by `docker-build.yml` when tags are pushed (cleaner separation of concerns)
-- Multi-platform builds (linux/amd64, linux/arm64) with version-specific tags via docker-build.yml
-- Eliminates redundant builds and follows industry-standard CI/CD practices
-- Version workflow focuses on versioning; Docker workflow focuses on container builds
+- Docker builds triggered via `workflow_call` from version-and-release.yml for releases (eliminates duplicate triggers)
+- Smart conditional logic skips Release Please commits on main branch to prevent duplication
+- Regular main branch commits still trigger Docker builds with `:latest` tag
+- Single release build produces all necessary image tags: version-specific, major.minor, major, and latest
+- Multi-platform builds (linux/amd64, linux/arm64) with proper semver tag management
+- Resource efficient: one build per release, normal builds for regular commits
 
-**NEW: Release Timing Synchronization Fix** - **Fixed race condition between release creation and Docker image availability**
+**Release Timing Synchronization** - **Coordinated build and release process**
 
-**Previous Issue:** Releases were created immediately after tag push, but before Docker images were actually built and available in the registry. This caused "image not found" errors for users trying to pull Docker images immediately after seeing a release announcement.
-
-**Fix Applied:** Added synchronization step using `lewagon/wait-on-check-action` that waits for the Docker build workflow to complete successfully before creating the GitHub release.
+**Current Implementation:** Direct workflow coordination eliminates timing issues
 
 **How It Works:**
 
-1. Version workflow pushes git tag (triggers Docker build in parallel)
-2. **NEW: Wait step** monitors `build-and-push` job status until completion
-3. Release is created only after Docker images are confirmed available
-4. Users see releases with guaranteed Docker image availability
+1. Release Please creates release and pushes tag
+2. Version workflow directly calls Docker build workflow via `workflow_call` with `secrets: inherit`
+3. Docker build completes with all image tags before release notification
+4. Release notification includes actual built image tags for immediate use
 
 **Benefits:**
 
-- ✅ No more "image not found" errors for immediate Docker pulls
-- ✅ Reliable Docker installation instructions in releases
-- ✅ Better user experience with guaranteed artifact availability
-- ✅ Maintains existing workflow logic while fixing timing issues
+- ✅ Synchronous process ensures images are available when release is announced
+- ✅ No race conditions between release creation and image availability
+- ✅ Users can immediately pull Docker images after seeing release
+- ✅ Release notification includes actual published image tags
 
 ### Development Workflow Improvements
 
@@ -471,14 +485,14 @@ on:
 ## 🐳 Docker Build
 
 **File:** `.github/workflows/docker-build.yml`  
-**Purpose:** Build and publish Docker container images for functional changes
+**Purpose:** Build, test, and publish Docker container images with comprehensive validation (consolidated workflow)
 
 ### Triggers
 
-- Push to `main` branch (**excludes non-functional commits**)
-- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`)
-- Push of version tags (`v*`)
+- Push to `main` branch (regular commits only, skips Release Please commits)
+- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`)
 - Pull requests to `main` (build-only, all commits)
+- **Workflow call** from `version-and-release.yml` (for release builds)
 
 ### Case Sensitivity Fix
 
@@ -494,6 +508,15 @@ Docker builds are optimized to only run when necessary:
 - **Version tags (always build releases)** - **NEW: Always builds for tag pushes regardless of commit message**
 - Pull requests (for testing)
 - Any commits not starting with excluded prefixes
+
+### Build Step Reliability
+
+**Fixed Issue:** Resolved YAML syntax error that was preventing the Docker Build workflow from executing:
+
+- ✅ **Duplicate ID fix** - Fixed duplicate `id: build` that caused workflow parsing errors
+- ✅ **Proper step isolation** - PR builds use `id: build`, push builds use `id: build-push`
+- ✅ **Output handling** - Dynamic output references handle both PR and push scenarios
+- ✅ **Status check reliability** - Workflow now properly reports "Docker Build / build" status
 
 ### Version-Specific Docker Images
 
@@ -513,28 +536,32 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:1.18.2
 docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 ```
 
-### 🔄 Duplicate Build Prevention
+### 🔄 Duplicate Build Prevention (RESOLVED)
 
-**Fixed Issue:** Release workflow was creating infinite loops due to multiple simultaneous Docker builds
+**Fixed Issue:** Eliminated duplicate Docker builds during release process
 
 **Previous Problem:**
 
-- Version-and-release workflow pushes version bump commit → triggers Docker build #1
-- Version-and-release workflow pushes git tag → triggers Docker build #2
-- `lewagon/wait-on-check-action` waits for ALL `build-and-push` checks to complete
-- Results in infinite loop: "The requested checks aren't complete yet, will check back in 30 seconds..."
+- When Release Please created a release, it triggered the docker-build workflow twice:
+  1. Once on the main branch push (release commit)
+  2. Again on the new tag creation
+- This caused wasteful duplicate builds of identical code
 
-**Solution Applied:** Enhanced commit message filtering in Docker build workflow
+**Solution Applied:** Optimized workflow architecture with smart triggering
 
-- **Before:** `!startsWith(github.event.head_commit.message, 'bump version to v')`
-- **After:** `!contains(github.event.head_commit.message, 'bump version to v')`
+- **Removed tag triggers** from docker-build.yml to prevent automatic duplicate builds
+- **Added workflow_call support** to docker-build.yml with release-specific parameters
+- **Updated version-and-release.yml** to directly call docker-build workflow with the release tag
+- **Smart main branch logic** - skips builds for Release Please commits, allows regular commits
+- **Single build per release** now gets tagged with all appropriate version tags (semver + latest)
 
 **Benefits:**
 
-- ✅ More reliable detection of version bump commits
-- ✅ Prevents race conditions between commit and tag builds
-- ✅ Fixes "allowed-conclusions: success" errors in releases
-- ✅ Eliminates infinite loops in release automation
+- ✅ **Eliminates duplicate builds** - only one Docker build per release
+- ✅ **Proper tag management** - single build gets all appropriate tags applied
+- ✅ **Faster releases** - reduced CI time and resource usage
+- ✅ **Cleaner workflow logs** - easier to track build status
+- ✅ **Better resource efficiency** - no redundant image builds
 
 **⏭️ Skips Build:**
 
@@ -544,6 +571,30 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 - `ci:` commits (workflow/CI changes)
 - `style:` commits (formatting only)
 - Version bump commits (prevents duplicate builds)
+
+### 🔄 Workflow Consolidation Update
+
+**Major Change:** The Docker workflows have been consolidated and standardized for better reliability and maintainability.
+
+**Previous Architecture:** Three separate workflows (Build → Test → Publish)
+
+- `docker-build.yml` - Build images only
+- `docker-test.yml` - Test images separately
+
+**New Consolidated Architecture:** Streamlined two-workflow approach
+
+- `docker-build.yml` - **Build, validate, and publish** (primary workflow)
+- `docker-test.yml` - Additional comprehensive testing for complex scenarios
+
+**Benefits of Consolidation:**
+
+- ✅ **Simplified CI/CD pipeline** - fewer interdependencies between workflows
+- ✅ **Faster feedback** - build and publish happen in single workflow
+- ✅ **Reduced complexity** - easier to maintain and debug
+- ✅ **Better reliability** - fewer potential failure points
+- ✅ **Standardized permissions** - consistent security model across workflows
+
+**Migration Status:** Complete - all functionality preserved in consolidated workflows
 
 ### What It Does
 
@@ -637,6 +688,56 @@ This prevents broken releases from reaching users and ensures:
 - ✅ **Release tag builds** → Tagged with versions + `latest` (if from main)
 
 This ensures that `latest` always points to the most recent stable build from the main branch.
+
+---
+
+## 🧪 Docker Test
+
+**File:** `.github/workflows/docker-test.yml`  
+**Purpose:** Comprehensive testing of Docker container images (Part 2 of 3-stage process)
+
+### Triggers
+
+- `workflow_run` from Docker Build completion
+- Pull requests to `main` (builds image locally for testing)
+- Manual `workflow_call` with image tags
+
+### What It Does
+
+1. **Image Acquisition**
+   - For workflow_run: Downloads image artifact from Docker Build
+   - For pull requests: Builds image locally for testing
+   - For workflow_call: Uses provided image tags
+
+2. **🛡️ Comprehensive Testing Suite**
+   - **Native Module Compatibility** - Tests better-sqlite3 and other native modules
+   - **Database Operations** - Comprehensive SQLite functionality testing
+   - **Application Startup** - Validates main application entry point
+   - **Configuration Validation** - Tests config system with environment variables
+   - **Health Check Testing** - Validates Docker HEALTHCHECK functionality
+   - **Cache/Database Integration** - Tests BookCache initialization and operations
+
+3. **Pull Request Support**
+   - Builds images locally for PR testing (no registry push needed)
+   - Ensures PR changes don't break container functionality
+   - Provides feedback on Docker compatibility before merge
+
+### Testing Strategy
+
+**Critical Tests** (failure blocks deployment):
+
+- ✅ Native modules load correctly (prevents GLIBC issues)
+- ✅ Database operations function properly
+- ✅ Application starts without crashes
+- ✅ Configuration system is operational
+- ✅ Health monitoring works
+- ✅ Core functionality is validated
+
+### Security Improvements
+
+- Uses GitHub secrets with fallback values for test credentials
+- No hardcoded test tokens in workflow files
+- Supports both authenticated and fallback testing scenarios
 
 ---
 
@@ -816,19 +917,28 @@ graph TD
     A[Code Push] --> B[CI Pipeline]
     A --> C[Code Quality]
     A --> D[Security Scan]
-    A --> E[Docker Build]
+    A --> E[Docker Build & Publish]
 
-    F[Version Change] --> G[Release Automation]
-    G --> H[GitHub Release]
-    E --> I[Docker Images]
+    E --> F[Docker Test]
+    G[Docker Publish - Deprecated]
 
-    B --> J[✅ Tests Pass]
-    C --> K[✅ Quality Gates]
-    D --> L[🔒 Security Clear]
+    H[Version Change] --> I[Release Automation]
+    I --> J[GitHub Release]
+    E --> K[Docker Images Available]
 
-    J --> M[Ready for Release]
-    K --> M
-    L --> M
+    B --> L[✅ Tests Pass]
+    C --> M[✅ Quality Gates]
+    D --> N[🔒 Security Clear]
+    E --> O[✅ Images Published]
+
+    L --> P[Ready for Release]
+    M --> P
+    N --> P
+    O --> P
+
+    style E fill:#e1f5fe
+    style F fill:#fff3e0
+    style G fill:#ffebee,stroke:#f44336,stroke-dasharray: 5 5
 ```
 
 ## 🎯 Best Practices

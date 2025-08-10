@@ -25,6 +25,15 @@ export {
   retryWithBackoff,
 } from './network.js';
 
+// Retry management utilities
+export {
+  RetryManager,
+  RetryStrategy,
+  createRetryManager,
+  HardcoverRetryManager,
+  AudiobookshelfRetryManager,
+} from './retry-manager.js';
+
 // Concurrency utilities
 export { Semaphore, RateLimiter } from './concurrency.js';
 

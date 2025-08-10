@@ -11,6 +11,7 @@ import { dumpFailedSyncBooks } from './utils/debug.js';
 import { testApiConnections } from './utils/api-testing.js';
 import { currentVersion } from './version.js';
 import cron from 'node-cron';
+import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Semaphore } from './utils/concurrency.js';
 import {
@@ -2072,6 +2073,10 @@ process.on('unhandledRejection', (reason, promise) => {
   executeCleanup();
   process.exit(1);
 });
+
+// Configure global event listener limits to prevent warnings in parallel operations
+// This helps when running multiple SyncManagers simultaneously
+setMaxListeners(0); // 0 means unlimited for the global EventEmitter
 
 // Parse command line arguments
 program.parse();
