@@ -13,6 +13,14 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.19.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.2...v1.19.3) (2025-08-10)
+
+
+### Bug Fixes
+
+* add memoization to eliminate duplicate ISBN lookup table creation ([3ed2419](https://github.com/rohit-purandare/ShelfBridge/commit/3ed24190d92dc01b23073c8ec5eefcf1a67c868c))
+* eliminate duplicate ISBN/ASIN lookups with combined memoization ([e300799](https://github.com/rohit-purandare/ShelfBridge/commit/e300799aac82e186c2a0739d6829c02515496ffd)), closes [#65](https://github.com/rohit-purandare/ShelfBridge/issues/65)
+
 ## [1.19.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.1...v1.19.2) (2025-08-09)
 
 
