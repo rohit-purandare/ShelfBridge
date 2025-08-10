@@ -35,6 +35,10 @@ export class BookMatcher {
     this.userLibraryData = null;
     this.formatMapper = null;
 
+    // Memoization cache for identifier lookup
+    this._identifierLookupCache = null;
+    this._lastLibraryDataHash = null;
+
     // Initialize matching strategies
     this.strategies = [
       new AsinMatcher(),
@@ -45,6 +49,73 @@ export class BookMatcher {
     logger.debug('BookMatcher initialized', {
       strategiesCount: this.strategies.length,
     });
+  }
+
+  /**
+   * Get or create identifier lookup table with memoization
+   * @returns {Object} - Cached identifier lookup table
+   * @private
+   */
+  _getIdentifierLookup() {
+    // Create a simple hash of the library data to detect changes
+    const currentDataHash = this._hashLibraryData();
+
+    // Return cached lookup if available and current
+    if (
+      this._identifierLookupCache &&
+      this._lastLibraryDataHash === currentDataHash
+    ) {
+      logger.debug('Using cached identifier lookup table', {
+        librarySize: this.userLibraryData ? this.userLibraryData.length : 0,
+        cacheHash: currentDataHash,
+      });
+      return this._identifierLookupCache;
+    }
+
+    // Build new lookup table and cache it
+    logger.debug('Building new identifier lookup table', {
+      librarySize: this.userLibraryData ? this.userLibraryData.length : 0,
+      previousHash: this._lastLibraryDataHash,
+      newHash: currentDataHash,
+    });
+
+    this._identifierLookupCache = createIdentifierLookup(
+      this.userLibraryData,
+      this.formatMapper,
+    );
+    this._lastLibraryDataHash = currentDataHash;
+
+    const lookupSize = Object.keys(this._identifierLookupCache).length;
+    logger.debug('Identifier lookup table built and cached', {
+      identifierCount: lookupSize,
+      cacheHash: currentDataHash,
+    });
+
+    return this._identifierLookupCache;
+  }
+
+  /**
+   * Create a simple hash of library data for change detection
+   * @returns {string} - Hash representing current library state
+   * @private
+   */
+  _hashLibraryData() {
+    if (!this.userLibraryData) {
+      return 'no-data';
+    }
+
+    // Create a simple hash based on library size and a sample of IDs
+    // This is lightweight but catches most changes
+    const librarySize = this.userLibraryData.length;
+    const sampleIds = this.userLibraryData
+      .slice(0, Math.min(5, librarySize))
+      .map(book => book.id || book.book?.id)
+      .filter(Boolean)
+      .join(',');
+
+    const formatMapperHash = this.formatMapper ? 'with-mapper' : 'no-mapper';
+
+    return `${librarySize}-${sampleIds}-${formatMapperHash}`;
   }
 
   /**
@@ -70,7 +141,7 @@ export class BookMatcher {
       author: extractedMetadata.author,
     });
 
-    // Create identifier lookup from user library data
+    // Get identifier lookup from cache or create if needed
     if (!this.userLibraryData) {
       logger.warn('No user library data available for book matching');
       return {
@@ -79,10 +150,7 @@ export class BookMatcher {
       };
     }
 
-    const identifierLookup = createIdentifierLookup(
-      this.userLibraryData,
-      this.formatMapper,
-    );
+    const identifierLookup = this._getIdentifierLookup();
 
     // Try each strategy in order (Tier 1, 2, 3)
     for (const strategy of this.strategies) {
@@ -210,9 +278,24 @@ export class BookMatcher {
   setUserLibrary(userLibraryData, formatMapper = null) {
     this.userLibraryData = userLibraryData;
     this.formatMapper = formatMapper;
+
+    // Invalidate cache when library data changes
+    this._invalidateCache();
+
     logger.debug('Updated user library data for book matching', {
       librarySize: userLibraryData ? userLibraryData.length : 0,
+      cacheInvalidated: true,
     });
+  }
+
+  /**
+   * Invalidate the cached identifier lookup table
+   * @private
+   */
+  _invalidateCache() {
+    this._identifierLookupCache = null;
+    this._lastLibraryDataHash = null;
+    logger.debug('Identifier lookup cache invalidated');
   }
 
   /**
