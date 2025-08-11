@@ -13,7 +13,12 @@
           "section": "## ⚡ Performance Improvements",
           "hidden": false
         },
-        { "type": "deps", "section": "## 📦 Dependencies", "hidden": false },
+        { "type": "deps", "section": "## 📦 Dependencies", "hidden": true },
+        {
+          "type": "build(deps)",
+          "section": "## 📦 Dependencies",
+          "hidden": true
+        },
         { "type": "revert", "section": "## ⏪ Reverts", "hidden": false },
         {
           "type": "refactor",
