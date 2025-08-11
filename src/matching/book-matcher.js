@@ -38,6 +38,7 @@ export class BookMatcher {
     // Memoization caches for lookup tables
     this._identifierLookupCache = null;
     this._editionLookupCache = null;
+    this._bookLookupCache = null;
     this._lastLibraryDataHash = null;
 
     // Initialize matching strategies
@@ -53,8 +54,8 @@ export class BookMatcher {
   }
 
   /**
-   * Get or create both identifier and edition lookup tables with memoization
-   * @returns {Object} - Object containing both cached lookup tables
+   * Get or create identifier, edition, and book lookup tables with memoization
+   * @returns {Object} - Object containing all cached lookup tables
    * @private
    */
   _getLookupTables() {
@@ -65,6 +66,7 @@ export class BookMatcher {
     if (
       this._identifierLookupCache &&
       this._editionLookupCache &&
+      this._bookLookupCache &&
       this._lastLibraryDataHash === currentDataHash
     ) {
       logger.debug('Using cached lookup tables', {
@@ -74,6 +76,7 @@ export class BookMatcher {
       return {
         identifierLookup: this._identifierLookupCache,
         editionLookup: this._editionLookupCache,
+        bookLookup: this._bookLookupCache,
       };
     }
 
@@ -87,19 +90,23 @@ export class BookMatcher {
     const lookupTables = this._createLookupTables();
     this._identifierLookupCache = lookupTables.identifierLookup;
     this._editionLookupCache = lookupTables.editionLookup;
+    this._bookLookupCache = lookupTables.bookLookup;
     this._lastLibraryDataHash = currentDataHash;
 
     const identifierCount = Object.keys(this._identifierLookupCache).length;
     const editionCount = Object.keys(this._editionLookupCache).length;
+    const bookCount = Object.keys(this._bookLookupCache).length;
     logger.debug('Lookup tables built and cached', {
       identifierCount,
       editionCount,
+      bookCount,
       cacheHash: currentDataHash,
     });
 
     return {
       identifierLookup: this._identifierLookupCache,
       editionLookup: this._editionLookupCache,
+      bookLookup: this._bookLookupCache,
     };
   }
 
@@ -146,22 +153,28 @@ export class BookMatcher {
   }
 
   /**
-   * Create both identifier and edition lookup tables in a single pass
-   * @returns {Object} - Object containing both lookup tables
+   * Create identifier, edition, and book lookup tables in a single pass
+   * @returns {Object} - Object containing all lookup tables
    * @private
    */
   _createLookupTables() {
     const identifierLookup = {};
     const editionLookup = {};
+    const bookLookup = {};
 
     if (!this.userLibraryData) {
-      return { identifierLookup, editionLookup };
+      return { identifierLookup, editionLookup, bookLookup };
     }
 
-    // Single pass through library data to build both tables
+    // Single pass through library data to build all tables
     for (const userBook of this.userLibraryData) {
       const book = userBook.book;
       if (!book || !book.editions) continue;
+
+      // Build book lookup table (book ID -> user book)
+      if (book.id) {
+        bookLookup[book.id] = userBook;
+      }
 
       for (const edition of book.editions) {
         // Apply format mapping if provided
@@ -213,7 +226,7 @@ export class BookMatcher {
       }
     }
 
-    return { identifierLookup, editionLookup };
+    return { identifierLookup, editionLookup, bookLookup };
   }
 
   /**
@@ -273,11 +286,12 @@ export class BookMatcher {
               `📚 Attempting title/author matching for "${extractedMetadata.title}" (no identifiers available)`,
             );
 
-            // Pass optimized user library lookup function to the strategy
+            // Pass optimized user library lookup functions to the strategy
             match = await strategy.findMatch(
               absBook,
               userId,
               this.findUserBookByEditionId.bind(this),
+              this.findUserBookByBookId.bind(this),
             );
           } else {
             logger.debug(
@@ -377,6 +391,7 @@ export class BookMatcher {
   _invalidateCache() {
     this._identifierLookupCache = null;
     this._editionLookupCache = null;
+    this._bookLookupCache = null;
     this._lastLibraryDataHash = null;
     logger.debug('All lookup caches invalidated');
   }
@@ -389,6 +404,16 @@ export class BookMatcher {
   findUserBookByEditionId(editionId) {
     const editionLookup = this._getEditionLookup();
     return editionLookup[editionId] || null;
+  }
+
+  /**
+   * Find user book by book ID using cached lookup table (optimized)
+   * @param {string|number} bookId - Book ID to find
+   * @returns {Object|null} - User book or null if not found
+   */
+  findUserBookByBookId(bookId) {
+    const { bookLookup } = this._getLookupTables();
+    return bookLookup[bookId] || null;
   }
 
   /**

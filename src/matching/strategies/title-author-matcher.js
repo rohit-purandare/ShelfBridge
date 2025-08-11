@@ -30,11 +30,18 @@ export class TitleAuthorMatcher {
    * @param {Object} absBook - Audiobookshelf book object
    * @param {string} userId - User ID for caching
    * @param {Function} findUserBookByEditionId - Function to find user books by edition ID
+   * @param {Function} findUserBookByBookId - Function to find user books by book ID
    * @returns {Object|null} - Hardcover match object or null if not found
    */
-  async findMatch(absBook, userId, findUserBookByEditionId = null) {
-    // Store the user library lookup function for use in this matching session
+  async findMatch(
+    absBook,
+    userId,
+    findUserBookByEditionId = null,
+    findUserBookByBookId = null,
+  ) {
+    // Store the user library lookup functions for use in this matching session
     this._findUserBookByEditionIdImpl = findUserBookByEditionId;
+    this._findUserBookByBookIdImpl = findUserBookByBookId;
 
     const title = extractTitle(absBook);
     const author = extractAuthor(absBook);
@@ -103,6 +110,7 @@ export class TitleAuthorMatcher {
       }
 
       // Score and rank results
+      const scoringErrors = [];
       const scoredResults = searchResults.map(result => {
         try {
           const score = calculateMatchingScore(
@@ -117,17 +125,13 @@ export class TitleAuthorMatcher {
             _matchingScore: score,
           };
         } catch (error) {
-          logger.warn(
-            `Error scoring search result for "${title}": ${error.message}`,
-            {
-              error: error.message,
-              result: {
-                id: result.id,
-                title: result.title,
-                book: result.book?.title,
-              },
-            },
-          );
+          // Collect errors instead of logging each one
+          scoringErrors.push({
+            error: error.message,
+            resultId: result.id,
+            resultTitle: result.title,
+          });
+
           // Return result with minimum score so it's not selected
           return {
             ...result,
@@ -139,6 +143,24 @@ export class TitleAuthorMatcher {
           };
         }
       });
+
+      // Log scoring errors once with summary
+      if (scoringErrors.length > 0) {
+        const uniqueErrors = [...new Set(scoringErrors.map(e => e.error))];
+        logger.warn(
+          `Scoring errors for "${title}": ${scoringErrors.length} results failed (${uniqueErrors.length} unique errors)`,
+          {
+            errorCount: scoringErrors.length,
+            uniqueErrors,
+            // Only include first few failed results to avoid spam
+            sampleFailures: scoringErrors.slice(0, 2).map(e => ({
+              id: e.resultId,
+              title: e.resultTitle,
+              error: e.error,
+            })),
+          },
+        );
+      }
 
       // Sort by confidence score
       scoredResults.sort(
@@ -341,7 +363,69 @@ export class TitleAuthorMatcher {
       return null;
     }
 
-    // Create match object
+    // First, check if we already have this exact edition
+    const existingByEdition = this._findUserBookByEditionId(editionId);
+    if (existingByEdition) {
+      logger.debug('Found exact edition match in user library', {
+        searchResultTitle: searchResult.title,
+        editionId: editionId,
+        userBookId: existingByEdition.id,
+        libraryTitle: existingByEdition.book.title,
+      });
+
+      return {
+        userBook: existingByEdition,
+        edition: {
+          id: editionId,
+          format: searchResult.format || 'audiobook',
+        },
+        _isSearchResult: false, // It's already in library
+        _matchingScore: searchResult._matchingScore,
+        _needsBookIdLookup: false,
+        _matchType: 'title_author_exact_edition',
+        _tier: 3,
+      };
+    }
+
+    // If we have a book ID, check if we have any edition of this book
+    if (bookId) {
+      const existingByBook = this._findUserBookByBookId(bookId);
+      if (existingByBook) {
+        logger.debug('Found different edition of same book in user library', {
+          searchResultTitle: searchResult.title,
+          searchEditionId: editionId,
+          foundUserBookId: existingByBook.id,
+          foundBookId: existingByBook.book.id,
+          libraryTitle: existingByBook.book.title,
+        });
+
+        // Find the user's preferred edition (first one found)
+        const userEdition = existingByBook.book.editions?.[0];
+        const userEditionId = userEdition?.id || editionId;
+
+        return {
+          userBook: existingByBook,
+          edition: {
+            id: userEditionId,
+            format: userEdition?.format || searchResult.format || 'audiobook',
+          },
+          _isSearchResult: false, // Use existing library book
+          _matchingScore: searchResult._matchingScore,
+          _needsBookIdLookup: false,
+          _matchType: 'title_author_different_edition',
+          _tier: 3,
+        };
+      }
+    }
+
+    // No existing edition found - this will need auto-add
+    logger.debug('No existing edition found, will need auto-add', {
+      searchResultTitle: searchResult.title,
+      searchEditionId: editionId,
+      searchBookId: bookId,
+    });
+
+    // Create match object for auto-add
     const match = {
       userBook: {
         id: bookId || editionId, // Fallback to edition ID if book ID missing
@@ -357,6 +441,8 @@ export class TitleAuthorMatcher {
       _isSearchResult: true,
       _matchingScore: searchResult._matchingScore,
       _needsBookIdLookup: !bookId, // Need lookup if we don't have book ID
+      _matchType: 'title_author_auto_add',
+      _tier: 3,
     };
 
     return match;
@@ -389,6 +475,22 @@ export class TitleAuthorMatcher {
     logger.warn(
       'No user library lookup function available in TitleAuthorMatcher',
     );
+    return null;
+  }
+
+  /**
+   * Find user book by book ID using the provided implementation
+   * @param {string} bookId - Book ID to find
+   * @returns {Object|null} - User book or null
+   * @private
+   */
+  _findUserBookByBookId(bookId) {
+    // Use the implementation provided by BookMatcher if available
+    if (this._findUserBookByBookIdImpl) {
+      return this._findUserBookByBookIdImpl(bookId);
+    }
+
+    logger.warn('No book ID lookup function available in TitleAuthorMatcher');
     return null;
   }
 

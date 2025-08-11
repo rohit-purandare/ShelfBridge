@@ -384,9 +384,13 @@ export class SyncResultFormatter {
           `   Progress: ${book.progress.before.toFixed(1)}% → ${book.progress.after.toFixed(1)}% ${changeStr}`,
         );
       } else {
-        console.log(
-          `   Progress: ${book.progress.before.toFixed(1)}% (unchanged since last sync)`,
-        );
+        // Check if this was actually skipped vs unchanged
+        const wasSkipped =
+          book.status === 'skipped' && book.reason !== 'Progress unchanged';
+        const message = wasSkipped
+          ? `   Progress: ${book.progress.before.toFixed(1)}%`
+          : `   Progress: ${book.progress.before.toFixed(1)}% (unchanged since last sync)`;
+        console.log(message);
       }
     } else if (book.progress.before !== null) {
       console.log(`   Progress: ${book.progress.before.toFixed(1)}%`);

@@ -103,7 +103,7 @@ export function extractTitle(bookData) {
   const titleFields = ['title', 'name'];
 
   for (const field of titleFields) {
-    if (bookData[field]) {
+    if (bookData[field] && typeof bookData[field] === 'string') {
       return bookData[field].trim();
     }
   }
@@ -111,7 +111,10 @@ export function extractTitle(bookData) {
   // Check metadata object
   if (bookData.metadata) {
     for (const field of titleFields) {
-      if (bookData.metadata[field]) {
+      if (
+        bookData.metadata[field] &&
+        typeof bookData.metadata[field] === 'string'
+      ) {
         return bookData.metadata[field].trim();
       }
     }
@@ -120,7 +123,10 @@ export function extractTitle(bookData) {
   // Check media metadata
   if (bookData.media && bookData.media.metadata) {
     for (const field of titleFields) {
-      if (bookData.media.metadata[field]) {
+      if (
+        bookData.media.metadata[field] &&
+        typeof bookData.media.metadata[field] === 'string'
+      ) {
         return bookData.media.metadata[field].trim();
       }
     }
@@ -343,7 +349,7 @@ export function extractSeries(bookData) {
 
   // Check direct fields
   for (const field of seriesFields) {
-    if (bookData[field]) {
+    if (bookData[field] && typeof bookData[field] === 'string') {
       series.name = bookData[field].trim();
       break;
     }
@@ -360,7 +366,10 @@ export function extractSeries(bookData) {
   if (bookData.metadata) {
     if (!series.name) {
       for (const field of seriesFields) {
-        if (bookData.metadata[field]) {
+        if (
+          bookData.metadata[field] &&
+          typeof bookData.metadata[field] === 'string'
+        ) {
           series.name = bookData.metadata[field].trim();
           break;
         }
@@ -384,7 +393,10 @@ export function extractSeries(bookData) {
   if (bookData.media && bookData.media.metadata) {
     if (!series.name) {
       for (const field of seriesFields) {
-        if (bookData.media.metadata[field]) {
+        if (
+          bookData.media.metadata[field] &&
+          typeof bookData.media.metadata[field] === 'string'
+        ) {
           series.name = bookData.media.metadata[field].trim();
           break;
         }
