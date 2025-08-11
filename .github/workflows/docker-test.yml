@@ -58,10 +58,14 @@ jobs:
           LOWER_REPO=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
 
           # Use the head SHA from the triggering build (short 7 chars)
+          # Note: Use the workflow_run's head_sha which is the commit that triggered the Docker Build
           SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
 
           IMAGE_TAG="ghcr.io/${LOWER_REPO}:sha-${SHORT_SHA}"
           echo "Testing image: ${IMAGE_TAG}"
+          echo "Workflow run head SHA: ${{ github.event.workflow_run.head_sha }}"
+          echo "Current context SHA: ${{ github.sha }}"
+          echo "Branch: ${{ github.event.workflow_run.head_branch }}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Build image for PR testing
