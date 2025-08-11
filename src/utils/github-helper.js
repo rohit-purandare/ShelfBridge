@@ -309,7 +309,7 @@ export function getProjectInfo() {
     name: 'ShelfBridge',
     repository: GITHUB_URL,
     issues: GITHUB_ISSUES_URL,
-    wiki: `${GITHUB_URL}/wiki`,
+    wiki: `${GITHUB_URL}/blob/main/wiki/Home.md`,
     discussions: `${GITHUB_URL}/discussions`,
     releases: `${GITHUB_URL}/releases`,
   };
