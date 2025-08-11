@@ -21,15 +21,10 @@ export class SyncCommand extends BaseCommand {
   }
 
   async execute(options) {
-    let config, globalConfig, users;
-
     // Validate configuration first
     await this.validateConfiguration(this.shouldSkipValidation());
 
-    const { config: cfg, globalConfig: gc, users: u } = this.getConfiguration();
-    config = cfg;
-    globalConfig = gc;
-    users = u;
+    const { config, globalConfig, users } = this.getConfiguration();
 
     // Override dry_run from config if --dry-run flag is used
     if (options.dryRun || this.isDryRun()) {

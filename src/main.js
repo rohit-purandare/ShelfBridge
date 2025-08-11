@@ -2,26 +2,23 @@
 
 import { Command } from 'commander';
 import { Config } from './config.js';
-import { ConfigValidator } from './config-validator.js';
+
 import { SyncManager } from './sync-manager.js';
 import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import { testApiConnections } from './utils/api-testing.js';
 import { currentVersion } from './version.js';
-import cron from 'node-cron';
+
 import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Semaphore } from './utils/concurrency.js';
-import {
-  formatStartupMessage,
-  formatWelcomeMessage,
-} from './utils/github-helper.js';
+
 import { SyncResultFormatter } from './display/SyncResultFormatter.js';
 import { CommandRegistry } from './cli/CommandRegistry.js';
-import inquirer from 'inquirer';
-import fs from 'fs';
-import cronstrue from 'cronstrue';
+
+
+
 
 const program = new Command();
 
@@ -55,49 +52,7 @@ commandRegistry.configureCommands(program);
 /**
  * Validate configuration on startup
  */
-async function validateConfigurationOnStartup(skipValidation = false) {
-  if (skipValidation) {
-    logger.debug('Skipping configuration validation');
-    return;
-  }
 
-  try {
-    logger.debug('Validating configuration...');
-
-    const config = new Config();
-    const validator = new ConfigValidator();
-
-    // Validate configuration structure
-    const validationResult = await validator.validateConfiguration(config);
-
-    if (!validationResult.valid) {
-      logger.error('Configuration validation failed');
-      console.error(validator.formatErrors(validationResult));
-
-      // Show help for fixing configuration
-      console.log('\n' + '='.repeat(50));
-      console.log('Configuration Help:');
-      console.log('='.repeat(50));
-      console.log(validator.generateHelpText());
-
-      process.exit(1);
-    }
-
-    logger.debug('Configuration validation passed');
-  } catch (error) {
-    logger.logErrorWithIssueLink('Configuration validation failed', error, {
-      operation: 'config_validation',
-      component: 'config_validator',
-      config_file_exists: fs.existsSync('config/config.yaml'),
-      env_config_detected: !!process.env.SHELFBRIDGE_USER_0_ID,
-      severity: 'high',
-    });
-
-    console.error('\nPlease check your config/config.yaml file and try again.');
-
-    process.exit(1);
-  }
-}
 
 /**
  * Test API connections for all users

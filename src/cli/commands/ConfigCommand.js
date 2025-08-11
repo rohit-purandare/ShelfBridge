@@ -10,7 +10,7 @@ export class ConfigCommand extends BaseCommand {
     this.showConfig = showConfigFn;
   }
 
-  async execute(options) {
+  async execute(_options) {
     try {
       // Validate configuration first
       await this.validateConfiguration(this.shouldSkipValidation());

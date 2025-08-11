@@ -19,7 +19,7 @@ export class InteractiveCommand extends BaseCommand {
     this.registerCleanup = registerCleanupFn;
   }
 
-  async execute(options) {
+  async execute(_options) {
     // Show welcome message
     console.log(formatWelcomeMessage(currentVersion));
 

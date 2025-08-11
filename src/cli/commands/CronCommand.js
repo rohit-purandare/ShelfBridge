@@ -14,7 +14,7 @@ export class CronCommand extends BaseCommand {
     this.showNextScheduledSync = showNextScheduledSyncFn;
   }
 
-  async execute(options) {
+  async execute(_options) {
     // Show startup message
     console.log(formatStartupMessage('Cron Sync', currentVersion));
 
@@ -90,7 +90,7 @@ export class StartCommand extends BaseCommand {
     return command;
   }
 
-  async execute(options) {
+  async execute(_options) {
     // Show startup message
     console.log(formatStartupMessage('Scheduled Sync', currentVersion));
 

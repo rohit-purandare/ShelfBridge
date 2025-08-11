@@ -9,8 +9,8 @@ export class SchemaCommand extends BaseCommand {
     super('schema', 'Check Hardcover GraphQL schema');
   }
 
-  async execute(options) {
-    const { config, users } = this.getConfiguration();
+  async execute(_options) {
+    const { config: _config, users } = this.getConfiguration();
 
     if (users.length === 0) {
       console.error('No users configured');
@@ -47,8 +47,8 @@ export class SchemaDetailCommand extends BaseCommand {
     super('schema-detail', 'Get detailed schema information for update_user_book_read');
   }
 
-  async execute(options) {
-    const { config, users } = this.getConfiguration();
+  async execute(_options) {
+    const { config: _config, users } = this.getConfiguration();
 
     if (users.length === 0) {
       console.error('No users configured');
@@ -131,8 +131,8 @@ export class SchemaInputsCommand extends BaseCommand {
     super('schema-inputs', 'Print all input types and their fields from the schema');
   }
 
-  async execute(options) {
-    const { config, users } = this.getConfiguration();
+  async execute(_options) {
+    const { config: _config, users } = this.getConfiguration();
 
     if (users.length === 0) {
       console.error('No users configured');

@@ -41,7 +41,7 @@ export class BaseCommand {
    * Add command-specific options
    * Subclasses should override this method
    */
-  addOptions(command) {
+  addOptions(_command) {
     // Default: no additional options
   }
 
@@ -49,7 +49,7 @@ export class BaseCommand {
    * Execute the command
    * Subclasses must implement this method
    */
-  async execute(options) {
+  async execute(_options) {
     throw new Error(`Command ${this.name} must implement execute() method`);
   }
 
