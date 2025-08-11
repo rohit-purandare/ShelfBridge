@@ -1,7 +1,15 @@
+# Pull Request Labeler Workflow
+# Purpose: Automatically label pull requests based on changed files
+# Triggers: PR opened, synchronized, reopened, or edited
+# Configuration: .github/labeler.yml
 name: 'Pull Request Labeler'
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: labeler-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   label:

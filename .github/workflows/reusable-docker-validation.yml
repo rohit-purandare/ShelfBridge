@@ -1,0 +1,209 @@
+# Reusable Docker Validation Workflow
+# Purpose: Standardized Docker image testing and validation
+# Usage: Called by docker-test.yml and other workflows that need Docker validation
+# Features: Comprehensive runtime testing, native modules, database operations
+
+name: Reusable Docker Validation
+
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        description: 'Docker image tag to test'
+        required: true
+        type: string
+      registry:
+        description: 'Container registry (default: ghcr.io)'
+        type: string
+        default: 'ghcr.io'
+      test-environment:
+        description: 'Test environment context'
+        type: string
+        default: 'docker'
+      skip-pull:
+        description: 'Skip pulling image (for locally built images)'
+        type: boolean
+        default: false
+    secrets:
+      TEST_USER_ID:
+        description: 'Test user ID for configuration'
+        required: false
+      TEST_ABS_URL:
+        description: 'Test AudioBookshelf URL'
+        required: false
+      TEST_ABS_TOKEN:
+        description: 'Test AudioBookshelf token'
+        required: false
+      TEST_HARDCOVER_TOKEN:
+        description: 'Test Hardcover token'
+        required: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        if: inputs.skip-pull != true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        if: inputs.skip-pull != true
+        run: |
+          echo "📥 Pulling Docker image: ${{ inputs.image-tag }}"
+          if ! docker pull "${{ inputs.image-tag }}"; then
+            echo "❌ Failed to pull image: ${{ inputs.image-tag }}"
+            exit 1
+          fi
+          echo "✅ Image pulled successfully"
+
+      - name: Test Docker image native modules
+        run: |
+          echo "🧪 CRITICAL: Testing Docker image native modules compatibility..."
+          echo "Testing image: ${{ inputs.image-tag }}"
+
+          if docker run --rm \
+            -e SHELFBRIDGE_USER_0_ID="${{ secrets.TEST_USER_ID || 'test_user' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_URL="${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_TOKEN="${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}" \
+            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN="${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}" \
+            --entrypoint="" \
+            "${{ inputs.image-tag }}" \
+            npm run test:native; then
+            echo "✅ Docker image native modules test passed"
+          else
+            echo "❌ CRITICAL FAILURE: Native modules are broken in Docker image"
+            exit 1
+          fi
+
+      - name: Test better-sqlite3 functionality
+        run: |
+          echo "🧪 CRITICAL: Testing better-sqlite3 database operations in Docker..."
+          echo "Testing database operations in image: ${{ inputs.image-tag }}"
+
+          if docker run --rm --entrypoint="" "${{ inputs.image-tag }}" node -e "
+            console.log('🔍 Testing better-sqlite3 comprehensive functionality...');
+            const db = require('better-sqlite3')(':memory:');
+            
+            // Test table creation
+            db.exec('CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value REAL)');
+            console.log('✅ Table creation successful');
+            
+            // Test insert operations
+            const insert = db.prepare('INSERT INTO test_table (name, value) VALUES (?, ?)');
+            insert.run('test1', 123.45);
+            insert.run('test2', 678.90);
+            console.log('✅ Insert operations successful');
+            
+            // Test query operations
+            const rows = db.prepare('SELECT * FROM test_table ORDER BY id').all();
+            if (rows.length !== 2 || rows[0].name !== 'test1') {
+              throw new Error('Query verification failed');
+            }
+            console.log('✅ Query operations successful');
+            
+            // Test transaction support
+            const transaction = db.transaction(() => {
+              insert.run('test3', 999.99);
+              insert.run('test4', 111.11);
+            });
+            transaction();
+            const count = db.prepare('SELECT COUNT(*) as count FROM test_table').get().count;
+            if (count !== 4) {
+              throw new Error('Transaction test failed');
+            }
+            console.log('✅ Transaction support successful');
+            
+            db.close();
+            console.log('🎉 ALL better-sqlite3 tests passed - database is fully functional!');
+          "; then
+            echo "✅ better-sqlite3 comprehensive testing passed"
+          else
+            echo "❌ CRITICAL FAILURE: better-sqlite3 database operations failed"
+            exit 1
+          fi
+
+      - name: Test application startup
+        run: |
+          echo "🧪 Testing full application startup in Docker..."
+          echo "Testing application startup in image: ${{ inputs.image-tag }}"
+
+          # Test version command
+          if docker run --rm --entrypoint="" "${{ inputs.image-tag }}" node src/main.js --version; then
+            echo "✅ Application version command passed"
+          else
+            echo "❌ CRITICAL FAILURE: Application version command failed"
+            exit 1
+          fi
+
+          # Test help command
+          if docker run --rm --entrypoint="" "${{ inputs.image-tag }}" node src/main.js --help >/dev/null 2>&1; then
+            echo "✅ Application help command passed"
+          else
+            echo "❌ CRITICAL FAILURE: Application help command failed"
+            exit 1
+          fi
+
+      - name: Test configuration validation
+        run: |
+          echo "🧪 Testing configuration validation in Docker..."
+          echo "Testing configuration in image: ${{ inputs.image-tag }}"
+
+          if docker run --rm \
+            -e SHELFBRIDGE_USER_0_ID="${{ secrets.TEST_USER_ID || 'test_user' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_URL="${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_TOKEN="${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}" \
+            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN="${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}" \
+            --entrypoint="" \
+            "${{ inputs.image-tag }}" \
+            node src/main.js validate >/dev/null 2>&1; then
+            echo "✅ Configuration validation tests passed"
+          else
+            echo "❌ CRITICAL FAILURE: Configuration validation failed"
+            exit 1
+          fi
+
+      - name: Test cache functionality
+        run: |
+          echo "🧪 Testing cache/database functionality in Docker..."
+          echo "Testing cache functionality in image: ${{ inputs.image-tag }}"
+
+          if docker run --rm \
+            -e SHELFBRIDGE_USER_0_ID="${{ secrets.TEST_USER_ID || 'test_user' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_URL="${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}" \
+            -e SHELFBRIDGE_USER_0_ABS_TOKEN="${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}" \
+            -e SHELFBRIDGE_USER_0_HARDCOVER_TOKEN="${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}" \
+            --entrypoint="" \
+            "${{ inputs.image-tag }}" \
+            npm run cache -- --show >/dev/null 2>&1; then
+            echo "✅ Cache functionality tests passed"
+          else
+            echo "❌ CRITICAL FAILURE: Cache functionality is broken"
+            exit 1
+          fi
+
+      - name: Validation summary
+        run: |
+          echo "🎉 ALL CRITICAL DOCKER TESTS PASSED!"
+          echo ""
+          echo "✅ Tests completed successfully:"
+          echo "  • Native modules compatibility"
+          echo "  • better-sqlite3 database operations (GLIBC/musl compatibility)"
+          echo "  • Application startup and basic functionality"
+          echo "  • Configuration validation and environment handling"
+          echo "  • Cache/database initialization and operations"
+          echo ""
+          echo "🚀 Docker image is verified and ready for deployment"
+          echo "📦 Image: ${{ inputs.image-tag }}"
+          echo "🔒 These tests prevent broken releases like GLIBC compatibility issues"

@@ -1,3 +1,7 @@
+# Release Please Workflow
+# Purpose: Automated versioning and release management using Release Please
+# Triggers: Push to main branch
+# Actions: Creates release PRs, publishes releases, triggers Docker builds for releases
 name: Release Please
 
 on:

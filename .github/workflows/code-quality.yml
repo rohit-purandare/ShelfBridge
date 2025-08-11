@@ -1,3 +1,7 @@
+# Code Quality Workflow
+# Purpose: Static analysis, linting, security audits, and configuration validation
+# Triggers: Push to main, Pull requests to main
+# Checks: ESLint, dependency vulnerabilities, debug statements, configuration files
 name: Code Quality
 
 on:
@@ -6,9 +10,15 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: code-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
+  code-quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -18,11 +28,19 @@ jobs:
           node-version: '20.19.4'
           cache: 'npm'
 
+      - name: Cache ESLint results
+        uses: actions/cache@v4
+        with:
+          path: ~/.eslintcache
+          key: eslint-${{ runner.os }}-${{ hashFiles('**/*.js', '.eslintrc*', 'package-lock.json') }}
+          restore-keys: |
+            eslint-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npx eslint src/ --ext .js --max-warnings 0
+        run: npx eslint src/ --ext .js --max-warnings 0 --cache
         continue-on-error: false
 
       - name: Check for debug statements
@@ -50,15 +68,27 @@ jobs:
             echo "✅ No TODO comments found"
           fi
 
-      - name: Check dependencies
+      - name: Security audit
         run: |
-          echo "Running dependency security audit..."
+          echo "🔒 Running dependency security audit..."
           npm audit --audit-level=high || {
             echo "⚠️  High-severity vulnerabilities found"
             echo "💡 Run 'npm audit fix' to resolve automatically fixable issues"
             exit 1
           }
           echo "✅ No high-severity vulnerabilities found"
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "🔍 Checking for potential hardcoded secrets..."
+          SECRET_COUNT=$(grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " | wc -l || echo "0")
+          if [ "$SECRET_COUNT" -gt 0 ]; then
+            echo "⚠️  Found $SECRET_COUNT potential secret references:"
+            grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " || true
+            echo "💡 Review these for hardcoded credentials"
+          else
+            echo "✅ No obvious hardcoded secrets found"
+          fi
 
       - name: Check package.json scripts
         run: |
@@ -94,40 +124,4 @@ jobs:
           else
             echo "❌ config/config.yaml.example not found"
             exit 1
-          fi
-
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.4'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Security audit
-        run: |
-          echo "🔒 Running dependency security audit..."
-          npm audit --audit-level=high || {
-            echo "⚠️  High-severity vulnerabilities found"
-            echo "💡 Run 'npm audit fix' to resolve automatically fixable issues"
-            exit 1
-          }
-          echo "✅ No high-severity vulnerabilities found"
-
-      - name: Check for hardcoded secrets
-        run: |
-          echo "🔍 Checking for potential hardcoded secrets..."
-          SECRET_COUNT=$(grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " | wc -l || echo "0")
-          if [ "$SECRET_COUNT" -gt 0 ]; then
-            echo "⚠️  Found $SECRET_COUNT potential secret references:"
-            grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " || true
-            echo "💡 Review these for hardcoded credentials"
-          else
-            echo "✅ No obvious hardcoded secrets found"
           fi

@@ -1,3 +1,7 @@
+# Docker Build Workflow
+# Purpose: Build and publish multi-architecture Docker images
+# Triggers: Branch pushes (filtered by paths), Pull requests, Workflow calls from releases
+# Features: Multi-arch builds (amd64/arm64), GitHub Container Registry publishing, build attestations
 name: Docker Build
 
 on:
@@ -15,8 +19,26 @@ on:
       ]
     # Remove tags trigger to avoid duplicate builds during releases
     # Tags will be handled via workflow_call from version-and-release.yml
+    paths:
+      - 'Dockerfile'
+      - 'docker-*.sh'
+      - 'src/**'
+      - 'package*.json'
+      - '.github/workflows/docker-*.yml'
+      - '!**.md'
+      - '!docs/**'
+      - '!wiki/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-*.sh'
+      - 'src/**'
+      - 'package*.json'
+      - '.github/workflows/docker-*.yml'
+      - '!**.md'
+      - '!docs/**'
+      - '!wiki/**'
   workflow_call:
     inputs:
       ref:
