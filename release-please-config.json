@@ -25,15 +25,41 @@
           "section": "## ♻️ Code Refactoring",
           "hidden": false
         },
-        { "type": "docs", "section": "## 📚 Documentation", "hidden": true },
-        { "type": "style", "section": "## 🎨 Styles", "hidden": true },
-        { "type": "chore", "section": "## 🧹 Miscellaneous", "hidden": true },
-        { "type": "test", "section": "## 🧪 Tests", "hidden": true },
-        { "type": "build", "section": "## 🏗️ Build System", "hidden": true },
+        {
+          "type": "docs",
+          "section": "## 📚 Documentation",
+          "hidden": true,
+          "bump": false
+        },
+        {
+          "type": "style",
+          "section": "## 🎨 Styles",
+          "hidden": true,
+          "bump": false
+        },
+        {
+          "type": "chore",
+          "section": "## 🧹 Miscellaneous",
+          "hidden": true,
+          "bump": false
+        },
+        {
+          "type": "test",
+          "section": "## 🧪 Tests",
+          "hidden": true,
+          "bump": false
+        },
+        {
+          "type": "build",
+          "section": "## 🏗️ Build System",
+          "hidden": true,
+          "bump": false
+        },
         {
           "type": "ci",
           "section": "## 🔄 Continuous Integration",
-          "hidden": true
+          "hidden": true,
+          "bump": false
         }
       ],
       "extra-files": ["package.json", "package-lock.json"]
