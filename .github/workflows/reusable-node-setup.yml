@@ -1,0 +1,77 @@
+# Reusable Node.js Setup Workflow
+# Purpose: Standardized Node.js environment setup with caching
+# Usage: Called by other workflows that need Node.js environment
+# Features: Node version matrix support, npm caching, dependency installation
+
+name: Reusable Node.js Setup
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use (default: 20.19.4)'
+        type: string
+        default: '20.19.4'
+      node-version-matrix:
+        description: 'JSON array of Node.js versions for matrix builds'
+        type: string
+        default: '["20.x", "22.x"]'
+      use-matrix:
+        description: 'Whether to use matrix strategy for multiple Node versions'
+        type: boolean
+        default: false
+      install-dependencies:
+        description: 'Whether to run npm ci'
+        type: boolean
+        default: true
+      cache-key-suffix:
+        description: 'Additional suffix for cache key'
+        type: string
+        default: ''
+    outputs:
+      node-version:
+        description: 'Node.js version that was used'
+        value: ${{ jobs.setup.outputs.node-version }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        node-version: ${{ inputs.use-matrix && fromJson(inputs.node-version-matrix) || fromJson(format('["{0}"]', inputs.node-version)) }}
+
+    outputs:
+      node-version: ${{ matrix.node-version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Cache Node modules
+        if: inputs.cache-key-suffix != ''
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ matrix.node-version }}-${{ hashFiles('package-lock.json') }}-${{ inputs.cache-key-suffix }}
+          restore-keys: |
+            npm-${{ runner.os }}-${{ matrix.node-version }}-${{ hashFiles('package-lock.json') }}-
+            npm-${{ runner.os }}-${{ matrix.node-version }}-
+
+      - name: Install dependencies
+        if: inputs.install-dependencies
+        run: npm ci
+
+      - name: Verify installation
+        run: |
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Dependencies installed: $([ -d node_modules ] && echo 'Yes' || echo 'No')"

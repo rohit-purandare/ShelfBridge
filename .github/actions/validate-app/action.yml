@@ -1,0 +1,119 @@
+# Composite Action: Application Validation
+# Purpose: Reusable validation steps for ShelfBridge application
+# Usage: Called by CI workflows to perform common validation tasks
+
+name: 'Validate ShelfBridge Application'
+description: 'Performs common validation checks for the ShelfBridge application'
+
+inputs:
+  skip-native-tests:
+    description: 'Skip native module tests'
+    required: false
+    default: 'false'
+  skip-cache-tests:
+    description: 'Skip cache functionality tests'
+    required: false
+    default: 'false'
+  test-environment:
+    description: 'Test environment (ci, docker, local)'
+    required: false
+    default: 'ci'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Verify main entry point
+      shell: bash
+      run: |
+        echo "🧪 Testing main entry point..."
+        if ! node src/main.js --help >/dev/null 2>&1; then
+          echo "❌ CRITICAL FAILURE: Main entry point broken"
+          exit 1
+        fi
+        echo "✅ Main entry point working"
+
+    - name: Check for required files
+      shell: bash
+      run: |
+        echo "🧪 Checking required files..."
+        if [ ! -f "config/config.yaml.example" ]; then
+          echo "❌ CRITICAL FAILURE: config/config.yaml.example not found"
+          exit 1
+        fi
+        echo "✅ Required files present"
+
+    - name: Test native modules compatibility
+      if: inputs.skip-native-tests != 'true'
+      shell: bash
+      run: |
+        echo "🧪 Testing native modules compatibility..."
+        if ! npm run test:native; then
+          echo "❌ CRITICAL FAILURE: Native modules broken"
+          exit 1
+        fi
+        echo "✅ Native modules compatible"
+
+    - name: Test cache functionality
+      if: inputs.skip-cache-tests != 'true'
+      shell: bash
+      env:
+        SHELFBRIDGE_USER_0_ID: ${{ env.SHELFBRIDGE_USER_0_ID || 'test_user' }}
+        SHELFBRIDGE_USER_0_ABS_URL: ${{ env.SHELFBRIDGE_USER_0_ABS_URL || 'https://test.audiobookshelf.com' }}
+        SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ env.SHELFBRIDGE_USER_0_ABS_TOKEN || 'test_abs_token_1234567890' }}
+        SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
+      run: |
+        echo "🧪 Testing cache functionality..."
+        if ! npm run cache -- --show; then
+          echo "❌ CRITICAL FAILURE: Cache functionality broken"
+          exit 1
+        fi
+        echo "✅ Cache functionality working"
+
+    - name: Validate configuration
+      shell: bash
+      env:
+        SHELFBRIDGE_USER_0_ID: ${{ env.SHELFBRIDGE_USER_0_ID || 'test_user' }}
+        SHELFBRIDGE_USER_0_ABS_URL: ${{ env.SHELFBRIDGE_USER_0_ABS_URL || 'https://test.audiobookshelf.com' }}
+        SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ env.SHELFBRIDGE_USER_0_ABS_TOKEN || 'test_abs_token_1234567890' }}
+        SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
+      run: |
+        echo "🧪 Testing configuration validation..."
+        if ! node src/main.js validate >/dev/null 2>&1; then
+          echo "❌ CRITICAL FAILURE: Configuration validation failed"
+          exit 1
+        fi
+        echo "✅ Configuration validation passed"
+
+    - name: Run application tests
+      shell: bash
+      env:
+        SHELFBRIDGE_USER_0_ID: ${{ env.SHELFBRIDGE_USER_0_ID || 'test_user' }}
+        SHELFBRIDGE_USER_0_ABS_URL: ${{ env.SHELFBRIDGE_USER_0_ABS_URL || 'https://test.audiobookshelf.com' }}
+        SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ env.SHELFBRIDGE_USER_0_ABS_TOKEN || 'test_abs_token_1234567890' }}
+        SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
+      run: |
+        echo "🧪 Running application tests..."
+        if ! npm test; then
+          echo "❌ CRITICAL FAILURE: Application tests failed"
+          exit 1
+        fi
+        echo "✅ Application tests passed"
+
+    - name: Validation summary
+      shell: bash
+      run: |
+        echo "🎉 ALL VALIDATION TESTS PASSED!"
+        echo ""
+        echo "✅ Validation completed successfully:"
+        echo "  • Main entry point verification"
+        echo "  • Required files check"
+        if [ "${{ inputs.skip-native-tests }}" != "true" ]; then
+          echo "  • Native modules compatibility"
+        fi
+        if [ "${{ inputs.skip-cache-tests }}" != "true" ]; then
+          echo "  • Cache functionality"
+        fi
+        echo "  • Configuration validation"
+        echo "  • Application tests"
+        echo ""
+        echo "🚀 Application is ready for ${{ inputs.test-environment }} environment"

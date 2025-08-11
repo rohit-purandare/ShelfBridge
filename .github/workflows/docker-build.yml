@@ -1,3 +1,7 @@
+# Docker Build Workflow
+# Purpose: Build and publish multi-architecture Docker images
+# Triggers: Branch pushes (filtered by paths), Pull requests, Workflow calls from releases
+# Features: Multi-arch builds (amd64/arm64), GitHub Container Registry publishing, build attestations
 name: Docker Build
 
 on:
@@ -15,8 +19,26 @@ on:
       ]
     # Remove tags trigger to avoid duplicate builds during releases
     # Tags will be handled via workflow_call from version-and-release.yml
+    paths:
+      - 'Dockerfile'
+      - 'docker-*.sh'
+      - 'src/**'
+      - 'package*.json'
+      - '.github/workflows/docker-*.yml'
+      - '!**.md'
+      - '!docs/**'
+      - '!wiki/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-*.sh'
+      - 'src/**'
+      - 'package*.json'
+      - '.github/workflows/docker-*.yml'
+      - '!**.md'
+      - '!docs/**'
+      - '!wiki/**'
   workflow_call:
     inputs:
       ref:
@@ -66,7 +88,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ inputs.ref || github.ref }}
           # Fetch tags for semver extraction when building releases
@@ -74,7 +96,7 @@ jobs:
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -87,7 +109,7 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           images: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
           tags: |
@@ -100,15 +122,15 @@ jobs:
             type=raw,value=latest,enable=${{ (inputs.is_release || github.ref_name == 'main') && github.event_name != 'pull_request' }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
 
       - name: Build Docker image (PR validation)
         if: github.event_name == 'pull_request'
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@16ebe778df0e7752d2cfcbd924afdbbd89c1a755 # v6.6.1
         with:
           context: .
           push: false
@@ -130,7 +152,7 @@ jobs:
       - name: Build and push Docker image (multi-arch)
         if: github.event_name != 'pull_request'
         id: build-push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@16ebe778df0e7752d2cfcbd924afdbbd89c1a755 # v6.6.1
         with:
           context: .
           push: true

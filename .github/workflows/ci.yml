@@ -1,3 +1,7 @@
+# CI Workflow
+# Purpose: Run comprehensive tests across multiple Node.js versions
+# Triggers: Push to main, Pull requests to main
+# Tests: Application functionality, native modules, cache, configuration validation
 name: CI
 
 on:
@@ -6,18 +10,24 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         node-version: [20.x, 22.x]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -25,79 +35,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run application tests (CRITICAL)
+      - name: Validate ShelfBridge Application
+        uses: ./.github/actions/validate-app
         env:
-          # Test environment variables for configuration validation
-          SHELFBRIDGE_USER_0_ID: 'test_user'
-          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
-          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
-          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
-        run: |
-          echo "🧪 CRITICAL: Running application tests on Node ${{ matrix.node-version }}"
-          echo "⚠️  BUILD WILL FAIL if tests don't pass"
-          if ! npm test; then
-            echo "❌ CRITICAL FAILURE: Application tests failed on Node ${{ matrix.node-version }}"
-            echo "🚫 BLOCKING BUILD - Fix required before merge"
-            exit 1
-          fi
-          echo "✅ Application tests passed on Node ${{ matrix.node-version }}"
+          SHELFBRIDGE_USER_0_ID: ${{ secrets.TEST_USER_ID || 'test_user' }}
+          SHELFBRIDGE_USER_0_ABS_URL: ${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}
+          SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}
+          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
+        with:
+          test-environment: 'ci'
 
       - name: Run API connection smoke tests (non-blocking)
         env:
-          SHELFBRIDGE_USER_0_ID: 'test_user'
-          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
-          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
-          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
+          SHELFBRIDGE_USER_0_ID: ${{ secrets.TEST_USER_ID || 'test_user' }}
+          SHELFBRIDGE_USER_0_ABS_URL: ${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}
+          SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}
+          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
         run: |
           echo "🔌 Running API connection smoke tests on Node ${{ matrix.node-version }}"
           # Allow failures so external service downtime doesn't block PRs
           npm run test:connections || echo "⚠️  API connection tests failed – non-blocking"
-      - name: Test native modules compatibility (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing native modules compatibility on Node ${{ matrix.node-version }}"
-          echo "⚠️  BUILD WILL FAIL if native modules don't work"
-          if ! npm run test:native; then
-            echo "❌ CRITICAL FAILURE: Native modules broken on Node ${{ matrix.node-version }}"
-            echo "🚫 BLOCKING BUILD - Fix required before merge"
-            exit 1
-          fi
-          echo "✅ Native modules compatible with Node ${{ matrix.node-version }}"
-
-      - name: Test cache functionality (CRITICAL)
-        env:
-          # Test environment variables for cache tests
-          SHELFBRIDGE_USER_0_ID: 'test_user'
-          SHELFBRIDGE_USER_0_ABS_URL: 'https://test.audiobookshelf.com'
-          SHELFBRIDGE_USER_0_ABS_TOKEN: 'test_abs_token_1234567890'
-          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: 'test_hc_token_1234567890'
-        run: |
-          echo "🧪 CRITICAL: Testing cache functionality on Node ${{ matrix.node-version }}"
-          echo "⚠️  BUILD WILL FAIL if cache doesn't work"
-          if ! npm run cache -- --show; then
-            echo "❌ CRITICAL FAILURE: Cache functionality broken on Node ${{ matrix.node-version }}"
-            echo "🚫 BLOCKING BUILD - Fix required before merge"
-            exit 1
-          fi
-          echo "✅ Cache functionality working on Node ${{ matrix.node-version }}"
-
-      - name: Verify main entry point (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Testing main entry point on Node ${{ matrix.node-version }}"
-          echo "⚠️  BUILD WILL FAIL if main entry point doesn't work"
-          if ! node src/main.js --help >/dev/null 2>&1; then
-            echo "❌ CRITICAL FAILURE: Main entry point broken on Node ${{ matrix.node-version }}"
-            echo "🚫 BLOCKING BUILD - Fix required before merge"
-            exit 1
-          fi
-          echo "✅ Main entry point working on Node ${{ matrix.node-version }}"
-
-      - name: Check for required files (CRITICAL)
-        run: |
-          echo "🧪 CRITICAL: Checking required files on Node ${{ matrix.node-version }}"
-          echo "⚠️  BUILD WILL FAIL if required files are missing"
-          if [ ! -f "config/config.yaml.example" ]; then
-            echo "❌ CRITICAL FAILURE: config/config.yaml.example not found"
-            echo "🚫 BLOCKING BUILD - Fix required before merge"
-            exit 1
-          fi
-          echo "✅ Required files present on Node ${{ matrix.node-version }}"
