@@ -62,7 +62,8 @@
           "bump": false
         }
       ],
-      "extra-files": ["package.json", "package-lock.json"]
+      "extra-files": ["package.json", "package-lock.json"],
+      "include-component-in-tag": false
     }
   }
 }
