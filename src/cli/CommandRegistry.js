@@ -1,5 +1,12 @@
 import { SyncCommand } from './commands/SyncCommand.js';
 import { InteractiveCommand } from './commands/InteractiveCommand.js';
+import { TestCommand } from './commands/TestCommand.js';
+import { ValidateCommand } from './commands/ValidateCommand.js';
+import { ConfigCommand } from './commands/ConfigCommand.js';
+import { CacheCommand } from './commands/CacheCommand.js';
+import { DebugCommand } from './commands/DebugCommand.js';
+import { SchemaCommand, SchemaDetailCommand, SchemaInputsCommand } from './commands/SchemaCommands.js';
+import { CronCommand, StartCommand } from './commands/CronCommand.js';
 
 /**
  * Registry for all CLI commands
@@ -17,21 +24,27 @@ export class CommandRegistry {
     const {
       syncUserFn,
       registerCleanupFn,
-      // Add other dependencies as needed
+      testUserFn,
+      testAllConnectionsFn,
+      showConfigFn,
+      debugUserFn,
+      runScheduledSyncFn,
+      showNextScheduledSyncFn,
     } = dependencies;
 
-    // Register commands
+    // Register all commands
     this.register(new SyncCommand(syncUserFn));
     this.register(new InteractiveCommand(syncUserFn, registerCleanupFn));
-
-    // TODO: Register other commands as they are extracted
-    // this.register(new TestCommand(...));
-    // this.register(new ValidateCommand(...));
-    // this.register(new ConfigCommand(...));
-    // this.register(new CacheCommand(...));
-    // this.register(new CronCommand(...));
-    // this.register(new DebugCommand(...));
-    // this.register(new SchemaCommand(...));
+    this.register(new TestCommand(testUserFn));
+    this.register(new ValidateCommand(testAllConnectionsFn));
+    this.register(new ConfigCommand(showConfigFn));
+    this.register(new CacheCommand(registerCleanupFn));
+    this.register(new DebugCommand(debugUserFn));
+    this.register(new SchemaCommand());
+    this.register(new SchemaDetailCommand());
+    this.register(new SchemaInputsCommand());
+    this.register(new CronCommand(runScheduledSyncFn, showNextScheduledSyncFn));
+    this.register(new StartCommand(runScheduledSyncFn, showNextScheduledSyncFn));
   }
 
   /**
