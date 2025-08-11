@@ -8,8 +8,7 @@ on:
   workflow_run:
     workflows: ['Docker Build']
     types: [completed]
-    branches:
-      [
+    branches: [
         main,
         'feature/*',
         'feat/*',
@@ -18,6 +17,19 @@ on:
         'hotfix/*',
         'release/*',
         'ci/*',
+        'chore/*', # Maintenance tasks
+        'docs/*', # Documentation updates
+        'test/*', # Test-related changes
+        'refactor/*', # Code refactoring
+        'perf/*', # Performance improvements
+        'style/*', # Code style changes
+        'build/*', # Build system changes
+        'dev/*', # Development branches
+        'experiment/*', # Experimental features
+        'poc/*', # Proof of concept
+        'demo/*', # Demo branches
+        'staging/*', # Staging branches
+        'patch/*', # Patch branches
       ]
     # Include pull request branches to test PR images built by docker-build.yml
   # Remove direct PR trigger - tests will run via workflow_run after docker-build completes
