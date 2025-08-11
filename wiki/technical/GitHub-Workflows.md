@@ -555,6 +555,51 @@ docker pull ghcr.io/rohit-purandare/shelfbridge:latest
 - **Smart main branch logic** - skips builds for Release Please commits, allows regular commits
 - **Single build per release** now gets tagged with all appropriate version tags (semver + latest)
 
+### 🏷️ Docker Release Tagging Fix (LATEST)
+
+**Fixed Issue:** Docker images were not getting proper semver tags during releases via `workflow_call`
+
+**Previous Problem:**
+
+- Release workflow called Docker build with `ref: v1.19.4` and `is_release: true`
+- Docker metadata action's semver detection logic failed in `workflow_call` context
+- Only SHA and branch-based tags were generated, missing version-specific tags
+- Users couldn't pull specific versions like `ghcr.io/rohit-purandare/shelfbridge:1.19.4`
+
+**Root Cause:**
+
+The semver tag enablement condition was incomplete:
+
+```yaml
+# BROKEN - didn't detect workflow_call version tags
+type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
+```
+
+In `workflow_call` context, `github.ref` doesn't start with `refs/tags/` when `inputs.ref` is a tag name.
+
+**Solution Applied:**
+
+```yaml
+# FIXED - properly detects workflow_call version tags
+type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
+```
+
+**Additional Fixes:**
+
+- **Updated release-please action** from deprecated `google-github-actions/release-please-action@v4` to `googleapis/release-please-action@v4`
+- **Added release-please configuration** for custom emoji release formatting (`🚀 ShelfBridge v1.19.5`)
+- **Enhanced git checkout** with proper fetch depth for semver extraction during releases
+- **Structured changelog sections** with emoji categorization (🔧 Bug Fixes, 🚀 Features, etc.)
+
+**Result:**
+
+Releases now properly generate all Docker image tags:
+
+- `ghcr.io/rohit-purandare/shelfbridge:1.19.5` (full version) ✅
+- `ghcr.io/rohit-purandare/shelfbridge:1.19` (major.minor) ✅
+- `ghcr.io/rohit-purandare/shelfbridge:1` (major) ✅
+- `ghcr.io/rohit-purandare/shelfbridge:latest` ✅
+
 **Benefits:**
 
 - ✅ **Eliminates duplicate builds** - only one Docker build per release

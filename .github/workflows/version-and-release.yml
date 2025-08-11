@@ -19,12 +19,11 @@ jobs:
     steps:
       - name: Release Please
         id: release
-        uses: google-github-actions/release-please-action@v4
+        uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
-          release-type: node
-          package-name: shelfbridge
-          changelog-types: '[{"type":"feat","section":"Features","hidden":false},{"type":"fix","section":"Bug Fixes","hidden":false},{"type":"perf","section":"Performance Improvements","hidden":false},{"type":"deps","section":"Dependencies","hidden":false},{"type":"revert","section":"Reverts","hidden":false},{"type":"docs","section":"Documentation","hidden":true},{"type":"style","section":"Styles","hidden":true},{"type":"chore","section":"Miscellaneous","hidden":true},{"type":"refactor","section":"Code Refactoring","hidden":false},{"type":"test","section":"Tests","hidden":true},{"type":"build","section":"Build System","hidden":true},{"type":"ci","section":"Continuous Integration","hidden":true}]'
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
   # Only run build and publish when a release is created
   build-and-publish:
