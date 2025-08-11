@@ -602,22 +602,28 @@ export class HardcoverClient {
     }
 
     try {
-      const result = await this._executeQuery(mutation, variables);
+      // Step 1: Update progress record
+      const progressResult = await this._executeQuery(mutation, variables);
       if (
-        result &&
-        result.update_user_book_read &&
-        result.update_user_book_read.user_book_read
+        !progressResult ||
+        !progressResult.update_user_book_read ||
+        !progressResult.update_user_book_read.user_book_read
       ) {
-        // Also update the book status to "Read" (status_id = 3)
-        const statusUpdated = await this.updateBookStatus(userBookId, 3);
-        if (!statusUpdated) {
-          logger.warn(
-            'Progress updated but failed to change book status to Read',
-          );
-        }
-        return result.update_user_book_read.user_book_read;
+        logger.error('Failed to update progress record for completion');
+        return false;
       }
-      return false;
+
+      // Step 2: Update book status to "Read" (status_id = 3) - this is required for completion
+      const statusUpdated = await this.updateBookStatus(userBookId, 3);
+      if (!statusUpdated) {
+        logger.error(
+          'Progress updated but failed to change book status to Read - completion operation failed',
+        );
+        return false;
+      }
+
+      logger.debug('Book successfully marked as completed with correct status');
+      return progressResult.update_user_book_read.user_book_read;
     } catch (error) {
       logger.error('Error marking book completed:', error.message);
       return false;
