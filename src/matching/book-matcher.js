@@ -43,8 +43,8 @@ export class BookMatcher {
 
     // Initialize matching strategies
     this.strategies = [
-      new AsinMatcher(),
-      new IsbnMatcher(),
+      new AsinMatcher(hardcoverClient),
+      new IsbnMatcher(hardcoverClient),
       new TitleAuthorMatcher(hardcoverClient, cache, config),
     ];
 
@@ -278,6 +278,7 @@ export class BookMatcher {
             absBook,
             extractedMetadata.identifiers,
             identifierLookup,
+            this.findUserBookByBookId.bind(this),
           );
         } else {
           // Title/Author strategy

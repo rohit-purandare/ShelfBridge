@@ -13,14 +13,19 @@ import { extractTitle } from '../utils/audiobookshelf-extractor.js';
  * Attempts to match books using ISBN identifiers
  */
 export class IsbnMatcher {
+  constructor(hardcoverClient = null) {
+    this.hardcoverClient = hardcoverClient;
+  }
+
   /**
    * Attempt to match a book using ISBN
    * @param {Object} absBook - Audiobookshelf book object
    * @param {Object} identifiers - Extracted identifiers from the book
    * @param {Object} identifierLookup - Lookup table of identifiers to Hardcover books
+   * @param {Function} findUserBookByBookId - Function to find user books by book ID (optional)
    * @returns {Object|null} - Hardcover match object or null if not found
    */
-  async findMatch(absBook, identifiers, identifierLookup) {
+  async findMatch(absBook, identifiers, identifierLookup, findUserBookByBookId = null) {
     const title = extractTitle(absBook) || 'Unknown Title';
 
     if (!identifiers.isbn) {
@@ -32,6 +37,56 @@ export class IsbnMatcher {
       logger.debug(
         `❌ ISBN ${identifiers.isbn} not found in user's Hardcover library for ${title}`,
       );
+      
+      // Try book-level matching if we have the necessary functions
+      if (this.hardcoverClient && findUserBookByBookId) {
+        logger.debug(`🔍 Attempting book-level ISBN search for ${title}`);
+        
+        try {
+          // Search Hardcover's global database for this ISBN
+          const searchResults = await this.hardcoverClient.searchBooksByIsbn(identifiers.isbn);
+          logger.debug(`ISBN search returned ${searchResults.length} results for ${identifiers.isbn}`);
+          
+          if (searchResults.length > 0) {
+            // Check if we have any edition of the same book
+            for (const result of searchResults) {
+              const bookId = result.book?.id;
+              if (bookId) {
+                logger.debug(`Checking if book ID ${bookId} exists in user library`);
+                const existingUserBook = findUserBookByBookId(bookId);
+                if (existingUserBook) {
+                  logger.debug(`📚 Found different edition of ${title} in library via ISBN book-level search`, {
+                    searchIsbn: identifiers.isbn,
+                    foundBookId: bookId,
+                    userBookId: existingUserBook.id,
+                    libraryTitle: existingUserBook.book.title,
+                  });
+
+                  // Find the user's preferred edition (first one found)
+                  const userEdition = existingUserBook.book.editions?.[0];
+                  const userEditionId = userEdition?.id;
+
+                  return {
+                    userBook: existingUserBook,
+                    edition: {
+                      id: userEditionId,
+                      format: userEdition?.format || 'unknown',
+                    },
+                    _matchType: 'isbn_cross_edition',
+                    _tier: 2,
+                    _needsScoring: false,
+                  };
+                }
+              }
+            }
+          }
+          
+          logger.debug(`❌ ISBN ${identifiers.isbn} not found in Hardcover's database for ${title}`);
+        } catch (error) {
+          logger.warn(`Error during ISBN book-level search for ${title}: ${error.message}`);
+        }
+      }
+      
       return null;
     }
 
