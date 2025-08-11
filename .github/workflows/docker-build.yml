@@ -69,6 +69,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
+          # Fetch tags for semver extraction when building releases
+          fetch-depth: ${{ inputs.is_release && '0' || '1' }}
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -92,9 +94,9 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
-            type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
+            type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
             type=raw,value=latest,enable=${{ (inputs.is_release || github.ref_name == 'main') && github.event_name != 'pull_request' }}
 
       - name: Set up QEMU
