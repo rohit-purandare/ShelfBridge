@@ -13,6 +13,15 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.19.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.3...v1.19.4) (2025-08-11)
+
+
+### Bug Fixes
+
+* add main branch trigger back to docker-build with release deduplication ([e5d9777](https://github.com/rohit-purandare/ShelfBridge/commit/e5d9777fd2e1afbdd610c3291fb0840f4cf67ac2))
+* add secrets inherit to reusable workflow call ([ea16d9a](https://github.com/rohit-purandare/ShelfBridge/commit/ea16d9a2a46cf5fc44ff4cd658d633d7ceddd665))
+* ensure book completion operations are atomic ([b09e614](https://github.com/rohit-purandare/ShelfBridge/commit/b09e61480ee1af0c17c76581391c00d489025f0e))
+
 ## [1.19.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.2...v1.19.3) (2025-08-10)
 
 
