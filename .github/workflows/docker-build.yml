@@ -6,8 +6,7 @@ name: Docker Build
 
 on:
   push:
-    branches:
-      [
+    branches: [
         main,
         'feature/*',
         'feat/*',
@@ -16,6 +15,19 @@ on:
         'hotfix/*',
         'release/*',
         'ci/*',
+        'chore/*', # Maintenance tasks
+        'docs/*', # Documentation updates
+        'test/*', # Test-related changes
+        'refactor/*', # Code refactoring
+        'perf/*', # Performance improvements
+        'style/*', # Code style changes
+        'build/*', # Build system changes
+        'dev/*', # Development branches
+        'experiment/*', # Experimental features
+        'poc/*', # Proof of concept
+        'demo/*', # Demo branches
+        'staging/*', # Staging branches
+        'patch/*', # Patch branches
       ]
     # Remove tags trigger to avoid duplicate builds during releases
     # Tags will be handled via workflow_call from version-and-release.yml

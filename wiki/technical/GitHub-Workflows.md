@@ -15,13 +15,13 @@ ShelfBridge uses **6 GitHub Actions workflows** to automate:
 
 ## 🔄 Workflow Summary
 
-| Workflow                                  | Trigger                           | Purpose                      | Status    |
-| ----------------------------------------- | --------------------------------- | ---------------------------- | --------- |
-| [CI Pipeline](#ci-pipeline)               | Push/PR to main                   | Test across Node.js versions | ✅ Active |
-| [Code Quality](#code-quality)             | Push/PR to main                   | ESLint + security scans      | ✅ Active |
-| [Release Automation](#release-automation) | Conventional commits to main      | Release Please automation    | ✅ Active |
-| [Docker Build](#docker-build)             | Main, feature branches, tags, PRs | Build, test, and publish     | ✅ Active |
-| [Docker Test](#docker-test)               | After Docker Build, PRs           | Comprehensive testing        | ✅ Active |
+| Workflow                                  | Trigger                                   | Purpose                      | Status    |
+| ----------------------------------------- | ----------------------------------------- | ---------------------------- | --------- |
+| [CI Pipeline](#ci-pipeline)               | Push/PR to main                           | Test across Node.js versions | ✅ Active |
+| [Code Quality](#code-quality)             | Push/PR to main                           | ESLint + security scans      | ✅ Active |
+| [Release Automation](#release-automation) | Conventional commits to main              | Release Please automation    | ✅ Active |
+| [Docker Build](#docker-build)             | Main, feature branches (14 patterns), PRs | Build, test, and publish     | ✅ Active |
+| [Docker Test](#docker-test)               | After Docker Build (14 patterns), PRs     | Comprehensive testing        | ✅ Active |
 
 | [Security Scan](#security-scan) | Push/PR, weekly schedule | Security auditing | ✅ Active |
 | [Pull Request Labeler](#pull-request-labeler) | Pull requests to main | Automatic PR labeling | ✅ Active |
@@ -490,7 +490,7 @@ on:
 ### Triggers
 
 - Push to `main` branch (regular commits only, skips Release Please commits)
-- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`)
+- Push to feature branches (`feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`, `chore/*`, `docs/*`, `test/*`, `refactor/*`, `perf/*`, `style/*`, `build/*`, `dev/*`, `experiment/*`, `poc/*`, `demo/*`, `staging/*`, `patch/*`)
 - Pull requests to `main` (build-only, all commits)
 - **Workflow call** from `version-and-release.yml` (for release builds)
 
@@ -743,7 +743,7 @@ This ensures that `latest` always points to the most recent stable build from th
 
 ### Triggers
 
-- `workflow_run` from Docker Build completion
+- `workflow_run` from Docker Build completion (supports all 14 branch patterns: `main`, `feature/*`, `feat/*`, `bugfix/*`, `fix/*`, `hotfix/*`, `release/*`, `ci/*`, `chore/*`, `docs/*`, `test/*`, `refactor/*`, `perf/*`, `style/*`, `build/*`, `dev/*`, `experiment/*`, `poc/*`, `demo/*`, `staging/*`, `patch/*`)
 - Pull requests to `main` (builds image locally for testing)
 - Manual `workflow_call` with image tags
 
