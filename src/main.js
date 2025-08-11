@@ -14,7 +14,12 @@ import cron from 'node-cron';
 import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Semaphore } from './utils/concurrency.js';
+import {
+  formatStartupMessage,
+  formatWelcomeMessage,
+} from './utils/github-helper.js';
 import inquirer from 'inquirer';
+import fs from 'fs';
 import cronstrue from 'cronstrue';
 
 const program = new Command();
@@ -63,13 +68,14 @@ async function validateConfigurationOnStartup(skipValidation = false) {
 
     logger.debug('Configuration validation passed');
   } catch (error) {
-    logger.error('Configuration validation error', {
-      error: error.message,
-      stack: error.stack,
+    logger.logErrorWithIssueLink('Configuration validation failed', error, {
+      operation: 'config_validation',
+      component: 'config_validator',
+      config_file_exists: fs.existsSync('config/config.yaml'),
+      env_config_detected: !!process.env.SHELFBRIDGE_USER_0_ID,
+      severity: 'high',
     });
 
-    console.error('\n❌ Configuration validation failed:');
-    console.error(`   ${error.message}`);
     console.error('\nPlease check your config/config.yaml file and try again.');
 
     process.exit(1);
@@ -147,13 +153,14 @@ program
   .option('-u, --user <userId>', 'Sync specific user')
   .option('--force', 'Force sync even if progress unchanged (ignores cache)')
   .action(async options => {
+    let config, globalConfig, users;
     try {
       // Validate configuration first
       await validateConfigurationOnStartup(program.opts().skipValidation);
 
-      const config = new Config();
-      const globalConfig = config.getGlobal();
-      const users = config.getUsers();
+      config = new Config();
+      globalConfig = config.getGlobal();
+      users = config.getUsers();
 
       // Override dry_run from config if --dry-run flag is used
       if (options.dryRun || program.opts().dryRun) {
@@ -166,6 +173,8 @@ program
       }
 
       // Show startup information
+      console.log(formatStartupMessage('Sync', currentVersion));
+
       logger.debug('Starting sync', {
         users: users.length,
         dryRun: globalConfig.dry_run,
@@ -203,7 +212,16 @@ program
       // Exit successfully after sync completion
       process.exit(0);
     } catch (error) {
-      logger.error('Sync failed', { error: error.message, stack: error.stack });
+      logger.logErrorWithIssueLink('Sync operation failed', error, {
+        operation: 'sync',
+        command: 'sync',
+        component: 'sync_manager',
+        users_count: users?.length || 0,
+        dry_run: globalConfig?.dry_run || false,
+        parallel_mode: globalConfig?.parallel || false,
+        force_sync: globalConfig?.force_sync || false,
+        severity: 'high',
+      });
       process.exit(1);
     }
   });
@@ -256,7 +274,10 @@ program
       // Exit successfully after test completion
       process.exit(0);
     } catch (error) {
-      logger.error('Test failed', { error: error.message, stack: error.stack });
+      logger.logErrorWithIssueLink('Connection test failed', error, {
+        operation: 'test',
+        command: 'test',
+      });
       process.exit(1);
     }
   });
@@ -290,9 +311,9 @@ program
       // Exit successfully after validation completion
       process.exit(0);
     } catch (error) {
-      logger.error('Validation failed', {
-        error: error.message,
-        stack: error.stack,
+      logger.logErrorWithIssueLink('Configuration validation failed', error, {
+        operation: 'validate',
+        command: 'validate',
       });
       process.exit(1);
     }
@@ -597,6 +618,9 @@ program
   .description('Start scheduled sync (runs in background)')
   .action(async () => {
     try {
+      // Show startup message
+      console.log(formatStartupMessage('Cron Sync', currentVersion));
+
       // Validate configuration first
       await validateConfigurationOnStartup(program.opts().skipValidation);
 
@@ -639,9 +663,9 @@ program
         // Do nothing, just keep the process alive
       }, 60000);
     } catch (error) {
-      logger.error('Cron setup failed', {
-        error: error.message,
-        stack: error.stack,
+      logger.logErrorWithIssueLink('Cron setup failed', error, {
+        operation: 'cron',
+        command: 'cron',
       });
       process.exit(1);
     }
@@ -653,6 +677,9 @@ program
   .description('Start in interactive mode')
   .action(async () => {
     try {
+      // Show welcome message
+      console.log(formatWelcomeMessage(currentVersion));
+
       // Validate configuration first
       await validateConfigurationOnStartup(program.opts().skipValidation);
 
@@ -661,9 +688,9 @@ program
       // Exit successfully after interactive mode completion
       process.exit(0);
     } catch (error) {
-      logger.error('Interactive mode failed', {
-        error: error.message,
-        stack: error.stack,
+      logger.logErrorWithIssueLink('Interactive mode failed', error, {
+        operation: 'interactive',
+        command: 'interactive',
       });
       process.exit(1);
     }
@@ -675,6 +702,9 @@ program
   .description('Start scheduled sync (default behavior)')
   .action(async () => {
     try {
+      // Show startup message
+      console.log(formatStartupMessage('Scheduled Sync', currentVersion));
+
       // Validate configuration first
       await validateConfigurationOnStartup(program.opts().skipValidation);
 
@@ -717,9 +747,9 @@ program
         // Do nothing, just keep the process alive
       }, 60000);
     } catch (error) {
-      logger.error('Scheduled sync failed', {
-        error: error.message,
-        stack: error.stack,
+      logger.logErrorWithIssueLink('Scheduled sync failed', error, {
+        operation: 'scheduled_sync',
+        command: 'start',
       });
       process.exit(1);
     }
@@ -2011,18 +2041,34 @@ process.on('SIGTERM', () => {
 });
 
 process.on('uncaughtException', error => {
-  logger.error('Uncaught exception, cleaning up...', {
-    error: error.message,
-    stack: error.stack,
+  logger.logErrorWithIssueLink('Uncaught exception occurred', error, {
+    operation: 'uncaught_exception',
+    component: 'process_handler',
+    severity: 'critical',
+    event_type: 'uncaught_exception',
+    process_argv: process.argv.slice(2).join(' '),
+    current_listeners: process.listenerCount('uncaughtException'),
   });
   executeCleanup();
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled promise rejection, cleaning up...', {
-    reason: reason?.toString(),
-    promise: promise?.toString(),
+  // Create an error object from the rejection reason
+  const error =
+    reason instanceof Error
+      ? reason
+      : new Error(reason?.toString() || 'Unknown rejection reason');
+
+  logger.logErrorWithIssueLink('Unhandled promise rejection occurred', error, {
+    operation: 'unhandled_rejection',
+    component: 'process_handler',
+    severity: 'critical',
+    event_type: 'unhandled_rejection',
+    promise_info: promise?.toString(),
+    process_argv: process.argv.slice(2).join(' '),
+    rejection_type: typeof reason,
+    current_listeners: process.listenerCount('unhandledRejection'),
   });
   executeCleanup();
   process.exit(1);

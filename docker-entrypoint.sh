@@ -95,7 +95,10 @@ if ! check_native_modules; then
     echo "  1. Pull the latest image: docker pull ghcr.io/rohit-purandare/shelfbridge:latest"
     echo "  2. Or rebuild completely: docker-compose build --no-cache"
     echo ""
-    echo "If this error persists, please report it as a bug."
+    echo "🐛 If this error persists, please report it:"
+    echo "   https://github.com/rohit-purandare/shelfbridge/issues/new"
+    echo ""
+    echo "📖 Documentation: https://github.com/rohit-purandare/shelfbridge/wiki"
     echo ""
     exit 1
 fi
@@ -145,7 +148,8 @@ else
     echo "   • Set SHELFBRIDGE_USER_0_ID, SHELFBRIDGE_USER_0_ABS_URL, etc."
     echo "   • No config file needed - perfect for containers!"
     echo ""
-    echo "📖 See documentation for complete setup guide"
+    echo "📖 Documentation: https://github.com/rohit-purandare/shelfbridge/wiki"
+    echo "🐛 Need help? https://github.com/rohit-purandare/shelfbridge/issues"
 fi
 echo ""
 
@@ -174,6 +178,9 @@ if [ -f "/app/config/config.yaml" ]; then
         echo "   • Restart container"
         echo ""
         echo "💡 Use 'node src/main.js validate' to check your configuration"
+        echo ""
+        echo "📖 Setup Guide: https://github.com/rohit-purandare/shelfbridge/wiki"
+        echo "🐛 Need help? https://github.com/rohit-purandare/shelfbridge/issues"
         echo ""
         echo "🚫 Exiting until configuration is updated..."
         exit 0

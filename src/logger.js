@@ -3,6 +3,7 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
 import { currentVersion } from './version.js';
+import { formatErrorWithIssueLink } from './utils/github-helper.js';
 
 // Get the version from shared utility
 const version = currentVersion;
@@ -235,6 +236,68 @@ logger.logCacheOperation = (operation, details) => {
     operation,
     ...details,
   });
+};
+
+// Error logging with GitHub issue link helper
+logger.logErrorWithIssueLink = async (message, error, context = {}) => {
+  // Capture comprehensive error context
+  const timestamp = new Date().toISOString();
+  const errorContext = {
+    timestamp,
+    error_type: error.constructor.name,
+    error_code: error.code,
+    error_errno: error.errno,
+    error_syscall: error.syscall,
+    error_path: error.path,
+    ...context,
+  };
+
+  // Log the error normally for file logging with full context
+  logger.error(message, {
+    error: error.message,
+    stack: error.stack,
+    ...errorContext,
+  });
+
+  try {
+    // Format and display user-friendly error with GitHub link to console only
+    const enhancedContext = {
+      version: version,
+      platform: process.platform,
+      node_version: process.version,
+      component: 'logger',
+      timestamp,
+      // Add any additional runtime context
+      memory_usage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+      process_uptime: `${Math.round(process.uptime())}s`,
+      ...errorContext,
+    };
+
+    const userFriendlyMessage = await formatErrorWithIssueLink(
+      message,
+      error,
+      enhancedContext,
+    );
+
+    // Use console directly to avoid winston formatting for this user-facing message
+    console.error('\n' + '='.repeat(60));
+    console.error('❌ ERROR');
+    console.error('='.repeat(60));
+    console.error(userFriendlyMessage);
+    console.error('='.repeat(60));
+  } catch (formatError) {
+    // If there's an error formatting the GitHub link, show a simpler message
+    console.error('\n' + '='.repeat(60));
+    console.error('❌ ERROR');
+    console.error('='.repeat(60));
+    console.error(
+      `${message}\n\n🐛 Report this issue: https://github.com/rohit-purandare/shelfbridge/issues/new`,
+    );
+    console.error('='.repeat(60));
+    logger.debug('Error formatting GitHub issue link', {
+      error: formatError.message,
+    });
+  }
 };
 
 export default logger;
