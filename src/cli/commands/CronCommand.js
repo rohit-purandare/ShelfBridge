@@ -14,6 +14,24 @@ export class CronCommand extends BaseCommand {
     this.showNextScheduledSync = showNextScheduledSyncFn;
   }
 
+  configure(program) {
+    const command = program
+      .command(this.name)
+      .description(this.description)
+      .action(async options => {
+        try {
+          await this.execute(options);
+          // Do NOT call exitSuccess() - the process should keep running
+          // The execute() method sets up the keep-alive mechanism
+        } catch (error) {
+          this.handleError(error, options);
+        }
+      });
+
+    this.addOptions(command);
+    return command;
+  }
+
   async execute(_options) {
     // Show startup message
     console.log(formatStartupMessage('Cron Sync', currentVersion));
@@ -44,7 +62,7 @@ export class CronCommand extends BaseCommand {
       },
       {
         timezone: cronConfig.timezone,
-      }
+      },
     );
 
     logger.info('Scheduled sync started. Press Ctrl+C to stop.');
@@ -77,15 +95,16 @@ export class StartCommand extends BaseCommand {
     const command = program
       .command(this.name, { isDefault: true })
       .description(this.description)
-      .action(async (options) => {
+      .action(async options => {
         try {
           await this.execute(options);
-          this.exitSuccess();
+          // Do NOT call exitSuccess() - the process should keep running
+          // The execute() method sets up the keep-alive mechanism
         } catch (error) {
           this.handleError(error, options);
         }
       });
-    
+
     this.addOptions(command);
     return command;
   }
@@ -120,7 +139,7 @@ export class StartCommand extends BaseCommand {
       },
       {
         timezone: cronConfig.timezone,
-      }
+      },
     );
 
     logger.info('Scheduled sync started. Press Ctrl+C to stop.');

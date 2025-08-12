@@ -260,7 +260,8 @@ shelfbridge cron
 - Runs initial sync immediately
 - Schedules recurring syncs based on `sync_schedule` configuration
 - Displays next scheduled sync time
-- Runs in foreground (use process manager for background)
+- Runs in foreground continuously (use process manager for background)
+- Process stays alive for scheduled syncs (does not exit after initial sync)
 
 **Output Format:**
 
@@ -471,6 +472,13 @@ shelfbridge
 shelfbridge start
 ```
 
+**Features:**
+
+- Runs initial sync immediately
+- Schedules recurring syncs based on `sync_schedule` configuration
+- Process stays alive continuously for scheduled syncs
+- Ideal for Docker containers and service deployments
+
 ## Interactive Mode
 
 Interactive mode provides a user-friendly menu interface:
@@ -529,10 +537,10 @@ shelfbridge debug --user alice
 ### Scheduled Operation
 
 ```bash
-# Start as service (foreground)
+# Start as service (foreground, stays alive for scheduled syncs)
 shelfbridge cron
 
-# Or use the default command
+# Or use the default command (ideal for Docker containers)
 shelfbridge
 ```
 
