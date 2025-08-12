@@ -69,23 +69,46 @@ export class Config {
       MAX_BOOKS_TO_FETCH: 'max_books_to_fetch',
       PAGE_SIZE: 'page_size',
       DUMP_FAILED_BOOKS: 'dump_failed_books',
+      DELAYED_UPDATES_ENABLED: 'delayed_updates.enabled',
+      DELAYED_UPDATES_SESSION_TIMEOUT: 'delayed_updates.session_timeout',
+      DELAYED_UPDATES_MAX_DELAY: 'delayed_updates.max_delay',
+      DELAYED_UPDATES_IMMEDIATE_COMPLETION:
+        'delayed_updates.immediate_completion',
     };
 
     for (const [envKey, configKey] of Object.entries(envMapping)) {
       const envVar = `SHELFBRIDGE_${envKey}`;
       const envValue = process.env[envVar];
 
-      // Only set from environment if not already set in YAML config
-      if (
-        envValue !== undefined &&
-        this.globalConfig[configKey] === undefined
-      ) {
+      if (envValue !== undefined) {
         const parsedValue = this._parseEnvironmentValue(envValue, configKey);
         if (parsedValue !== null) {
-          this.globalConfig[configKey] = parsedValue;
-          logger.debug(
-            `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
-          );
+          // Handle nested config paths (e.g., "delayed_updates.enabled")
+          if (configKey.includes('.')) {
+            const [parentKey, childKey] = configKey.split('.');
+
+            // Only set if not already defined in YAML
+            if (
+              !this.globalConfig[parentKey] ||
+              this.globalConfig[parentKey][childKey] === undefined
+            ) {
+              if (!this.globalConfig[parentKey]) {
+                this.globalConfig[parentKey] = {};
+              }
+              this.globalConfig[parentKey][childKey] = parsedValue;
+              logger.debug(
+                `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
+              );
+            }
+          } else {
+            // Handle simple config paths (existing behavior)
+            if (this.globalConfig[configKey] === undefined) {
+              this.globalConfig[configKey] = parsedValue;
+              logger.debug(
+                `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
+              );
+            }
+          }
         }
       }
     }
@@ -198,6 +221,8 @@ export class Config {
       'auto_add_books',
       'prevent_progress_regression',
       'dump_failed_books',
+      'delayed_updates.enabled',
+      'delayed_updates.immediate_completion',
     ];
     const numberKeys = [
       'min_progress_threshold',
@@ -209,6 +234,8 @@ export class Config {
       'audiobookshelf_rate_limit',
       'max_books_to_fetch',
       'page_size',
+      'delayed_updates.session_timeout',
+      'delayed_updates.max_delay',
     ];
 
     if (booleanKeys.includes(configKey)) {
@@ -237,6 +264,12 @@ export class Config {
       audiobookshelf_semaphore: 5,
       hardcover_semaphore: 1,
       dump_failed_books: true,
+      delayed_updates: {
+        enabled: false,
+        session_timeout: 900,
+        max_delay: 3600,
+        immediate_completion: true,
+      },
     };
 
     // Track which values were explicitly set vs using defaults

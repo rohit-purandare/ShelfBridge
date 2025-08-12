@@ -149,6 +149,51 @@ global:
 - **Description**: Automatically add books to Hardcover that don't exist
 - **Impact**: When true, creates new Hardcover entries for missing books
 
+#### `delayed_updates` (YAML Only)
+
+Session-based delayed update configuration for reducing API calls during active listening sessions:
+
+```yaml
+global:
+  delayed_updates:
+    enabled: false # Enable delayed updates (default: false)
+    session_timeout: 900 # Session timeout in seconds (default: 15 minutes)
+    max_delay: 3600 # Maximum delay in seconds (default: 1 hour)
+    immediate_completion: true # Always sync completion immediately (default: true)
+```
+
+- **Type**: Object with nested properties
+- **Default**: Disabled with conservative settings
+- **Environment**: Supported via `SHELFBRIDGE_DELAYED_UPDATES_*` variables
+- **Description**: Delays Hardcover API updates until reading sessions end to reduce API overhead
+
+**How it works:**
+
+1. Progress updates are stored locally during active sessions
+2. After `session_timeout` with no progress changes, final progress is sent to Hardcover
+3. Book completions always bypass delays for immediate sync (if `immediate_completion: true`)
+4. `max_delay` ensures updates never wait longer than specified time
+
+**Sub-properties:**
+
+- `enabled`: Boolean, default: `false` - Enable/disable the feature
+- `session_timeout`: Number (60-7200), default: `900` - Session timeout in seconds (1 minute to 2 hours)
+- `max_delay`: Number (300-86400), default: `3600` - Maximum delay in seconds (5 minutes to 24 hours)
+- `immediate_completion`: Boolean, default: `true` - Always sync book completion immediately
+
+**Environment Variables:**
+
+- `SHELFBRIDGE_DELAYED_UPDATES_ENABLED=true`
+- `SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT=900`
+- `SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY=3600`
+- `SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION=true`
+
+**Use Cases:**
+
+- Frequent sync schedules (every 15 minutes) with long listening sessions
+- Users concerned about API rate limiting
+- Reducing "noise" in Hardcover progress history during active reading
+
 ### Enhanced Matching Settings
 
 #### `title_author_matching` (YAML Only)
@@ -453,25 +498,29 @@ Environment variables are automatically parsed:
 
 ### Complete Environment Variable Reference
 
-| Environment Variable                      | Type             | Default        | YAML Equivalent               |
-| ----------------------------------------- | ---------------- | -------------- | ----------------------------- |
-| `SHELFBRIDGE_MIN_PROGRESS_THRESHOLD`      | Number (0-100)   | 5.0            | `min_progress_threshold`      |
-| `SHELFBRIDGE_WORKERS`                     | Number (1-10)    | 3              | `workers`                     |
-| `SHELFBRIDGE_PARALLEL`                    | Boolean          | true           | `parallel`                    |
-| `SHELFBRIDGE_TIMEZONE`                    | String           | UTC            | `timezone`                    |
-| `SHELFBRIDGE_DRY_RUN`                     | Boolean          | false          | `dry_run`                     |
-| `SHELFBRIDGE_FORCE_SYNC`                  | Boolean          | false          | `force_sync`                  |
-| `SHELFBRIDGE_MAX_BOOKS_TO_PROCESS`        | Number           | (none)         | `max_books_to_process`        |
-| `SHELFBRIDGE_SYNC_SCHEDULE`               | String           | "0 3 \* \* \*" | `sync_schedule`               |
-| `SHELFBRIDGE_AUTO_ADD_BOOKS`              | Boolean          | false          | `auto_add_books`              |
-| `SHELFBRIDGE_PREVENT_PROGRESS_REGRESSION` | Boolean          | true           | `prevent_progress_regression` |
-| `SHELFBRIDGE_HARDCOVER_SEMAPHORE`         | Number (1-10)    | 1              | `hardcover_semaphore`         |
-| `SHELFBRIDGE_HARDCOVER_RATE_LIMIT`        | Number (10-60)   | 55             | `hardcover_rate_limit`        |
-| `SHELFBRIDGE_AUDIOBOOKSHELF_SEMAPHORE`    | Number (1-10)    | 5              | `audiobookshelf_semaphore`    |
-| `SHELFBRIDGE_AUDIOBOOKSHELF_RATE_LIMIT`   | Number (60-1200) | 600            | `audiobookshelf_rate_limit`   |
-| `SHELFBRIDGE_MAX_BOOKS_TO_FETCH`          | Number           | (none)         | `max_books_to_fetch`          |
-| `SHELFBRIDGE_PAGE_SIZE`                   | Number (25-200)  | 100            | `page_size`                   |
-| `SHELFBRIDGE_DUMP_FAILED_BOOKS`           | Boolean          | true           | `dump_failed_books`           |
+| Environment Variable                               | Type               | Default        | YAML Equivalent                        |
+| -------------------------------------------------- | ------------------ | -------------- | -------------------------------------- |
+| `SHELFBRIDGE_MIN_PROGRESS_THRESHOLD`               | Number (0-100)     | 5.0            | `min_progress_threshold`               |
+| `SHELFBRIDGE_WORKERS`                              | Number (1-10)      | 3              | `workers`                              |
+| `SHELFBRIDGE_PARALLEL`                             | Boolean            | true           | `parallel`                             |
+| `SHELFBRIDGE_TIMEZONE`                             | String             | UTC            | `timezone`                             |
+| `SHELFBRIDGE_DRY_RUN`                              | Boolean            | false          | `dry_run`                              |
+| `SHELFBRIDGE_FORCE_SYNC`                           | Boolean            | false          | `force_sync`                           |
+| `SHELFBRIDGE_MAX_BOOKS_TO_PROCESS`                 | Number             | (none)         | `max_books_to_process`                 |
+| `SHELFBRIDGE_SYNC_SCHEDULE`                        | String             | "0 3 \* \* \*" | `sync_schedule`                        |
+| `SHELFBRIDGE_AUTO_ADD_BOOKS`                       | Boolean            | false          | `auto_add_books`                       |
+| `SHELFBRIDGE_PREVENT_PROGRESS_REGRESSION`          | Boolean            | true           | `prevent_progress_regression`          |
+| `SHELFBRIDGE_HARDCOVER_SEMAPHORE`                  | Number (1-10)      | 1              | `hardcover_semaphore`                  |
+| `SHELFBRIDGE_HARDCOVER_RATE_LIMIT`                 | Number (10-60)     | 55             | `hardcover_rate_limit`                 |
+| `SHELFBRIDGE_AUDIOBOOKSHELF_SEMAPHORE`             | Number (1-10)      | 5              | `audiobookshelf_semaphore`             |
+| `SHELFBRIDGE_AUDIOBOOKSHELF_RATE_LIMIT`            | Number (60-1200)   | 600            | `audiobookshelf_rate_limit`            |
+| `SHELFBRIDGE_MAX_BOOKS_TO_FETCH`                   | Number             | (none)         | `max_books_to_fetch`                   |
+| `SHELFBRIDGE_PAGE_SIZE`                            | Number (25-200)    | 100            | `page_size`                            |
+| `SHELFBRIDGE_DUMP_FAILED_BOOKS`                    | Boolean            | true           | `dump_failed_books`                    |
+| `SHELFBRIDGE_DELAYED_UPDATES_ENABLED`              | Boolean            | false          | `delayed_updates.enabled`              |
+| `SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT`      | Number (60-7200)   | 900            | `delayed_updates.session_timeout`      |
+| `SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY`            | Number (300-86400) | 3600           | `delayed_updates.max_delay`            |
+| `SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION` | Boolean            | true           | `delayed_updates.immediate_completion` |
 
 ### User Environment Variables
 

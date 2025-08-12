@@ -159,6 +159,41 @@ export class ConfigValidator {
           optional: true,
           description: 'Dump failed sync books to text file for debugging',
         },
+        delayed_updates: {
+          type: 'object',
+          optional: true,
+          description: 'Session-based delayed update configuration',
+          properties: {
+            enabled: {
+              type: 'boolean',
+              default: false,
+              description:
+                'Enable session-based delayed updates (default: false)',
+            },
+            session_timeout: {
+              type: 'number',
+              min: 60,
+              max: 7200,
+              default: 900,
+              description:
+                'Session timeout in seconds (1 minute to 2 hours, default: 15 minutes)',
+            },
+            max_delay: {
+              type: 'number',
+              min: 300,
+              max: 86400,
+              default: 3600,
+              description:
+                'Maximum delay before forcing update in seconds (5 minutes to 24 hours, default: 1 hour)',
+            },
+            immediate_completion: {
+              type: 'boolean',
+              default: true,
+              description:
+                'Always sync book completion immediately, bypassing delays (default: true)',
+            },
+          },
+        },
         libraries: {
           type: 'object',
           optional: true,
