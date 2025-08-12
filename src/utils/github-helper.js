@@ -309,9 +309,10 @@ export function getProjectInfo() {
     name: 'ShelfBridge',
     repository: GITHUB_URL,
     issues: GITHUB_ISSUES_URL,
-    wiki: `${GITHUB_URL}/wiki`,
+    wiki: `${GITHUB_URL}/blob/main/wiki/Home.md`,
     discussions: `${GITHUB_URL}/discussions`,
     releases: `${GITHUB_URL}/releases`,
+    changelog: `${GITHUB_URL}/blob/main/CHANGELOG.md`,
   };
 }
 
@@ -333,6 +334,7 @@ export function formatWelcomeMessage(version) {
    • Issues & Support: ${createClickableLink(projectInfo.issues, 'Get Help & Report Issues')}
    • Discussions: ${createClickableLink(projectInfo.discussions, 'Community Discussions')}
    • Latest Release: ${createClickableLink(projectInfo.releases, 'Download Latest Version')}
+   • Changelog: ${createClickableLink(projectInfo.changelog, 'What\'s New & Release Notes')}
 
 💡 Need help? Check the wiki or create an issue for support!
 `;

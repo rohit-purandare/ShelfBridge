@@ -25,11 +25,22 @@ export function extractAuthorFromSearchResult(
         c.role === 'author' ||
         c.role === 'Author' ||
         !c.role || // Default to author if no role specified
-        c.role.toLowerCase().includes('author'),
+        c.role.toLowerCase().includes('author') ||
+        // Handle different data structure: {"author": {"name": "..."}}
+        (c.author && c.author.name),
     );
 
     if (authorContribs.length > 0) {
-      availableAuthors = authorContribs.map(c => c.person.name);
+      availableAuthors = authorContribs
+        .filter(
+          c =>
+            (c.person && c.person.name) || // Original structure
+            (c.author && c.author.name), // Alternative structure
+        )
+        .map(
+          c => c.person?.name || c.author?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -37,6 +48,7 @@ export function extractAuthorFromSearchResult(
   if (
     availableAuthors.length === 0 &&
     searchResult.book &&
+    typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
     searchResult.book.contributions.length > 0
   ) {
@@ -45,11 +57,22 @@ export function extractAuthorFromSearchResult(
         c.role === 'author' ||
         c.role === 'Author' ||
         !c.role ||
-        c.role.toLowerCase().includes('author'),
+        c.role.toLowerCase().includes('author') ||
+        // Handle different data structure: {"author": {"name": "..."}}
+        (c.author && c.author.name),
     );
 
     if (authorContribs.length > 0) {
-      availableAuthors = authorContribs.map(c => c.person.name);
+      availableAuthors = authorContribs
+        .filter(
+          c =>
+            (c.person && c.person.name) || // Original structure
+            (c.author && c.author.name), // Alternative structure
+        )
+        .map(
+          c => c.person?.name || c.author?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -107,7 +130,9 @@ export function extractNarratorFromSearchResult(searchResult) {
     );
 
     if (narratorContribs.length > 0) {
-      availableNarrators = narratorContribs.map(c => c.person.name);
+      availableNarrators = narratorContribs
+        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
+        .map(c => c.person.name);
     }
   }
 
@@ -115,6 +140,7 @@ export function extractNarratorFromSearchResult(searchResult) {
   if (
     availableNarrators.length === 0 &&
     searchResult.book &&
+    typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
     searchResult.book.contributions.length > 0
   ) {
@@ -127,7 +153,9 @@ export function extractNarratorFromSearchResult(searchResult) {
     );
 
     if (narratorContribs.length > 0) {
-      availableNarrators = narratorContribs.map(c => c.person.name);
+      availableNarrators = narratorContribs
+        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
+        .map(c => c.person.name);
     }
   }
 
@@ -146,26 +174,34 @@ export function extractNarratorFromSearchResult(searchResult) {
  * @returns {string} - Format string
  */
 export function extractFormatFromSearchResult(searchResult) {
-  // Try different format fields
-  if (searchResult.format) {
+  // Try different format fields, ensuring they are strings
+  if (searchResult.format && typeof searchResult.format === 'string') {
     return searchResult.format;
   }
 
-  if (searchResult.reading_format) {
+  if (
+    searchResult.reading_format &&
+    typeof searchResult.reading_format === 'string'
+  ) {
     return searchResult.reading_format;
   }
 
-  if (searchResult.book && searchResult.book.format) {
+  if (
+    searchResult.book &&
+    typeof searchResult.book === 'object' &&
+    searchResult.book.format &&
+    typeof searchResult.book.format === 'string'
+  ) {
     return searchResult.book.format;
   }
 
   // Check if it's an audiobook based on contributions
-  if (searchResult.contributions) {
+  if (searchResult.contributions && Array.isArray(searchResult.contributions)) {
     const hasNarrator = searchResult.contributions.some(
       c =>
         c.role === 'narrator' ||
         c.role === 'Narrator' ||
-        c.role?.toLowerCase().includes('narrator'),
+        c.role?.toLowerCase?.().includes('narrator'),
     );
     if (hasNarrator) {
       return 'audiobook';

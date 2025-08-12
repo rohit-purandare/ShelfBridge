@@ -547,19 +547,32 @@ export class ProgressManager {
     const oldValidated = this.validateProgress(oldProgress, `${context} (old)`);
     const newValidated = this.validateProgress(newProgress, `${context} (new)`);
 
-    // Handle invalid data gracefully instead of defaulting to 0
+    // Handle missing or invalid data gracefully
     if (oldValidated === null || newValidated === null) {
-      logger.warn(
-        `Cannot detect progress change due to invalid data in ${context}`,
-        {
+      // Only log at debug level if it's truly invalid data (both null)
+      // If only old is null, it's just no cached progress (normal)
+      if (oldValidated === null && newValidated !== null) {
+        logger.debug(
+          `No cached progress for ${context} - assuming change needed`,
+          {
+            oldProgress,
+            newProgress,
+          },
+        );
+      } else if (oldValidated !== null && newValidated === null) {
+        logger.warn(`Invalid new progress data in ${context}`, {
           oldProgress,
           newProgress,
-          oldValid: oldValidated !== null,
-          newValid: newValidated !== null,
-        },
-      );
+        });
+      } else {
+        logger.warn(`Both old and new progress data invalid in ${context}`, {
+          oldProgress,
+          newProgress,
+        });
+      }
+
       return {
-        hasChange: false,
+        hasChange: oldValidated === null && newValidated !== null, // Change if we have new valid data
         oldProgress: oldValidated || 0,
         newProgress: newValidated || 0,
         absoluteChange: 0,

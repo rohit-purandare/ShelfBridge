@@ -203,8 +203,9 @@ export function calculateMatchingScore(
 
   // NEW: Format Preference Bonus - strongly prefer matching format types
   const userFormat = detectUserBookFormat(targetMetadata);
-  const resultFormatLower =
-    extractFormatFromSearchResult(searchResult).toLowerCase();
+  const resultFormatLower = (
+    typeof resultFormat === 'string' ? resultFormat : 'unknown'
+  ).toLowerCase();
 
   if (
     userFormat === 'audiobook' &&
@@ -378,7 +379,7 @@ function calculateYearScore(targetYear, resultYear) {
  * @returns {number} - Format score (0-100)
  */
 function calculateFormatScore(format) {
-  if (!format) return 50; // Neutral if no format data
+  if (!format || typeof format !== 'string') return 50; // Neutral if no format data or not a string
 
   const formatLower = format.toLowerCase();
 
