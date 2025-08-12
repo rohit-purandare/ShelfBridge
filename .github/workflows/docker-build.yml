@@ -29,8 +29,9 @@ on:
         'staging/*', # Staging branches
         'patch/*', # Patch branches
       ]
-    # Remove tags trigger to avoid duplicate builds during releases
-    # Tags will be handled via workflow_call from version-and-release.yml
+    # Fallback: Also trigger on version tags in case workflow_call fails
+    tags:
+      - 'v*'
     paths:
       - 'Dockerfile'
       - 'docker-*.sh'
@@ -90,10 +91,11 @@ jobs:
       id-token: write
       attestations: write
     # Skip build for Release Please commits on main (handled by version-and-release.yml)
-    # Always build for workflow_call, feature branches, and non-release commits
+    # Always build for workflow_call, feature branches, tag pushes, and non-release commits
     if: |
       github.event_name == 'workflow_call' || 
       github.event_name == 'pull_request' ||
+      startsWith(github.ref, 'refs/tags/') ||
       github.ref_name != 'main' ||
       !contains(github.event.head_commit.message, 'chore(main): release')
 

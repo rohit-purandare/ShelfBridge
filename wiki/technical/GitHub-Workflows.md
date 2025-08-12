@@ -254,6 +254,49 @@ Based on **Conventional Commits** standard:
 4. **Changelog Generation** - Creates changelog from git commits
 5. **Tag Push** - Creates and pushes git tag to trigger separate Docker build workflow
 6. **Docker Build Synchronization** - **NEW: Waits for Docker build completion before creating release**
+
+### 🔧 Critical Fix: Docker Build Reliability
+
+**Fixed Issue:** Docker builds were not triggering after release-please PRs due to output detection problems
+
+**Previous Problem:**
+
+Release-please action v4 runs in two phases during one execution:
+
+1. **Phase 1:** Process merged release PR → ✅ Creates release + tag
+2. **Phase 2:** Check for new commits for next release PR → ❌ Finds no commits, sets `release_created=false`
+
+The final `release_created` output comes from Phase 2, overwriting Phase 1's success, causing Docker builds to be skipped.
+
+**Solution Applied:**
+
+**Enhanced Conditional Logic** - Added fallback detection for successful releases:
+
+```yaml
+# OLD: Only checked release_created
+if: ${{ needs.release-please.outputs.release_created }}
+
+# NEW: Also checks if tag was created
+if: ${{ needs.release-please.outputs.release_created || needs.release-please.outputs.tag_name != '' }}
+```
+
+**Fallback Tag Triggers** - Added direct tag-based triggers to docker-build workflow:
+
+```yaml
+# Added to docker-build.yml
+on:
+  push:
+    tags:
+      - 'v*' # Fallback trigger for version tags
+```
+
+**Benefits:**
+
+- ✅ **Primary Path:** Enhanced workflow_call logic with tag_name fallback detection
+- ✅ **Backup Path:** Direct tag push triggers if workflow_call fails
+- ✅ **Reliability:** Docker images are built for all releases, even when release_created=false
+- ✅ **Backward Compatible:** All existing functionality preserved
+
 7. **GitHub Release Creation** - Creates tagged release with notes only after Docker images are available
 8. **Docker Coordination** - Ensures Docker images are built and published before users see the release
 
