@@ -80,6 +80,12 @@ services:
       # SHELFBRIDGE_SYNC_SCHEDULE: "0 3 * * *"         # Cron schedule (default: daily at 3 AM)
       # SHELFBRIDGE_AUTO_ADD_BOOKS: "false"            # Auto-add books to Hardcover (true/false, default: false)
 
+      # Session-based delayed updates (reduces API calls)
+      # SHELFBRIDGE_DELAYED_UPDATES_ENABLED: "false"             # Enable delayed updates (true/false, default: false)
+      # SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT: "900"       # Session timeout in seconds (60-7200, default: 900 = 15 min)
+      # SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY: "3600"            # Max delay before forcing sync (300-86400, default: 3600 = 1 hour)
+      # SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION: "true" # Always sync book completion immediately (true/false, default: true)
+
       # Progress protection
       # SHELFBRIDGE_PREVENT_PROGRESS_REGRESSION: "true" # Prevent progress loss (true/false, default: true)
 
@@ -121,6 +127,16 @@ services:
       # SHELFBRIDGE_USER_1_ABS_URL: "https://family-audiobooks.com"
       # SHELFBRIDGE_USER_1_ABS_TOKEN: "dad_abs_token"
       # SHELFBRIDGE_USER_1_HARDCOVER_TOKEN: "dad_hardcover_token"
+
+      # Reduced API Usage Example - Delayed updates for frequent readers:
+      # SHELFBRIDGE_DELAYED_UPDATES_ENABLED: "true"                # Enable session-based delayed updates
+      # SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT: "1800"        # 30 minutes timeout
+      # SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY: "7200"              # 2 hours max delay
+      # SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION: "true"   # Still sync completions immediately
+      # SHELFBRIDGE_SYNC_SCHEDULE: "0 */1 * * *"                   # Check every hour (with delayed updates)
+      #
+      # Benefits: Reduces Hardcover API calls while maintaining accuracy
+      # Use case: Active readers who listen continuously for long sessions
     command: ['npm', 'start']
     healthcheck:
       test: ['CMD', 'npm', 'run', 'test:native']

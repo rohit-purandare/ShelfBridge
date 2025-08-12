@@ -213,6 +213,14 @@ export class Config {
       return null;
     }
 
+    // Trim whitespace from all values
+    const trimmedValue = value.trim();
+
+    // Return null for empty trimmed values
+    if (trimmedValue === '') {
+      return null;
+    }
+
     // Parse based on expected type for the config key
     const booleanKeys = [
       'parallel',
@@ -239,12 +247,12 @@ export class Config {
     ];
 
     if (booleanKeys.includes(configKey)) {
-      return value.toLowerCase() === 'true' || value === '1';
+      return trimmedValue.toLowerCase() === 'true' || trimmedValue === '1';
     } else if (numberKeys.includes(configKey)) {
-      const parsed = parseFloat(value);
+      const parsed = parseFloat(trimmedValue);
       return isNaN(parsed) ? null : parsed;
     } else {
-      return value;
+      return trimmedValue;
     }
   }
 
@@ -280,6 +288,32 @@ export class Config {
       if (this.globalConfig[key] === undefined) {
         this.globalConfig[key] = defaultValue;
         logger.debug(`Applied default for ${key}: ${defaultValue}`);
+      } else if (
+        typeof defaultValue === 'object' &&
+        defaultValue !== null &&
+        !Array.isArray(defaultValue)
+      ) {
+        // Handle nested objects - merge defaults for missing properties
+        if (
+          typeof this.globalConfig[key] === 'object' &&
+          this.globalConfig[key] !== null
+        ) {
+          for (const [nestedKey, nestedDefault] of Object.entries(
+            defaultValue,
+          )) {
+            if (this.globalConfig[key][nestedKey] === undefined) {
+              this.globalConfig[key][nestedKey] = nestedDefault;
+              logger.debug(
+                `Applied default for ${key}.${nestedKey}: ${nestedDefault}`,
+              );
+            }
+          }
+        }
+        // Mark as explicitly set
+        this.explicitlySet.add(key);
+        logger.debug(
+          `Using explicit value for ${key}: ${JSON.stringify(this.globalConfig[key])}`,
+        );
       } else {
         // Mark as explicitly set
         this.explicitlySet.add(key);

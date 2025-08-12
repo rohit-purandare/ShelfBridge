@@ -173,6 +173,23 @@ environment:
 # That's it! No file editing needed.
 ```
 
+**Advanced: Session-Based Delayed Updates**
+
+Reduce Hardcover API calls by delaying progress updates until listening sessions end:
+
+```bash
+# Add these to your docker-compose.yml environment section:
+environment:
+  # Enable delayed updates for API efficiency
+  SHELFBRIDGE_DELAYED_UPDATES_ENABLED: "true"
+  SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT: "1800"    # 30 minutes
+  SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY: "7200"          # 2 hours max
+  SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION: "true" # Still sync completions immediately
+
+# Benefits: Reduces API calls while maintaining accuracy
+# Ideal for: Active readers with continuous listening sessions
+```
+
 **Option B: YAML Configuration File (Advanced)**
 
 ```bash
