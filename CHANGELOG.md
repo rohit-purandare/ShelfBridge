@@ -13,6 +13,24 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.19.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.4...v1.19.5) (2025-08-12)
+
+
+### ## 🔧 Bug Fixes
+
+* correct GitHub wiki links to point to repository wiki folder ([24ada91](https://github.com/rohit-purandare/ShelfBridge/commit/24ada912bfdf5a34072d2fc6055616c1f92c4c9d))
+* enhance book matching with comprehensive cross-edition support ([27ece06](https://github.com/rohit-purandare/ShelfBridge/commit/27ece06afc4ab97c8949a219f10c3d42bdf6bd09))
+* prevent Docker container from exiting after initial sync ([f8d5e6a](https://github.com/rohit-purandare/ShelfBridge/commit/f8d5e6ad005a000324ab8e70a741311e9ad47ac2))
+* resolve title/author matching by fixing author extraction and implementing book-level matching ([c92d8d6](https://github.com/rohit-purandare/ShelfBridge/commit/c92d8d69f95b96551d6378f89d7cd53ab5d8741f))
+
+
+### ## ♻️ Code Refactoring
+
+* complete CLI integration - massive main.js reduction ([004483b](https://github.com/rohit-purandare/ShelfBridge/commit/004483b68e09c018b6e638f37fbcb2d46db1f6dd))
+* extract all remaining CLI commands ([99b5c46](https://github.com/rohit-purandare/ShelfBridge/commit/99b5c46258528812bf35c5daed86683692ec4aa9))
+* extract CLI commands infrastructure ([0b79101](https://github.com/rohit-purandare/ShelfBridge/commit/0b7910155d4224d0f8195a47519b27b1ccea397a))
+* extract sync output formatting to dedicated module ([c9e3c74](https://github.com/rohit-purandare/ShelfBridge/commit/c9e3c74de0d311531f7254afdd70e5fc6e09963f))
+
 ## [1.19.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.3...v1.19.4) (2025-08-11)
 
 
