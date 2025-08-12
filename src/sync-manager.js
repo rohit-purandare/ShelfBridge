@@ -9,6 +9,7 @@ import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Transaction } from './utils/transaction.js';
+import SessionManager from './session-manager.js';
 
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
@@ -53,6 +54,12 @@ export class SyncManager {
     // Initialize cache
     this.cache = new BookCache();
 
+    // Initialize session manager for delayed updates
+    this.sessionManager = new SessionManager(
+      this.cache,
+      globalConfig.delayed_updates || {},
+    );
+
     // Initialize book matcher
     this.bookMatcher = new BookMatcher(
       this.hardcover,
@@ -87,6 +94,9 @@ export class SyncManager {
     // Increment sync count (for tracking purposes)
     const _syncTracking = await this.cache.incrementSyncCount(this.userId);
 
+    // Process expired sessions before starting new sync
+    await this._processExpiredSessions();
+
     // Simple unified sync message (completion detection now always runs)
     console.log(`🔄 Starting sync...`);
 
@@ -96,6 +106,8 @@ export class SyncManager {
       books_completed: 0,
       books_auto_added: 0,
       books_skipped: 0,
+      books_delayed: 0,
+      expired_sessions_processed: 0,
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
@@ -1072,6 +1084,59 @@ export class SyncManager {
       syncResult.progress_changed = true;
     }
 
+    // Session-based delayed updates decision
+    if (syncResult.progress_changed) {
+      const sessionDecision = await this.sessionManager.shouldDelayUpdate(
+        this.userId,
+        identifier,
+        title,
+        progressPercent,
+        absBook,
+        identifierType,
+      );
+
+      logger.debug(`Session decision for ${title}:`, sessionDecision);
+
+      if (sessionDecision.shouldDelay) {
+        // Delay the update - store in session
+        const sessionUpdated = await this.sessionManager.updateSession(
+          this.userId,
+          identifier,
+          title,
+          progressPercent,
+          identifierType,
+        );
+
+        if (sessionUpdated) {
+          syncResult.status = 'delayed';
+          syncResult.reason = `Session-based delay: ${sessionDecision.reason}`;
+          syncResult.session_info = {
+            action: sessionDecision.action,
+            reason: sessionDecision.reason,
+            sessionTimeout: sessionDecision.sessionTimeout,
+          };
+          syncResult.timing = performance.now() - startTime;
+          logger.debug(`Delayed update for ${title} - stored in session`);
+          return syncResult;
+        } else {
+          // If session update failed, fall back to immediate sync
+          logger.warn(
+            `Failed to store session for ${title}, falling back to immediate sync`,
+          );
+        }
+      } else {
+        // Immediate sync required
+        syncResult.sync_reason = sessionDecision.reason;
+        if (sessionDecision.isCompletion) {
+          syncResult.completion_bypass = true;
+        }
+        if (sessionDecision.forcedSync) {
+          syncResult.forced_sync = sessionDecision.reason;
+        }
+        logger.debug(`Immediate sync for ${title}: ${sessionDecision.reason}`);
+      }
+    }
+
     // Sync the existing book
     const existingSyncResult = await this._syncExistingBook(
       absBook,
@@ -1090,6 +1155,25 @@ export class SyncManager {
     // Add API response info if available
     if (existingSyncResult.api_response) {
       syncResult.api_response = existingSyncResult.api_response;
+    }
+
+    // Complete session if sync was successful
+    if (
+      syncResult.progress_changed &&
+      existingSyncResult.status === 'updated'
+    ) {
+      const sessionCompleted = await this.sessionManager.completeSession(
+        this.userId,
+        identifier,
+        title,
+        progressPercent,
+        identifierType,
+      );
+
+      if (sessionCompleted) {
+        syncResult.session_completed = true;
+        logger.debug(`Completed session for ${title} after successful sync`);
+      }
     }
 
     syncResult.timing = performance.now() - startTime;
@@ -2043,6 +2127,9 @@ export class SyncManager {
       case 'skipped':
         result.books_skipped++;
         break;
+      case 'delayed':
+        result.books_delayed++;
+        break;
       case 'error':
         result.errors.push(`${syncResult.title}: ${syncResult.reason}`);
         break;
@@ -2191,5 +2278,135 @@ export class SyncManager {
       absBook.last_listened_at,
       absBook.started_at,
     );
+  }
+
+  /**
+   * Process expired sessions by syncing their final progress to Hardcover
+   * This runs at the beginning of each sync cycle
+   * @private
+   */
+  async _processExpiredSessions() {
+    try {
+      const processingResult = await this.sessionManager.processExpiredSessions(
+        this.userId,
+        async sessionData => {
+          // Callback to sync expired session progress to Hardcover
+          logger.info(`Processing expired session for ${sessionData.title}`, {
+            finalProgress: sessionData.finalProgress,
+            identifier: sessionData.identifier,
+            identifierType: sessionData.identifierType,
+          });
+
+          // Create a mock book object for the sync process
+          const mockBook = {
+            id: `expired-session-${sessionData.identifier}`,
+            progress_percentage: sessionData.finalProgress,
+            is_finished: sessionData.finalProgress >= 95,
+            last_listened_at: sessionData.sessionData.session_last_change,
+            started_at:
+              sessionData.sessionData.started_at ||
+              sessionData.sessionData.session_last_change,
+          };
+
+          // Find the book match using the stored identifier
+          const identifiers = {};
+          identifiers[sessionData.identifierType] = sessionData.identifier;
+
+          // Try to find existing Hardcover match
+          const matchResult = await this.bookMatcher.findMatchByIdentifier(
+            identifiers,
+            sessionData.title,
+            sessionData.identifierType,
+          );
+
+          if (matchResult && matchResult.match) {
+            // Sync directly to Hardcover using the existing match
+            await this._syncToHardcover(
+              mockBook,
+              matchResult.match,
+              sessionData.identifier,
+              sessionData.title,
+              sessionData.finalProgress,
+              sessionData.identifierType,
+            );
+
+            logger.info(
+              `Successfully synced expired session for ${sessionData.title}`,
+            );
+          } else {
+            logger.warn(
+              `Could not find Hardcover match for expired session: ${sessionData.title}`,
+            );
+          }
+        },
+      );
+
+      if (processingResult.processed > 0) {
+        console.log(
+          `📋 Processed ${processingResult.processed} expired sessions`,
+        );
+        logger.info(`Processed expired sessions`, processingResult);
+      }
+
+      return processingResult;
+    } catch (err) {
+      logger.error(`Error processing expired sessions: ${err.message}`);
+      return { processed: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Sync progress directly to Hardcover (used for expired sessions)
+   * @private
+   */
+  async _syncToHardcover(
+    mockBook,
+    hardcoverMatch,
+    identifier,
+    title,
+    progressPercent,
+    identifierType,
+  ) {
+    try {
+      if (!this.dryRun) {
+        // Update reading progress on Hardcover
+        const result = await this.hardcover.updateReadingProgress(
+          hardcoverMatch.userBookId,
+          progressPercent,
+          progressPercent,
+          hardcoverMatch.edition.id,
+          hardcoverMatch.useSeconds || false,
+          mockBook.started_at,
+          this.globalConfig.reread_detection,
+          null, // reading format ID
+        );
+
+        if (result && result.id) {
+          logger.debug(
+            `Updated Hardcover progress for ${title}: ${progressPercent}%`,
+          );
+        }
+      } else {
+        logger.info(
+          `[DRY RUN] Would update Hardcover progress for ${title}: ${progressPercent}%`,
+        );
+      }
+
+      // Store the final progress in cache
+      await this.cache.storeProgress(
+        this.userId,
+        identifier,
+        title,
+        progressPercent,
+        identifierType,
+        mockBook.last_listened_at,
+        mockBook.started_at,
+      );
+    } catch (err) {
+      logger.error(
+        `Error syncing expired session to Hardcover for ${title}: ${err.message}`,
+      );
+      throw err;
+    }
   }
 }
