@@ -32,7 +32,7 @@ jobs:
   # Only run build and publish when a release is created
   build-and-publish:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.release_created || needs.release-please.outputs.tag_name != '' }}
     uses: ./.github/workflows/docker-build.yml
     permissions:
       contents: read
@@ -48,7 +48,7 @@ jobs:
   notify-success:
     runs-on: ubuntu-latest
     needs: [release-please, build-and-publish]
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.release_created || needs.release-please.outputs.tag_name != '' }}
     steps:
       - name: Release success message
         run: |
