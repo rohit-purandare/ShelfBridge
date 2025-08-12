@@ -247,7 +247,15 @@ export class Config {
     ];
 
     if (booleanKeys.includes(configKey)) {
-      return trimmedValue.toLowerCase() === 'true' || trimmedValue === '1';
+      const lowerValue = trimmedValue.toLowerCase();
+      if (lowerValue === 'true' || trimmedValue === '1') {
+        return true;
+      } else if (lowerValue === 'false' || trimmedValue === '0') {
+        return false;
+      } else {
+        // Invalid boolean value - return null to trigger default fallback
+        return null;
+      }
     } else if (numberKeys.includes(configKey)) {
       const parsed = parseFloat(trimmedValue);
       return isNaN(parsed) ? null : parsed;
@@ -271,6 +279,9 @@ export class Config {
       prevent_progress_regression: true,
       audiobookshelf_semaphore: 5,
       hardcover_semaphore: 1,
+      hardcover_rate_limit: 55,
+      audiobookshelf_rate_limit: 600,
+      page_size: 100,
       dump_failed_books: true,
       delayed_updates: {
         enabled: false,
