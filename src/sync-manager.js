@@ -1226,33 +1226,119 @@ export class SyncManager {
       }
 
       if (searchResults.length === 0) {
-        if (this.globalConfig.force_sync) {
-          logger.warn(
-            `Force sync: Book ${title} not found in Hardcover database - attempting more aggressive matching`,
-            {
-              searchedIdentifiers: identifiers,
-              dryRun: this.dryRun,
+        // Try title/author fallback if identifier searches failed
+        logger.debug(
+          `Identifier searches failed for ${title}, attempting title/author fallback for auto-add`,
+        );
+
+        if (!this.dryRun) {
+          try {
+            const narrator = absBook?.metadata?.narrators?.join(', ') || null;
+            const maxResults = this.globalConfig.max_search_results || 5;
+
+            logger.debug(
+              `Searching Hardcover by title/author: "${title}" by "${author}"`,
+            );
+            const titleAuthorResults =
+              await this.hardcover.searchEditionsByTitleAuthor(
+                title,
+                author,
+                narrator,
+                maxResults,
+              );
+
+            if (titleAuthorResults.length > 0) {
+              logger.debug(
+                `Title/author search returned ${titleAuthorResults.length} results for auto-add`,
+              );
+
+              // Score and rank the results (reuse existing scoring logic)
+              const { calculateMatchingScore } = await import(
+                './matching/scoring/match-scorer.js'
+              );
+              const scoredResults = titleAuthorResults.map(result => {
+                const score = calculateMatchingScore(
+                  result,
+                  title,
+                  author,
+                  narrator,
+                  absBook?.metadata || {},
+                );
+                return { ...result, _matchingScore: score };
+              });
+
+              // Sort by score and filter by confidence threshold
+              const sortedResults = scoredResults
+                .filter(result => result._matchingScore.totalScore >= 50) // Minimum 50% confidence for auto-add
+                .sort(
+                  (a, b) =>
+                    b._matchingScore.totalScore - a._matchingScore.totalScore,
+                );
+
+              if (sortedResults.length > 0) {
+                const bestMatch = sortedResults[0];
+                logger.info(
+                  `Found ${title} via title/author fallback for auto-add`,
+                  {
+                    confidence: bestMatch._matchingScore.totalScore.toFixed(1),
+                    hardcoverTitle: bestMatch.book.title,
+                  },
+                );
+                searchResults = [bestMatch];
+              } else {
+                logger.debug(
+                  `Title/author search found results but none met confidence threshold for auto-add`,
+                );
+              }
+            } else {
+              logger.debug(
+                `Title/author search returned no results for auto-add`,
+              );
+            }
+          } catch (titleAuthorError) {
+            logger.warn(
+              `Title/author fallback search failed for auto-add of ${title}`,
+              {
+                error: titleAuthorError.message,
+              },
+            );
+          }
+        }
+
+        // If still no results after all attempts
+        if (searchResults.length === 0) {
+          if (this.globalConfig.force_sync) {
+            logger.warn(
+              `Force sync: Book ${title} not found in Hardcover database - attempted identifier and title/author searches`,
+              {
+                searchedIdentifiers: identifiers,
+                dryRun: this.dryRun,
+                forceSync: true,
+              },
+            );
+            return {
+              status: 'skipped',
+              reason:
+                'Book not found in Hardcover (force sync attempted with all search methods)',
+              title,
               forceSync: true,
-            },
-          );
-          // For force sync, we could try additional matching strategies here
-          // For now, still return skipped but with force context
-          return {
-            status: 'skipped',
-            reason: 'Book not found in Hardcover (force sync attempted)',
-            title,
-            forceSync: true,
-          };
-        } else {
-          logger.info(`Could not find ${title} in Hardcover database`, {
-            searchedIdentifiers: identifiers,
-            dryRun: this.dryRun,
-          });
-          return {
-            status: 'skipped',
-            reason: 'Book not found in Hardcover',
-            title,
-          };
+            };
+          } else {
+            logger.info(
+              `Could not find ${title} in Hardcover database after all search attempts`,
+              {
+                searchedIdentifiers: identifiers,
+                titleAuthorAttempted: !this.dryRun,
+                dryRun: this.dryRun,
+              },
+            );
+            return {
+              status: 'skipped',
+              reason:
+                'Book not found in Hardcover after identifier and title/author searches',
+              title,
+            };
+          }
         }
       }
 
