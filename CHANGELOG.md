@@ -13,6 +13,24 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.20.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.5...v1.20.0) (2025-08-13)
+
+
+### ## 🚀 Features
+
+* add comprehensive test suite for delayed updates functionality ([1613ad8](https://github.com/rohit-purandare/ShelfBridge/commit/1613ad8ba7600b4b3624aa3e2d740e680ffbc13f))
+* add configuration foundation for delayed updates feature ([24c4ccf](https://github.com/rohit-purandare/ShelfBridge/commit/24c4ccf7867f225b01e52964239ee42b5516d8e9))
+* add database migration and session methods for delayed updates ([88203f3](https://github.com/rohit-purandare/ShelfBridge/commit/88203f37e11b86d3087bfc9a1040b6d0446e19cf))
+* add startup session recovery for delayed updates ([239d790](https://github.com/rohit-purandare/ShelfBridge/commit/239d7903a77d683ab88eab1f04b8b017cea409fd))
+* implement SessionManager class for delayed updates ([9d9f99a](https://github.com/rohit-purandare/ShelfBridge/commit/9d9f99aa5fd1bce488315fc5f5a07bf5f161c11b))
+* integrate SessionManager with SyncManager for delayed updates ([b1f4aa0](https://github.com/rohit-purandare/ShelfBridge/commit/b1f4aa05c23749fdd38b1f702037efa7b0f60ae2))
+
+
+### ## 🔧 Bug Fixes
+
+* improve environment variable parsing for delayed updates ([f8bb195](https://github.com/rohit-purandare/ShelfBridge/commit/f8bb195c0ad0211e7b7bd73b5193a9b52e9fb6f0))
+* scan all books for completion detection instead of limiting to first 100 ([bd23cbc](https://github.com/rohit-purandare/ShelfBridge/commit/bd23cbc9b1afb8f75b76e05ad49ecb672ef294a3))
+
 ## [1.19.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.4...v1.19.5) (2025-08-12)
 
 
