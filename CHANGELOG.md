@@ -13,6 +13,18 @@
   - Better error logging distinguishes between timeout and server error types
   - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
+## [1.20.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.0...v1.20.1) (2025-08-13)
+
+
+### ## 🔧 Bug Fixes
+
+* add title/author fallback to auto-add when ISBN/ASIN lookup fails ([53ce062](https://github.com/rohit-purandare/ShelfBridge/commit/53ce0626c8bc16f14e3a9118a6106858c9eb2c4e))
+
+
+### ## ♻️ Code Refactoring
+
+* use existing TitleAuthorMatcher instead of duplicating logic ([19b1034](https://github.com/rohit-purandare/ShelfBridge/commit/19b1034b1885c658fe371cf5d982d7f73c380ccb))
+
 ## [1.20.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.19.5...v1.20.0) (2025-08-13)
 
 
