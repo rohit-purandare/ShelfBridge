@@ -1,17 +1,9 @@
-## [1.19.1] - 2025-08-08
+# Changelog
 
-### Fixed
-- 🔧 **MaxListenersExceededWarning Resolution**: Fixed memory leak warning when processing many books
-  - Configure dynamic listener limits in SyncManager based on max_books_to_fetch configuration
-  - Set global unlimited listeners in main.js for multi-user parallel scenarios
-  - Prevents 'Possible EventTarget memory leak detected' warnings during parallel operations
-  - Maintains proper cleanup and backward compatibility while scaling with configuration settings
-- 🔄 **Enhanced Server Error Handling**: Improved reliability for Hardcover API interactions
-  - Added automatic retry logic for HTTP 5xx server errors (502, 503, 504, etc.)
-  - Extended existing timeout retry logic to cover temporary server issues
-  - Uses exponential backoff strategy (1s, 2s, 4s) with configurable max retries
-  - Better error logging distinguishes between timeout and server error types
-  - Significantly improves sync reliability when Hardcover API experiences temporary outages
+All notable changes to ShelfBridge will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.20.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.0...v1.20.1) (2025-08-13)
 
@@ -89,38 +81,20 @@
 * prevent undefined property access errors in title/author matching ([b22ad5c](https://github.com/rohit-purandare/ShelfBridge/commit/b22ad5c6e8dafb668e389a46fe7aa2fcf38927ff))
 * reduce log verbosity for book matching success messages ([6a11e04](https://github.com/rohit-purandare/ShelfBridge/commit/6a11e04db24537311e0a24c89ad062464b82612a))
 
-## [1.18.21] - 2025-07-26
+## [1.19.1] - 2025-08-08
 
 ### Fixed
-- 🔧 **Critical GLIBC Compatibility Fix**: Resolved `GLIBC_2.38` dependency issue
-  - Switched from `node:20-slim` to `node:20-alpine` base image
-  - Eliminates GLIBC version conflicts preventing container startup
-  - Ensures better-sqlite3 native module compatibility across all systems
-- 🚀 **Docker Image Optimization**: Reduced image size from ~650MB to ~530MB
-  - Multi-stage Alpine builds with optimized cache strategy  
-  - Enhanced CI/CD pipeline with comprehensive testing
-  - Improved reliability for ARM64 and AMD64 platforms
-- 🛠️ **Workflow Improvements**: Enhanced release automation and testing
-  - Added gitleaks security scanning to CI pipelines
-  - Fixed pre-commit hook compatibility issues
-  - Implemented robust Docker build timeout handling
-
-### Technical Details
-- **Base Image**: Now uses `node:20-alpine` for better compatibility
-- **Build Process**: better-sqlite3 compiled from source for musl libc
-- **Testing**: Comprehensive native module validation in CI
-- **Platforms**: Full support for linux/amd64 and linux/arm64
-
-This release resolves the critical container startup failures reported by users.
-
-# Changelog
-
-All notable changes to ShelfBridge will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+- 🔧 **MaxListenersExceededWarning Resolution**: Fixed memory leak warning when processing many books
+  - Configure dynamic listener limits in SyncManager based on max_books_to_fetch configuration
+  - Set global unlimited listeners in main.js for multi-user parallel scenarios
+  - Prevents 'Possible EventTarget memory leak detected' warnings during parallel operations
+  - Maintains proper cleanup and backward compatibility while scaling with configuration settings
+- 🔄 **Enhanced Server Error Handling**: Improved reliability for Hardcover API interactions
+  - Added automatic retry logic for HTTP 5xx server errors (502, 503, 504, etc.)
+  - Extended existing timeout retry logic to cover temporary server issues
+  - Uses exponential backoff strategy (1s, 2s, 4s) with configurable max retries
+  - Better error logging distinguishes between timeout and server error types
+  - Significantly improves sync reliability when Hardcover API experiences temporary outages
 
 ## [1.19.0] - 2025-08-08
 
