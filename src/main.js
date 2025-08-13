@@ -17,9 +17,6 @@ import { Semaphore } from './utils/concurrency.js';
 import { SyncResultFormatter } from './display/SyncResultFormatter.js';
 import { CommandRegistry } from './cli/CommandRegistry.js';
 
-
-
-
 const program = new Command();
 
 program
@@ -52,7 +49,6 @@ commandRegistry.configureCommands(program);
 /**
  * Validate configuration on startup
  */
-
 
 /**
  * Test API connections for all users
@@ -161,7 +157,13 @@ async function syncUser(user, globalConfig, verbose = false) {
 
     // Use the SyncResultFormatter to display results
     const formatter = new SyncResultFormatter();
-    await formatter.formatSyncResults(user, result, globalConfig, duration, verbose);
+    await formatter.formatSyncResults(
+      user,
+      result,
+      globalConfig,
+      duration,
+      verbose,
+    );
   } catch (error) {
     logger.error('Sync failed for user', {
       user_id: user.id,
@@ -507,6 +509,12 @@ async function runScheduledSync(config) {
 
     logger.info('Starting scheduled sync', { userCount: users.length });
 
+    // Check for and process any active sessions from previous app shutdown
+    if (globalConfig.delayed_updates && globalConfig.delayed_updates.enabled) {
+      logger.info('Processing any active sessions from previous shutdown...');
+      await processStartupSessions(users, globalConfig);
+    }
+
     if (globalConfig.parallel) {
       const workers = globalConfig.workers || 3;
       logger.debug('Running user syncs in parallel mode', { workers });
@@ -538,6 +546,111 @@ async function runScheduledSync(config) {
       error: error.message,
       stack: error.stack,
     });
+  }
+}
+
+/**
+ * Process any active sessions that were left from a previous app shutdown
+ * This ensures no progress updates are lost when the app restarts
+ */
+async function processStartupSessions(users, globalConfig) {
+  let totalSessionsProcessed = 0;
+  let totalSessionsFound = 0;
+
+  for (const user of users) {
+    try {
+      logger.debug('Checking for active sessions on startup', {
+        user_id: user.id,
+      });
+
+      // Initialize cache to check for active sessions
+      const cache = new BookCache(`data/.book_cache_${user.id}.db`);
+      await cache.init();
+
+      // Get all active sessions for this user
+      const activeSessions = await cache.getActiveSessions(user.id);
+
+      if (activeSessions.length > 0) {
+        totalSessionsFound += activeSessions.length;
+        logger.info('Found active sessions from previous shutdown', {
+          user_id: user.id,
+          sessionCount: activeSessions.length,
+        });
+
+        // Initialize clients for syncing
+        const audiobookshelf = new AudiobookshelfClient(
+          user.abs_url,
+          user.abs_token,
+        );
+        const hardcover = new HardcoverClient(user.hardcover_token);
+
+        // Create a sync manager to handle the session processing
+        const syncManager = new SyncManager(user, globalConfig, false, false);
+        syncManager.audiobookshelf = audiobookshelf;
+        syncManager.hardcover = hardcover;
+        syncManager.cache = cache;
+
+        // Process expired sessions through the session manager
+        const sessionResults =
+          await syncManager.sessionManager.processExpiredSessions(
+            user.id,
+            async sessionData => {
+              logger.info('Syncing recovered session to Hardcover', {
+                user_id: user.id,
+                title: sessionData.title,
+                finalProgress: sessionData.finalProgress,
+              });
+
+              // Use the syncManager's helper method to sync to Hardcover
+              await syncManager._syncToHardcover(
+                {
+                  is_finished: sessionData.finalProgress >= 95,
+                  last_listened_at: sessionData.sessionData.session_last_change,
+                  started_at:
+                    sessionData.sessionData.started_at ||
+                    sessionData.sessionData.session_last_change,
+                },
+                {
+                  userBookId: `startup-recovery-${sessionData.identifier}`,
+                  edition: { id: `edition-${sessionData.identifier}` },
+                  useSeconds: false,
+                },
+                sessionData.identifier,
+                sessionData.title,
+                sessionData.finalProgress,
+                sessionData.identifierType,
+              );
+            },
+          );
+
+        totalSessionsProcessed += sessionResults.processed;
+
+        if (sessionResults.processed > 0) {
+          logger.info('Successfully processed startup sessions', {
+            user_id: user.id,
+            processed: sessionResults.processed,
+            errors: sessionResults.errors,
+          });
+        }
+      }
+
+      await cache.close();
+    } catch (err) {
+      logger.error('Error processing startup sessions for user', {
+        user_id: user.id,
+        error: err.message,
+      });
+    }
+  }
+
+  if (totalSessionsFound > 0) {
+    logger.info('Startup session recovery complete', {
+      totalSessionsFound,
+      totalSessionsProcessed,
+      usersProcessed: users.length,
+    });
+  } else {
+    logger.debug('No active sessions found during startup recovery');
   }
 }
 

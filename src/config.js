@@ -27,7 +27,7 @@ export class Config {
 
     try {
       const configFile = fs.readFileSync(this.configPath, 'utf8');
-      const config = yaml.load(configFile);
+      const config = yaml.load(configFile) || {}; // Handle empty YAML files
 
       this.globalConfig = config.global || {};
       this.users = config.users || [];
@@ -69,23 +69,46 @@ export class Config {
       MAX_BOOKS_TO_FETCH: 'max_books_to_fetch',
       PAGE_SIZE: 'page_size',
       DUMP_FAILED_BOOKS: 'dump_failed_books',
+      DELAYED_UPDATES_ENABLED: 'delayed_updates.enabled',
+      DELAYED_UPDATES_SESSION_TIMEOUT: 'delayed_updates.session_timeout',
+      DELAYED_UPDATES_MAX_DELAY: 'delayed_updates.max_delay',
+      DELAYED_UPDATES_IMMEDIATE_COMPLETION:
+        'delayed_updates.immediate_completion',
     };
 
     for (const [envKey, configKey] of Object.entries(envMapping)) {
       const envVar = `SHELFBRIDGE_${envKey}`;
       const envValue = process.env[envVar];
 
-      // Only set from environment if not already set in YAML config
-      if (
-        envValue !== undefined &&
-        this.globalConfig[configKey] === undefined
-      ) {
+      if (envValue !== undefined) {
         const parsedValue = this._parseEnvironmentValue(envValue, configKey);
         if (parsedValue !== null) {
-          this.globalConfig[configKey] = parsedValue;
-          logger.debug(
-            `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
-          );
+          // Handle nested config paths (e.g., "delayed_updates.enabled")
+          if (configKey.includes('.')) {
+            const [parentKey, childKey] = configKey.split('.');
+
+            // Only set if not already defined in YAML
+            if (
+              !this.globalConfig[parentKey] ||
+              this.globalConfig[parentKey][childKey] === undefined
+            ) {
+              if (!this.globalConfig[parentKey]) {
+                this.globalConfig[parentKey] = {};
+              }
+              this.globalConfig[parentKey][childKey] = parsedValue;
+              logger.debug(
+                `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
+              );
+            }
+          } else {
+            // Handle simple config paths (existing behavior)
+            if (this.globalConfig[configKey] === undefined) {
+              this.globalConfig[configKey] = parsedValue;
+              logger.debug(
+                `Set ${configKey} from environment variable ${envVar}: ${parsedValue}`,
+              );
+            }
+          }
         }
       }
     }
@@ -190,6 +213,14 @@ export class Config {
       return null;
     }
 
+    // Trim whitespace from all values
+    const trimmedValue = value.trim();
+
+    // Return null for empty trimmed values
+    if (trimmedValue === '') {
+      return null;
+    }
+
     // Parse based on expected type for the config key
     const booleanKeys = [
       'parallel',
@@ -198,6 +229,8 @@ export class Config {
       'auto_add_books',
       'prevent_progress_regression',
       'dump_failed_books',
+      'delayed_updates.enabled',
+      'delayed_updates.immediate_completion',
     ];
     const numberKeys = [
       'min_progress_threshold',
@@ -209,15 +242,25 @@ export class Config {
       'audiobookshelf_rate_limit',
       'max_books_to_fetch',
       'page_size',
+      'delayed_updates.session_timeout',
+      'delayed_updates.max_delay',
     ];
 
     if (booleanKeys.includes(configKey)) {
-      return value.toLowerCase() === 'true' || value === '1';
+      const lowerValue = trimmedValue.toLowerCase();
+      if (lowerValue === 'true' || trimmedValue === '1') {
+        return true;
+      } else if (lowerValue === 'false' || trimmedValue === '0') {
+        return false;
+      } else {
+        // Invalid boolean value - return null to trigger default fallback
+        return null;
+      }
     } else if (numberKeys.includes(configKey)) {
-      const parsed = parseFloat(value);
+      const parsed = parseFloat(trimmedValue);
       return isNaN(parsed) ? null : parsed;
     } else {
-      return value;
+      return trimmedValue;
     }
   }
 
@@ -236,7 +279,16 @@ export class Config {
       prevent_progress_regression: true,
       audiobookshelf_semaphore: 5,
       hardcover_semaphore: 1,
+      hardcover_rate_limit: 55,
+      audiobookshelf_rate_limit: 600,
+      page_size: 100,
       dump_failed_books: true,
+      delayed_updates: {
+        enabled: false,
+        session_timeout: 900,
+        max_delay: 3600,
+        immediate_completion: true,
+      },
     };
 
     // Track which values were explicitly set vs using defaults
@@ -247,6 +299,32 @@ export class Config {
       if (this.globalConfig[key] === undefined) {
         this.globalConfig[key] = defaultValue;
         logger.debug(`Applied default for ${key}: ${defaultValue}`);
+      } else if (
+        typeof defaultValue === 'object' &&
+        defaultValue !== null &&
+        !Array.isArray(defaultValue)
+      ) {
+        // Handle nested objects - merge defaults for missing properties
+        if (
+          typeof this.globalConfig[key] === 'object' &&
+          this.globalConfig[key] !== null
+        ) {
+          for (const [nestedKey, nestedDefault] of Object.entries(
+            defaultValue,
+          )) {
+            if (this.globalConfig[key][nestedKey] === undefined) {
+              this.globalConfig[key][nestedKey] = nestedDefault;
+              logger.debug(
+                `Applied default for ${key}.${nestedKey}: ${nestedDefault}`,
+              );
+            }
+          }
+        }
+        // Mark as explicitly set
+        this.explicitlySet.add(key);
+        logger.debug(
+          `Using explicit value for ${key}: ${JSON.stringify(this.globalConfig[key])}`,
+        );
       } else {
         // Mark as explicitly set
         this.explicitlySet.add(key);

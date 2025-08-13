@@ -373,14 +373,15 @@ export class AudiobookshelfClient {
       // Process all libraries in parallel for maximum speed
       const libraryPromises = libraries.map(async library => {
         try {
-          const sampleSize = Math.min(100, this.maxBooksToFetch || 100);
+          // For completion detection, we need to check ALL books, not just a sample
+          // This ensures we don't miss completed books that are not in the first 100
           logger.debug(
-            `Scanning library ${library.name} (ID: ${library.id}) with sample size ${sampleSize}`,
+            `Scanning library ${library.name} (ID: ${library.id}) for all completed books`,
           );
 
           const libraryItems = await this.getLibraryItems(
             library.id,
-            sampleSize,
+            null, // No limit - check all books for completion status
           );
 
           if (!libraryItems || libraryItems.length === 0) {

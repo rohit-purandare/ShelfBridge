@@ -97,6 +97,30 @@ users:
 #   auto_add_books: false
 #   
 #   # =============================================================================
+#   # SESSION-BASED DELAYED UPDATES (Optional - Disabled by Default)
+#   # =============================================================================
+#   
+#   # Delay Hardcover API updates until reading sessions end (default: disabled)
+#   # Useful for reducing API calls during active listening sessions
+#   # delayed_updates:
+#   #   enabled: false                     # Enable delayed updates (default: false)
+#   #   session_timeout: 900               # Session timeout in seconds (default: 15 minutes)
+#   #   max_delay: 3600                    # Maximum delay in seconds (default: 1 hour)
+#   #   immediate_completion: true         # Always sync completion immediately (default: true)
+#   #   
+#   #   # How it works:
+#   #   # - Progress updates are stored locally during active sessions
+#   #   # - After session_timeout with no progress changes, final progress is sent to Hardcover
+#   #   # - Book completions always bypass delays for immediate sync
+#   #   # - max_delay ensures updates never wait longer than specified time
+#   #   
+#   #   # Environment Variables (Docker/CI):
+#   #   # SHELFBRIDGE_DELAYED_UPDATES_ENABLED=true
+#   #   # SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT=900
+#   #   # SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY=3600
+#   #   # SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION=true
+#   
+#   # =============================================================================
 #   # TITLE/AUTHOR MATCHING (Optional - Enabled by Default)
 #   # =============================================================================
 #   
@@ -225,6 +249,14 @@ users:
 #   workers: 1
 #   parallel: false
 #   min_progress_threshold: 10.0
+
+# Session-based delayed updates (reduce API calls during listening):
+# global:
+#   sync_schedule: "*/15 * * * *"  # Every 15 minutes
+#   delayed_updates:
+#     enabled: true
+#     session_timeout: 900         # 15 minutes - end session if no progress change
+#     max_delay: 3600             # 1 hour maximum delay for safety
 
 # Testing/development setup:
 # global:

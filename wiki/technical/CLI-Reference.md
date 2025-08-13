@@ -475,6 +475,8 @@ shelfbridge start
 **Features:**
 
 - Runs initial sync immediately
+- **Startup Session Recovery**: Automatically detects and processes any active sessions from previous app shutdown (when delayed updates enabled)
+- Zero data loss on application restarts
 - Schedules recurring syncs based on `sync_schedule` configuration
 - Process stays alive continuously for scheduled syncs
 - Ideal for Docker containers and service deployments

@@ -7,6 +7,7 @@ ShelfBridge is a comprehensive audiobook progress synchronization solution with 
 - [Core Synchronization Features](#core-synchronization-features)
 - [Smart Features](#smart-features)
 - [Performance Features](#performance-features)
+  - [Session-Based Delayed Updates](#session-based-delayed-updates)
 - [User Management Features](#user-management-features)
 - [Configuration Features](#configuration-features)
 - [CLI Features](#cli-features)
@@ -75,6 +76,15 @@ ShelfBridge is a comprehensive audiobook progress synchronization solution with 
 - **Concurrent API requests** with semaphore control
 - **Memory optimization** for resource-constrained environments
 - **Progress tracking** during parallel operations
+
+### Session-Based Delayed Updates
+
+- **Smart API reduction** delays progress updates until listening sessions end
+- **Session timeout detection** (60 seconds to 2 hours, default 15 minutes)
+- **Maximum delay safety** (5 minutes to 24 hours, default 1 hour)
+- **Immediate completion sync** overrides delays for finished books
+- **Startup session recovery** processes any active sessions after app restart
+- **Zero data loss guarantee** ensures all progress is eventually synced
 
 ### Rate Limiting
 

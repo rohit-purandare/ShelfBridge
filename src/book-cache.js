@@ -361,6 +361,72 @@ export class BookCache {
       }
     }
 
+    // Migration 5: Add delayed updates columns for session-based updates
+    const delayedUpdateColumns = [
+      {
+        name: 'session_last_change',
+        type: 'TIMESTAMP',
+        description: 'Last time progress changed during session',
+      },
+      {
+        name: 'session_pending_progress',
+        type: 'REAL',
+        description: 'Pending progress to sync to Hardcover',
+      },
+      {
+        name: 'session_is_active',
+        type: 'BOOLEAN DEFAULT 0',
+        description: 'Whether book has active session with pending updates',
+      },
+      {
+        name: 'last_hardcover_sync',
+        type: 'TIMESTAMP',
+        description: 'Last time progress was synced to Hardcover',
+      },
+    ];
+
+    for (const column of delayedUpdateColumns) {
+      try {
+        this.db.prepare(`SELECT ${column.name} FROM books LIMIT 1`).get();
+        logger.debug(`Migration 5: ${column.name} column already exists`);
+      } catch (err) {
+        if (err.message.includes(`no such column: ${column.name}`)) {
+          try {
+            this.db.exec(
+              `ALTER TABLE books ADD COLUMN ${column.name} ${column.type}`,
+            );
+            logger.debug(
+              `Migration 5: Added ${column.name} column - ${column.description}`,
+            );
+          } catch (alterErr) {
+            logger.error(
+              `Migration 5 failed for ${column.name}: ${alterErr.message}`,
+            );
+            throw alterErr;
+          }
+        } else {
+          logger.error(
+            `Migration 5 check failed for ${column.name}: ${err.message}`,
+          );
+          throw err;
+        }
+      }
+    }
+
+    // Add index for efficient session timeout queries
+    try {
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_books_session_timeout 
+        ON books(user_id, session_is_active, session_last_change) 
+        WHERE session_is_active = 1
+      `);
+      logger.debug(
+        'Migration 5: Added session timeout index for efficient queries',
+      );
+    } catch (err) {
+      logger.debug(`Could not create session timeout index: ${err.message}`);
+    }
+
     logger.debug('Database migrations completed successfully');
   }
 
@@ -1275,6 +1341,237 @@ export class BookCache {
       } finally {
         this.db = null;
       }
+    }
+  }
+
+  /**
+   * Session Management Methods for Delayed Updates
+   */
+
+  /**
+   * Update session progress for delayed updates
+   * @param {string} userId - User ID
+   * @param {string} identifier - Book identifier
+   * @param {string} title - Book title
+   * @param {number} pendingProgress - New progress to store pending sync
+   * @param {string} identifierType - Identifier type (asin/isbn)
+   * @returns {Promise<boolean>} Success status
+   */
+  async updateSessionProgress(
+    userId,
+    identifier,
+    title,
+    pendingProgress,
+    identifierType = 'isbn',
+  ) {
+    await this.init();
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const now = new Date().toISOString();
+
+      const stmt = this.db.prepare(`
+        UPDATE books 
+        SET session_pending_progress = ?,
+            session_last_change = ?,
+            session_is_active = 1,
+            updated_at = ?
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+
+      const result = stmt.run(
+        pendingProgress,
+        now,
+        now,
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+
+      if (result.changes > 0) {
+        logger.debug(
+          `Updated session progress for ${title}: ${pendingProgress}%`,
+        );
+        return true;
+      } else {
+        logger.debug(`No book found to update session progress for ${title}`);
+        return false;
+      }
+    } catch (err) {
+      logger.error(
+        `Error updating session progress for ${title}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Get books with expired sessions (session timeout reached)
+   * @param {string} userId - User ID
+   * @param {number} sessionTimeoutSeconds - Session timeout in seconds
+   * @returns {Promise<Array>} Array of books with expired sessions
+   */
+  async getExpiredSessions(userId, sessionTimeoutSeconds) {
+    await this.init();
+
+    try {
+      const timeoutMs = sessionTimeoutSeconds * 1000;
+      const cutoffTime = new Date(Date.now() - timeoutMs).toISOString();
+
+      const stmt = this.db.prepare(`
+        SELECT user_id, identifier, identifier_type, title, 
+               session_pending_progress, session_last_change,
+               progress_percent, last_hardcover_sync
+        FROM books 
+        WHERE user_id = ? 
+          AND session_is_active = 1 
+          AND session_last_change < ?
+      `);
+
+      const expiredSessions = stmt.all(userId, cutoffTime);
+
+      if (expiredSessions.length > 0) {
+        logger.debug(
+          `Found ${expiredSessions.length} expired sessions for user ${userId}`,
+        );
+      }
+
+      return expiredSessions;
+    } catch (err) {
+      logger.error(
+        `Error getting expired sessions for user ${userId}: ${err.message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Mark session as complete and sync final progress
+   * @param {string} userId - User ID
+   * @param {string} identifier - Book identifier
+   * @param {string} title - Book title
+   * @param {number} finalProgress - Final progress to sync
+   * @param {string} identifierType - Identifier type (asin/isbn)
+   * @returns {Promise<boolean>} Success status
+   */
+  async markSessionComplete(
+    userId,
+    identifier,
+    title,
+    finalProgress,
+    identifierType = 'isbn',
+  ) {
+    await this.init();
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const now = new Date().toISOString();
+
+      const stmt = this.db.prepare(`
+        UPDATE books 
+        SET progress_percent = ?,
+            session_is_active = 0,
+            session_pending_progress = NULL,
+            session_last_change = NULL,
+            last_hardcover_sync = ?,
+            last_sync = ?,
+            updated_at = ?
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+
+      const result = stmt.run(
+        finalProgress,
+        now,
+        now,
+        now,
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+
+      if (result.changes > 0) {
+        logger.debug(`Marked session complete for ${title}: ${finalProgress}%`);
+        return true;
+      } else {
+        logger.debug(`No active session found to complete for ${title}`);
+        return false;
+      }
+    } catch (err) {
+      logger.error(
+        `Error marking session complete for ${title}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Check if a book has an active session
+   * @param {string} userId - User ID
+   * @param {string} identifier - Book identifier
+   * @param {string} title - Book title
+   * @param {string} identifierType - Identifier type (asin/isbn)
+   * @returns {Promise<boolean>} Whether book has active session
+   */
+  async hasActiveSession(userId, identifier, title, identifierType = 'isbn') {
+    await this.init();
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+
+      const stmt = this.db.prepare(`
+        SELECT session_is_active 
+        FROM books 
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+
+      const result = stmt.get(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+      return result && result.session_is_active === 1;
+    } catch (err) {
+      logger.error(
+        `Error checking active session for ${title}: ${err.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Get all active sessions for a user (useful for app restart recovery)
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of books with active sessions
+   */
+  async getActiveSessions(userId) {
+    await this.init();
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT user_id, identifier, identifier_type, title, 
+               session_pending_progress, session_last_change,
+               progress_percent, last_hardcover_sync
+        FROM books 
+        WHERE user_id = ? AND session_is_active = 1
+      `);
+
+      const activeSessions = stmt.all(userId);
+
+      if (activeSessions.length > 0) {
+        logger.debug(
+          `Found ${activeSessions.length} active sessions for user ${userId}`,
+        );
+      }
+
+      return activeSessions;
+    } catch (err) {
+      logger.error(
+        `Error getting active sessions for user ${userId}: ${err.message}`,
+      );
+      return [];
     }
   }
 
