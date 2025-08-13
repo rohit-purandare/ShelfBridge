@@ -1233,66 +1233,46 @@ export class SyncManager {
 
         if (!this.dryRun) {
           try {
-            const narrator = absBook?.metadata?.narrators?.join(', ') || null;
-            const maxResults = this.globalConfig.max_search_results || 5;
-
-            logger.debug(
-              `Searching Hardcover by title/author: "${title}" by "${author}"`,
+            // Use existing TitleAuthorMatcher instead of duplicating logic
+            const { TitleAuthorMatcher } = await import(
+              './matching/strategies/title-author-matcher.js'
             );
-            const titleAuthorResults =
-              await this.hardcover.searchEditionsByTitleAuthor(
-                title,
-                author,
-                narrator,
-                maxResults,
+            const titleAuthorMatcher = new TitleAuthorMatcher(
+              this.hardcover,
+              this.cache,
+              this.globalConfig,
+            );
+
+            // Use the existing findMatch method for search results (not user library lookup)
+            const titleAuthorMatch = await titleAuthorMatcher.findMatch(
+              absBook,
+              this.userId,
+              null, // No user library lookup needed for auto-add
+              null,
+            );
+
+            if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
+              logger.info(
+                `Found ${title} via title/author fallback for auto-add`,
+                {
+                  confidence:
+                    titleAuthorMatch._matchingScore?.totalScore?.toFixed(1) ||
+                    'N/A',
+                  hardcoverTitle: titleAuthorMatch.edition?.book?.title,
+                },
               );
 
-            if (titleAuthorResults.length > 0) {
-              logger.debug(
-                `Title/author search returned ${titleAuthorResults.length} results for auto-add`,
-              );
-
-              // Score and rank the results (reuse existing scoring logic)
-              const { calculateMatchingScore } = await import(
-                './matching/scoring/match-scorer.js'
-              );
-              const scoredResults = titleAuthorResults.map(result => {
-                const score = calculateMatchingScore(
-                  result,
-                  title,
-                  author,
-                  narrator,
-                  absBook?.metadata || {},
-                );
-                return { ...result, _matchingScore: score };
-              });
-
-              // Sort by score and filter by confidence threshold
-              const sortedResults = scoredResults
-                .filter(result => result._matchingScore.totalScore >= 50) // Minimum 50% confidence for auto-add
-                .sort(
-                  (a, b) =>
-                    b._matchingScore.totalScore - a._matchingScore.totalScore,
-                );
-
-              if (sortedResults.length > 0) {
-                const bestMatch = sortedResults[0];
-                logger.info(
-                  `Found ${title} via title/author fallback for auto-add`,
-                  {
-                    confidence: bestMatch._matchingScore.totalScore.toFixed(1),
-                    hardcoverTitle: bestMatch.book.title,
-                  },
-                );
-                searchResults = [bestMatch];
-              } else {
-                logger.debug(
-                  `Title/author search found results but none met confidence threshold for auto-add`,
-                );
-              }
+              // Convert the match to the expected searchResults format for auto-add
+              searchResults = [
+                {
+                  id: titleAuthorMatch.edition.id,
+                  book: titleAuthorMatch.edition.book,
+                  format: titleAuthorMatch.edition.format,
+                },
+              ];
             } else {
               logger.debug(
-                `Title/author search returned no results for auto-add`,
+                `Title/author matcher found no suitable results for auto-add`,
               );
             }
           } catch (titleAuthorError) {
