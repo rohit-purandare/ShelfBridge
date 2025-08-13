@@ -1226,33 +1226,99 @@ export class SyncManager {
       }
 
       if (searchResults.length === 0) {
-        if (this.globalConfig.force_sync) {
-          logger.warn(
-            `Force sync: Book ${title} not found in Hardcover database - attempting more aggressive matching`,
-            {
-              searchedIdentifiers: identifiers,
-              dryRun: this.dryRun,
+        // Try title/author fallback if identifier searches failed
+        logger.debug(
+          `Identifier searches failed for ${title}, attempting title/author fallback for auto-add`,
+        );
+
+        if (!this.dryRun) {
+          try {
+            // Use existing TitleAuthorMatcher instead of duplicating logic
+            const { TitleAuthorMatcher } = await import(
+              './matching/strategies/title-author-matcher.js'
+            );
+            const titleAuthorMatcher = new TitleAuthorMatcher(
+              this.hardcover,
+              this.cache,
+              this.globalConfig,
+            );
+
+            // Use the existing findMatch method for search results (not user library lookup)
+            const titleAuthorMatch = await titleAuthorMatcher.findMatch(
+              absBook,
+              this.userId,
+              null, // No user library lookup needed for auto-add
+              null,
+            );
+
+            if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
+              logger.info(
+                `Found ${title} via title/author fallback for auto-add`,
+                {
+                  confidence:
+                    titleAuthorMatch._matchingScore?.totalScore?.toFixed(1) ||
+                    'N/A',
+                  hardcoverTitle: titleAuthorMatch.edition?.book?.title,
+                },
+              );
+
+              // Convert the match to the expected searchResults format for auto-add
+              searchResults = [
+                {
+                  id: titleAuthorMatch.edition.id,
+                  book: titleAuthorMatch.edition.book,
+                  format: titleAuthorMatch.edition.format,
+                },
+              ];
+            } else {
+              logger.debug(
+                `Title/author matcher found no suitable results for auto-add`,
+              );
+            }
+          } catch (titleAuthorError) {
+            logger.warn(
+              `Title/author fallback search failed for auto-add of ${title}`,
+              {
+                error: titleAuthorError.message,
+              },
+            );
+          }
+        }
+
+        // If still no results after all attempts
+        if (searchResults.length === 0) {
+          if (this.globalConfig.force_sync) {
+            logger.warn(
+              `Force sync: Book ${title} not found in Hardcover database - attempted identifier and title/author searches`,
+              {
+                searchedIdentifiers: identifiers,
+                dryRun: this.dryRun,
+                forceSync: true,
+              },
+            );
+            return {
+              status: 'skipped',
+              reason:
+                'Book not found in Hardcover (force sync attempted with all search methods)',
+              title,
               forceSync: true,
-            },
-          );
-          // For force sync, we could try additional matching strategies here
-          // For now, still return skipped but with force context
-          return {
-            status: 'skipped',
-            reason: 'Book not found in Hardcover (force sync attempted)',
-            title,
-            forceSync: true,
-          };
-        } else {
-          logger.info(`Could not find ${title} in Hardcover database`, {
-            searchedIdentifiers: identifiers,
-            dryRun: this.dryRun,
-          });
-          return {
-            status: 'skipped',
-            reason: 'Book not found in Hardcover',
-            title,
-          };
+            };
+          } else {
+            logger.info(
+              `Could not find ${title} in Hardcover database after all search attempts`,
+              {
+                searchedIdentifiers: identifiers,
+                titleAuthorAttempted: !this.dryRun,
+                dryRun: this.dryRun,
+              },
+            );
+            return {
+              status: 'skipped',
+              reason:
+                'Book not found in Hardcover after identifier and title/author searches',
+              title,
+            };
+          }
         }
       }
 
