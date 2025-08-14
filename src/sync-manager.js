@@ -1262,14 +1262,59 @@ export class SyncManager {
                 },
               );
 
-              // Convert the match to the expected searchResults format for auto-add
-              searchResults = [
-                {
-                  id: titleAuthorMatch.edition.id,
-                  book: titleAuthorMatch.edition.book,
-                  format: titleAuthorMatch.edition.format,
-                },
-              ];
+              // Handle edition lookup for search API results
+              if (titleAuthorMatch._needsEditionIdLookup) {
+                logger.debug(
+                  `Looking up edition information for book ${titleAuthorMatch.userBook.book.id}`,
+                );
+
+                const editionInfo =
+                  await this.hardcover.getPreferredEditionFromBookId(
+                    titleAuthorMatch.userBook.book.id,
+                    'audiobook', // Prefer audiobook format for AudioBookshelf integration
+                  );
+
+                if (editionInfo) {
+                  // Convert to searchResults format with proper edition data
+                  searchResults = [
+                    {
+                      id: editionInfo.edition.id, // Now we have the real edition ID
+                      book: {
+                        id: editionInfo.bookId,
+                        title: editionInfo.title,
+                      },
+                      format:
+                        editionInfo.edition.reading_format?.format ||
+                        'audiobook',
+                      asin: editionInfo.edition.asin,
+                      isbn_10: editionInfo.edition.isbn_10,
+                      isbn_13: editionInfo.edition.isbn_13,
+                      pages: editionInfo.edition.pages,
+                      audio_seconds: editionInfo.edition.audio_seconds,
+                    },
+                  ];
+
+                  logger.debug(`Edition lookup successful`, {
+                    bookId: editionInfo.bookId,
+                    editionId: editionInfo.edition.id,
+                    format: editionInfo.edition.reading_format?.format,
+                  });
+                } else {
+                  logger.warn(
+                    `Edition lookup failed for book ${titleAuthorMatch.userBook.book.id}`,
+                  );
+                  searchResults = [];
+                }
+              } else {
+                // Convert the match to the expected searchResults format for auto-add
+                searchResults = [
+                  {
+                    id: titleAuthorMatch.edition.id,
+                    book: titleAuthorMatch.edition.book,
+                    format: titleAuthorMatch.edition.format,
+                  },
+                ];
+              }
             } else {
               logger.debug(
                 `Title/author matcher found no suitable results for auto-add`,

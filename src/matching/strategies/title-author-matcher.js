@@ -91,18 +91,17 @@ export class TitleAuthorMatcher {
         });
       }
 
-      // 2. Cache miss - perform API search
+      // 2. Cache miss - perform API search using the reliable search API
       logger.debug(
-        `Title/author cache miss for "${title}" - calling edition search API`,
+        `Title/author cache miss for "${title}" - using search API (more reliable than direct GraphQL)`,
       );
 
-      const searchResults =
-        await this.hardcoverClient.searchEditionsByTitleAuthor(
-          title,
-          author,
-          narrator,
-          maxResults,
-        );
+      const searchResults = await this.hardcoverClient.searchBooksForMatching(
+        title,
+        author,
+        narrator,
+        maxResults,
+      );
 
       if (searchResults.length === 0) {
         logger.debug(`No search results found for "${title}"`);
@@ -345,47 +344,26 @@ export class TitleAuthorMatcher {
    * @private
    */
   _convertSearchResultToMatch(searchResult) {
-    const editionId = searchResult.id;
-    const bookId = searchResult.book?.id;
+    // All search results now come from the search API (book-level results)
+    const bookId = searchResult.id;
+    const editionId = null; // Search API returns book IDs, not edition IDs
 
-    logger.debug('Converting search result to match format', {
-      searchResultId: searchResult.id,
-      searchResultTitle: searchResult.title,
+    logger.debug('Converting search API result', {
       bookId: bookId,
-      editionId: editionId,
-      hasBookObject: !!searchResult.book,
+      searchResultTitle: searchResult.title,
+      hasContributions: !!(
+        searchResult.contributions && searchResult.contributions.length > 0
+      ),
     });
 
-    if (!editionId) {
-      logger.error('Cannot convert search result: missing edition ID', {
+    if (!bookId) {
+      logger.error('Cannot convert search result: missing book ID', {
         searchResult: searchResult,
       });
       return null;
     }
 
-    // First, check if we already have this exact edition
-    const existingByEdition = this._findUserBookByEditionId(editionId);
-    if (existingByEdition) {
-      logger.debug('Found exact edition match in user library', {
-        searchResultTitle: searchResult.title,
-        editionId: editionId,
-        userBookId: existingByEdition.id,
-        libraryTitle: existingByEdition.book.title,
-      });
-
-      return {
-        userBook: existingByEdition,
-        edition: {
-          id: editionId,
-          format: searchResult.format || 'audiobook',
-        },
-        _isSearchResult: false, // It's already in library
-        _matchingScore: searchResult._matchingScore,
-        _needsBookIdLookup: false,
-        _matchType: 'title_author_exact_edition',
-        _tier: 3,
-      };
-    }
+    // Skip edition-level check since search API returns book-level results
 
     // If we have a book ID, check if we have any edition of this book
     if (bookId) {
@@ -425,22 +403,24 @@ export class TitleAuthorMatcher {
       searchBookId: bookId,
     });
 
-    // Create match object for auto-add
+    // Create match object for auto-add (search API results are book-level)
     const match = {
       userBook: {
-        id: bookId || editionId, // Fallback to edition ID if book ID missing
+        id: bookId,
         book: {
           title: searchResult.title || 'Unknown Title',
-          id: bookId || editionId,
+          id: bookId,
+          contributions: searchResult.contributions || [],
         },
       },
       edition: {
-        id: editionId,
-        format: searchResult.format || 'unknown',
+        id: bookId, // Use book ID as placeholder until we can get proper edition info
+        format: 'unknown', // Will be determined during auto-add process
       },
       _isSearchResult: true,
       _matchingScore: searchResult._matchingScore,
-      _needsBookIdLookup: !bookId, // Need lookup if we don't have book ID
+      _needsBookIdLookup: false, // We have the book ID
+      _needsEditionIdLookup: true, // Always need edition lookup for search API results
       _matchType: 'title_author_auto_add',
       _tier: 3,
     };

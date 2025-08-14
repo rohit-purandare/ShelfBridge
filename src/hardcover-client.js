@@ -1632,133 +1632,95 @@ export class HardcoverClient {
   }
 
   /**
-   * Search editions directly by title and author using Hardcover's editions API
-   * This provides edition-specific data (ASIN, ISBN, format, narrator) for accurate matching
-   * @param {string} title - Book title
-   * @param {string} author - Author name (optional)
-   * @param {string} narrator - Narrator name (optional, for metadata)
-   * @param {number} limit - Maximum results
-   * @returns {Array} - Edition search results with full edition data
+   * Get edition information from book ID for auto-add operations
+   * @param {string|number} bookId - Book ID
+   * @param {string} format - Preferred format (audiobook, ebook, etc.)
+   * @returns {Object|null} - Best edition for the book or null if not found
    */
-  async searchEditionsByTitleAuthor(
-    title,
-    author = null,
-    narrator = null,
-    limit = 5,
-  ) {
-    if (!title || typeof title !== 'string') {
-      logger.warn('Invalid title provided for edition search:', title);
-      return [];
-    }
-
-    logger.debug(`Searching editions for "${title}" by "${author}"`);
-
-    // Build search conditions
-    const titleCondition = `%${title.trim()}%`;
-    const whereConditions = {
-      book: {
-        title: { _ilike: titleCondition },
-      },
-    };
-
-    // Add author condition if provided (use contributions instead of author_names)
-    if (author && typeof author === 'string') {
-      whereConditions.book.contributions = {
-        author: {
-          name: { _ilike: `%${author.trim()}%` },
-        },
-      };
-    }
-
+  async getPreferredEditionFromBookId(bookId, preferredFormat = 'audiobook') {
     const query = `
-      query searchEditions($where: editions_bool_exp!, $limit: Int!) {
-        editions(
-          where: $where
-          order_by: [
-            {users_count: desc},
-            {id: desc}
-          ]
-          limit: $limit
-        ) {
+      query getEditionsFromBook($bookId: Int!) {
+        books(where: {id: {_eq: $bookId}}, limit: 1) {
           id
           title
-          subtitle
-          asin
-          isbn_10
-          isbn_13
-          pages
-          audio_seconds
-          release_date
-          physical_format
-          rating
-          users_count
-          users_read_count
-          lists_count
-          book {
+          editions {
             id
-            title
-            contributions {
-              author {
-                id
-                name
-              }
-            }
-          }
-          publisher {
-            id
-            name
-          }
-          reading_format {
-            id
-            format
-          }
-          contributions {
-            author {
-              id
-              name
-            }
-            contribution
+            asin
+            isbn_10
+            isbn_13
+            pages
+            audio_seconds
+            physical_format
+            reading_format { format }
+            users_count
+            users_read_count
           }
         }
       }
     `;
 
-    const variables = {
-      where: whereConditions,
-      limit: Math.min(limit, 20), // Cap at 20 for performance
-    };
+    const variables = { bookId: safeParseInt(bookId, 'bookId') };
 
     try {
       const result = await this._executeQuery(query, variables);
 
-      if (!result || !result.editions) {
-        logger.debug('No edition results returned from API for:', title);
-        return [];
+      if (result && result.books && result.books.length > 0) {
+        const book = result.books[0];
+        if (book.editions && book.editions.length > 0) {
+          // Sort editions by preference: preferred format first, then by user popularity
+          const sortedEditions = book.editions.sort((a, b) => {
+            // Prefer audiobook format if that's what we're looking for
+            const aIsPreferred = a.reading_format?.format === preferredFormat;
+            const bIsPreferred = b.reading_format?.format === preferredFormat;
+
+            if (aIsPreferred && !bIsPreferred) return -1;
+            if (!aIsPreferred && bIsPreferred) return 1;
+
+            // Then by user count (popularity)
+            return (b.users_count || 0) - (a.users_count || 0);
+          });
+
+          const bestEdition = sortedEditions[0];
+
+          logger.debug(`Selected edition for book ${bookId}`, {
+            bookTitle: book.title,
+            editionId: bestEdition.id,
+            format:
+              bestEdition.reading_format?.format || bestEdition.physical_format,
+            usersCount: bestEdition.users_count,
+            totalEditions: book.editions.length,
+          });
+
+          return {
+            bookId: book.id,
+            title: book.title,
+            edition: {
+              id: bestEdition.id,
+              asin: bestEdition.asin,
+              isbn_10: bestEdition.isbn_10,
+              isbn_13: bestEdition.isbn_13,
+              pages: bestEdition.pages,
+              audio_seconds: bestEdition.audio_seconds,
+              physical_format: bestEdition.physical_format,
+              reading_format: bestEdition.reading_format,
+              users_count: bestEdition.users_count,
+            },
+          };
+        }
       }
 
-      const editions = result.editions;
-      logger.debug(
-        `Edition search for "${title}" returned ${editions.length} results`,
-      );
-
-      // Add search metadata to each result
-      return editions.map(edition => ({
-        ...edition,
-        _searchMetadata: {
-          searchTitle: title,
-          searchAuthor: author,
-          searchNarrator: narrator,
-          searchTimestamp: Date.now(),
-          searchType: 'direct_edition_search',
-        },
-      }));
+      logger.warn('No editions found for book', { bookId });
+      return null;
     } catch (error) {
-      logger.error('Error searching editions by title/author:', title, {
+      logger.error('Error looking up editions from book ID:', error.message, {
+        bookId,
         error: error.message,
-        author: author,
-        stack: error.stack,
       });
-      return [];
+      return null;
     }
   }
+
+  // REMOVED: searchEditionsByTitleAuthor
+  // This method was redundant with searchBooksForMatching and less reliable.
+  // The search API is more flexible and has better fuzzy matching capabilities.
 }
