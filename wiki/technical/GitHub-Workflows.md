@@ -561,6 +561,26 @@ Docker builds are optimized to only run when necessary:
 - ✅ **Output handling** - Dynamic output references handle both PR and push scenarios
 - ✅ **Status check reliability** - Workflow now properly reports "Docker Build / build" status
 
+### Branch Protection Status Reporting (RESOLVED)
+
+**Fixed Issue:** Resolved "build" status check blocking PRs when Docker build was skipped for docs-only changes
+
+**Previous Problem:**
+
+- Branch protection required "build" status check for all PRs
+- Docker Build workflow used path filters that skipped docs-only changes (`.md` files)
+- PRs with only documentation changes got stuck waiting for "build" status that never reported
+
+**Solution Applied:** Always-run workflow with internal path detection
+
+- ✅ **Removed path filters** from `pull_request` trigger - workflow always runs for all PRs
+- ✅ **Added internal path detection** using `dorny/paths-filter@v3` action
+- ✅ **Smart build logic** - PRs always build Docker images for local testing
+- ✅ **Conditional push builds** - Push events only build when relevant files change
+- ✅ **Always reports status** - Workflow provides "build" status for branch protection regardless of file changes
+
+**Result:** Documentation-only PRs no longer get stuck, while maintaining Docker build requirements for code changes.
+
 ### Version-Specific Docker Images
 
 **Fixed Issue:** The workflow now ensures that version-specific Docker images are created for every release:

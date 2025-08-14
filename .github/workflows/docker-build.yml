@@ -45,17 +45,6 @@ on:
       - '!wiki/**'
   pull_request:
     branches: [main]
-    paths:
-      - 'Dockerfile'
-      - 'docker-*.sh'
-      - 'src/**'
-      - 'package*.json'
-      - 'release-please-config.json'
-      - '.release-please-manifest.json'
-      - '.github/workflows/docker-*.yml'
-      - '!**.md'
-      - '!docs/**'
-      - '!wiki/**'
   workflow_call:
     inputs:
       ref:
@@ -111,6 +100,26 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           # Fetch tags for semver extraction when building releases
           fetch-depth: ${{ inputs.is_release && '0' || '1' }}
+
+      - name: Check if Docker build is needed
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile'
+              - 'docker-*.sh'
+              - 'src/**'
+              - 'package*.json'
+              - 'release-please-config.json'
+              - '.release-please-manifest.json'
+              - '.github/workflows/docker-*.yml'
+
+      - name: Skip message for docs-only changes
+        if: steps.changes.outputs.docker != 'true'
+        run: |
+          echo "⏭️ Skipping Docker build - no relevant files changed"
+          echo "This is expected for documentation-only changes"
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -168,7 +177,7 @@ jobs:
           sbom: false
 
       - name: Build and push Docker image (multi-arch)
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.changes.outputs.docker == 'true'
         id: build-push
         uses: docker/build-push-action@v6
         with:
