@@ -76,7 +76,18 @@ export function extractAuthorFromSearchResult(
     }
   }
 
-  // Priority 3: Direct author field (fallback for older data)
+  // Priority 3: author_names array (common in search results)
+  if (
+    availableAuthors.length === 0 &&
+    searchResult.author_names &&
+    Array.isArray(searchResult.author_names)
+  ) {
+    availableAuthors = searchResult.author_names.filter(
+      name => name && typeof name === 'string',
+    );
+  }
+
+  // Priority 4: Direct author field (fallback for older data)
   if (availableAuthors.length === 0 && searchResult.author) {
     availableAuthors = [searchResult.author];
   }
@@ -179,11 +190,25 @@ export function extractFormatFromSearchResult(searchResult) {
     return searchResult.format;
   }
 
+  if (searchResult.reading_format) {
+    if (typeof searchResult.reading_format === 'string') {
+      return searchResult.reading_format;
+    }
+    // Handle object format: { format: 'audiobook' }
+    if (
+      typeof searchResult.reading_format === 'object' &&
+      searchResult.reading_format.format
+    ) {
+      return searchResult.reading_format.format;
+    }
+  }
+
+  // Handle physical_format field (common for physical books)
   if (
-    searchResult.reading_format &&
-    typeof searchResult.reading_format === 'string'
+    searchResult.physical_format &&
+    typeof searchResult.physical_format === 'string'
   ) {
-    return searchResult.reading_format;
+    return 'physical'; // Normalize physical formats
   }
 
   if (
@@ -255,7 +280,13 @@ export function extractActivityFromSearchResult(searchResult) {
  */
 export function extractAudioDurationFromSearchResult(searchResult) {
   // Try different duration fields
-  const durationFields = ['duration', 'length', 'runtime', 'duration_seconds'];
+  const durationFields = [
+    'audio_seconds',
+    'duration',
+    'length',
+    'runtime',
+    'duration_seconds',
+  ];
 
   for (const field of durationFields) {
     if (searchResult[field] && typeof searchResult[field] === 'number') {

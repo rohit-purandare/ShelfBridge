@@ -6,7 +6,8 @@
  */
 
 export { BookMatcher } from './book-matcher.js';
-export { calculateMatchingScore } from './scoring/match-scorer.js';
+export { calculateBookIdentificationScore } from './scoring/book-identification-scorer.js';
+export { selectBestEdition } from './edition-selector.js';
 export { extractBookIdentifiers } from './utils/identifier-extractor.js';
 export { createIdentifierLookup } from './utils/identifier-lookup.js';
 
