@@ -1554,6 +1554,23 @@ export class SyncManager {
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
 
+    // Check if this is an auto-add scenario (userBook is null)
+    if (!userBook) {
+      logger.debug(`Book not in user's library, needs auto-add: ${title}`, {
+        currentProgress: progressPercent,
+        editionId: edition?.id,
+        bookId: hardcoverMatch.book?.id,
+      });
+
+      // For auto-add scenarios, delegate to the auto-add method
+      const identifiers = {
+        isbn: edition?.isbn_13 || edition?.isbn_10,
+        asin: edition?.asin,
+      };
+
+      return await this._tryAutoAddBook(absBook, identifiers, title, author);
+    }
+
     logger.debug(`Syncing existing book: ${title}`, {
       currentProgress: progressPercent,
       hardcoverTitle: userBook.book.title,

@@ -281,31 +281,83 @@ export class TitleAuthorMatcher {
         });
 
         // Create the match object with edition details
-        finalMatch = {
-          userBook: null, // Will be set if user already has this book
-          edition: {
-            id: selectedEditionResult.edition.id,
-            asin: selectedEditionResult.edition.asin,
-            isbn_10: selectedEditionResult.edition.isbn_10,
-            isbn_13: selectedEditionResult.edition.isbn_13,
-            pages: selectedEditionResult.edition.pages,
-            audio_seconds: selectedEditionResult.edition.audio_seconds,
-            format:
-              selectedEditionResult.edition.reading_format?.format ||
-              selectedEditionResult.edition.physical_format ||
-              'unknown',
-            users_count: selectedEditionResult.edition.users_count,
-          },
-          book: {
-            id: selectedEditionResult.bookId,
-            title: selectedEditionResult.title,
-          },
-          _matchType: 'title_author_two_stage',
-          _tier: 3,
-          _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
-          _editionSelectionResult: selectedEditionResult,
-          _needsScoring: false, // Already scored in two stages
-        };
+        // Check if user already has this book in their library
+        let existingUserBook = null;
+        let isCrossEditionMatch = false;
+
+        // First check by the selected edition ID (exact edition match)
+        if (findUserBookByEditionId) {
+          existingUserBook = findUserBookByEditionId(
+            selectedEditionResult.edition.id,
+          );
+        }
+
+        // If not found by edition, check by book ID (different edition of same book)
+        if (!existingUserBook && findUserBookByBookId) {
+          existingUserBook = findUserBookByBookId(selectedEditionResult.bookId);
+          if (existingUserBook) {
+            isCrossEditionMatch = true;
+            logger.debug(
+              `📚 Found different edition of ${title} in library via title-author matching`,
+              {
+                foundEditionId: selectedEditionResult.edition.id,
+                userBookId: existingUserBook.id,
+                libraryTitle: existingUserBook.book.title,
+              },
+            );
+          }
+        }
+
+        // Create match object following ASIN/ISBN matcher pattern
+        if (existingUserBook && isCrossEditionMatch) {
+          // Cross-edition match: use user's existing edition info (like ASIN/ISBN matchers)
+          const userEdition = existingUserBook.book.editions?.[0];
+          const userEditionId = userEdition?.id;
+
+          finalMatch = {
+            userBook: existingUserBook,
+            edition: {
+              id: userEditionId,
+              format: userEdition?.format || 'unknown',
+            },
+            book: {
+              id: selectedEditionResult.bookId,
+              title: selectedEditionResult.title,
+            },
+            _matchType: 'title_author_cross_edition',
+            _tier: 3,
+            _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
+            _editionSelectionResult: selectedEditionResult,
+            _needsScoring: false,
+          };
+        } else {
+          // Exact edition match or auto-add scenario
+          finalMatch = {
+            userBook: existingUserBook, // Set to actual user book if found, null if not in library
+            edition: {
+              id: selectedEditionResult.edition.id,
+              asin: selectedEditionResult.edition.asin,
+              isbn_10: selectedEditionResult.edition.isbn_10,
+              isbn_13: selectedEditionResult.edition.isbn_13,
+              pages: selectedEditionResult.edition.pages,
+              audio_seconds: selectedEditionResult.edition.audio_seconds,
+              format:
+                selectedEditionResult.edition.reading_format?.format ||
+                selectedEditionResult.edition.physical_format ||
+                'unknown',
+              users_count: selectedEditionResult.edition.users_count,
+            },
+            book: {
+              id: selectedEditionResult.bookId,
+              title: selectedEditionResult.title,
+            },
+            _matchType: 'title_author_two_stage',
+            _tier: 3,
+            _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
+            _editionSelectionResult: selectedEditionResult,
+            _needsScoring: false, // Already scored in two stages
+          };
+        }
 
         // Cache successful match using edition ID
         await this._cacheSuccessfulMatch(
