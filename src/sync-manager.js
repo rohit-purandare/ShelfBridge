@@ -1227,8 +1227,17 @@ export class SyncManager {
 
       if (searchResults.length === 0) {
         // Try title/author fallback if identifier searches failed
-        logger.debug(
-          `Identifier searches failed for ${title}, attempting title/author fallback for auto-add`,
+        logger.info(
+          `Auto-add identifier search failed for "${title}", trying title/author fallback`,
+          {
+            attemptedIdentifiers: {
+              asin: identifiers.asin || 'N/A',
+              isbn: identifiers.isbn || 'N/A',
+            },
+            targetTitle: title,
+            targetAuthor: author || 'N/A',
+            fallbackEnabled: !this.dryRun,
+          },
         );
 
         if (!this.dryRun) {
@@ -1253,12 +1262,24 @@ export class SyncManager {
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
               logger.info(
-                `Found ${title} via title/author fallback for auto-add`,
+                `Auto-add title/author fallback successful for "${title}"`,
                 {
-                  confidence:
-                    titleAuthorMatch._matchingScore?.totalScore?.toFixed(1) ||
-                    'N/A',
-                  hardcoverTitle: titleAuthorMatch.edition?.book?.title,
+                  matchType: titleAuthorMatch._matchType,
+                  bookConfidence:
+                    titleAuthorMatch._bookIdentificationScore?.totalScore?.toFixed(
+                      1,
+                    ) + '%' || 'N/A',
+                  hardcoverTitle:
+                    titleAuthorMatch.book?.title ||
+                    titleAuthorMatch.edition?.book?.title,
+                  hardcoverAuthor:
+                    titleAuthorMatch.userBook?.book?.contributions
+                      ?.map(c => c.author?.name)
+                      .join(', ') || 'N/A',
+                  bookId:
+                    titleAuthorMatch.book?.id ||
+                    titleAuthorMatch.userBook?.book?.id,
+                  needsEditionLookup: titleAuthorMatch._needsEditionIdLookup,
                 },
               );
 
@@ -1316,8 +1337,18 @@ export class SyncManager {
                 ];
               }
             } else {
-              logger.debug(
-                `Title/author matcher found no suitable results for auto-add`,
+              logger.info(
+                `Auto-add title/author fallback failed for "${title}"`,
+                {
+                  searchedTitle: title,
+                  searchedAuthor: author || 'N/A',
+                  matchFound: !!titleAuthorMatch,
+                  isSearchResult: titleAuthorMatch?._isSearchResult || false,
+                  matchType: titleAuthorMatch?._matchType || 'N/A',
+                  reason: !titleAuthorMatch
+                    ? 'No matches found in title/author search'
+                    : 'Match found but not suitable for auto-add (likely already in library)',
+                },
               );
             }
           } catch (titleAuthorError) {

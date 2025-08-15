@@ -105,6 +105,28 @@ export class TitleAuthorMatcher {
         `Title/author cache miss for "${title}" - using search API (more reliable than direct GraphQL)`,
       );
 
+      // Extract source book metadata for logging
+      const { extractSeries, extractPublicationYear } = await import(
+        '../utils/audiobookshelf-extractor.js'
+      );
+      const sourceSeries = extractSeries(absBook);
+      const sourceYear = extractPublicationYear(absBook);
+
+      logger.info(`Title/author search initiated for "${title}"`, {
+        searchTitle: title,
+        searchAuthor: author || 'N/A',
+        searchNarrator: narrator || 'N/A',
+        userFormat: userFormat,
+        maxResults: maxResults,
+        confidenceThreshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+        sourceBookMetadata: {
+          series: sourceSeries?.name || 'N/A',
+          seriesPosition: sourceSeries?.position || 'N/A',
+          publicationYear: sourceYear || 'N/A',
+          bookId: absBook.id || 'N/A',
+        },
+      });
+
       const searchResults = await this.hardcoverClient.searchBooksForMatching(
         title,
         author,
@@ -112,8 +134,60 @@ export class TitleAuthorMatcher {
         maxResults,
       );
 
+      logger.info(`Title/author search results for "${title}"`, {
+        resultCount: searchResults.length,
+        searchMetadata: {
+          searchTitle: title,
+          searchAuthor: author || 'N/A',
+          searchNarrator: narrator || 'N/A',
+          searchTimestamp:
+            searchResults[0]?._searchMetadata?.searchTimestamp || Date.now(),
+          searchStrategy:
+            searchResults[0]?._searchMetadata?.searchStrategy || 'unknown',
+        },
+        results: searchResults.map(result => ({
+          title: result.title,
+          author:
+            result.contributions?.map(c => c.author?.name).join(', ') || 'N/A',
+          bookId: result.id,
+          hasEditions: !!(result.editions && result.editions.length > 0),
+          editionCount: result.editions?.length || 0,
+          // Include additional metadata that helps with troubleshooting
+          series: result.series?.name || 'N/A',
+          seriesPosition: result.series?.position || 'N/A',
+          publicationYear: result.publication_year || 'N/A',
+          // Include identifiers if available
+          identifiers: {
+            isbn_10: result.isbn_10 || result.editions?.[0]?.isbn_10 || 'N/A',
+            isbn_13: result.isbn_13 || result.editions?.[0]?.isbn_13 || 'N/A',
+            asin: result.asin || result.editions?.[0]?.asin || 'N/A',
+          },
+          // Include format information
+          formats:
+            result.editions?.map(ed => ({
+              id: ed.id,
+              format:
+                ed.reading_format?.format || ed.physical_format || 'unknown',
+              pages: ed.pages || 'N/A',
+              audioSeconds: ed.audio_seconds || 'N/A',
+            })) || [],
+          // Include activity/popularity if available
+          usersCount: result.users_count || 'N/A',
+          ratingsCount: result.ratings_count || 'N/A',
+          averageRating: result.average_rating || 'N/A',
+        })),
+      });
+
       if (searchResults.length === 0) {
-        logger.debug(`No search results found for "${title}"`);
+        logger.info(
+          `No search results found for "${title}" in Hardcover database`,
+          {
+            searchedTitle: title,
+            searchedAuthor: author || 'N/A',
+            reason:
+              'Book may not exist in Hardcover database or search terms may not match exactly',
+          },
+        );
         return null;
       }
 
@@ -185,6 +259,71 @@ export class TitleAuthorMatcher {
           a._bookIdentificationScore.totalScore,
       );
 
+      // Log detailed scoring results for troubleshooting
+      logger.info(`Title/author scoring results for "${title}"`, {
+        targetTitle: title,
+        targetAuthor: author || 'N/A',
+        threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+        candidates: bookScoredResults.map((result, index) => ({
+          rank: index + 1,
+          title: result.title,
+          author:
+            result.contributions?.map(c => c.author?.name).join(', ') || 'N/A',
+          score: `${result._bookIdentificationScore.totalScore.toFixed(1)}%`,
+          confidence: result._bookIdentificationScore.confidence,
+          isBookMatch: result._bookIdentificationScore.isBookMatch,
+          passesThreshold:
+            result._bookIdentificationScore.totalScore >=
+            confidenceThreshold * 100,
+          breakdown: {
+            title: {
+              score: `${result._bookIdentificationScore.breakdown.title?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.title?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.title?.comparison ||
+                'N/A',
+            },
+            author: {
+              score: `${result._bookIdentificationScore.breakdown.author?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.author?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.author?.comparison ||
+                'N/A',
+            },
+            series: {
+              score: `${result._bookIdentificationScore.breakdown.series?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.series?.weight || 0) * 100).toFixed(1)}%`,
+              reason:
+                result._bookIdentificationScore.breakdown.series?.reason ||
+                'N/A',
+            },
+            activity: {
+              score: `${result._bookIdentificationScore.breakdown.activity?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.activity?.weight || 0) * 100).toFixed(1)}%`,
+              value:
+                result._bookIdentificationScore.breakdown.activity?.value ||
+                'N/A',
+            },
+            year: {
+              score: `${result._bookIdentificationScore.breakdown.year?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.year?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.year?.comparison ||
+                'N/A',
+            },
+            penalties: Object.keys(result._bookIdentificationScore.breakdown)
+              .filter(key => key.includes('Penalty'))
+              .map(key => ({
+                type: key,
+                score: `${result._bookIdentificationScore.breakdown[key]?.score?.toFixed(1) || 0}%`,
+                reason:
+                  result._bookIdentificationScore.breakdown[key]?.reason ||
+                  'N/A',
+              })),
+          },
+        })),
+      });
+
       // Find best book match above identification threshold
       const bestBookMatch = bookScoredResults[0];
 
@@ -255,7 +394,7 @@ export class TitleAuthorMatcher {
         const isHighConfidence = bookConfidence >= 75; // High confidence threshold
 
         // Log successful match with two-stage details
-        logger.info(`📚 Found "${title}" via two-stage matching`, {
+        logger.info(`Found "${title}" via two-stage matching`, {
           bookMatch: selectedEditionResult.title,
           bookConfidence: `${bookConfidence.toFixed(1)}%`,
           finalConfidence: isHighConfidence ? 'high' : 'medium',
@@ -298,7 +437,7 @@ export class TitleAuthorMatcher {
           if (existingUserBook) {
             isCrossEditionMatch = true;
             logger.debug(
-              `📚 Found different edition of ${title} in library via title-author matching`,
+              `Found different edition of ${title} in library via title-author matching`,
               {
                 foundEditionId: selectedEditionResult.edition.id,
                 userBookId: existingUserBook.id,
@@ -373,17 +512,42 @@ export class TitleAuthorMatcher {
         const bestScore = bestBookMatch
           ? bestBookMatch._bookIdentificationScore.totalScore
           : 0;
-        logger.debug(
-          `Best book identification for "${title}" below threshold`,
-          {
-            bookScore: bestScore.toFixed(1),
-            threshold: (confidenceThreshold * 100).toFixed(1),
-            hardcoverTitle: bestBookMatch ? bestBookMatch.title : 'N/A',
-            isBookMatch: bestBookMatch
-              ? bestBookMatch._bookIdentificationScore.isBookMatch
-              : false,
-          },
-        );
+
+        if (bestBookMatch) {
+          logger.info(
+            `Best title/author match for "${title}" below confidence threshold`,
+            {
+              bestCandidate: {
+                title: bestBookMatch.title,
+                author:
+                  bestBookMatch.contributions
+                    ?.map(c => c.author?.name)
+                    .join(', ') || 'N/A',
+                score: `${bestScore.toFixed(1)}%`,
+                confidence: bestBookMatch._bookIdentificationScore.confidence,
+                isBookMatch: bestBookMatch._bookIdentificationScore.isBookMatch,
+              },
+              threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+              reason: bestBookMatch._bookIdentificationScore.isBookMatch
+                ? `Score ${bestScore.toFixed(1)}% is below threshold ${(confidenceThreshold * 100).toFixed(1)}%`
+                : `Best match failed basic book identification criteria`,
+              suggestion:
+                bestScore > 45 && bestScore < confidenceThreshold * 100
+                  ? `Consider lowering confidence_threshold to ${Math.floor(bestScore / 10) * 10}% if this match looks correct`
+                  : 'Book may genuinely not exist in Hardcover database',
+            },
+          );
+        } else {
+          logger.info(
+            `No valid candidates found for "${title}" after scoring`,
+            {
+              reason: 'All search results failed basic scoring criteria',
+              searchedTitle: title,
+              searchedAuthor: author || 'N/A',
+            },
+          );
+        }
+
         return null;
       }
     } catch (error) {

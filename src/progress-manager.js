@@ -719,15 +719,22 @@ export class ProgressManager {
 
     // Handle invalid data gracefully instead of defaulting to 0
     if (oldValidated === null || newValidated === null) {
-      logger.warn(
-        `Cannot analyze progress regression due to invalid data in ${context}`,
-        {
-          oldProgress,
-          newProgress,
-          oldValid: oldValidated !== null,
-          newValid: newValidated !== null,
-        },
-      );
+      // Use debug level for normal cases where old progress is simply not available (new books)
+      // Use warn level only when new progress is also invalid (actual data corruption)
+      const logLevel =
+        oldValidated === null && newValidated !== null ? 'debug' : 'warn';
+      const logMessage =
+        oldValidated === null && newValidated !== null
+          ? `No previous progress available for regression analysis in ${context} (normal for new books)`
+          : `Cannot analyze progress regression due to invalid data in ${context}`;
+
+      logger[logLevel](logMessage, {
+        oldProgress,
+        newProgress,
+        oldValid: oldValidated !== null,
+        newValid: newValidated !== null,
+      });
+
       return {
         isRegression: false,
         regressionAmount: 0,
@@ -735,9 +742,12 @@ export class ProgressManager {
         newProgress: newValidated || 0,
         shouldBlock: false,
         shouldWarn: false,
-        reason: 'Cannot analyze regression - invalid progress data',
+        reason:
+          oldValidated === null && newValidated !== null
+            ? 'No previous progress data available - treating as new book'
+            : 'Cannot analyze regression - invalid progress data',
         isPotentialReread: false,
-        invalidData: true,
+        invalidData: oldValidated === null && newValidated === null, // Only true invalid data if both are null
       };
     }
 

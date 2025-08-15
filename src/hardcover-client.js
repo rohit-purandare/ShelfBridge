@@ -1144,15 +1144,18 @@ export class HardcoverClient {
   ) {
     // First try combined title + author search
     let results = [];
+    let searchStrategy = 'unknown';
 
     if (author) {
       logger.debug(
         `Searching Hardcover by title and author: "${title}" by "${author}"`,
       );
       results = await this.searchBooksByTitleAndAuthor(title, author, limit);
+      searchStrategy = 'title_and_author';
     } else {
       logger.debug(`Searching Hardcover by title only: "${title}"`);
       results = await this.searchBooksByTitle(title, limit);
+      searchStrategy = 'title_only';
     }
 
     // If no results and we have author, try title-only as fallback
@@ -1161,6 +1164,7 @@ export class HardcoverClient {
         `No results for combined search, trying title-only: "${title}"`,
       );
       results = await this.searchBooksByTitle(title, limit);
+      searchStrategy = 'title_only_fallback';
     }
 
     // Add metadata for easier processing
@@ -1171,6 +1175,7 @@ export class HardcoverClient {
         searchAuthor: author,
         searchNarrator: narrator,
         searchTimestamp: Date.now(),
+        searchStrategy: searchStrategy,
       },
     }));
   }
