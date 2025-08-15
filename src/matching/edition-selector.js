@@ -10,12 +10,18 @@ import logger from '../logger.js';
 import {
   extractAudioDurationFromAudiobookshelf,
   detectUserBookFormat,
+  extractNarrator,
 } from './utils/audiobookshelf-extractor.js';
 import {
   extractAudioDurationFromSearchResult,
   extractFormatFromSearchResult,
+  extractNarratorFromSearchResult,
 } from './utils/hardcover-extractor.js';
-import { calculateDurationSimilarity } from './utils/similarity.js';
+import {
+  calculateDurationSimilarity,
+  calculateTextSimilarity,
+} from './utils/similarity.js';
+import { normalizeNarrator } from './utils/normalization.js';
 
 /**
  * Select the best edition from available options
@@ -41,6 +47,7 @@ export function selectBestEdition(
   const editions = bookResult.editions;
   const detectedFormat = userFormat || detectUserBookFormat(targetMetadata);
   const targetDuration = extractAudioDurationFromAudiobookshelf(targetMetadata);
+  const targetNarrator = extractNarrator(targetMetadata);
 
   logger.debug(`Selecting best edition from ${editions.length} options`, {
     bookTitle: bookResult.title,
@@ -56,6 +63,7 @@ export function selectBestEdition(
       edition,
       detectedFormat,
       targetDuration,
+      targetNarrator,
     );
     return {
       ...edition,
@@ -82,10 +90,15 @@ export function selectBestEdition(
     totalEditions: editions.length,
   });
 
+  // Extract narrator from the selected edition
+  const selectedNarrator = extractNarratorFromSearchResult(bestEdition);
+
   return {
     bookId: bookResult.id,
     title: bookResult.title,
     edition: bestEdition,
+    score: bestEdition._editionScore.totalScore,
+    narratorName: selectedNarrator,
     selectionReason: bestEdition._editionScore.breakdown,
     alternativeEditions: sortedEditions.slice(1, 3), // Top 2 alternatives
   };
@@ -97,15 +110,22 @@ export function selectBestEdition(
  * @param {Object} edition - Edition to score
  * @param {string} userFormat - User's book format (audiobook, ebook)
  * @param {number} targetDuration - Target duration in seconds (for audiobooks)
+ * @param {string} targetNarrator - Target narrator name (for audiobooks)
  * @returns {Object} - Edition score and breakdown
  */
-function calculateEditionScore(edition, userFormat, targetDuration) {
+function calculateEditionScore(
+  edition,
+  userFormat,
+  targetDuration,
+  targetNarrator,
+) {
   let score = 0;
   const breakdown = {};
 
   // Extract edition data
   const editionFormat = extractFormatFromSearchResult(edition);
   const editionDuration = extractAudioDurationFromSearchResult(edition);
+  const editionNarrator = extractNarratorFromSearchResult(edition);
   const usersCount = edition.users_count || 0;
 
   // ============================================================================
@@ -123,20 +143,20 @@ function calculateEditionScore(edition, userFormat, targetDuration) {
   };
 
   // ============================================================================
-  // POPULARITY/USAGE (25% weight) - More users = better edition
+  // POPULARITY/USAGE (23% weight) - More users = better edition
   // ============================================================================
 
   const popularityScore = calculatePopularityScore(usersCount);
-  score += popularityScore * 0.25;
+  score += popularityScore * 0.23;
   breakdown.popularity = {
     score: popularityScore,
-    weight: 0.25,
+    weight: 0.23,
     usersCount,
     reason: `${usersCount} users - ${getPopularityReason(usersCount)}`,
   };
 
   // ============================================================================
-  // DURATION MATCHING (20% weight) - For audiobooks only
+  // DURATION MATCHING (19% weight) - For audiobooks only
   // ============================================================================
 
   let durationScore = 50; // Neutral default
@@ -151,10 +171,10 @@ function calculateEditionScore(edition, userFormat, targetDuration) {
     durationScore = 60; // Neutral for non-audiobooks
   }
 
-  score += durationScore * 0.2;
+  score += durationScore * 0.19;
   breakdown.duration = {
     score: durationScore,
-    weight: 0.2,
+    weight: 0.19,
     targetDuration: targetDuration
       ? Math.round(targetDuration / 60) + 'm'
       : 'N/A',
@@ -174,6 +194,34 @@ function calculateEditionScore(edition, userFormat, targetDuration) {
     score: completenessScore,
     weight: 0.15,
     reason: getCompletenessReason(edition),
+  };
+
+  // ============================================================================
+  // NARRATOR MATCHING (3% weight) - For audiobooks only
+  // ============================================================================
+
+  let narratorScore = 50; // Neutral default
+  if (userFormat === 'audiobook' && targetNarrator && editionNarrator) {
+    narratorScore =
+      calculateTextSimilarity(
+        normalizeNarrator(targetNarrator),
+        normalizeNarrator(editionNarrator),
+      ) * 100;
+  } else if (userFormat === 'audiobook' && targetNarrator && !editionNarrator) {
+    narratorScore = 30; // Slight penalty for missing narrator on audiobooks when we have target
+  } else if (userFormat === 'audiobook' && !targetNarrator && editionNarrator) {
+    narratorScore = 40; // Slight penalty for missing target narrator but edition has one
+  } else if (userFormat !== 'audiobook') {
+    narratorScore = 60; // Neutral for non-audiobooks
+  }
+
+  score += narratorScore * 0.03;
+  breakdown.narrator = {
+    score: narratorScore,
+    weight: 0.03,
+    targetNarrator: targetNarrator || 'N/A',
+    editionNarrator: editionNarrator || 'N/A',
+    reason: getNarratorMatchReason(userFormat, targetNarrator, editionNarrator),
   };
 
   // ============================================================================
@@ -417,4 +465,34 @@ function getCompletenessReason(edition) {
   if (completeness >= 3) return 'Decent edition data';
   if (completeness >= 2) return 'Limited edition data';
   return 'Minimal edition data';
+}
+
+function getNarratorMatchReason(userFormat, targetNarrator, editionNarrator) {
+  if (userFormat !== 'audiobook') {
+    return 'Narrator not relevant for non-audiobook';
+  }
+
+  if (!targetNarrator && !editionNarrator) {
+    return 'No narrator information available';
+  }
+
+  if (!targetNarrator) {
+    return 'No target narrator to compare';
+  }
+
+  if (!editionNarrator) {
+    return 'Edition narrator not available';
+  }
+
+  const similarity =
+    calculateTextSimilarity(
+      normalizeNarrator(targetNarrator),
+      normalizeNarrator(editionNarrator),
+    ) * 100;
+
+  if (similarity >= 90) return 'Excellent narrator match';
+  if (similarity >= 70) return 'Very good narrator match';
+  if (similarity >= 50) return 'Good narrator match';
+  if (similarity >= 30) return 'Partial narrator match';
+  return 'Poor narrator match';
 }

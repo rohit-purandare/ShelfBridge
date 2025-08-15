@@ -7,7 +7,11 @@
  */
 
 import logger from '../../logger.js';
-import { normalizeTitle, normalizeAuthor } from '../utils/normalization.js';
+import {
+  normalizeTitle,
+  normalizeAuthor,
+  normalizeSeries,
+} from '../utils/normalization.js';
 import { calculateTextSimilarity } from '../utils/similarity.js';
 import {
   extractSeries,
@@ -224,11 +228,11 @@ function calculateSeriesScore(targetSeries, resultSeries) {
     return { score: 45, reason: 'Series data missing on one side' };
   }
 
-  // Compare series names
+  // Compare series names using dedicated series normalization
   const seriesNameSimilarity =
     calculateTextSimilarity(
-      normalizeTitle(targetSeries.name),
-      normalizeTitle(resultSeries.name),
+      normalizeSeries(targetSeries.name),
+      normalizeSeries(resultSeries.name),
     ) * 100;
 
   // If series names don't match well, low score

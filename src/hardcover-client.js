@@ -1587,6 +1587,7 @@ export class HardcoverClient {
                 reading_format: edition.reading_format,
                 pages: edition.pages,
                 audio_seconds: edition.audio_seconds,
+                contributions: edition.contributions, // Include narrator data!
               },
 
               // Enhanced book data
