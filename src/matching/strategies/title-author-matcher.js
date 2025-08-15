@@ -1,8 +1,12 @@
 /**
- * Title/Author-based book matching strategy
+ * Title/Author-based book matching strategy (Two-Stage Approach)
  *
- * This strategy matches books using title and author text matching via the
- * Hardcover search API when identifier-based matching fails.
+ * This strategy implements a two-stage matching process:
+ * Stage 1: Book Identification - Uses focused scoring to identify the correct book
+ * Stage 2: Edition Selection - Selects the best edition/format using preferences
+ *
+ * This approach separates concerns and reduces false negatives where good book
+ * matches fail due to edition-specific metadata issues.
  */
 
 import logger from '../../logger.js';
@@ -10,9 +14,11 @@ import {
   extractTitle,
   extractAuthor,
   extractNarrator,
+  detectUserBookFormat,
 } from '../utils/audiobookshelf-extractor.js';
 import { extractAuthorFromSearchResult } from '../utils/hardcover-extractor.js';
-import { calculateMatchingScore } from '../scoring/match-scorer.js';
+import { calculateBookIdentificationScore } from '../scoring/book-identification-scorer.js';
+import { selectBestEdition } from '../edition-selector.js';
 
 /**
  * Title/Author Matching Strategy - Tier 3
@@ -52,10 +58,13 @@ export class TitleAuthorMatcher {
       return null;
     }
 
-    // Get configuration
+    // Get configuration for two-stage matching
     const config = this.config.title_author_matching || {};
-    const confidenceThreshold = config.confidence_threshold || 0.7;
+    const confidenceThreshold = config.confidence_threshold || 0.7; // Used as book ID threshold
     const maxResults = config.max_search_results || 5;
+
+    // Detect user's book format for edition selection
+    const userFormat = detectUserBookFormat(absBook);
 
     try {
       // 1. Check existing cache for successful title/author match
@@ -91,41 +100,121 @@ export class TitleAuthorMatcher {
         });
       }
 
-      // 2. Cache miss - perform API search
+      // 2. Cache miss - perform API search using the reliable search API
       logger.debug(
-        `Title/author cache miss for "${title}" - calling edition search API`,
+        `Title/author cache miss for "${title}" - using search API (more reliable than direct GraphQL)`,
       );
 
-      const searchResults =
-        await this.hardcoverClient.searchEditionsByTitleAuthor(
-          title,
-          author,
-          narrator,
-          maxResults,
-        );
+      // Extract source book metadata for logging
+      const { extractSeries, extractPublicationYear } = await import(
+        '../utils/audiobookshelf-extractor.js'
+      );
+      const sourceSeries = extractSeries(absBook);
+      const sourceYear = extractPublicationYear(absBook);
+
+      logger.info(`Title/author search initiated for "${title}"`, {
+        searchTitle: title,
+        searchAuthor: author || 'N/A',
+        searchNarrator: narrator || 'N/A',
+        userFormat: userFormat,
+        maxResults: maxResults,
+        confidenceThreshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+        sourceBookMetadata: {
+          series: sourceSeries?.name || 'N/A',
+          seriesPosition: sourceSeries?.position || 'N/A',
+          publicationYear: sourceYear || 'N/A',
+          bookId: absBook.id || 'N/A',
+        },
+      });
+
+      const searchResults = await this.hardcoverClient.searchBooksForMatching(
+        title,
+        author,
+        narrator,
+        maxResults,
+      );
+
+      logger.info(`Title/author search results for "${title}"`, {
+        resultCount: searchResults.length,
+        searchMetadata: {
+          searchTitle: title,
+          searchAuthor: author || 'N/A',
+          searchNarrator: narrator || 'N/A',
+          searchTimestamp:
+            searchResults[0]?._searchMetadata?.searchTimestamp || Date.now(),
+          searchStrategy:
+            searchResults[0]?._searchMetadata?.searchStrategy || 'unknown',
+        },
+        results: searchResults.map(result => ({
+          title: result.title,
+          author:
+            result.contributions?.map(c => c.author?.name).join(', ') || 'N/A',
+          bookId: result.id,
+          hasEditions: !!(result.editions && result.editions.length > 0),
+          editionCount: result.editions?.length || 0,
+          // Include additional metadata that helps with troubleshooting
+          series: result.series?.name || 'N/A',
+          seriesPosition: result.series?.position || 'N/A',
+          publicationYear: result.publication_year || 'N/A',
+          // Include identifiers if available
+          identifiers: {
+            isbn_10: result.isbn_10 || result.editions?.[0]?.isbn_10 || 'N/A',
+            isbn_13: result.isbn_13 || result.editions?.[0]?.isbn_13 || 'N/A',
+            asin: result.asin || result.editions?.[0]?.asin || 'N/A',
+          },
+          // Include format information
+          formats:
+            result.editions?.map(ed => ({
+              id: ed.id,
+              format:
+                ed.reading_format?.format || ed.physical_format || 'unknown',
+              pages: ed.pages || 'N/A',
+              audioSeconds: ed.audio_seconds || 'N/A',
+            })) || [],
+          // Include activity/popularity if available
+          usersCount: result.users_count || 'N/A',
+          ratingsCount: result.ratings_count || 'N/A',
+          averageRating: result.average_rating || 'N/A',
+        })),
+      });
 
       if (searchResults.length === 0) {
-        logger.debug(`No search results found for "${title}"`);
+        logger.info(
+          `No search results found for "${title}" in Hardcover database`,
+          {
+            searchedTitle: title,
+            searchedAuthor: author || 'N/A',
+            reason:
+              'Book may not exist in Hardcover database or search terms may not match exactly',
+          },
+        );
         return null;
       }
 
-      // Score and rank results
+      // ========================================================================
+      // STAGE 1: BOOK IDENTIFICATION SCORING
+      // ========================================================================
+
+      logger.debug(
+        `Stage 1: Book identification for "${title}" (threshold: ${(confidenceThreshold * 100).toFixed(1)}%, format: ${userFormat})`,
+      );
+
       const scoringErrors = [];
-      const scoredResults = searchResults.map(result => {
+      const bookScoredResults = searchResults.map(result => {
         try {
-          const score = calculateMatchingScore(
+          // Use book identification scoring instead of full scoring
+          const bookScore = calculateBookIdentificationScore(
             result,
             title,
             author,
-            narrator,
             absBook,
           );
+
           return {
             ...result,
-            _matchingScore: score,
+            _bookIdentificationScore: bookScore,
           };
         } catch (error) {
-          // Collect errors instead of logging each one
           scoringErrors.push({
             error: error.message,
             resultId: result.id,
@@ -135,10 +224,11 @@ export class TitleAuthorMatcher {
           // Return result with minimum score so it's not selected
           return {
             ...result,
-            _matchingScore: {
+            _bookIdentificationScore: {
               totalScore: 0,
               breakdown: {},
-              confidence: 'error',
+              confidence: 'none',
+              isBookMatch: false,
             },
           };
         }
@@ -162,66 +252,302 @@ export class TitleAuthorMatcher {
         );
       }
 
-      // Sort by confidence score
-      scoredResults.sort(
-        (a, b) => b._matchingScore.totalScore - a._matchingScore.totalScore,
+      // Sort by book identification score descending
+      bookScoredResults.sort(
+        (a, b) =>
+          b._bookIdentificationScore.totalScore -
+          a._bookIdentificationScore.totalScore,
       );
 
-      // Find best match above threshold
-      const bestMatch = scoredResults[0];
+      // Log detailed scoring results for troubleshooting
+      logger.info(`Title/author scoring results for "${title}"`, {
+        targetTitle: title,
+        targetAuthor: author || 'N/A',
+        threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+        candidates: bookScoredResults.map((result, index) => ({
+          rank: index + 1,
+          title: result.title,
+          author:
+            result.contributions?.map(c => c.author?.name).join(', ') || 'N/A',
+          score: `${result._bookIdentificationScore.totalScore.toFixed(1)}%`,
+          confidence: result._bookIdentificationScore.confidence,
+          isBookMatch: result._bookIdentificationScore.isBookMatch,
+          passesThreshold:
+            result._bookIdentificationScore.totalScore >=
+            confidenceThreshold * 100,
+          breakdown: {
+            title: {
+              score: `${result._bookIdentificationScore.breakdown.title?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.title?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.title?.comparison ||
+                'N/A',
+            },
+            author: {
+              score: `${result._bookIdentificationScore.breakdown.author?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.author?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.author?.comparison ||
+                'N/A',
+            },
+            series: {
+              score: `${result._bookIdentificationScore.breakdown.series?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.series?.weight || 0) * 100).toFixed(1)}%`,
+              reason:
+                result._bookIdentificationScore.breakdown.series?.reason ||
+                'N/A',
+            },
+            activity: {
+              score: `${result._bookIdentificationScore.breakdown.activity?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.activity?.weight || 0) * 100).toFixed(1)}%`,
+              value:
+                result._bookIdentificationScore.breakdown.activity?.value ||
+                'N/A',
+            },
+            year: {
+              score: `${result._bookIdentificationScore.breakdown.year?.score?.toFixed(1) || 0}%`,
+              weight: `${((result._bookIdentificationScore.breakdown.year?.weight || 0) * 100).toFixed(1)}%`,
+              comparison:
+                result._bookIdentificationScore.breakdown.year?.comparison ||
+                'N/A',
+            },
+            penalties: Object.keys(result._bookIdentificationScore.breakdown)
+              .filter(key => key.includes('Penalty'))
+              .map(key => ({
+                type: key,
+                score: `${result._bookIdentificationScore.breakdown[key]?.score?.toFixed(1) || 0}%`,
+                reason:
+                  result._bookIdentificationScore.breakdown[key]?.reason ||
+                  'N/A',
+              })),
+          },
+        })),
+      });
+
+      // Find best book match above identification threshold
+      const bestBookMatch = bookScoredResults[0];
+
       if (
-        bestMatch &&
-        bestMatch._matchingScore.totalScore >= confidenceThreshold * 100
+        bestBookMatch &&
+        bestBookMatch._bookIdentificationScore.isBookMatch &&
+        bestBookMatch._bookIdentificationScore.totalScore >=
+          confidenceThreshold * 100
       ) {
-        // Clean user-facing log
-        logger.info(`📚 Found "${title}" in Hardcover by title/author search`, {
-          match: bestMatch.title,
-          confidence: `${bestMatch._matchingScore.totalScore.toFixed(1)}%`,
-        });
+        // ====================================================================
+        // STAGE 2: EDITION SELECTION
+        // ====================================================================
 
-        // Detailed breakdown for debugging only
-        logger.debug(`Title/author match details for "${title}"`, {
-          confidence: bestMatch._matchingScore.totalScore,
-          breakdown: bestMatch._matchingScore.breakdown,
-          searchMetadata: bestMatch._searchMetadata,
-        });
-
-        // 3. Cache successful match
-        await this._cacheSuccessfulMatch(
-          userId,
-          titleAuthorId,
-          title,
-          bestMatch,
-          author,
+        logger.debug(
+          `Stage 2: Edition selection for "${title}" (book ID: ${bestBookMatch.id})`,
         );
 
-        // Convert search result to match format
-        const convertedMatch = this._convertSearchResultToMatch(bestMatch);
+        let selectedEditionResult = null;
+        let finalMatch = null;
 
-        if (!convertedMatch) {
-          logger.error(
-            `Failed to convert search result to match format for "${title}"`,
-            {
-              bestMatchId: bestMatch.id,
-              bestMatchTitle: bestMatch.title,
-            },
+        // Check if we already have editions data in the search result
+        if (bestBookMatch.editions && bestBookMatch.editions.length > 0) {
+          // Use the edition selector to pick the best edition
+          selectedEditionResult = selectBestEdition(
+            bestBookMatch,
+            absBook,
+            userFormat,
+          );
+        } else {
+          // Need to fetch editions from the book ID
+          logger.debug(`Fetching editions for book ID ${bestBookMatch.id}`);
+          try {
+            const editionData =
+              await this.hardcoverClient.getPreferredEditionFromBookId(
+                bestBookMatch.id,
+                userFormat,
+              );
+
+            if (editionData) {
+              selectedEditionResult = {
+                bookId: editionData.bookId,
+                title: editionData.title,
+                edition: editionData.edition,
+                selectionReason: {
+                  automatic: `Preferred ${userFormat} edition from book ID`,
+                },
+                alternativeEditions: [],
+              };
+            }
+          } catch (error) {
+            logger.warn(
+              `Failed to fetch editions for book ID ${bestBookMatch.id}:`,
+              error.message,
+            );
+          }
+        }
+
+        if (!selectedEditionResult) {
+          logger.warn(
+            `No suitable edition found for "${title}" despite successful book identification`,
           );
           return null;
         }
 
-        return {
-          ...convertedMatch,
-          _matchType: 'title_author',
-          _tier: 3,
-          _needsScoring: true,
-        };
-      } else {
-        const bestScore = bestMatch ? bestMatch._matchingScore.totalScore : 0;
-        logger.debug(`Best title/author match for "${title}" below threshold`, {
-          bestScore: bestScore,
-          threshold: confidenceThreshold * 100,
-          hardcoverTitle: bestMatch ? bestMatch.title : 'N/A',
+        // Determine final confidence based on book identification
+        const bookConfidence =
+          bestBookMatch._bookIdentificationScore.totalScore;
+        const isHighConfidence = bookConfidence >= 75; // High confidence threshold
+
+        // Log successful match with two-stage details
+        logger.info(`Found "${title}" via two-stage matching`, {
+          bookMatch: selectedEditionResult.title,
+          bookConfidence: `${bookConfidence.toFixed(1)}%`,
+          finalConfidence: isHighConfidence ? 'high' : 'medium',
+          selectedEdition: selectedEditionResult.edition.id,
+          editionFormat:
+            selectedEditionResult.edition.reading_format?.format ||
+            selectedEditionResult.edition.physical_format,
         });
+
+        // Detailed breakdown for debugging
+        logger.debug(`Two-stage match details for "${title}"`, {
+          stage1: {
+            confidence: bookConfidence,
+            breakdown: bestBookMatch._bookIdentificationScore.breakdown,
+            threshold: confidenceThreshold * 100,
+          },
+          stage2: {
+            selectedEdition: selectedEditionResult.edition.id,
+            selectionReason: selectedEditionResult.selectionReason,
+            alternativeEditions:
+              selectedEditionResult.alternativeEditions?.length || 0,
+          },
+        });
+
+        // Create the match object with edition details
+        // Check if user already has this book in their library
+        let existingUserBook = null;
+        let isCrossEditionMatch = false;
+
+        // First check by the selected edition ID (exact edition match)
+        if (findUserBookByEditionId) {
+          existingUserBook = findUserBookByEditionId(
+            selectedEditionResult.edition.id,
+          );
+        }
+
+        // If not found by edition, check by book ID (different edition of same book)
+        if (!existingUserBook && findUserBookByBookId) {
+          existingUserBook = findUserBookByBookId(selectedEditionResult.bookId);
+          if (existingUserBook) {
+            isCrossEditionMatch = true;
+            logger.debug(
+              `Found different edition of ${title} in library via title-author matching`,
+              {
+                foundEditionId: selectedEditionResult.edition.id,
+                userBookId: existingUserBook.id,
+                libraryTitle: existingUserBook.book.title,
+              },
+            );
+          }
+        }
+
+        // Create match object following ASIN/ISBN matcher pattern
+        if (existingUserBook && isCrossEditionMatch) {
+          // Cross-edition match: use user's existing edition info (like ASIN/ISBN matchers)
+          const userEdition = existingUserBook.book.editions?.[0];
+          const userEditionId = userEdition?.id;
+
+          finalMatch = {
+            userBook: existingUserBook,
+            edition: {
+              id: userEditionId,
+              format: userEdition?.format || 'unknown',
+            },
+            book: {
+              id: selectedEditionResult.bookId,
+              title: selectedEditionResult.title,
+            },
+            _matchType: 'title_author_cross_edition',
+            _tier: 3,
+            _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
+            _editionSelectionResult: selectedEditionResult,
+            _needsScoring: false,
+          };
+        } else {
+          // Exact edition match or auto-add scenario
+          finalMatch = {
+            userBook: existingUserBook, // Set to actual user book if found, null if not in library
+            edition: {
+              id: selectedEditionResult.edition.id,
+              asin: selectedEditionResult.edition.asin,
+              isbn_10: selectedEditionResult.edition.isbn_10,
+              isbn_13: selectedEditionResult.edition.isbn_13,
+              pages: selectedEditionResult.edition.pages,
+              audio_seconds: selectedEditionResult.edition.audio_seconds,
+              format:
+                selectedEditionResult.edition.reading_format?.format ||
+                selectedEditionResult.edition.physical_format ||
+                'unknown',
+              users_count: selectedEditionResult.edition.users_count,
+            },
+            book: {
+              id: selectedEditionResult.bookId,
+              title: selectedEditionResult.title,
+            },
+            _matchType: 'title_author_two_stage',
+            _tier: 3,
+            _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
+            _editionSelectionResult: selectedEditionResult,
+            _needsScoring: false, // Already scored in two stages
+          };
+        }
+
+        // Cache successful match using edition ID
+        await this._cacheSuccessfulMatch(
+          userId,
+          titleAuthorId,
+          title,
+          finalMatch,
+          author,
+        );
+
+        return finalMatch;
+      } else {
+        const bestScore = bestBookMatch
+          ? bestBookMatch._bookIdentificationScore.totalScore
+          : 0;
+
+        if (bestBookMatch) {
+          logger.info(
+            `Best title/author match for "${title}" below confidence threshold`,
+            {
+              bestCandidate: {
+                title: bestBookMatch.title,
+                author:
+                  bestBookMatch.contributions
+                    ?.map(c => c.author?.name)
+                    .join(', ') || 'N/A',
+                score: `${bestScore.toFixed(1)}%`,
+                confidence: bestBookMatch._bookIdentificationScore.confidence,
+                isBookMatch: bestBookMatch._bookIdentificationScore.isBookMatch,
+              },
+              threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+              reason: bestBookMatch._bookIdentificationScore.isBookMatch
+                ? `Score ${bestScore.toFixed(1)}% is below threshold ${(confidenceThreshold * 100).toFixed(1)}%`
+                : `Best match failed basic book identification criteria`,
+              suggestion:
+                bestScore > 45 && bestScore < confidenceThreshold * 100
+                  ? `Consider lowering confidence_threshold to ${Math.floor(bestScore / 10) * 10}% if this match looks correct`
+                  : 'Book may genuinely not exist in Hardcover database',
+            },
+          );
+        } else {
+          logger.info(
+            `No valid candidates found for "${title}" after scoring`,
+            {
+              reason: 'All search results failed basic scoring criteria',
+              searchedTitle: title,
+              searchedAuthor: author || 'N/A',
+            },
+          );
+        }
+
         return null;
       }
     } catch (error) {
@@ -345,47 +671,26 @@ export class TitleAuthorMatcher {
    * @private
    */
   _convertSearchResultToMatch(searchResult) {
-    const editionId = searchResult.id;
-    const bookId = searchResult.book?.id;
+    // All search results now come from the search API (book-level results)
+    const bookId = searchResult.id;
+    const editionId = null; // Search API returns book IDs, not edition IDs
 
-    logger.debug('Converting search result to match format', {
-      searchResultId: searchResult.id,
-      searchResultTitle: searchResult.title,
+    logger.debug('Converting search API result', {
       bookId: bookId,
-      editionId: editionId,
-      hasBookObject: !!searchResult.book,
+      searchResultTitle: searchResult.title,
+      hasContributions: !!(
+        searchResult.contributions && searchResult.contributions.length > 0
+      ),
     });
 
-    if (!editionId) {
-      logger.error('Cannot convert search result: missing edition ID', {
+    if (!bookId) {
+      logger.error('Cannot convert search result: missing book ID', {
         searchResult: searchResult,
       });
       return null;
     }
 
-    // First, check if we already have this exact edition
-    const existingByEdition = this._findUserBookByEditionId(editionId);
-    if (existingByEdition) {
-      logger.debug('Found exact edition match in user library', {
-        searchResultTitle: searchResult.title,
-        editionId: editionId,
-        userBookId: existingByEdition.id,
-        libraryTitle: existingByEdition.book.title,
-      });
-
-      return {
-        userBook: existingByEdition,
-        edition: {
-          id: editionId,
-          format: searchResult.format || 'audiobook',
-        },
-        _isSearchResult: false, // It's already in library
-        _matchingScore: searchResult._matchingScore,
-        _needsBookIdLookup: false,
-        _matchType: 'title_author_exact_edition',
-        _tier: 3,
-      };
-    }
+    // Skip edition-level check since search API returns book-level results
 
     // If we have a book ID, check if we have any edition of this book
     if (bookId) {
@@ -425,22 +730,24 @@ export class TitleAuthorMatcher {
       searchBookId: bookId,
     });
 
-    // Create match object for auto-add
+    // Create match object for auto-add (search API results are book-level)
     const match = {
       userBook: {
-        id: bookId || editionId, // Fallback to edition ID if book ID missing
+        id: bookId,
         book: {
           title: searchResult.title || 'Unknown Title',
-          id: bookId || editionId,
+          id: bookId,
+          contributions: searchResult.contributions || [],
         },
       },
       edition: {
-        id: editionId,
-        format: searchResult.format || 'unknown',
+        id: bookId, // Use book ID as placeholder until we can get proper edition info
+        format: 'unknown', // Will be determined during auto-add process
       },
       _isSearchResult: true,
       _matchingScore: searchResult._matchingScore,
-      _needsBookIdLookup: !bookId, // Need lookup if we don't have book ID
+      _needsBookIdLookup: false, // We have the book ID
+      _needsEditionIdLookup: true, // Always need edition lookup for search API results
       _matchType: 'title_author_auto_add',
       _tier: 3,
     };

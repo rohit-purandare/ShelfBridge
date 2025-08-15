@@ -22,12 +22,14 @@ export function extractAuthorFromSearchResult(
   if (searchResult.contributions && searchResult.contributions.length > 0) {
     const authorContribs = searchResult.contributions.filter(
       c =>
+        c.contribution === 'author' ||
+        c.contribution === 'Author' ||
+        !c.contribution || // Default to author if no contribution specified
+        c.contribution?.toLowerCase().includes('author') ||
+        // Legacy fallback for old data structure
         c.role === 'author' ||
         c.role === 'Author' ||
-        !c.role || // Default to author if no role specified
-        c.role.toLowerCase().includes('author') ||
-        // Handle different data structure: {"author": {"name": "..."}}
-        (c.author && c.author.name),
+        (!c.role && c.author && c.author.name),
     );
 
     if (authorContribs.length > 0) {
@@ -54,12 +56,14 @@ export function extractAuthorFromSearchResult(
   ) {
     const authorContribs = searchResult.book.contributions.filter(
       c =>
+        c.contribution === 'author' ||
+        c.contribution === 'Author' ||
+        !c.contribution ||
+        c.contribution?.toLowerCase().includes('author') ||
+        // Legacy fallback for old data structure
         c.role === 'author' ||
         c.role === 'Author' ||
-        !c.role ||
-        c.role.toLowerCase().includes('author') ||
-        // Handle different data structure: {"author": {"name": "..."}}
-        (c.author && c.author.name),
+        (!c.role && c.author && c.author.name),
     );
 
     if (authorContribs.length > 0) {
@@ -76,7 +80,18 @@ export function extractAuthorFromSearchResult(
     }
   }
 
-  // Priority 3: Direct author field (fallback for older data)
+  // Priority 3: author_names array (common in search results)
+  if (
+    availableAuthors.length === 0 &&
+    searchResult.author_names &&
+    Array.isArray(searchResult.author_names)
+  ) {
+    availableAuthors = searchResult.author_names.filter(
+      name => name && typeof name === 'string',
+    );
+  }
+
+  // Priority 4: Direct author field (fallback for older data)
   if (availableAuthors.length === 0 && searchResult.author) {
     availableAuthors = [searchResult.author];
   }
@@ -123,16 +138,23 @@ export function extractNarratorFromSearchResult(searchResult) {
   if (searchResult.contributions && searchResult.contributions.length > 0) {
     const narratorContribs = searchResult.contributions.filter(
       c =>
-        c.role === 'narrator' ||
-        c.role === 'Narrator' ||
-        c.role?.toLowerCase().includes('narrator') ||
-        c.role?.toLowerCase().includes('voice'),
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase().includes('narrator') ||
+        c.contribution?.toLowerCase().includes('voice'),
     );
 
     if (narratorContribs.length > 0) {
       availableNarrators = narratorContribs
-        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
-        .map(c => c.person.name);
+        .filter(
+          c =>
+            (c.author && c.author.name) || // New structure
+            (c.person && c.person.name), // Legacy structure
+        )
+        .map(
+          c => c.author?.name || c.person?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -146,6 +168,11 @@ export function extractNarratorFromSearchResult(searchResult) {
   ) {
     const narratorContribs = searchResult.book.contributions.filter(
       c =>
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase().includes('narrator') ||
+        c.contribution?.toLowerCase().includes('voice') ||
+        // Legacy fallback
         c.role === 'narrator' ||
         c.role === 'Narrator' ||
         c.role?.toLowerCase().includes('narrator') ||
@@ -154,8 +181,15 @@ export function extractNarratorFromSearchResult(searchResult) {
 
     if (narratorContribs.length > 0) {
       availableNarrators = narratorContribs
-        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
-        .map(c => c.person.name);
+        .filter(
+          c =>
+            (c.author && c.author.name) || // New structure
+            (c.person && c.person.name), // Legacy structure
+        )
+        .map(
+          c => c.author?.name || c.person?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -179,11 +213,25 @@ export function extractFormatFromSearchResult(searchResult) {
     return searchResult.format;
   }
 
+  if (searchResult.reading_format) {
+    if (typeof searchResult.reading_format === 'string') {
+      return searchResult.reading_format;
+    }
+    // Handle object format: { format: 'audiobook' }
+    if (
+      typeof searchResult.reading_format === 'object' &&
+      searchResult.reading_format.format
+    ) {
+      return searchResult.reading_format.format;
+    }
+  }
+
+  // Handle physical_format field (common for physical books)
   if (
-    searchResult.reading_format &&
-    typeof searchResult.reading_format === 'string'
+    searchResult.physical_format &&
+    typeof searchResult.physical_format === 'string'
   ) {
-    return searchResult.reading_format;
+    return 'physical'; // Normalize physical formats
   }
 
   if (
@@ -199,6 +247,10 @@ export function extractFormatFromSearchResult(searchResult) {
   if (searchResult.contributions && Array.isArray(searchResult.contributions)) {
     const hasNarrator = searchResult.contributions.some(
       c =>
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase?.().includes('narrator') ||
+        // Legacy fallback
         c.role === 'narrator' ||
         c.role === 'Narrator' ||
         c.role?.toLowerCase?.().includes('narrator'),
@@ -255,7 +307,13 @@ export function extractActivityFromSearchResult(searchResult) {
  */
 export function extractAudioDurationFromSearchResult(searchResult) {
   // Try different duration fields
-  const durationFields = ['duration', 'length', 'runtime', 'duration_seconds'];
+  const durationFields = [
+    'audio_seconds',
+    'duration',
+    'length',
+    'runtime',
+    'duration_seconds',
+  ];
 
   for (const field of durationFields) {
     if (searchResult[field] && typeof searchResult[field] === 'number') {

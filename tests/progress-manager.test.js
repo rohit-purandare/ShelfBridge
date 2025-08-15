@@ -204,13 +204,23 @@ describe('ProgressManager.analyzeProgressRegression()', () => {
     assert.equal(result.shouldBlock, true); // Also a major regression
   });
 
-  it('handles invalid progress data gracefully', () => {
+  it('handles missing old progress data gracefully (new books)', () => {
     const result = ProgressManager.analyzeProgressRegression(null, 50, {
       context: 'test'
     });
     
     assert.equal(result.isRegression, false);
-    assert.equal(result.invalidData, true);
+    assert.equal(result.invalidData, false); // oldProgress=null with valid newProgress is normal for new books
+    assert.equal(result.reason, 'No previous progress data available - treating as new book');
+  });
+  
+  it('handles truly invalid progress data', () => {
+    const result = ProgressManager.analyzeProgressRegression(null, null, {
+      context: 'test'
+    });
+    
+    assert.equal(result.isRegression, false);
+    assert.equal(result.invalidData, true); // Both null is truly invalid
     assert.equal(result.reason, 'Cannot analyze regression - invalid progress data');
   });
 });
