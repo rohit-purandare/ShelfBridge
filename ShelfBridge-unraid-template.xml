@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/rohit-purandare/ShelfBridge/discussions</Support>
   <Project>https://github.com/rohit-purandare/ShelfBridge</Project>
-  <Overview>Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically. ShelfBridge runs as a background service that periodically syncs your listening progress between the two services.</Overview>
+  <Overview>Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically.</Overview>
   <Category>Tools:</Category>
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/ShelfBridge-unraid-template.xml</TemplateURL>
@@ -17,18 +17,17 @@
   <ExtraParams>--restart=on-failure</ExtraParams>
   <PostArgs/>
   <CPUset/>
-  <DateInstalled></DateInstalled>
+  <DateInstalled/>
   <DonateText/>
   <DonateLink/>
   <Requires>Audiobookshelf server with API access and Hardcover account with API token</Requires>
-  <Config Name="Config Directory" Target="/app/config" Default="/mnt/user/appdata/shelfbridge/config" Mode="rw" Description="Directory for configuration files" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/config</Config>
-  <Config Name="Data Directory" Target="/app/data" Default="/mnt/user/appdata/shelfbridge/data" Mode="rw" Description="Directory for database and cache files" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/data</Config>
-  <Config Name="User ID" Target="SHELFBRIDGE_USER_0_ID" Default="" Mode="" Description="Your username/identifier" Type="Variable" Display="always" Required="true" Mask="false"></Config>
-  <Config Name="Audiobookshelf URL" Target="SHELFBRIDGE_USER_0_ABS_URL" Default="" Mode="" Description="URL of your Audiobookshelf server (include https://)" Type="Variable" Display="always" Required="true" Mask="false"></Config>
-  <Config Name="Audiobookshelf Token" Target="SHELFBRIDGE_USER_0_ABS_TOKEN" Default="" Mode="" Description="API token from your Audiobookshelf server" Type="Variable" Display="always" Required="true" Mask="true"></Config>
-  <Config Name="Hardcover Token" Target="SHELFBRIDGE_USER_0_HARDCOVER_TOKEN" Default="" Mode="" Description="API token from Hardcover (hardcover.app/account/api)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
-  <Config Name="Sync Schedule" Target="SHELFBRIDGE_SYNC_SCHEDULE" Default="0 3 * * *" Mode="" Description="When to sync (default: daily at 3 AM)" Type="Variable" Display="always" Required="false" Mask="false">0 3 * * *</Config>
-  <Config Name="Timezone" Target="SHELFBRIDGE_TIMEZONE" Default="UTC" Mode="" Description="Timezone for scheduling (e.g., America/New_York)" Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+  <Config Name="Config" Target="/app/config" Default="/mnt/user/appdata/shelfbridge/config" Mode="rw" Description="Container config directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/config</Config>
+  <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/shelfbridge/data" Mode="rw" Description="Container data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/data</Config>
+  <Config Name="Logs" Target="/app/logs" Default="/mnt/user/appdata/shelfbridge/logs" Mode="rw" Description="Container logs directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/logs</Config>
+  <Config Name="User ID" Target="SHELFBRIDGE_USER_0_ID" Default="" Mode="" Description="Your username/identifier (any name you choose)" Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Audiobookshelf URL" Target="SHELFBRIDGE_USER_0_ABS_URL" Default="" Mode="" Description="URL of your Audiobookshelf server (include https://)" Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Audiobookshelf Token" Target="SHELFBRIDGE_USER_0_ABS_TOKEN" Default="" Mode="" Description="API token from your Audiobookshelf server" Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Hardcover Token" Target="SHELFBRIDGE_USER_0_HARDCOVER_TOKEN" Default="" Mode="" Description="API token from Hardcover (hardcover.app/account/api)" Type="Variable" Display="always" Required="true" Mask="true"/>
   <Changes>
     ### v1.16.0
     - Added comprehensive title/author matching as third fallback option
@@ -54,51 +53,21 @@
   </Changes>
   <Date>2024-12-20</Date>
   <License>MIT</License>
-  <ReadMe>## Quick Setup
+  <ReadMe>## Setup
 
-### 1. Get Your API Tokens
+**Required:**
+1. **User ID** - Any username/identifier you choose
+2. **Audiobookshelf URL** - Your server URL (include https://)
+3. **Audiobookshelf Token** - Get from Settings → Users → [Your User] → API Tokens
+4. **Hardcover Token** - Get from https://hardcover.app/account/api
 
-**Audiobookshelf Token:**
-1. Log into your Audiobookshelf server
-2. Go to Settings → Users → [Your User] → API Tokens
-3. Generate a new token and copy it
+**Usage:**
+Container automatically syncs progress daily at 3 AM UTC.
 
-**Hardcover Token:**
-1. Go to https://hardcover.app/account/api
-2. Create a new API token and copy it
+**Advanced Configuration:**
+For custom schedules, multi-user setups, or library filtering, see the [Configuration Reference](https://github.com/rohit-purandare/ShelfBridge/wiki/admin/Configuration-Reference).
 
-### 2. Configure the Template
-
-1. Fill in your User ID (any username you want)
-2. Enter your Audiobookshelf server URL (include https://)
-3. Paste your API tokens
-4. Optionally adjust the sync schedule and timezone
-
-### 3. Start Container
-
-The container will automatically sync your progress daily at 3 AM (or your custom schedule).
-
-## Advanced Configuration
-
-This template provides basic scheduled sync functionality. For advanced features, see the **[Configuration Reference](https://github.com/rohit-purandare/ShelfBridge/wiki/admin/Configuration-Reference)** which covers:
-
-- **Multi-user setups** - Sync multiple users from one container
-- **Library filtering** - Include/exclude specific Audiobookshelf libraries
-- **Progress protection** - Advanced settings to prevent accidental regression
-- **Custom sync thresholds** - Fine-tune when progress gets synced
-- **Rate limiting** - Optimize for your server performance
-- **YAML configuration** - For complex setups requiring config files
-
-## Troubleshooting
-
-- **Container won't start:** Check that all required fields are filled correctly
-- **No books syncing:** Verify your API tokens are valid and have proper permissions
-- **Need help?** Visit the [Troubleshooting Guide](https://github.com/rohit-purandare/ShelfBridge/wiki/troubleshooting/Troubleshooting-Guide) or ask in [Discussions](https://github.com/rohit-purandare/ShelfBridge/discussions)
-
-## Documentation
-
-- **[Quick Start Guide](https://github.com/rohit-purandare/ShelfBridge/wiki/user-guides/Quick-Start)**
-- **[Configuration Reference](https://github.com/rohit-purandare/ShelfBridge/wiki/admin/Configuration-Reference)**
-- **[Full Documentation](https://github.com/rohit-purandare/ShelfBridge/wiki)**
+**Support:**
+[Troubleshooting Guide](https://github.com/rohit-purandare/ShelfBridge/wiki/troubleshooting/Troubleshooting-Guide) | [Discussions](https://github.com/rohit-purandare/ShelfBridge/discussions)
   </ReadMe>
 </Container>
