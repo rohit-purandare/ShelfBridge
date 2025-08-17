@@ -13,7 +13,11 @@
   <Category>Tools:Utilities</Category>
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/ShelfBridge-unraid-template.xml</TemplateURL>
+  <Icon>/plugins/dynamix.docker.manager/images/question.png</Icon>
   <ExtraParams>--restart=no</ExtraParams>
+  <PostArgs/>
+  <DonateText/>
+  <DonateLink/>
   <Requires>Audiobookshelf server with API access and Hardcover account with API token</Requires>
   <Config Name="Config" Target="/app/config" Default="/mnt/user/appdata/shelfbridge/config" Mode="rw" Description="Container config directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/config</Config>
   <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/shelfbridge/data" Mode="rw" Description="Container data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/data</Config>
