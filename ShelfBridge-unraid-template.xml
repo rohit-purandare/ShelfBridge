@@ -10,16 +10,10 @@
   <Support>https://github.com/rohit-purandare/ShelfBridge/discussions</Support>
   <Project>https://github.com/rohit-purandare/ShelfBridge</Project>
   <Overview>Sync your audiobook reading progress from Audiobookshelf to Hardcover automatically.</Overview>
-  <Category>Tools:</Category>
+  <Category>Tools:Utilities</Category>
   <WebUI/>
   <TemplateURL>https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/ShelfBridge-unraid-template.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/rohit-purandare/ShelfBridge/main/assets/icon.png</Icon>
-  <ExtraParams>--restart=on-failure</ExtraParams>
-  <PostArgs/>
-  <CPUset/>
-  <DateInstalled/>
-  <DonateText/>
-  <DonateLink/>
+  <ExtraParams>--restart=no</ExtraParams>
   <Requires>Audiobookshelf server with API access and Hardcover account with API token</Requires>
   <Config Name="Config" Target="/app/config" Default="/mnt/user/appdata/shelfbridge/config" Mode="rw" Description="Container config directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/config</Config>
   <Config Name="Data" Target="/app/data" Default="/mnt/user/appdata/shelfbridge/data" Mode="rw" Description="Container data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/shelfbridge/data</Config>
@@ -28,31 +22,7 @@
   <Config Name="Audiobookshelf URL" Target="SHELFBRIDGE_USER_0_ABS_URL" Default="" Mode="" Description="URL of your Audiobookshelf server (include https://)" Type="Variable" Display="always" Required="true" Mask="false"/>
   <Config Name="Audiobookshelf Token" Target="SHELFBRIDGE_USER_0_ABS_TOKEN" Default="" Mode="" Description="API token from your Audiobookshelf server" Type="Variable" Display="always" Required="true" Mask="true"/>
   <Config Name="Hardcover Token" Target="SHELFBRIDGE_USER_0_HARDCOVER_TOKEN" Default="" Mode="" Description="API token from Hardcover (hardcover.app/account/api)" Type="Variable" Display="always" Required="true" Mask="true"/>
-  <Changes>
-    ### v1.16.0
-    - Added comprehensive title/author matching as third fallback option
-    - Intelligent matching using Hardcover's search API with sophisticated scoring
-    - Configurable confidence thresholds and cross-format matching support
-    - Significantly improves sync rates for books with incomplete metadata
 
-    ### v1.15.0
-    - Added environment variable configuration support
-    - Perfect for Docker deployments and homelab setups
-    - Environment variables provide ~85% feature parity with YAML configuration
-    - Advanced features like library filtering still require YAML config files
-
-    ### v1.14.0
-    - Added multi-library filtering support
-    - Include/exclude specific Audiobookshelf libraries by name or ID
-    - Configure globally or per-user to sync only desired libraries
-
-    ### v1.13.0
-    - Enhanced CLI interface and workflow improvements
-    - Improved sync output display and user experience
-    - Better progress indicators and performance metrics
-  </Changes>
-  <Date>2024-12-20</Date>
-  <License>MIT</License>
   <ReadMe>## Setup
 
 **Required:**
