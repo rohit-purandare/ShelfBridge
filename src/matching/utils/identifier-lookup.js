@@ -5,7 +5,7 @@
  * based on identifiers (ISBN, ASIN) from user library data.
  */
 
-import { normalizeIsbn, normalizeAsin } from './normalization.js';
+import { normalizeIsbn, normalizeAsin } from './text-matching.js';
 
 /**
  * Create identifier lookup table from Hardcover user library

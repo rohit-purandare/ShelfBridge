@@ -20,8 +20,8 @@ import {
 import {
   calculateDurationSimilarity,
   calculateTextSimilarity,
-} from './utils/similarity.js';
-import { normalizeNarrator } from './utils/normalization.js';
+  normalizeNarrator,
+} from './utils/text-matching.js';
 
 /**
  * Select the best edition from available options

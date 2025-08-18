@@ -16,7 +16,7 @@ import {
   extractTitle,
   extractAuthor,
 } from './utils/audiobookshelf-extractor.js';
-import { normalizeIsbn, normalizeAsin } from './utils/normalization.js';
+import { normalizeIsbn, normalizeAsin } from './utils/text-matching.js';
 
 /**
  * Book Matcher - Orchestrates the multi-tier book matching process

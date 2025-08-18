@@ -14,39 +14,32 @@ import { parseDurationString } from '../../utils/time.js';
  */
 export function extractAuthorFromSearchResult(
   searchResult,
-  targetAuthor = null,
+  _targetAuthor = null,
 ) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   let availableAuthors = [];
 
   // Priority 1: Edition-level contributions (most specific for different editions)
   if (searchResult.contributions && searchResult.contributions.length > 0) {
-    const authorContribs = searchResult.contributions.filter(
-      c =>
-        c.contribution === 'author' ||
-        c.contribution === 'Author' ||
-        !c.contribution || // Default to author if no contribution specified
-        c.contribution?.toLowerCase().includes('author') ||
-        // Legacy fallback for old data structure
-        c.role === 'author' ||
-        c.role === 'Author' ||
-        (!c.role && c.author && c.author.name),
-    );
-
-    if (authorContribs.length > 0) {
-      availableAuthors = authorContribs
-        .filter(
-          c =>
-            (c.person && c.person.name) || // Original structure
-            (c.author && c.author.name), // Alternative structure
-        )
-        .map(
-          c => c.person?.name || c.author?.name, // Handle both structures
-        )
-        .filter(name => name); // Remove any undefined/null names
-    }
+    // Extract ALL contributors - don't filter by role since different sources
+    // may classify the same person differently (author vs translator vs co-author)
+    availableAuthors = searchResult.contributions
+      .filter(
+        c =>
+          (c.person && c.person.name) || // Original structure
+          (c.author && c.author.name), // Alternative structure
+      )
+      .map(
+        c => c.person?.name || c.author?.name, // Handle both structures
+      )
+      .filter(name => name); // Remove any undefined/null names
   }
 
-  // Priority 2: Book-level authors (fallback)
+  // Priority 2: Book-level contributors (fallback)
   if (
     availableAuthors.length === 0 &&
     searchResult.book &&
@@ -54,30 +47,17 @@ export function extractAuthorFromSearchResult(
     searchResult.book.contributions &&
     searchResult.book.contributions.length > 0
   ) {
-    const authorContribs = searchResult.book.contributions.filter(
-      c =>
-        c.contribution === 'author' ||
-        c.contribution === 'Author' ||
-        !c.contribution ||
-        c.contribution?.toLowerCase().includes('author') ||
-        // Legacy fallback for old data structure
-        c.role === 'author' ||
-        c.role === 'Author' ||
-        (!c.role && c.author && c.author.name),
-    );
-
-    if (authorContribs.length > 0) {
-      availableAuthors = authorContribs
-        .filter(
-          c =>
-            (c.person && c.person.name) || // Original structure
-            (c.author && c.author.name), // Alternative structure
-        )
-        .map(
-          c => c.person?.name || c.author?.name, // Handle both structures
-        )
-        .filter(name => name); // Remove any undefined/null names
-    }
+    // Extract ALL book-level contributors - same logic as edition-level
+    availableAuthors = searchResult.book.contributions
+      .filter(
+        c =>
+          (c.person && c.person.name) || // Original structure
+          (c.author && c.author.name), // Alternative structure
+      )
+      .map(
+        c => c.person?.name || c.author?.name, // Handle both structures
+      )
+      .filter(name => name); // Remove any undefined/null names
   }
 
   // Priority 3: author_names array (common in search results)
@@ -100,30 +80,10 @@ export function extractAuthorFromSearchResult(
     return null;
   }
 
-  // If we have a target author, find the best match
-  if (targetAuthor && availableAuthors.length > 1) {
-    let bestMatch = availableAuthors[0];
-    let bestSimilarity = 0;
-
-    for (const author of availableAuthors) {
-      // Simple similarity check - could be enhanced with text similarity algorithm
-      const similarity = calculateSimpleStringSimilarity(
-        targetAuthor.toLowerCase(),
-        author.toLowerCase(),
-      );
-      if (similarity > bestSimilarity) {
-        bestSimilarity = similarity;
-        bestMatch = author;
-      }
-    }
-
-    return bestMatch;
-  }
-
-  // Return first author or join multiple authors
-  return availableAuthors.length === 1
-    ? availableAuthors[0]
-    : availableAuthors.join(', ');
+  // Always return ALL available authors joined together
+  // This ensures we capture the complete author information for matching
+  // (the downstream normalization and similarity algorithms will handle the comparison)
+  return availableAuthors.join(', ');
 }
 
 /**
@@ -329,54 +289,4 @@ export function extractAudioDurationFromSearchResult(searchResult) {
   return null;
 }
 
-/**
- * Simple string similarity calculation
- * @param {string} str1 - First string
- * @param {string} str2 - Second string
- * @returns {number} - Similarity score (0-1)
- */
-function calculateSimpleStringSimilarity(str1, str2) {
-  if (str1 === str2) return 1;
-
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
-
-  if (longer.length === 0) return 1;
-
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-/**
- * Calculate Levenshtein distance
- * @param {string} str1 - First string
- * @param {string} str2 - Second string
- * @returns {number} - Edit distance
- */
-function levenshteinDistance(str1, str2) {
-  const matrix = [];
-
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1, // insertion
-          matrix[i - 1][j] + 1, // deletion
-        );
-      }
-    }
-  }
-
-  return matrix[str2.length][str1.length];
-}
+// Removed duplicate string similarity functions - now using text-matching.js

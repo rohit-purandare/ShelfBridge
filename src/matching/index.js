@@ -23,12 +23,12 @@ export {
   normalizeTitle,
   normalizeAuthor,
   normalizeNarrator,
-} from './utils/normalization.js';
+} from './utils/text-matching.js';
 
 export {
   calculateTextSimilarity,
   calculateDurationSimilarity,
-} from './utils/similarity.js';
+} from './utils/text-matching.js';
 
 export {
   extractIsbn,

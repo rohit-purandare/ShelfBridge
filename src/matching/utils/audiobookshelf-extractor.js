@@ -5,7 +5,7 @@
  * from Audiobookshelf book objects.
  */
 
-import { normalizeIsbn, normalizeAsin } from './normalization.js';
+import { normalizeIsbn, normalizeAsin } from './text-matching.js';
 
 /**
  * Extract ISBN from various formats in book data

@@ -11,8 +11,8 @@ import {
   normalizeTitle,
   normalizeAuthor,
   normalizeSeries,
-} from '../utils/normalization.js';
-import { calculateTextSimilarity } from '../utils/similarity.js';
+  calculateTextSimilarity,
+} from '../utils/text-matching.js';
 import {
   extractSeries,
   extractPublicationYear,
@@ -78,6 +78,7 @@ export function calculateBookIdentificationScore(
     calculateTextSimilarity(
       normalizeTitle(targetTitle),
       normalizeTitle(resultTitle),
+      'title', // Use specialized title fuzzy matching
     ) * 100;
   score += titleScore * 0.35;
   breakdown.title = {
@@ -91,6 +92,7 @@ export function calculateBookIdentificationScore(
     calculateTextSimilarity(
       normalizeAuthor(targetAuthor || ''),
       normalizeAuthor(resultAuthor || ''),
+      'author', // Use specialized author fuzzy matching
     ) * 100;
   score += authorScore * 0.25;
   breakdown.author = {
@@ -233,6 +235,7 @@ function calculateSeriesScore(targetSeries, resultSeries) {
     calculateTextSimilarity(
       normalizeSeries(targetSeries.name),
       normalizeSeries(resultSeries.name),
+      'series', // Use specialized series fuzzy matching
     ) * 100;
 
   // If series names don't match well, low score
