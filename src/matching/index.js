@@ -6,7 +6,8 @@
  */
 
 export { BookMatcher } from './book-matcher.js';
-export { calculateMatchingScore } from './scoring/match-scorer.js';
+export { calculateBookIdentificationScore } from './scoring/book-identification-scorer.js';
+export { selectBestEdition } from './edition-selector.js';
 export { extractBookIdentifiers } from './utils/identifier-extractor.js';
 export { createIdentifierLookup } from './utils/identifier-lookup.js';
 
@@ -22,12 +23,12 @@ export {
   normalizeTitle,
   normalizeAuthor,
   normalizeNarrator,
-} from './utils/normalization.js';
+} from './utils/text-matching.js';
 
 export {
   calculateTextSimilarity,
   calculateDurationSimilarity,
-} from './utils/similarity.js';
+} from './utils/text-matching.js';
 
 export {
   extractIsbn,

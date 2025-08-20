@@ -5,7 +5,7 @@
  * from Audiobookshelf book objects.
  */
 
-import { normalizeIsbn, normalizeAsin } from './normalization.js';
+import { normalizeIsbn, normalizeAsin } from './text-matching.js';
 
 /**
  * Extract ISBN from various formats in book data
@@ -514,36 +514,56 @@ export function extractAudioDurationFromAudiobookshelf(bookData) {
 }
 
 /**
- * Detect the format of the user's book (audiobook, ebook, physical)
- * @param {Object} targetMetadata - Book metadata
- * @returns {string} - Detected format: 'audiobook', 'ebook', or 'physical'
+ * Detect the format of the user's book from Audiobookshelf metadata
+ *
+ * Simplified for two-stage matching - trusts what Audiobookshelf tells us directly.
+ * Audiobookshelf only handles audiobooks and ebooks (never physical).
+ *
+ * @param {Object} targetMetadata - Book metadata from Audiobookshelf
+ * @returns {string} - Detected format: 'audiobook' or 'ebook'
  */
 export function detectUserBookFormat(targetMetadata) {
-  if (!targetMetadata) return 'unknown';
+  if (!targetMetadata) return 'ebook'; // Default fallback
 
-  // Check for audiobook indicators
+  // Trust Audiobookshelf's explicit media type first
+  if (targetMetadata.mediaType) {
+    const mediaType = targetMetadata.mediaType.toLowerCase();
+    if (mediaType.includes('audio') || mediaType === 'book') {
+      return 'audiobook';
+    }
+    if (mediaType.includes('ebook')) {
+      return 'ebook';
+    }
+  }
+
+  // Trust library type if available
+  if (targetMetadata.libraryType) {
+    const libType = targetMetadata.libraryType.toLowerCase();
+    if (libType.includes('audio')) return 'audiobook';
+    if (libType.includes('ebook') || libType.includes('book')) return 'ebook';
+  }
+
+  // Check for obvious audiobook indicators
   if (
     targetMetadata.duration ||
     targetMetadata.media?.duration ||
     targetMetadata.narrator ||
     targetMetadata.media?.metadata?.narrator ||
-    (targetMetadata.mediaType &&
-      targetMetadata.mediaType.toLowerCase().includes('audio'))
+    targetMetadata.media?.audioFiles?.length > 0
   ) {
     return 'audiobook';
   }
 
-  // Check for ebook indicators
+  // Check for obvious ebook indicators
   if (
+    targetMetadata.media?.ebookFiles?.length > 0 ||
     targetMetadata.format?.toLowerCase().includes('epub') ||
     targetMetadata.format?.toLowerCase().includes('pdf') ||
-    targetMetadata.format?.toLowerCase().includes('mobi') ||
-    (targetMetadata.mediaType &&
-      targetMetadata.mediaType.toLowerCase().includes('ebook'))
+    targetMetadata.format?.toLowerCase().includes('mobi')
   ) {
     return 'ebook';
   }
 
-  // Default to physical book
-  return 'physical';
+  // Default to ebook (most common fallback)
+  return 'ebook';
 }

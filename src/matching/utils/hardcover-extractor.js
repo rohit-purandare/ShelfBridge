@@ -14,69 +14,69 @@ import { parseDurationString } from '../../utils/time.js';
  */
 export function extractAuthorFromSearchResult(
   searchResult,
-  targetAuthor = null,
+  _targetAuthor = null,
 ) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   let availableAuthors = [];
 
   // Priority 1: Edition-level contributions (most specific for different editions)
-  if (searchResult.contributions && searchResult.contributions.length > 0) {
-    const authorContribs = searchResult.contributions.filter(
-      c =>
-        c.role === 'author' ||
-        c.role === 'Author' ||
-        !c.role || // Default to author if no role specified
-        c.role.toLowerCase().includes('author') ||
-        // Handle different data structure: {"author": {"name": "..."}}
-        (c.author && c.author.name),
-    );
-
-    if (authorContribs.length > 0) {
-      availableAuthors = authorContribs
-        .filter(
-          c =>
-            (c.person && c.person.name) || // Original structure
-            (c.author && c.author.name), // Alternative structure
-        )
-        .map(
-          c => c.person?.name || c.author?.name, // Handle both structures
-        )
-        .filter(name => name); // Remove any undefined/null names
-    }
+  if (
+    searchResult.contributions &&
+    Array.isArray(searchResult.contributions) &&
+    searchResult.contributions.length > 0
+  ) {
+    // Extract ALL contributors - don't filter by role since different sources
+    // may classify the same person differently (author vs translator vs co-author)
+    availableAuthors = searchResult.contributions
+      .filter(
+        c =>
+          (c.person && c.person.name) || // Original structure
+          (c.author && c.author.name), // Alternative structure
+      )
+      .map(
+        c => c.person?.name || c.author?.name, // Handle both structures
+      )
+      .filter(name => name); // Remove any undefined/null names
   }
 
-  // Priority 2: Book-level authors (fallback)
+  // Priority 2: Book-level contributors (fallback)
   if (
     availableAuthors.length === 0 &&
     searchResult.book &&
     typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
+    Array.isArray(searchResult.book.contributions) &&
     searchResult.book.contributions.length > 0
   ) {
-    const authorContribs = searchResult.book.contributions.filter(
-      c =>
-        c.role === 'author' ||
-        c.role === 'Author' ||
-        !c.role ||
-        c.role.toLowerCase().includes('author') ||
-        // Handle different data structure: {"author": {"name": "..."}}
-        (c.author && c.author.name),
-    );
-
-    if (authorContribs.length > 0) {
-      availableAuthors = authorContribs
-        .filter(
-          c =>
-            (c.person && c.person.name) || // Original structure
-            (c.author && c.author.name), // Alternative structure
-        )
-        .map(
-          c => c.person?.name || c.author?.name, // Handle both structures
-        )
-        .filter(name => name); // Remove any undefined/null names
-    }
+    // Extract ALL book-level contributors - same logic as edition-level
+    availableAuthors = searchResult.book.contributions
+      .filter(
+        c =>
+          (c.person && c.person.name) || // Original structure
+          (c.author && c.author.name), // Alternative structure
+      )
+      .map(
+        c => c.person?.name || c.author?.name, // Handle both structures
+      )
+      .filter(name => name); // Remove any undefined/null names
   }
 
-  // Priority 3: Direct author field (fallback for older data)
+  // Priority 3: author_names array (common in search results)
+  if (
+    availableAuthors.length === 0 &&
+    searchResult.author_names &&
+    Array.isArray(searchResult.author_names)
+  ) {
+    availableAuthors = searchResult.author_names.filter(
+      name => name && typeof name === 'string',
+    );
+  }
+
+  // Priority 4: Direct author field (fallback for older data)
   if (availableAuthors.length === 0 && searchResult.author) {
     availableAuthors = [searchResult.author];
   }
@@ -85,30 +85,10 @@ export function extractAuthorFromSearchResult(
     return null;
   }
 
-  // If we have a target author, find the best match
-  if (targetAuthor && availableAuthors.length > 1) {
-    let bestMatch = availableAuthors[0];
-    let bestSimilarity = 0;
-
-    for (const author of availableAuthors) {
-      // Simple similarity check - could be enhanced with text similarity algorithm
-      const similarity = calculateSimpleStringSimilarity(
-        targetAuthor.toLowerCase(),
-        author.toLowerCase(),
-      );
-      if (similarity > bestSimilarity) {
-        bestSimilarity = similarity;
-        bestMatch = author;
-      }
-    }
-
-    return bestMatch;
-  }
-
-  // Return first author or join multiple authors
-  return availableAuthors.length === 1
-    ? availableAuthors[0]
-    : availableAuthors.join(', ');
+  // Always return ALL available authors joined together
+  // This ensures we capture the complete author information for matching
+  // (the downstream normalization and similarity algorithms will handle the comparison)
+  return availableAuthors.join(', ');
 }
 
 /**
@@ -117,22 +97,38 @@ export function extractAuthorFromSearchResult(
  * @returns {string|null} - Narrator name or null
  */
 export function extractNarratorFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   let availableNarrators = [];
 
   // Priority 1: Edition-level contributions
-  if (searchResult.contributions && searchResult.contributions.length > 0) {
+  if (
+    searchResult.contributions &&
+    Array.isArray(searchResult.contributions) &&
+    searchResult.contributions.length > 0
+  ) {
     const narratorContribs = searchResult.contributions.filter(
       c =>
-        c.role === 'narrator' ||
-        c.role === 'Narrator' ||
-        c.role?.toLowerCase().includes('narrator') ||
-        c.role?.toLowerCase().includes('voice'),
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase().includes('narrator') ||
+        c.contribution?.toLowerCase().includes('voice'),
     );
 
     if (narratorContribs.length > 0) {
       availableNarrators = narratorContribs
-        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
-        .map(c => c.person.name);
+        .filter(
+          c =>
+            (c.author && c.author.name) || // New structure
+            (c.person && c.person.name), // Legacy structure
+        )
+        .map(
+          c => c.author?.name || c.person?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -142,10 +138,16 @@ export function extractNarratorFromSearchResult(searchResult) {
     searchResult.book &&
     typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
+    Array.isArray(searchResult.book.contributions) &&
     searchResult.book.contributions.length > 0
   ) {
     const narratorContribs = searchResult.book.contributions.filter(
       c =>
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase().includes('narrator') ||
+        c.contribution?.toLowerCase().includes('voice') ||
+        // Legacy fallback
         c.role === 'narrator' ||
         c.role === 'Narrator' ||
         c.role?.toLowerCase().includes('narrator') ||
@@ -154,8 +156,15 @@ export function extractNarratorFromSearchResult(searchResult) {
 
     if (narratorContribs.length > 0) {
       availableNarrators = narratorContribs
-        .filter(c => c.person && c.person.name) // Filter out contributions without person.name
-        .map(c => c.person.name);
+        .filter(
+          c =>
+            (c.author && c.author.name) || // New structure
+            (c.person && c.person.name), // Legacy structure
+        )
+        .map(
+          c => c.author?.name || c.person?.name, // Handle both structures
+        )
+        .filter(name => name); // Remove any undefined/null names
     }
   }
 
@@ -174,16 +183,35 @@ export function extractNarratorFromSearchResult(searchResult) {
  * @returns {string} - Format string
  */
 export function extractFormatFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return 'unknown';
+  }
+
   // Try different format fields, ensuring they are strings
   if (searchResult.format && typeof searchResult.format === 'string') {
     return searchResult.format;
   }
 
+  if (searchResult.reading_format) {
+    if (typeof searchResult.reading_format === 'string') {
+      return searchResult.reading_format;
+    }
+    // Handle object format: { format: 'audiobook' }
+    if (
+      typeof searchResult.reading_format === 'object' &&
+      searchResult.reading_format.format
+    ) {
+      return searchResult.reading_format.format;
+    }
+  }
+
+  // Handle physical_format field (common for physical books)
   if (
-    searchResult.reading_format &&
-    typeof searchResult.reading_format === 'string'
+    searchResult.physical_format &&
+    typeof searchResult.physical_format === 'string'
   ) {
-    return searchResult.reading_format;
+    return 'physical'; // Normalize physical formats
   }
 
   if (
@@ -199,6 +227,10 @@ export function extractFormatFromSearchResult(searchResult) {
   if (searchResult.contributions && Array.isArray(searchResult.contributions)) {
     const hasNarrator = searchResult.contributions.some(
       c =>
+        c.contribution === 'narrator' ||
+        c.contribution === 'Narrator' ||
+        c.contribution?.toLowerCase?.().includes('narrator') ||
+        // Legacy fallback
         c.role === 'narrator' ||
         c.role === 'Narrator' ||
         c.role?.toLowerCase?.().includes('narrator'),
@@ -217,6 +249,11 @@ export function extractFormatFromSearchResult(searchResult) {
  * @returns {number} - Activity score
  */
 export function extractActivityFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return 0;
+  }
+
   // Try different activity fields
   if (searchResult.activity !== undefined) {
     return Number(searchResult.activity) || 0;
@@ -254,8 +291,19 @@ export function extractActivityFromSearchResult(searchResult) {
  * @returns {number|null} - Duration in seconds or null
  */
 export function extractAudioDurationFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   // Try different duration fields
-  const durationFields = ['duration', 'length', 'runtime', 'duration_seconds'];
+  const durationFields = [
+    'audio_seconds',
+    'duration',
+    'length',
+    'runtime',
+    'duration_seconds',
+  ];
 
   for (const field of durationFields) {
     if (searchResult[field] && typeof searchResult[field] === 'number') {
@@ -272,53 +320,133 @@ export function extractAudioDurationFromSearchResult(searchResult) {
 }
 
 /**
- * Simple string similarity calculation
- * @param {string} str1 - First string
- * @param {string} str2 - Second string
- * @returns {number} - Similarity score (0-1)
+ * Extract series information from Hardcover search result
+ * @param {Object} searchResult - Hardcover search result
+ * @returns {Object} - Series info {name, sequence}
  */
-function calculateSimpleStringSimilarity(str1, str2) {
-  if (str1 === str2) return 1;
+export function extractSeries(searchResult) {
+  const series = { name: null, sequence: null };
 
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
+  if (!searchResult) return series;
 
-  if (longer.length === 0) return 1;
+  // Try different series fields in the search result
+  const seriesFields = ['series', 'seriesName', 'series_name'];
+  const sequenceFields = [
+    'sequence',
+    'seriesSequence',
+    'series_sequence',
+    'book_number',
+    'volume',
+    'position',
+  ];
 
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-/**
- * Calculate Levenshtein distance
- * @param {string} str1 - First string
- * @param {string} str2 - Second string
- * @returns {number} - Edit distance
- */
-function levenshteinDistance(str1, str2) {
-  const matrix = [];
-
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
+  // Check direct fields first
+  for (const field of seriesFields) {
+    if (searchResult[field] && typeof searchResult[field] === 'string') {
+      series.name = searchResult[field].trim();
+      break;
+    }
   }
 
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1, // insertion
-          matrix[i - 1][j] + 1, // deletion
-        );
+  for (const field of sequenceFields) {
+    if (searchResult[field] !== undefined && searchResult[field] !== null) {
+      const parsed = parseFloat(searchResult[field]);
+      if (!isNaN(parsed)) {
+        series.sequence = parsed;
+        break;
       }
     }
   }
 
-  return matrix[str2.length][str1.length];
+  // Check book-level series information if available
+  if (searchResult.book && typeof searchResult.book === 'object') {
+    if (!series.name) {
+      for (const field of seriesFields) {
+        if (
+          searchResult.book[field] &&
+          typeof searchResult.book[field] === 'string'
+        ) {
+          series.name = searchResult.book[field].trim();
+          break;
+        }
+      }
+    }
+
+    if (series.sequence === null) {
+      for (const field of sequenceFields) {
+        if (
+          searchResult.book[field] !== undefined &&
+          searchResult.book[field] !== null
+        ) {
+          const parsed = parseFloat(searchResult.book[field]);
+          if (!isNaN(parsed)) {
+            series.sequence = parsed;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return series;
 }
+
+/**
+ * Extract publication year from Hardcover search result
+ * @param {Object} searchResult - Hardcover search result
+ * @returns {number|null} - Publication year or null
+ */
+export function extractPublicationYear(searchResult) {
+  if (!searchResult) return null;
+
+  const yearFields = [
+    'publishedYear',
+    'published_year',
+    'year',
+    'publicationYear',
+    'publication_year',
+    'releaseDate',
+    'release_date',
+    'date',
+  ];
+
+  // Check direct fields first
+  for (const field of yearFields) {
+    if (searchResult[field]) {
+      const year = parseInt(searchResult[field]);
+      if (!isNaN(year) && year > 1000 && year < 3000) {
+        return year;
+      }
+    }
+  }
+
+  // Check book-level information if available
+  if (searchResult.book && typeof searchResult.book === 'object') {
+    for (const field of yearFields) {
+      if (searchResult.book[field]) {
+        const year = parseInt(searchResult.book[field]);
+        if (!isNaN(year) && year > 1000 && year < 3000) {
+          return year;
+        }
+      }
+    }
+  }
+
+  // Try to extract year from string dates
+  const dateFields = ['published', 'created_at', 'updated_at'];
+  for (const field of dateFields) {
+    if (searchResult[field] && typeof searchResult[field] === 'string') {
+      const dateMatch = searchResult[field].match(/(\d{4})/);
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1]);
+        if (year > 1000 && year < 3000) {
+          return year;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+// Removed duplicate string similarity functions - now using text-matching.js

@@ -11,7 +11,7 @@ import {
   extractAsin,
   extractTitle,
 } from './audiobookshelf-extractor.js';
-import { normalizeIsbn, normalizeAsin } from './normalization.js';
+import { normalizeIsbn, normalizeAsin } from './text-matching.js';
 
 /**
  * Extract book identifiers from Audiobookshelf book data

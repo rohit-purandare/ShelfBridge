@@ -1227,8 +1227,17 @@ export class SyncManager {
 
       if (searchResults.length === 0) {
         // Try title/author fallback if identifier searches failed
-        logger.debug(
-          `Identifier searches failed for ${title}, attempting title/author fallback for auto-add`,
+        logger.info(
+          `Auto-add identifier search failed for "${title}", trying title/author fallback`,
+          {
+            attemptedIdentifiers: {
+              asin: identifiers.asin || 'N/A',
+              isbn: identifiers.isbn || 'N/A',
+            },
+            targetTitle: title,
+            targetAuthor: author || 'N/A',
+            fallbackEnabled: !this.dryRun,
+          },
         );
 
         if (!this.dryRun) {
@@ -1253,26 +1262,93 @@ export class SyncManager {
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
               logger.info(
-                `Found ${title} via title/author fallback for auto-add`,
+                `Auto-add title/author fallback successful for "${title}"`,
                 {
-                  confidence:
-                    titleAuthorMatch._matchingScore?.totalScore?.toFixed(1) ||
-                    'N/A',
-                  hardcoverTitle: titleAuthorMatch.edition?.book?.title,
+                  matchType: titleAuthorMatch._matchType,
+                  bookConfidence:
+                    titleAuthorMatch._bookIdentificationScore?.totalScore?.toFixed(
+                      1,
+                    ) + '%' || 'N/A',
+                  hardcoverTitle:
+                    titleAuthorMatch.book?.title ||
+                    titleAuthorMatch.edition?.book?.title,
+                  hardcoverAuthor:
+                    titleAuthorMatch.userBook?.book?.contributions
+                      ?.map(c => c.author?.name)
+                      .join(', ') || 'N/A',
+                  bookId:
+                    titleAuthorMatch.book?.id ||
+                    titleAuthorMatch.userBook?.book?.id,
+                  needsEditionLookup: titleAuthorMatch._needsEditionIdLookup,
                 },
               );
 
-              // Convert the match to the expected searchResults format for auto-add
-              searchResults = [
-                {
-                  id: titleAuthorMatch.edition.id,
-                  book: titleAuthorMatch.edition.book,
-                  format: titleAuthorMatch.edition.format,
-                },
-              ];
+              // Handle edition lookup for search API results
+              if (titleAuthorMatch._needsEditionIdLookup) {
+                logger.debug(
+                  `Looking up edition information for book ${titleAuthorMatch.userBook.book.id}`,
+                );
+
+                const editionInfo =
+                  await this.hardcover.getPreferredEditionFromBookId(
+                    titleAuthorMatch.userBook.book.id,
+                    'audiobook', // Prefer audiobook format for AudioBookshelf integration
+                  );
+
+                if (editionInfo) {
+                  // Convert to searchResults format with proper edition data
+                  searchResults = [
+                    {
+                      id: editionInfo.edition.id, // Now we have the real edition ID
+                      book: {
+                        id: editionInfo.bookId,
+                        title: editionInfo.title,
+                      },
+                      format:
+                        editionInfo.edition.reading_format?.format ||
+                        'audiobook',
+                      asin: editionInfo.edition.asin,
+                      isbn_10: editionInfo.edition.isbn_10,
+                      isbn_13: editionInfo.edition.isbn_13,
+                      pages: editionInfo.edition.pages,
+                      audio_seconds: editionInfo.edition.audio_seconds,
+                    },
+                  ];
+
+                  logger.debug(`Edition lookup successful`, {
+                    bookId: editionInfo.bookId,
+                    editionId: editionInfo.edition.id,
+                    format: editionInfo.edition.reading_format?.format,
+                  });
+                } else {
+                  logger.warn(
+                    `Edition lookup failed for book ${titleAuthorMatch.userBook.book.id}`,
+                  );
+                  searchResults = [];
+                }
+              } else {
+                // Convert the match to the expected searchResults format for auto-add
+                searchResults = [
+                  {
+                    id: titleAuthorMatch.edition.id,
+                    book: titleAuthorMatch.edition.book,
+                    format: titleAuthorMatch.edition.format,
+                  },
+                ];
+              }
             } else {
-              logger.debug(
-                `Title/author matcher found no suitable results for auto-add`,
+              logger.info(
+                `Auto-add title/author fallback failed for "${title}"`,
+                {
+                  searchedTitle: title,
+                  searchedAuthor: author || 'N/A',
+                  matchFound: !!titleAuthorMatch,
+                  isSearchResult: titleAuthorMatch?._isSearchResult || false,
+                  matchType: titleAuthorMatch?._matchType || 'N/A',
+                  reason: !titleAuthorMatch
+                    ? 'No matches found in title/author search'
+                    : 'Match found but not suitable for auto-add (likely already in library)',
+                },
               );
             }
           } catch (titleAuthorError) {
@@ -1508,6 +1584,23 @@ export class SyncManager {
   ) {
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
+
+    // Check if this is an auto-add scenario (userBook is null)
+    if (!userBook) {
+      logger.debug(`Book not in user's library, needs auto-add: ${title}`, {
+        currentProgress: progressPercent,
+        editionId: edition?.id,
+        bookId: hardcoverMatch.book?.id,
+      });
+
+      // For auto-add scenarios, delegate to the auto-add method
+      const identifiers = {
+        isbn: edition?.isbn_13 || edition?.isbn_10,
+        asin: edition?.asin,
+      };
+
+      return await this._tryAutoAddBook(absBook, identifiers, title, author);
+    }
 
     logger.debug(`Syncing existing book: ${title}`, {
       currentProgress: progressPercent,
