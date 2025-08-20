@@ -24,7 +24,11 @@ export function extractAuthorFromSearchResult(
   let availableAuthors = [];
 
   // Priority 1: Edition-level contributions (most specific for different editions)
-  if (searchResult.contributions && searchResult.contributions.length > 0) {
+  if (
+    searchResult.contributions &&
+    Array.isArray(searchResult.contributions) &&
+    searchResult.contributions.length > 0
+  ) {
     // Extract ALL contributors - don't filter by role since different sources
     // may classify the same person differently (author vs translator vs co-author)
     availableAuthors = searchResult.contributions
@@ -45,6 +49,7 @@ export function extractAuthorFromSearchResult(
     searchResult.book &&
     typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
+    Array.isArray(searchResult.book.contributions) &&
     searchResult.book.contributions.length > 0
   ) {
     // Extract ALL book-level contributors - same logic as edition-level
@@ -92,10 +97,19 @@ export function extractAuthorFromSearchResult(
  * @returns {string|null} - Narrator name or null
  */
 export function extractNarratorFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   let availableNarrators = [];
 
   // Priority 1: Edition-level contributions
-  if (searchResult.contributions && searchResult.contributions.length > 0) {
+  if (
+    searchResult.contributions &&
+    Array.isArray(searchResult.contributions) &&
+    searchResult.contributions.length > 0
+  ) {
     const narratorContribs = searchResult.contributions.filter(
       c =>
         c.contribution === 'narrator' ||
@@ -124,6 +138,7 @@ export function extractNarratorFromSearchResult(searchResult) {
     searchResult.book &&
     typeof searchResult.book === 'object' && // Ensure book is an object, not a string
     searchResult.book.contributions &&
+    Array.isArray(searchResult.book.contributions) &&
     searchResult.book.contributions.length > 0
   ) {
     const narratorContribs = searchResult.book.contributions.filter(
@@ -168,6 +183,11 @@ export function extractNarratorFromSearchResult(searchResult) {
  * @returns {string} - Format string
  */
 export function extractFormatFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return 'unknown';
+  }
+
   // Try different format fields, ensuring they are strings
   if (searchResult.format && typeof searchResult.format === 'string') {
     return searchResult.format;
@@ -229,6 +249,11 @@ export function extractFormatFromSearchResult(searchResult) {
  * @returns {number} - Activity score
  */
 export function extractActivityFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return 0;
+  }
+
   // Try different activity fields
   if (searchResult.activity !== undefined) {
     return Number(searchResult.activity) || 0;
@@ -266,6 +291,11 @@ export function extractActivityFromSearchResult(searchResult) {
  * @returns {number|null} - Duration in seconds or null
  */
 export function extractAudioDurationFromSearchResult(searchResult) {
+  // Handle null/undefined search results
+  if (!searchResult || typeof searchResult !== 'object') {
+    return null;
+  }
+
   // Try different duration fields
   const durationFields = [
     'audio_seconds',
@@ -284,6 +314,136 @@ export function extractAudioDurationFromSearchResult(searchResult) {
   // Check if duration is in string format (e.g., "10h 30m")
   if (searchResult.duration && typeof searchResult.duration === 'string') {
     return parseDurationString(searchResult.duration);
+  }
+
+  return null;
+}
+
+/**
+ * Extract series information from Hardcover search result
+ * @param {Object} searchResult - Hardcover search result
+ * @returns {Object} - Series info {name, sequence}
+ */
+export function extractSeries(searchResult) {
+  const series = { name: null, sequence: null };
+
+  if (!searchResult) return series;
+
+  // Try different series fields in the search result
+  const seriesFields = ['series', 'seriesName', 'series_name'];
+  const sequenceFields = [
+    'sequence',
+    'seriesSequence',
+    'series_sequence',
+    'book_number',
+    'volume',
+    'position',
+  ];
+
+  // Check direct fields first
+  for (const field of seriesFields) {
+    if (searchResult[field] && typeof searchResult[field] === 'string') {
+      series.name = searchResult[field].trim();
+      break;
+    }
+  }
+
+  for (const field of sequenceFields) {
+    if (searchResult[field] !== undefined && searchResult[field] !== null) {
+      const parsed = parseFloat(searchResult[field]);
+      if (!isNaN(parsed)) {
+        series.sequence = parsed;
+        break;
+      }
+    }
+  }
+
+  // Check book-level series information if available
+  if (searchResult.book && typeof searchResult.book === 'object') {
+    if (!series.name) {
+      for (const field of seriesFields) {
+        if (
+          searchResult.book[field] &&
+          typeof searchResult.book[field] === 'string'
+        ) {
+          series.name = searchResult.book[field].trim();
+          break;
+        }
+      }
+    }
+
+    if (series.sequence === null) {
+      for (const field of sequenceFields) {
+        if (
+          searchResult.book[field] !== undefined &&
+          searchResult.book[field] !== null
+        ) {
+          const parsed = parseFloat(searchResult.book[field]);
+          if (!isNaN(parsed)) {
+            series.sequence = parsed;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return series;
+}
+
+/**
+ * Extract publication year from Hardcover search result
+ * @param {Object} searchResult - Hardcover search result
+ * @returns {number|null} - Publication year or null
+ */
+export function extractPublicationYear(searchResult) {
+  if (!searchResult) return null;
+
+  const yearFields = [
+    'publishedYear',
+    'published_year',
+    'year',
+    'publicationYear',
+    'publication_year',
+    'releaseDate',
+    'release_date',
+    'date',
+  ];
+
+  // Check direct fields first
+  for (const field of yearFields) {
+    if (searchResult[field]) {
+      const year = parseInt(searchResult[field]);
+      if (!isNaN(year) && year > 1000 && year < 3000) {
+        return year;
+      }
+    }
+  }
+
+  // Check book-level information if available
+  if (searchResult.book && typeof searchResult.book === 'object') {
+    for (const field of yearFields) {
+      if (searchResult.book[field]) {
+        const year = parseInt(searchResult.book[field]);
+        if (!isNaN(year) && year > 1000 && year < 3000) {
+          return year;
+        }
+      }
+    }
+  }
+
+  // Try to extract year from string dates
+  const dateFields = ['published', 'created_at', 'updated_at'];
+  for (const field of dateFields) {
+    if (searchResult[field] && typeof searchResult[field] === 'string') {
+      const dateMatch = searchResult[field].match(/(\d{4})/);
+      if (dateMatch) {
+        const year = parseInt(dateMatch[1]);
+        if (year > 1000 && year < 3000) {
+          return year;
+        }
+      }
+    }
   }
 
   return null;

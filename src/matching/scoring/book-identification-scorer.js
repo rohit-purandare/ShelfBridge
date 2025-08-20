@@ -14,12 +14,14 @@ import {
   calculateTextSimilarity,
 } from '../utils/text-matching.js';
 import {
-  extractSeries,
-  extractPublicationYear,
+  extractSeries as extractSeriesFromAudiobookshelf,
+  extractPublicationYear as extractPublicationYearFromAudiobookshelf,
 } from '../utils/audiobookshelf-extractor.js';
 import {
   extractAuthorFromSearchResult,
   extractActivityFromSearchResult,
+  extractSeries as extractSeriesFromSearchResult,
+  extractPublicationYear as extractPublicationYearFromSearchResult,
 } from '../utils/hardcover-extractor.js';
 
 /**
@@ -61,10 +63,10 @@ export function calculateBookIdentificationScore(
   );
 
   // Extract enhanced metadata for book-level comparison
-  const targetSeries = extractSeries(targetMetadata);
-  const targetYear = extractPublicationYear(targetMetadata);
-  const resultSeries = extractSeries(searchResult);
-  const resultYear = extractPublicationYear(searchResult);
+  const targetSeries = extractSeriesFromAudiobookshelf(targetMetadata);
+  const targetYear = extractPublicationYearFromAudiobookshelf(targetMetadata);
+  const resultSeries = extractSeriesFromSearchResult(searchResult);
+  const resultYear = extractPublicationYearFromSearchResult(searchResult);
 
   // Extract activity data (still relevant for book disambiguation)
   const resultActivity = extractActivityFromSearchResult(searchResult);
