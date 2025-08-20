@@ -5,6 +5,20 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.1...v1.20.2) (2025-08-20)
+
+
+### ## 🔧 Bug Fixes
+
+* enhance title/author matching logging and fix progress regression warnings ([de913d2](https://github.com/rohit-purandare/ShelfBridge/commit/de913d2a6fe908f09c4c5f97fed1fb84606eef1f))
+* implement narrator matching system and advanced text normalization ([d696c09](https://github.com/rohit-purandare/ShelfBridge/commit/d696c09058bbc444891f4cb3808a9ec66fc336ed))
+* improve book matching reliability with two-stage approach ([1fde97c](https://github.com/rohit-purandare/ShelfBridge/commit/1fde97ce4ff48ac0878531da9dfef2f06a7a4fa9))
+* refactor title/author matching to apply DRY principle and improv… ([f22675c](https://github.com/rohit-purandare/ShelfBridge/commit/f22675c734f17411c40e33318a52960b776ef810))
+* refactor title/author matching to apply DRY principle and improve reliability ([0925d98](https://github.com/rohit-purandare/ShelfBridge/commit/0925d984ab066f05ac961266f370e11b11ff320f))
+* resolve author extraction bug and consolidate text matching utilities ([f3c87b3](https://github.com/rohit-purandare/ShelfBridge/commit/f3c87b359e43b78d9dde2f6a8c110c2f61615458))
+* resolve null userBook reference in title-author two-stage matching ([6279a92](https://github.com/rohit-purandare/ShelfBridge/commit/6279a920c0225ad8ed236dcaae6c816f2ec46c9c))
+* resolve scoring undefined name property error and improve extraction robustness ([02c89e6](https://github.com/rohit-purandare/ShelfBridge/commit/02c89e6905fa2ff9929ee9c22c6c519b8fa7e09d))
+
 ## [1.20.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.0...v1.20.1) (2025-08-13)
 
 
