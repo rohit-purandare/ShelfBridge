@@ -859,34 +859,48 @@ export class SyncManager {
       return syncResult;
     }
 
-    // Special handling for title/author matches from search results
+    // Special handling for search result matches (ASIN, ISBN, or title/author)
     if (hardcoverMatch._isSearchResult) {
       // This book was found via search but isn't in the user's library yet
       // We need to add it to the library first, then sync progress
 
-      // Check if book meets minimum progress threshold before auto-adding title/author match
+      // Determine the match type for logging
+      const matchType =
+        hardcoverMatch._matchType === 'asin_search_result'
+          ? 'asin'
+          : hardcoverMatch._matchType === 'isbn_search_result'
+            ? 'isbn'
+            : 'title_author';
+      const matchDescription =
+        matchType === 'asin'
+          ? 'ASIN match'
+          : matchType === 'isbn'
+            ? 'ISBN match'
+            : 'title/author match';
+
+      // Check if book meets minimum progress threshold before auto-adding
       if (this._isZeroProgress(progressPercent)) {
         logger.info(
-          `Skipping title/author match auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
+          `Skipping ${matchDescription} auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
           {
             title: title,
             progress: progressPercent,
             threshold: this.globalConfig.min_progress_threshold,
-            matchType: 'title_author',
+            matchType: matchType,
             reason: 'below_progress_threshold',
           },
         );
         syncResult.actions.push(
-          `Title/author match found but progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
+          `${matchDescription} found but progress ${progressPercent.toFixed(1)}% below auto-add threshold ${this.globalConfig.min_progress_threshold}%`,
         );
         syncResult.status = 'skipped';
-        syncResult.reason = `Progress below auto-add threshold for title/author match (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
+        syncResult.reason = `Progress below auto-add threshold for ${matchDescription} (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
         syncResult.timing = performance.now() - startTime;
         return syncResult;
       }
 
       logger.debug(
-        `Title/author match requires auto-add to library: ${title} (progress: ${progressPercent.toFixed(1)}%)`,
+        `${matchDescription} requires auto-add to library: ${title} (progress: ${progressPercent.toFixed(1)}%)`,
       );
 
       let bookId = hardcoverMatch.userBook.book.id;
@@ -1261,8 +1275,22 @@ export class SyncManager {
             );
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
+              // Determine the match type for logging
+              const matchType =
+                titleAuthorMatch._matchType === 'asin_search_result'
+                  ? 'asin'
+                  : titleAuthorMatch._matchType === 'isbn_search_result'
+                    ? 'isbn'
+                    : 'title_author';
+              const matchDescription =
+                matchType === 'asin'
+                  ? 'ASIN'
+                  : matchType === 'isbn'
+                    ? 'ISBN'
+                    : 'title/author fallback';
+
               logger.info(
-                `Auto-add title/author fallback successful for "${title}"`,
+                `Auto-add ${matchDescription} successful for "${title}"`,
                 {
                   matchType: titleAuthorMatch._matchType,
                   bookConfidence:
