@@ -5,6 +5,14 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.2...v1.20.3) (2025-08-22)
+
+
+### ## 🔧 Bug Fixes
+
+* improve ASIN/ISBN matcher auto-add consistency and logging ([a0498c0](https://github.com/rohit-purandare/ShelfBridge/commit/a0498c08420fc99d3452072b172709c2330b38ab))
+* improve ASIN/ISBN matcher auto-add consistency and logging ([5edba3b](https://github.com/rohit-purandare/ShelfBridge/commit/5edba3b1e8fa6beaa307aac04883cbe6ea4f739c))
+
 ## [1.20.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.1...v1.20.2) (2025-08-20)
 
 
