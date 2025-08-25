@@ -114,6 +114,9 @@ jobs:
               - 'release-please-config.json'
               - '.release-please-manifest.json'
               - '.github/workflows/docker-*.yml'
+              - '!**.md'
+              - '!docs/**'
+              - '!wiki/**'
 
       - name: Skip message for docs-only changes
         if: steps.changes.outputs.docker != 'true'
@@ -222,9 +225,11 @@ jobs:
           echo "✅ Basic image validation passed"
 
       - name: Verify published images (non-PR)
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.changes.outputs.docker == 'true'
         run: |
           echo "🔍 Verifying published Docker images..."
+          echo "⏳ Waiting 10 seconds for registry propagation..."
+          sleep 10
 
           while IFS= read -r tag; do
             if [ -n "$tag" ]; then

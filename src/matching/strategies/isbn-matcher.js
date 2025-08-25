@@ -133,8 +133,8 @@ export class IsbnMatcher {
 
     logger.debug(`Found ISBN match for ${title}`, {
       isbn: identifiers.isbn,
-      hardcoverTitle: match.userBook.book.title,
-      userBookId: match.userBook.id,
+      hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
+      userBookId: match.userBook?.id || 'No User Book ID',
       editionId: match.edition.id,
     });
 

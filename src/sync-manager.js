@@ -903,7 +903,8 @@ export class SyncManager {
         `${matchDescription} requires auto-add to library: ${title} (progress: ${progressPercent.toFixed(1)}%)`,
       );
 
-      let bookId = hardcoverMatch.userBook.book.id;
+      // For search results, userBook might be null (ASIN/ISBN matches) or populated (title/author matches)
+      let bookId = hardcoverMatch.userBook?.book?.id;
       const editionId = hardcoverMatch.edition.id;
 
       // If book ID is missing, look it up from the edition ID
@@ -915,12 +916,15 @@ export class SyncManager {
           if (bookInfo && bookInfo.bookId) {
             bookId = bookInfo.bookId;
             // Update the match object with the resolved book info
-            hardcoverMatch.userBook.book.id = bookId;
-            hardcoverMatch.userBook.book.title =
-              bookInfo.title || hardcoverMatch.userBook.book.title;
-            hardcoverMatch.userBook.book.contributions =
-              bookInfo.contributions ||
-              hardcoverMatch.userBook.book.contributions;
+            // Only update userBook if it exists (title/author matches have userBook, ASIN/ISBN matches don't)
+            if (hardcoverMatch.userBook?.book) {
+              hardcoverMatch.userBook.book.id = bookId;
+              hardcoverMatch.userBook.book.title =
+                bookInfo.title || hardcoverMatch.userBook.book.title;
+              hardcoverMatch.userBook.book.contributions =
+                bookInfo.contributions ||
+                hardcoverMatch.userBook.book.contributions;
+            }
 
             // Update edition metadata if available
             if (bookInfo.edition) {
@@ -985,7 +989,7 @@ export class SyncManager {
             bookId: bookId,
             editionId: editionId,
             title: title,
-            hasBook: !!hardcoverMatch.userBook.book,
+            hasBook: !!hardcoverMatch.userBook?.book,
             hasEdition: !!hardcoverMatch.edition,
             attemptedLookup: hardcoverMatch._needsBookIdLookup,
           },
@@ -1015,7 +1019,19 @@ export class SyncManager {
             syncResult.actions.push(`Added matched book to Hardcover library`);
 
             // Update the match object to look like a regular library match
-            hardcoverMatch.userBook.id = addResult.id;
+            // For ASIN/ISBN matches, userBook is null, so we need to create it
+            if (!hardcoverMatch.userBook) {
+              hardcoverMatch.userBook = {
+                id: addResult.id,
+                book: {
+                  id: bookId,
+                  title: title,
+                  contributions: [], // Will be populated from the edition data if available
+                },
+              };
+            } else {
+              hardcoverMatch.userBook.id = addResult.id;
+            }
             hardcoverMatch._isSearchResult = false; // No longer just a search result
           } else {
             logger.error(
@@ -1312,7 +1328,10 @@ export class SyncManager {
               );
 
               // Handle edition lookup for search API results
-              if (titleAuthorMatch._needsEditionIdLookup) {
+              if (
+                titleAuthorMatch._needsEditionIdLookup &&
+                titleAuthorMatch.userBook?.book?.id
+              ) {
                 logger.debug(
                   `Looking up edition information for book ${titleAuthorMatch.userBook.book.id}`,
                 );
@@ -1350,7 +1369,7 @@ export class SyncManager {
                   });
                 } else {
                   logger.warn(
-                    `Edition lookup failed for book ${titleAuthorMatch.userBook.book.id}`,
+                    `Edition lookup failed for book ${titleAuthorMatch.userBook?.book?.id || 'Unknown Book ID'}`,
                   );
                   searchResults = [];
                 }
