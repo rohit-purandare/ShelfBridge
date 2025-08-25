@@ -133,8 +133,8 @@ export class AsinMatcher {
 
     logger.debug(`Found ASIN match for ${title}`, {
       asin: identifiers.asin,
-      hardcoverTitle: match.userBook.book.title,
-      userBookId: match.userBook.id,
+      hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
+      userBookId: match.userBook?.id || 'No User Book ID',
       editionId: match.edition.id,
     });
 
