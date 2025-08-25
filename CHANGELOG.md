@@ -5,6 +5,13 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.3...v1.20.4) (2025-08-25)
+
+
+### ## 🔧 Bug Fixes
+
+* prevent null userBook crashes in sync and matching ([1941409](https://github.com/rohit-purandare/ShelfBridge/commit/1941409f23a5973be51850d3dee78944694d956b))
+
 ## [1.20.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.2...v1.20.3) (2025-08-22)
 
 
