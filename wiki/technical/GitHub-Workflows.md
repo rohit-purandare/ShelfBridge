@@ -227,6 +227,17 @@ node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
 - **Action:** Creates Git tag and GitHub release automatically
 - **Integration:** Triggers Docker builds with versioned tags
 
+#### **🔧 Credentials Fix (Recently Fixed)**
+
+**Fixed Issue:** Release Please workflow failing with "Bad credentials" error
+
+- **Root Cause**: Workflow was trying to use `RELEASE_TOKEN` secret with insufficient permissions
+- **Solution**:
+  - Simplified to use default `github.token` which has proper repo context
+  - Added missing permissions: `issues: write` and `repository-projects: write`
+  - Removed dependency on custom `RELEASE_TOKEN` secret
+- **Result**: Release automation now works reliably with built-in GitHub token permissions
+
 #### **🐳 Docker Integration (Fixed)**
 
 - **Branch Testing:** Each branch push creates tagged images (e.g., `feature-auth`, `fix-bug-123`)
