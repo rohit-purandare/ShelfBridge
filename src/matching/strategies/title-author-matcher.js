@@ -19,6 +19,7 @@ import {
 import { extractAuthorFromSearchResult } from '../utils/hardcover-extractor.js';
 import { calculateBookIdentificationScore } from '../scoring/book-identification-scorer.js';
 import { selectBestEdition } from '../edition-selector.js';
+import { normalizeTitle } from '../utils/text-matching.js';
 
 /**
  * Title/Author Matching Strategy - Tier 3
@@ -112,8 +113,12 @@ export class TitleAuthorMatcher {
       const sourceSeries = extractSeries(absBook);
       const sourceYear = extractPublicationYear(absBook);
 
+      // Normalize title for Hardcover API search to fix issues like "(Unabridged)" suffix breaking search
+      const normalizedSearchTitle = normalizeTitle(title);
+
       logger.info(`Title/author search initiated for "${title}"`, {
         searchTitle: title,
+        normalizedSearchTitle: normalizedSearchTitle, // Log both for debugging
         searchAuthor: author || 'N/A',
         searchNarrator: narrator || 'N/A',
         userFormat: userFormat,
@@ -128,7 +133,7 @@ export class TitleAuthorMatcher {
       });
 
       const searchResults = await this.hardcoverClient.searchBooksForMatching(
-        title,
+        normalizedSearchTitle, // Use normalized title for API search
         author,
         narrator,
         maxResults,
