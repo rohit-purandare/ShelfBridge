@@ -7,6 +7,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+    # Run on all pushes to main - Release Please handles loop prevention internally
 
 jobs:
   release-please:
@@ -29,10 +30,19 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: Debug Release Please outputs
+        if: always()
+        run: |
+          echo "Release created: ${{ steps.release.outputs.release_created }}"
+          echo "Tag name: ${{ steps.release.outputs.tag_name }}"
+          echo "Version: ${{ steps.release.outputs.version }}"
+          echo "Upload URL: ${{ steps.release.outputs.upload_url }}"
+          echo "HTML URL: ${{ steps.release.outputs.html_url }}"
+
   # Only run build and publish when a release is created
   build-and-publish:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created || needs.release-please.outputs.tag_name != '' }}
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     uses: ./.github/workflows/docker-build.yml
     permissions:
       contents: read
@@ -48,15 +58,29 @@ jobs:
   notify-success:
     runs-on: ubuntu-latest
     needs: [release-please, build-and-publish]
-    if: ${{ needs.release-please.outputs.release_created || needs.release-please.outputs.tag_name != '' }}
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     steps:
       - name: Release success message
         run: |
           echo "✅ Release ${{ needs.release-please.outputs.tag_name }} created successfully"
-          echo "🏷️ Tag ${{ needs.release-please.outputs.tag_name }} pushed"
-          echo "🐳 Docker images built and published with release tags"
-          echo "📦 Release available at: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release-please.outputs.tag_name }}"
-          echo "🚀 Multi-arch Docker images are now available"
+          echo "🏷️ Git tag ${{ needs.release-please.outputs.tag_name }} pushed"
+          echo "🐳 Docker images built and published with versioned tags"
+          echo "📦 GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release-please.outputs.tag_name }}"
+          echo "🚀 Multi-arch Docker images are now available:"
           echo ""
-          echo "🏷️  Published image tags:"
-          echo "  • ${{ needs.build-and-publish.outputs.image-tags }}"
+          echo "🏷️ Published Docker image tags:"
+          echo "  • ghcr.io/${{ github.repository }}:v${{ needs.release-please.outputs.version }} (full version with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.version }} (version only)"
+          MAJOR_MINOR=$(echo "${{ needs.release-please.outputs.version }}" | cut -d. -f1-2)
+          MAJOR=$(echo "${{ needs.release-please.outputs.version }}" | cut -d. -f1)
+          echo "  • ghcr.io/${{ github.repository }}:v${MAJOR_MINOR} (major.minor with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${MAJOR_MINOR} (major.minor)"
+          echo "  • ghcr.io/${{ github.repository }}:v${MAJOR} (major with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${MAJOR} (major only)"
+          echo "  • ghcr.io/${{ github.repository }}:latest"
+          echo ""
+          echo "📋 Pull commands:"
+          echo "  # Latest release:"
+          echo "  docker pull ghcr.io/${{ github.repository }}:latest"
+          echo "  # Specific version:"
+          echo "  docker pull ghcr.io/${{ github.repository }}:v${{ needs.release-please.outputs.version }}"

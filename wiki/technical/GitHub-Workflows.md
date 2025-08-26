@@ -225,7 +225,19 @@ node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
 
 - **Trigger:** Manual merge of Release PR
 - **Action:** Creates Git tag and GitHub release automatically
-- **Integration:** Triggers Docker builds and other workflows
+- **Integration:** Triggers Docker builds with versioned tags
+
+#### **🐳 Docker Integration (Fixed)**
+
+- **Branch Testing:** Each branch push creates tagged images (e.g., `feature-auth`, `fix-bug-123`)
+- **Release Versioning:** Full semver support with multiple tag formats
+  - `v1.20.5` (full version with v) • `1.20.5` (version only)
+  - `v1.20` & `1.20` (major.minor) • `v1` & `1` (major only)
+  - `latest` (latest release)
+- **Multi-arch:** Builds both AMD64 and ARM64 architectures
+- **Registry:** Published to GitHub Container Registry (ghcr.io)
+- **Smart Triggers:** Proper loop prevention and conditional building (fixed)
+- **Issue Resolution:** Fixed tag generation, workflow triggers, and release automation
 
 ### Version Bump Logic
 

@@ -1,8 +1,14 @@
 {
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "draft": false,
+  "prerelease": false,
   "packages": {
     ".": {
       "package-name": "shelfbridge",
       "release-type": "node",
+      "draft": false,
+      "prerelease": false,
       "pull-request-title-pattern": "chore${scope}: release${component} ${version}",
       "release-name": "🚀 ShelfBridge ${version}",
       "changelog-sections": [

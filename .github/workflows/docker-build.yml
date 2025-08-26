@@ -143,13 +143,25 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
-            type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
-            type=raw,value=latest,enable=${{ (inputs.is_release || github.ref_name == 'main') && github.event_name != 'pull_request' }}
+            # Branch builds: Clean branch names for testing (feature/auth -> feature-auth)
+            type=ref,event=branch,enable=${{ github.event_name == 'push' && github.ref_name != 'main' }}
+            # PR builds: pr-123 format for testing  
+            type=ref,event=pr,prefix=pr-
+            # Main branch: SHA-based tags for tracking
+            type=sha,prefix=main-,enable=${{ github.ref_name == 'main' && github.event_name == 'push' }}
+            # Release versioning: Full semver support (fixed conditions)
+            type=semver,pattern=v{{version}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{version}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern=v{{major}}.{{minor}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern=v{{major}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{major}},enable=${{ inputs.is_release == true }}
+            # Latest tag: Only for releases
+            type=raw,value=latest,enable=${{ inputs.is_release == true }}
+          flavor: |
+            # Clean up branch names: replace '/' with '-', remove special chars
+            suffix=
+            prefix=
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -257,3 +269,38 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
           subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
+
+      - name: Display build results
+        if: always()
+        run: |
+          echo "🏗️ Docker Build Summary"
+          echo "======================="
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Is Release: ${{ inputs.is_release || 'false' }}"
+          echo ""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔍 PR Build - Image built locally for testing"
+            echo "Tags created (local only):"
+          elif [ "${{ steps.changes.outputs.docker }}" = "true" ]; then
+            echo "✅ Multi-arch images published to registry:"
+          else
+            echo "⏭️ Docker build skipped - no relevant changes"
+          fi
+
+          if [ -n "${{ steps.meta.outputs.tags }}" ]; then
+            echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+              if [ -n "$tag" ]; then
+                echo "  • $tag"
+              fi
+            done
+          fi
+
+          echo ""
+          if [ "${{ inputs.is_release }}" = "true" ]; then
+            echo "🚀 Release build: Tagged with version numbers and 'latest'"
+          elif [ "${{ github.ref_name }}" != "main" ] && [ "${{ github.event_name }}" = "push" ]; then
+            echo "🧪 Branch build: Use for testing with branch-specific tag"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "🔍 PR build: Built locally for validation only"
+          fi
