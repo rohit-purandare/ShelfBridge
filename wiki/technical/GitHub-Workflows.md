@@ -872,7 +872,8 @@ This ensures that `latest` always points to the most recent stable build from th
 3. **Pull Request Support** 🔧 _Recently Fixed_
    - **Smart Event Detection**: Uses `github.event.workflow_run.event` to properly detect PR vs branch builds
    - **Correct PR Tag Resolution**: Extracts PR numbers from `pull_requests[0].number` with fallback handling
-   - **Local Image Building**: Rebuilds PR images locally since they're not pushed to registry
+   - **Local Image Building**: Added missing build step in reusable validation workflow when `skip-pull=true`
+   - **Fixed Issue**: Resolved "manifest unknown" error where PR tests failed because images weren't built locally
    - **Comprehensive Testing**: Ensures PR changes don't break container functionality before merge
 
 ### Testing Strategy
