@@ -68,6 +68,17 @@ jobs:
           fi
           echo "✅ Image pulled successfully"
 
+      - name: Build Docker image locally
+        if: inputs.skip-pull == true
+        run: |
+          echo "🔨 Building Docker image locally for testing: ${{ inputs.image-tag }}"
+          echo "This is a PR build - image was not pushed to registry"
+          if ! docker build -t "${{ inputs.image-tag }}" .; then
+            echo "❌ Failed to build image locally: ${{ inputs.image-tag }}"
+            exit 1
+          fi
+          echo "✅ Image built successfully: ${{ inputs.image-tag }}"
+
       - name: Test Docker image native modules
         run: |
           echo "🧪 CRITICAL: Testing Docker image native modules compatibility..."
