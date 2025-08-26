@@ -112,6 +112,7 @@ export class IsbnMatcher {
               _matchType: 'isbn_search_result',
               _tier: 2,
               _needsScoring: false,
+              _needsBookIdLookup: true, // Book ID needs to be looked up from edition
               _isSearchResult: true, // Flag for sync manager to handle auto-add with progress threshold
             };
           }
