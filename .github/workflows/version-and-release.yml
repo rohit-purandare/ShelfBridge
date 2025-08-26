@@ -7,6 +7,10 @@ name: Release Please
 on:
   push:
     branches: [main]
+    # Only run on non-release commits to avoid loops
+    paths-ignore:
+      - '.release-please-manifest.json'
+      - 'CHANGELOG.md'
 
 jobs:
   release-please:
@@ -68,8 +72,18 @@ jobs:
           echo "🚀 Multi-arch Docker images are now available:"
           echo ""
           echo "🏷️ Published Docker image tags:"
-          echo "  • ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.version }}"
+          echo "  • ghcr.io/${{ github.repository }}:v${{ needs.release-please.outputs.version }} (full version with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.version }} (version only)"
+          MAJOR_MINOR=$(echo "${{ needs.release-please.outputs.version }}" | cut -d. -f1-2)
+          MAJOR=$(echo "${{ needs.release-please.outputs.version }}" | cut -d. -f1)
+          echo "  • ghcr.io/${{ github.repository }}:v${MAJOR_MINOR} (major.minor with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${MAJOR_MINOR} (major.minor)"
+          echo "  • ghcr.io/${{ github.repository }}:v${MAJOR} (major with v)"
+          echo "  • ghcr.io/${{ github.repository }}:${MAJOR} (major only)"
           echo "  • ghcr.io/${{ github.repository }}:latest"
           echo ""
-          echo "📋 Pull the release image with:"
-          echo "  docker pull ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.version }}"
+          echo "📋 Pull commands:"
+          echo "  # Latest release:"
+          echo "  docker pull ghcr.io/${{ github.repository }}:latest"
+          echo "  # Specific version:"
+          echo "  docker pull ghcr.io/${{ github.repository }}:v${{ needs.release-please.outputs.version }}"
