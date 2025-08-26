@@ -81,21 +81,41 @@ jobs:
           LOWER_REPO=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
 
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            # For workflow_run (both main branches and PRs), use the SHA-based tag
-            # The Docker Build workflow creates images with sha-<short-sha> tags for PRs
+            # For workflow_run, determine image tag based on the source event type
             SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
             
-            # Check if this is a PR by looking at the head branch
-            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
-            if [[ "$HEAD_BRANCH" =~ ^[0-9]+/merge$ ]]; then
-              # This is a PR merge ref, use pr-<number> tag format
-              PR_NUMBER=$(echo "$HEAD_BRANCH" | cut -d'/' -f1)
-              IMAGE_TAG="ghcr.io/${LOWER_REPO}:pr-${PR_NUMBER}"
-              echo "Testing PR image: ${IMAGE_TAG}"
-              echo "skip-pull=true" >> $GITHUB_OUTPUT
+            # Check if this originated from a PR by examining the event
+            if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
+              # This is from a PR - extract PR number from refs/pull/{number}/merge
+              REF="${{ github.event.workflow_run.pull_requests[0].number }}"
+              if [ -n "$REF" ] && [ "$REF" != "null" ]; then
+                IMAGE_TAG="ghcr.io/${LOWER_REPO}:pr-${REF}"
+                echo "Testing PR image: ${IMAGE_TAG}"
+                echo "skip-pull=true" >> $GITHUB_OUTPUT
+              else
+                # Fallback: try to extract from head_branch if it matches PR format
+                HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+                if [[ "$HEAD_BRANCH" =~ ^[0-9]+/merge$ ]]; then
+                  PR_NUMBER=$(echo "$HEAD_BRANCH" | cut -d'/' -f1)
+                  IMAGE_TAG="ghcr.io/${LOWER_REPO}:pr-${PR_NUMBER}"
+                  echo "Testing PR image (fallback): ${IMAGE_TAG}"
+                  echo "skip-pull=true" >> $GITHUB_OUTPUT
+                else
+                  echo "❌ Could not determine PR number for pull request event"
+                  exit 1
+                fi
+              fi
             else
-              # This is a regular branch, use sha-based tag
-              IMAGE_TAG="ghcr.io/${LOWER_REPO}:sha-${SHORT_SHA}"
+              # This is a regular branch push
+              HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+              if [ "$HEAD_BRANCH" = "main" ]; then
+                # Main branch uses main-<sha> format
+                IMAGE_TAG="ghcr.io/${LOWER_REPO}:main-${SHORT_SHA}"
+              else
+                # Feature branches use branch name format (cleaned)
+                CLEAN_BRANCH=$(echo "$HEAD_BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g')
+                IMAGE_TAG="ghcr.io/${LOWER_REPO}:${CLEAN_BRANCH}"
+              fi
               echo "Testing branch image: ${IMAGE_TAG}"
               echo "skip-pull=false" >> $GITHUB_OUTPUT
             fi
@@ -125,9 +145,8 @@ jobs:
           echo "Image: $IMAGE_TAG"
 
           # For PRs, images are built locally in docker-build.yml and not pushed
-          # We need to check if this is a PR workflow_run
-          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
-          if [[ "$HEAD_BRANCH" =~ ^[0-9]+/merge$ ]]; then
+          # Check if this is a PR by examining the original event type
+          if [ "${{ github.event.workflow_run.event }}" = "pull_request" ]; then
             echo "🔄 This is a PR - image was built locally and validated in docker-build.yml"
             echo "⚠️  For PR testing, we need to rebuild the image locally since it's not pushed to registry"
             

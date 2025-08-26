@@ -315,12 +315,17 @@ export function normalizeTitle(title) {
         /^(a|an|the|la|le|les|el|los|las|der|die|das|de|het|il|lo|gli|le)\s+/i,
         '',
       )
-      // Remove edition indicators first
+      // Remove standalone audiobook format indicators first (critical fix for Hardcover search compatibility)
+      .replace(
+        /\s*\(?\s*(unabridged|abridged|complete|full|extended|directors?\s*cut|special\s*edition|remastered|enhanced|dramatized?|multi-?voice|full\s*cast)\s*\)?$/i,
+        '',
+      )
+      // Remove edition indicators with qualifiers
       .replace(
         /\s*\(?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|\d+(?:st|nd|rd|th)?)\s*(edition|ed\.?|revised|rev\.?|updated|unabridged|abridged|complete|expanded)\)?.*$/i,
         '',
       )
-      // Remove parenthetical content
+      // Remove remaining parenthetical content
       .replace(/\s*\([^)]*\)/g, '')
       // Remove volume/part indicators with number normalization
       .replace(
