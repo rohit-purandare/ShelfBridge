@@ -144,21 +144,20 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.lowercase }}
           tags: |
             # Branch builds: Clean branch names for testing (feature/auth -> feature-auth)
-            type=ref,event=branch,suffix=-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name == 'push' && github.ref_name != 'main' }}
             type=ref,event=branch,enable=${{ github.event_name == 'push' && github.ref_name != 'main' }}
-            # PR builds: pr-123 format for testing
+            # PR builds: pr-123 format for testing  
             type=ref,event=pr,prefix=pr-
             # Main branch: SHA-based tags for tracking
-            type=sha,prefix={{branch}}-,enable=${{ github.ref_name == 'main' }}
-            # Release versioning: Full semver support
-            type=semver,pattern=v{{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern=v{{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern=v{{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') }}
-            # Latest tag: Only for releases and main
-            type=raw,value=latest,enable=${{ inputs.is_release || (github.ref_name == 'main' && github.event_name == 'push') }}
+            type=sha,prefix=main-,enable=${{ github.ref_name == 'main' && github.event_name == 'push' }}
+            # Release versioning: Full semver support (fixed conditions)
+            type=semver,pattern=v{{version}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{version}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern=v{{major}}.{{minor}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern=v{{major}},enable=${{ inputs.is_release == true }}
+            type=semver,pattern={{major}},enable=${{ inputs.is_release == true }}
+            # Latest tag: Only for releases
+            type=raw,value=latest,enable=${{ inputs.is_release == true }}
           flavor: |
             # Clean up branch names: replace '/' with '-', remove special chars
             suffix=

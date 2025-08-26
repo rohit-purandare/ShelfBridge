@@ -236,7 +236,8 @@ node-version: [20.x, 22.x] # Supports current LTS (20) and latest stable (22)
   - `latest` (latest release)
 - **Multi-arch:** Builds both AMD64 and ARM64 architectures
 - **Registry:** Published to GitHub Container Registry (ghcr.io)
-- **Smart Triggers:** Avoids rebuild loops and unnecessary builds
+- **Smart Triggers:** Proper loop prevention and conditional building (fixed)
+- **Issue Resolution:** Fixed tag generation, workflow triggers, and release automation
 
 ### Version Bump Logic
 

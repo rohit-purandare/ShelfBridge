@@ -7,10 +7,7 @@ name: Release Please
 on:
   push:
     branches: [main]
-    # Only run on non-release commits to avoid loops
-    paths-ignore:
-      - '.release-please-manifest.json'
-      - 'CHANGELOG.md'
+    # Run on all pushes to main - Release Please handles loop prevention internally
 
 jobs:
   release-please:
