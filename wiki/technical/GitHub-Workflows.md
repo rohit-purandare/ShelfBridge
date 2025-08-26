@@ -844,10 +844,11 @@ This ensures that `latest` always points to the most recent stable build from th
 
 ### What It Does
 
-1. **Image Acquisition**
-   - For workflow_run: Downloads image artifact from Docker Build
-   - For pull requests: Builds image locally for testing
-   - For workflow_call: Uses provided image tags
+1. **Image Acquisition** 🔧 _Recently Fixed_
+   - **For Pull Requests**: Correctly identifies PR images using `pr-<number>` tag format (e.g., `pr-114`)
+   - **For Branch Pushes**: Uses appropriate tagging - `main-<sha>` for main branch, cleaned branch names for features
+   - **For Manual Calls**: Uses provided image tags
+   - **Fixed Issue**: Resolved image tag mismatch where Docker Build created `pr-114` tags but Docker Test expected `sha-<hash>` tags
 
 2. **🛡️ Comprehensive Testing Suite**
    - **Native Module Compatibility** - Tests better-sqlite3 and other native modules
@@ -857,10 +858,11 @@ This ensures that `latest` always points to the most recent stable build from th
    - **Health Check Testing** - Validates Docker HEALTHCHECK functionality
    - **Cache/Database Integration** - Tests BookCache initialization and operations
 
-3. **Pull Request Support**
-   - Builds images locally for PR testing (no registry push needed)
-   - Ensures PR changes don't break container functionality
-   - Provides feedback on Docker compatibility before merge
+3. **Pull Request Support** 🔧 _Recently Fixed_
+   - **Smart Event Detection**: Uses `github.event.workflow_run.event` to properly detect PR vs branch builds
+   - **Correct PR Tag Resolution**: Extracts PR numbers from `pull_requests[0].number` with fallback handling
+   - **Local Image Building**: Rebuilds PR images locally since they're not pushed to registry
+   - **Comprehensive Testing**: Ensures PR changes don't break container functionality before merge
 
 ### Testing Strategy
 
