@@ -112,6 +112,7 @@ export class AsinMatcher {
               _matchType: 'asin_search_result',
               _tier: 1,
               _needsScoring: false,
+              _needsBookIdLookup: true, // Book ID needs to be looked up from edition
               _isSearchResult: true, // Flag for sync manager to handle auto-add with progress threshold
             };
           }
@@ -133,8 +134,8 @@ export class AsinMatcher {
 
     logger.debug(`Found ASIN match for ${title}`, {
       asin: identifiers.asin,
-      hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
-      userBookId: match.userBook?.id || 'No User Book ID',
+      hardcoverTitle: match.userBook.book.title,
+      userBookId: match.userBook.id,
       editionId: match.edition.id,
     });
 

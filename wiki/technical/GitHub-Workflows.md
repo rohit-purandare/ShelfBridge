@@ -797,6 +797,26 @@ This prevents broken releases from reaching users and ensures:
 
 This ensures that `latest` always points to the most recent stable build from the main branch.
 
+### 🔐 Image Attestation Fix (LATEST)
+
+**Fixed Issue:** Docker image attestation was failing for documentation-only releases
+
+**Previous Problem:**
+
+- Attestation step ran for all releases, main branch pushes, and tag pushes
+- But the Docker build step only ran when Docker-relevant files changed
+- Documentation-only releases would skip the Docker build but still try to generate attestation
+- This caused failures with "One of subject-path or subject-digest must be provided" error
+
+**Solution Applied:**
+
+- Added `steps.changes.outputs.docker == 'true'` condition to attestation step
+- Attestation now only runs when Docker build actually happened
+- Maintains security attestation for actual Docker builds and releases
+- Prevents workflow failures for documentation-only changes
+
+**Result:** Documentation-only releases no longer fail, while maintaining proper attestation for Docker image builds.
+
 ---
 
 ## 🧪 Docker Test
