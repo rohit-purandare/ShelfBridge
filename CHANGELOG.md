@@ -5,6 +5,21 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.5...v1.21.0) (2025-08-26)
+
+
+### ## 🚀 Features
+
+* enhance Docker workflows for comprehensive branch and release tagging ([8fd6740](https://github.com/rohit-purandare/ShelfBridge/commit/8fd6740a69f5ce23659dfff1de6ef39dc48a3440))
+
+
+### ## 🔧 Bug Fixes
+
+* improve logging clarity in title-author matcher rejection logic ([c4c4116](https://github.com/rohit-purandare/ShelfBridge/commit/c4c41160306b8a46c305f258d51b913b3b3acda6))
+* improve logging clarity in title-author matcher rejection logic ([a4cae42](https://github.com/rohit-purandare/ShelfBridge/commit/a4cae42ef63a127c219e3a138c67a9b6a9b6a41e))
+* resolve critical Docker workflow issues ([4d7912f](https://github.com/rohit-purandare/ShelfBridge/commit/4d7912f71200673b272b1e9b177c123f250e90fe))
+* resolve Hardcover search API mismatch for audiobook titles with format suffixes ([7a5653b](https://github.com/rohit-purandare/ShelfBridge/commit/7a5653bf9c48a84b85d7ba7cd0505b70c1f4d4c2))
+
 ## [1.20.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.4...v1.20.5) (2025-08-26)
 
 
