@@ -5,6 +5,13 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.4...v1.20.5) (2025-08-26)
+
+
+### ## 🔧 Bug Fixes
+
+* set _needsBookIdLookup flag for ASIN/ISBN search results ([4df759b](https://github.com/rohit-purandare/ShelfBridge/commit/4df759b4276f6714bc9d27c6a3ffb71b7d7739d6))
+
 ## [1.20.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.3...v1.20.4) (2025-08-25)
 
 
