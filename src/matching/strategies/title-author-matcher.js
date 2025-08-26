@@ -513,39 +513,39 @@ export class TitleAuthorMatcher {
           ? bestBookMatch._bookIdentificationScore.totalScore
           : 0;
 
+        // Log the rejection decision clearly - no match was made
+        logger.info(`No suitable match found for "${title}"`, {
+          searchedTitle: title,
+          searchedAuthor: author || 'N/A',
+          threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
+          candidatesEvaluated: bookScoredResults.length,
+          bestScore: bestBookMatch ? `${bestScore.toFixed(1)}%` : 'N/A',
+          reason: bestBookMatch
+            ? bestBookMatch._bookIdentificationScore.isBookMatch
+              ? `Best candidate scored ${bestScore.toFixed(1)}% which is below ${(confidenceThreshold * 100).toFixed(1)}% threshold`
+              : `Best candidate failed book identification criteria`
+            : 'No viable candidates found',
+          outcome: 'MATCH_REJECTED',
+        });
+
+        // Move detailed candidate info to debug level to avoid confusion
         if (bestBookMatch) {
-          logger.info(
-            `Best title/author match for "${title}" below confidence threshold`,
-            {
-              bestCandidate: {
-                title: bestBookMatch.title,
-                author:
-                  bestBookMatch.contributions
-                    ?.map(c => c.author?.name)
-                    .join(', ') || 'N/A',
-                score: `${bestScore.toFixed(1)}%`,
-                confidence: bestBookMatch._bookIdentificationScore.confidence,
-                isBookMatch: bestBookMatch._bookIdentificationScore.isBookMatch,
-              },
-              threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
-              reason: bestBookMatch._bookIdentificationScore.isBookMatch
-                ? `Score ${bestScore.toFixed(1)}% is below threshold ${(confidenceThreshold * 100).toFixed(1)}%`
-                : `Best match failed basic book identification criteria`,
-              suggestion:
-                bestScore > 45 && bestScore < confidenceThreshold * 100
-                  ? `Consider lowering confidence_threshold to ${Math.floor(bestScore / 10) * 10}% if this match looks correct`
-                  : 'Book may genuinely not exist in Hardcover database',
+          logger.debug(`Rejected candidate details for "${title}"`, {
+            rejectedCandidate: {
+              title: bestBookMatch.title,
+              author:
+                bestBookMatch.contributions
+                  ?.map(c => c.author?.name)
+                  .join(', ') || 'N/A',
+              score: `${bestScore.toFixed(1)}%`,
+              confidence: bestBookMatch._bookIdentificationScore.confidence,
+              isBookMatch: bestBookMatch._bookIdentificationScore.isBookMatch,
             },
-          );
-        } else {
-          logger.info(
-            `No valid candidates found for "${title}" after scoring`,
-            {
-              reason: 'All search results failed basic scoring criteria',
-              searchedTitle: title,
-              searchedAuthor: author || 'N/A',
-            },
-          );
+            suggestion:
+              bestScore > 45 && bestScore < confidenceThreshold * 100
+                ? `Consider lowering confidence_threshold to ${Math.floor(bestScore / 10) * 10}% if this match looks correct`
+                : 'Book may genuinely not exist in Hardcover database',
+          });
         }
 
         return null;
