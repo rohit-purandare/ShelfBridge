@@ -50,6 +50,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
   - Basic smoke tests
 - Uses GitHub Actions caching for performance
 - **Usage:** `docker pull ghcr.io/rohit-purandare/shelfbridge:pr-123`
+- **Note:** All images use GHCR registry for consistent authentication
 
 #### 3. **Security & Quality**
 

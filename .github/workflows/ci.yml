@@ -81,7 +81,7 @@ jobs:
           push: true
           load: true
           tags: |
-            shelfbridge:test
+            ghcr.io/rohit-purandare/shelfbridge:test
             ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}
             ghcr.io/rohit-purandare/shelfbridge:${{ github.sha }}
           cache-from: type=gha
@@ -93,13 +93,13 @@ jobs:
           echo "Testing Docker image functionality..."
 
           # Basic runtime test
-          docker run --rm --entrypoint="" shelfbridge:test node --version
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node --version
 
           # Check main entry point exists
-          docker run --rm --entrypoint="" shelfbridge:test ls src/main.js
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test ls src/main.js
 
           # Quick smoke test of application
-          docker run --rm --entrypoint="" shelfbridge:test node -e "console.log('Docker build test passed')"
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node -e "console.log('Docker build test passed')"
 
           echo "✅ Docker image test completed successfully"
 
