@@ -22,18 +22,19 @@ describe('DisplayLogger', () => {
       warn: console.warn,
     };
 
-    console.log = (message) => capturedMessages.push({ type: 'log', message });
-    console.error = (message) => capturedMessages.push({ type: 'error', message });
-    console.warn = (message) => capturedMessages.push({ type: 'warn', message });
+    console.log = message => capturedMessages.push({ type: 'log', message });
+    console.error = message =>
+      capturedMessages.push({ type: 'error', message });
+    console.warn = message => capturedMessages.push({ type: 'warn', message });
 
     // Mock logger methods
     originalLoggerDebug = logger.debug;
     originalLoggerError = logger.error;
     originalLoggerWarn = logger.warn;
 
-    logger.debug = (message) => capturedLogs.push({ type: 'debug', message });
-    logger.error = (message) => capturedLogs.push({ type: 'error', message });
-    logger.warn = (message) => capturedLogs.push({ type: 'warn', message });
+    logger.debug = message => capturedLogs.push({ type: 'debug', message });
+    logger.error = message => capturedLogs.push({ type: 'error', message });
+    logger.warn = message => capturedLogs.push({ type: 'warn', message });
   });
 
   afterEach(() => {
@@ -50,7 +51,7 @@ describe('DisplayLogger', () => {
   describe('constructor', () => {
     test('detects test environment correctly', () => {
       const originalNodeEnv = process.env.NODE_ENV;
-      
+
       try {
         process.env.NODE_ENV = 'test';
         const testLogger = new DisplayLogger();
@@ -71,10 +72,16 @@ describe('DisplayLogger', () => {
       displayLogger.info('Test message');
 
       assert.strictEqual(capturedMessages.length, 1);
-      assert.deepStrictEqual(capturedMessages[0], { type: 'log', message: 'Test message' });
-      
+      assert.deepStrictEqual(capturedMessages[0], {
+        type: 'log',
+        message: 'Test message',
+      });
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'debug', message: '[DISPLAY] Test message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'debug',
+        message: '[DISPLAY] Test message',
+      });
     });
 
     test('only logs to logger in test environment', () => {
@@ -82,9 +89,12 @@ describe('DisplayLogger', () => {
       displayLogger.info('Test message');
 
       assert.strictEqual(capturedMessages.length, 0);
-      
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'debug', message: '[DISPLAY] Test message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'debug',
+        message: '[DISPLAY] Test message',
+      });
     });
   });
 
@@ -94,10 +104,16 @@ describe('DisplayLogger', () => {
       displayLogger.error('Error message');
 
       assert.strictEqual(capturedMessages.length, 1);
-      assert.deepStrictEqual(capturedMessages[0], { type: 'error', message: 'Error message' });
-      
+      assert.deepStrictEqual(capturedMessages[0], {
+        type: 'error',
+        message: 'Error message',
+      });
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'error', message: '[DISPLAY] Error message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'error',
+        message: '[DISPLAY] Error message',
+      });
     });
 
     test('only logs to logger.error in test environment', () => {
@@ -105,9 +121,12 @@ describe('DisplayLogger', () => {
       displayLogger.error('Error message');
 
       assert.strictEqual(capturedMessages.length, 0);
-      
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'error', message: '[DISPLAY] Error message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'error',
+        message: '[DISPLAY] Error message',
+      });
     });
   });
 
@@ -117,10 +136,16 @@ describe('DisplayLogger', () => {
       displayLogger.warn('Warning message');
 
       assert.strictEqual(capturedMessages.length, 1);
-      assert.deepStrictEqual(capturedMessages[0], { type: 'warn', message: 'Warning message' });
-      
+      assert.deepStrictEqual(capturedMessages[0], {
+        type: 'warn',
+        message: 'Warning message',
+      });
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'warn', message: '[DISPLAY] Warning message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'warn',
+        message: '[DISPLAY] Warning message',
+      });
     });
 
     test('only logs to logger.warn in test environment', () => {
@@ -128,9 +153,12 @@ describe('DisplayLogger', () => {
       displayLogger.warn('Warning message');
 
       assert.strictEqual(capturedMessages.length, 0);
-      
+
       assert.strictEqual(capturedLogs.length, 1);
-      assert.deepStrictEqual(capturedLogs[0], { type: 'warn', message: '[DISPLAY] Warning message' });
+      assert.deepStrictEqual(capturedLogs[0], {
+        type: 'warn',
+        message: '[DISPLAY] Warning message',
+      });
     });
   });
 
@@ -161,9 +189,15 @@ describe('DisplayLogger', () => {
 
       assert.strictEqual(capturedMessages.length, 0);
       assert.strictEqual(capturedLogs.length, 3);
-      assert.strictEqual(capturedLogs[0].message, '[DISPLAY] ' + '═'.repeat(50));
+      assert.strictEqual(
+        capturedLogs[0].message,
+        '[DISPLAY] ' + '═'.repeat(50),
+      );
       assert.strictEqual(capturedLogs[1].message, '[DISPLAY] Test Header');
-      assert.strictEqual(capturedLogs[2].message, '[DISPLAY] ' + '═'.repeat(50));
+      assert.strictEqual(
+        capturedLogs[2].message,
+        '[DISPLAY] ' + '═'.repeat(50),
+      );
     });
   });
 
@@ -185,7 +219,10 @@ describe('DisplayLogger', () => {
 
       assert.strictEqual(capturedMessages.length, 2);
       assert.strictEqual(capturedMessages[0].message, '\nTest Section');
-      assert.strictEqual(capturedMessages[1].message, '-'.repeat('Test Section'.length));
+      assert.strictEqual(
+        capturedMessages[1].message,
+        '-'.repeat('Test Section'.length),
+      );
     });
 
     test('adjusts underline length to match title', () => {
@@ -210,11 +247,15 @@ describe('DisplayLogger', () => {
 
   describe('singleton export', () => {
     test('default export provides singleton instance', async () => {
-      const { default: defaultLogger } = await import('../src/utils/display-logger.js');
+      const { default: defaultLogger } = await import(
+        '../src/utils/display-logger.js'
+      );
       assert(defaultLogger instanceof DisplayLogger);
-      
+
       // Should be the same instance when imported again
-      const { default: defaultLogger2 } = await import('../src/utils/display-logger.js');
+      const { default: defaultLogger2 } = await import(
+        '../src/utils/display-logger.js'
+      );
       assert.strictEqual(defaultLogger, defaultLogger2);
     });
   });
@@ -222,7 +263,7 @@ describe('DisplayLogger', () => {
   describe('integration with existing logger', () => {
     test('preserves logger functionality when logger methods exist', () => {
       displayLogger.isTestEnvironment = false;
-      
+
       displayLogger.info('Info test');
       displayLogger.error('Error test');
       displayLogger.warn('Warn test');
@@ -230,7 +271,7 @@ describe('DisplayLogger', () => {
       // Should call both console and logger methods
       assert.strictEqual(capturedMessages.length, 3);
       assert.strictEqual(capturedLogs.length, 3);
-      
+
       assert.strictEqual(capturedLogs[0].type, 'debug');
       assert.strictEqual(capturedLogs[1].type, 'error');
       assert.strictEqual(capturedLogs[2].type, 'warn');
@@ -240,35 +281,46 @@ describe('DisplayLogger', () => {
   describe('NODE_ENV handling', () => {
     test('respects NODE_ENV changes during runtime', () => {
       const originalNodeEnv = process.env.NODE_ENV;
-      
+
       try {
         // Test production mode
         process.env.NODE_ENV = 'production';
         const prodLogger = new DisplayLogger();
         prodLogger.info('Production message');
-        
-        assert.strictEqual(capturedMessages.length, 1, 'Should display in production');
-        
+
+        assert.strictEqual(
+          capturedMessages.length,
+          1,
+          'Should display in production',
+        );
+
         // Reset captured messages
         capturedMessages.length = 0;
-        
+
         // Test development mode
         process.env.NODE_ENV = 'development';
         const devLogger = new DisplayLogger();
         devLogger.info('Development message');
-        
-        assert.strictEqual(capturedMessages.length, 1, 'Should display in development');
-        
+
+        assert.strictEqual(
+          capturedMessages.length,
+          1,
+          'Should display in development',
+        );
+
         // Reset captured messages
         capturedMessages.length = 0;
-        
+
         // Test test mode
         process.env.NODE_ENV = 'test';
         const testLogger = new DisplayLogger();
         testLogger.info('Test message');
-        
-        assert.strictEqual(capturedMessages.length, 0, 'Should not display in test');
-        
+
+        assert.strictEqual(
+          capturedMessages.length,
+          0,
+          'Should not display in test',
+        );
       } finally {
         process.env.NODE_ENV = originalNodeEnv;
       }

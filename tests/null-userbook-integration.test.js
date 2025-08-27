@@ -275,4 +275,3 @@ describe('Null UserBook Integration Test', () => {
     );
   });
 });
-
