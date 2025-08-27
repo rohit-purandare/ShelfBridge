@@ -61,7 +61,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 ### Performance Optimizations
 
 - **Pull request focused**: Only runs on PRs for branch protection (no redundant push triggers)
-- Shallow clone (`fetch-depth: 1`) for speed
+- Full Git history (`fetch-depth: 0`) for reliable Git operations
 - Matrix strategy for parallel testing
 - Conditional job execution
 - Docker layer caching
