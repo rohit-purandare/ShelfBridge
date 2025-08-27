@@ -39,13 +39,17 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 #### 2. **Docker Build Test**
 
-- **Condition:** Only for PRs and non-main branch pushes
-- Builds AMD64 Docker image locally (fast for development)
+- **Condition:** Only for PRs (pull request validation)
+- Builds AMD64 Docker image locally and publishes test images to GHCR
+- **Test Image Publishing:**
+  - `ghcr.io/rohit-purandare/shelfbridge:pr-{PR_NUMBER}` - Easy PR testing
+  - `ghcr.io/rohit-purandare/shelfbridge:{COMMIT_SHA}` - Specific commit testing
 - Validates image functionality:
   - Node.js runtime availability
   - Main entry point exists (`src/main.js`)
   - Basic smoke tests
 - Uses GitHub Actions caching for performance
+- **Usage:** `docker pull ghcr.io/rohit-purandare/shelfbridge:pr-123`
 
 #### 3. **Security & Quality**
 
