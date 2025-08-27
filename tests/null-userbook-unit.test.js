@@ -3,26 +3,29 @@ import { describe, it } from 'node:test';
 
 /**
  * Unit tests for the null userBook fix
- * 
+ *
  * These tests specifically validate that the code can handle null userBook
  * properties without crashing, which was the root cause of the error:
  * "Cannot read properties of null (reading 'book')"
  */
 
 describe('Null UserBook Unit Tests', () => {
-  
   describe('Optional Chaining Tests', () => {
     it('should safely access userBook.book.id when userBook is null', () => {
       const hardcoverMatch = {
         userBook: null,
         edition: { id: 'test-edition' },
         _isSearchResult: true,
-        _matchType: 'asin_search_result'
+        _matchType: 'asin_search_result',
       };
 
       // This should not throw an error with optional chaining
       const bookId = hardcoverMatch.userBook?.book?.id;
-      assert.strictEqual(bookId, undefined, 'Should return undefined for null userBook');
+      assert.strictEqual(
+        bookId,
+        undefined,
+        'Should return undefined for null userBook',
+      );
     });
 
     it('should safely access userBook.book.id when userBook exists', () => {
@@ -31,48 +34,64 @@ describe('Null UserBook Unit Tests', () => {
           id: 'user-book-123',
           book: {
             id: 'book-456',
-            title: 'Test Book'
-          }
+            title: 'Test Book',
+          },
         },
         edition: { id: 'test-edition' },
         _isSearchResult: true,
-        _matchType: 'title_author_auto_add'
+        _matchType: 'title_author_auto_add',
       };
 
       const bookId = hardcoverMatch.userBook?.book?.id;
-      assert.strictEqual(bookId, 'book-456', 'Should return book ID when userBook exists');
+      assert.strictEqual(
+        bookId,
+        'book-456',
+        'Should return book ID when userBook exists',
+      );
     });
 
     it('should safely access userBook.id when userBook is null', () => {
       const hardcoverMatch = {
         userBook: null,
-        edition: { id: 'test-edition' }
+        edition: { id: 'test-edition' },
       };
 
       const userBookId = hardcoverMatch.userBook?.id;
-      assert.strictEqual(userBookId, undefined, 'Should return undefined for null userBook');
+      assert.strictEqual(
+        userBookId,
+        undefined,
+        'Should return undefined for null userBook',
+      );
     });
 
     it('should safely check userBook.book existence when userBook is null', () => {
       const hardcoverMatch = {
         userBook: null,
-        edition: { id: 'test-edition' }
+        edition: { id: 'test-edition' },
       };
 
       const hasBook = !!hardcoverMatch.userBook?.book;
-      assert.strictEqual(hasBook, false, 'Should return false when userBook is null');
+      assert.strictEqual(
+        hasBook,
+        false,
+        'Should return false when userBook is null',
+      );
     });
 
     it('should safely check userBook.book existence when userBook exists', () => {
       const hardcoverMatch = {
         userBook: {
-          book: { id: 'book-123' }
+          book: { id: 'book-123' },
         },
-        edition: { id: 'test-edition' }
+        edition: { id: 'test-edition' },
       };
 
       const hasBook = !!hardcoverMatch.userBook?.book;
-      assert.strictEqual(hasBook, true, 'Should return true when userBook.book exists');
+      assert.strictEqual(
+        hasBook,
+        true,
+        'Should return true when userBook.book exists',
+      );
     });
   });
 
@@ -81,7 +100,7 @@ describe('Null UserBook Unit Tests', () => {
       const hardcoverMatch = {
         userBook: null,
         edition: { id: 'test-edition' },
-        _isSearchResult: true
+        _isSearchResult: true,
       };
 
       const addResult = { id: 'newly-added-book' };
@@ -116,11 +135,11 @@ describe('Null UserBook Unit Tests', () => {
           id: 'existing-user-book',
           book: {
             id: 'existing-book-id',
-            title: 'Existing Title'
-          }
+            title: 'Existing Title',
+          },
         },
         edition: { id: 'test-edition' },
-        _isSearchResult: true
+        _isSearchResult: true,
       };
 
       const addResult = { id: 'updated-book-id' };
@@ -142,7 +161,11 @@ describe('Null UserBook Unit Tests', () => {
 
       assert.ok(hardcoverMatch.userBook, 'userBook should still exist');
       assert.strictEqual(hardcoverMatch.userBook.id, 'updated-book-id');
-      assert.strictEqual(hardcoverMatch.userBook.book.id, 'existing-book-id', 'Existing book data should be preserved');
+      assert.strictEqual(
+        hardcoverMatch.userBook.book.id,
+        'existing-book-id',
+        'Existing book data should be preserved',
+      );
       assert.strictEqual(hardcoverMatch._isSearchResult, false);
     });
   });
@@ -154,45 +177,51 @@ describe('Null UserBook Unit Tests', () => {
           book: {
             id: 'original-id',
             title: 'Original Title',
-            contributions: []
-          }
-        }
+            contributions: [],
+          },
+        },
       };
 
       const bookInfo = {
         bookId: 'new-book-id',
         title: 'New Title',
-        contributions: [{ author: { name: 'New Author' } }]
+        contributions: [{ author: { name: 'New Author' } }],
       };
 
       // Simulate the conditional update logic from the fix
       if (hardcoverMatch.userBook?.book) {
         hardcoverMatch.userBook.book.id = bookInfo.bookId;
-        hardcoverMatch.userBook.book.title = bookInfo.title || hardcoverMatch.userBook.book.title;
-        hardcoverMatch.userBook.book.contributions = bookInfo.contributions || hardcoverMatch.userBook.book.contributions;
+        hardcoverMatch.userBook.book.title =
+          bookInfo.title || hardcoverMatch.userBook.book.title;
+        hardcoverMatch.userBook.book.contributions =
+          bookInfo.contributions || hardcoverMatch.userBook.book.contributions;
       }
 
       assert.strictEqual(hardcoverMatch.userBook.book.id, 'new-book-id');
       assert.strictEqual(hardcoverMatch.userBook.book.title, 'New Title');
-      assert.deepStrictEqual(hardcoverMatch.userBook.book.contributions, [{ author: { name: 'New Author' } }]);
+      assert.deepStrictEqual(hardcoverMatch.userBook.book.contributions, [
+        { author: { name: 'New Author' } },
+      ]);
     });
 
     it('should safely skip updates when userBook is null', () => {
       const hardcoverMatch = {
-        userBook: null
+        userBook: null,
       };
 
       const bookInfo = {
         bookId: 'new-book-id',
         title: 'New Title',
-        contributions: [{ author: { name: 'New Author' } }]
+        contributions: [{ author: { name: 'New Author' } }],
       };
 
       // Simulate the conditional update logic from the fix
       if (hardcoverMatch.userBook?.book) {
         hardcoverMatch.userBook.book.id = bookInfo.bookId;
-        hardcoverMatch.userBook.book.title = bookInfo.title || hardcoverMatch.userBook.book.title;
-        hardcoverMatch.userBook.book.contributions = bookInfo.contributions || hardcoverMatch.userBook.book.contributions;
+        hardcoverMatch.userBook.book.title =
+          bookInfo.title || hardcoverMatch.userBook.book.title;
+        hardcoverMatch.userBook.book.contributions =
+          bookInfo.contributions || hardcoverMatch.userBook.book.contributions;
       }
 
       // Should not crash and userBook should remain null

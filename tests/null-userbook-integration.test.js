@@ -3,16 +3,15 @@ import { describe, it } from 'node:test';
 
 /**
  * Integration test for the null userBook fix
- * 
+ *
  * This test simulates the exact error scenario that was reported:
  * "Cannot read properties of null (reading 'book')"
- * 
+ *
  * The test validates that the code patterns used in the fix work correctly
  * in scenarios that mirror the real sync manager logic.
  */
 
 describe('Null UserBook Integration Test', () => {
-  
   it('should handle the exact error scenario from the bug report', () => {
     // Simulate the exact scenario that caused the original error
     // This represents an ASIN or ISBN search result with null userBook
@@ -36,8 +35,16 @@ describe('Null UserBook Integration Test', () => {
     const editionId = hardcoverMatch.edition.id;
 
     // Should not throw an error and should handle null gracefully
-    assert.strictEqual(bookId, undefined, 'bookId should be undefined for null userBook');
-    assert.strictEqual(editionId, 'test-edition-id', 'editionId should be accessible');
+    assert.strictEqual(
+      bookId,
+      undefined,
+      'bookId should be undefined for null userBook',
+    );
+    assert.strictEqual(
+      editionId,
+      'test-edition-id',
+      'editionId should be accessible',
+    );
 
     // Simulate the book ID lookup scenario
     if (!bookId && hardcoverMatch._needsBookIdLookup) {
@@ -46,26 +53,37 @@ describe('Null UserBook Integration Test', () => {
         bookId: 'resolved-book-id',
         title: 'Resolved Title',
         contributions: [{ author: { name: 'Test Author' } }],
-        edition: { id: editionId, format: 'audiobook' }
+        edition: { id: editionId, format: 'audiobook' },
       };
 
       if (bookInfo && bookInfo.bookId) {
         bookId = bookInfo.bookId;
-        
+
         // This was also failing in the original code (lines 918-926)
         // Before fix: hardcoverMatch.userBook.book.id = bookId; // Would throw error
         // After fix: Only update if userBook exists
         if (hardcoverMatch.userBook?.book) {
           hardcoverMatch.userBook.book.id = bookId;
-          hardcoverMatch.userBook.book.title = bookInfo.title || hardcoverMatch.userBook.book.title;
-          hardcoverMatch.userBook.book.contributions = bookInfo.contributions || hardcoverMatch.userBook.book.contributions;
+          hardcoverMatch.userBook.book.title =
+            bookInfo.title || hardcoverMatch.userBook.book.title;
+          hardcoverMatch.userBook.book.contributions =
+            bookInfo.contributions ||
+            hardcoverMatch.userBook.book.contributions;
         }
         // If userBook is null, we skip the update (no error)
       }
     }
 
-    assert.strictEqual(bookId, 'resolved-book-id', 'bookId should be resolved from lookup');
-    assert.strictEqual(hardcoverMatch.userBook, null, 'userBook should remain null since no update occurred');
+    assert.strictEqual(
+      bookId,
+      'resolved-book-id',
+      'bookId should be resolved from lookup',
+    );
+    assert.strictEqual(
+      hardcoverMatch.userBook,
+      null,
+      'userBook should remain null since no update occurred',
+    );
   });
 
   it('should handle auto-add scenario that creates userBook from null', () => {
@@ -137,9 +155,17 @@ describe('Null UserBook Integration Test', () => {
     };
 
     // Should not throw an error and should provide correct info
-    assert.strictEqual(errorInfo.hasBook, false, 'hasBook should be false for null userBook');
+    assert.strictEqual(
+      errorInfo.hasBook,
+      false,
+      'hasBook should be false for null userBook',
+    );
     assert.strictEqual(errorInfo.hasEdition, true, 'hasEdition should be true');
-    assert.strictEqual(errorInfo.attemptedLookup, true, 'attemptedLookup should be true');
+    assert.strictEqual(
+      errorInfo.attemptedLookup,
+      true,
+      'attemptedLookup should be true',
+    );
   });
 
   it('should handle cache key generation with null userBook', () => {
@@ -151,23 +177,39 @@ describe('Null UserBook Integration Test', () => {
 
     // Simulate cache key generation logic that was potentially affected
     let cacheKey = null;
-    
+
     // This pattern was used in the code around line 706
-    if (hardcoverMatch && hardcoverMatch.userBook?.id && hardcoverMatch.edition?.id) {
+    if (
+      hardcoverMatch &&
+      hardcoverMatch.userBook?.id &&
+      hardcoverMatch.edition?.id
+    ) {
       cacheKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
     }
 
     // Should not generate a cache key when userBook is null
-    assert.strictEqual(cacheKey, null, 'Should not generate cache key when userBook is null');
+    assert.strictEqual(
+      cacheKey,
+      null,
+      'Should not generate cache key when userBook is null',
+    );
 
     // Now test with a valid userBook
     hardcoverMatch.userBook = { id: 'valid-user-book-id' };
-    
-    if (hardcoverMatch && hardcoverMatch.userBook?.id && hardcoverMatch.edition?.id) {
+
+    if (
+      hardcoverMatch &&
+      hardcoverMatch.userBook?.id &&
+      hardcoverMatch.edition?.id
+    ) {
       cacheKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
     }
 
-    assert.strictEqual(cacheKey, 'title_author_valid-user-book-id_cache-test-edition', 'Should generate valid cache key');
+    assert.strictEqual(
+      cacheKey,
+      'title_author_valid-user-book-id_cache-test-edition',
+      'Should generate valid cache key',
+    );
   });
 
   it('should demonstrate the difference between ASIN/ISBN and title/author matches', () => {
@@ -198,8 +240,16 @@ describe('Null UserBook Integration Test', () => {
     const asinBookId = asinMatch.userBook?.book?.id;
     const titleAuthorBookId = titleAuthorMatch.userBook?.book?.id;
 
-    assert.strictEqual(asinBookId, undefined, 'ASIN match should have undefined book ID');
-    assert.strictEqual(titleAuthorBookId, 'existing-book-id', 'Title/author match should have existing book ID');
+    assert.strictEqual(
+      asinBookId,
+      undefined,
+      'ASIN match should have undefined book ID',
+    );
+    assert.strictEqual(
+      titleAuthorBookId,
+      'existing-book-id',
+      'Title/author match should have existing book ID',
+    );
 
     // Both should handle updates safely
     const bookInfo = { bookId: 'updated-id', title: 'Updated Title' };
@@ -213,7 +263,15 @@ describe('Null UserBook Integration Test', () => {
     }
 
     // Verify results
-    assert.strictEqual(asinMatch.userBook, null, 'ASIN match userBook should remain null');
-    assert.strictEqual(titleAuthorMatch.userBook.book.id, 'updated-id', 'Title/author match should be updated');
+    assert.strictEqual(
+      asinMatch.userBook,
+      null,
+      'ASIN match userBook should remain null',
+    );
+    assert.strictEqual(
+      titleAuthorMatch.userBook.book.id,
+      'updated-id',
+      'Title/author match should be updated',
+    );
   });
 });

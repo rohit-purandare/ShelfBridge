@@ -3,13 +3,12 @@ import { describe, it } from 'node:test';
 
 /**
  * Additional Edge Cases for Null UserBook Fix
- * 
+ *
  * These tests cover edge cases discovered during comprehensive analysis
  * that could still cause "Cannot read properties of null" errors.
  */
 
 describe('Additional Null UserBook Edge Cases', () => {
-  
   describe('Matcher Logging Edge Cases', () => {
     it('should handle ASIN matcher logging when userBook is null', () => {
       // This simulates the scenario in asin-matcher.js lines 136-137
@@ -17,7 +16,7 @@ describe('Additional Null UserBook Edge Cases', () => {
         userBook: null, // This would cause the logging to crash
         edition: { id: 'test-edition-id' },
         _isSearchResult: true,
-        _matchType: 'asin_search_result'
+        _matchType: 'asin_search_result',
       };
 
       const identifiers = { asin: 'B123456789' };
@@ -44,7 +43,7 @@ describe('Additional Null UserBook Edge Cases', () => {
         userBook: null, // This would cause the logging to crash
         edition: { id: 'isbn-edition-id' },
         _isSearchResult: true,
-        _matchType: 'isbn_search_result'
+        _matchType: 'isbn_search_result',
       };
 
       const identifiers = { isbn: '9781234567890' };
@@ -70,9 +69,9 @@ describe('Additional Null UserBook Edge Cases', () => {
       const match = {
         userBook: {
           id: 'user-book-123',
-          book: null // This could also cause crashes
+          book: null, // This could also cause crashes
         },
-        edition: { id: 'edge-case-edition' }
+        edition: { id: 'edge-case-edition' },
       };
 
       const logData = {
@@ -94,47 +93,55 @@ describe('Additional Null UserBook Edge Cases', () => {
         userBook: null, // This would cause edition lookup logging to crash
         edition: { id: 'lookup-edition' },
         _needsEditionIdLookup: true,
-        _matchType: 'title_author_auto_add'
+        _matchType: 'title_author_auto_add',
       };
 
       // Simulate the problematic logging code with safe access
       const bookId = titleAuthorMatch.userBook?.book?.id;
-      
+
       if (titleAuthorMatch._needsEditionIdLookup && bookId) {
         // This branch should not execute when userBook is null
         assert.fail('Should not attempt edition lookup when userBook is null');
       }
 
       // Should safely skip edition lookup when no book ID available
-      assert.strictEqual(bookId, undefined, 'Should not have book ID when userBook is null');
+      assert.strictEqual(
+        bookId,
+        undefined,
+        'Should not have book ID when userBook is null',
+      );
     });
 
     it('should handle edition lookup when userBook exists but book is null', () => {
       const titleAuthorMatch = {
         userBook: {
           id: 'user-book-456',
-          book: null // Edge case: userBook exists but book is null
+          book: null, // Edge case: userBook exists but book is null
         },
         edition: { id: 'lookup-edition-2' },
-        _needsEditionIdLookup: true
+        _needsEditionIdLookup: true,
       };
 
       const bookId = titleAuthorMatch.userBook?.book?.id;
-      
+
       if (titleAuthorMatch._needsEditionIdLookup && bookId) {
         // This branch should not execute when book is null
         assert.fail('Should not attempt edition lookup when book is null');
       }
 
       // Should safely skip edition lookup when no book ID available
-      assert.strictEqual(bookId, undefined, 'Should not have book ID when book is null');
+      assert.strictEqual(
+        bookId,
+        undefined,
+        'Should not have book ID when book is null',
+      );
     });
 
     it('should handle edition lookup failure logging safely', () => {
       const titleAuthorMatch = {
         userBook: null, // Could cause crash in failure logging
         edition: { id: 'failed-lookup-edition' },
-        _needsEditionIdLookup: true
+        _needsEditionIdLookup: true,
       };
 
       // Simulate edition lookup failure logging with safe access
@@ -142,7 +149,10 @@ describe('Additional Null UserBook Edge Cases', () => {
       const failureMessage = `Edition lookup failed for book ${bookId}`;
 
       // Should not crash and should provide meaningful message
-      assert.strictEqual(failureMessage, 'Edition lookup failed for book Unknown Book ID');
+      assert.strictEqual(
+        failureMessage,
+        'Edition lookup failed for book Unknown Book ID',
+      );
     });
   });
 
@@ -155,10 +165,10 @@ describe('Additional Null UserBook Edge Cases', () => {
             id: 'complex-book-id',
             title: null, // Nested null property
             contributions: null, // Another nested null
-            editions: null // Yet another nested null
-          }
+            editions: null, // Yet another nested null
+          },
         },
-        edition: { id: 'complex-edition' }
+        edition: { id: 'complex-edition' },
       };
 
       // Test multiple levels of safe access
@@ -166,7 +176,8 @@ describe('Additional Null UserBook Edge Cases', () => {
       const contributions = complexMatch.userBook?.book?.contributions || [];
       const editions = complexMatch.userBook?.book?.editions || [];
       const firstEdition = complexMatch.userBook?.book?.editions?.[0];
-      const firstContribution = complexMatch.userBook?.book?.contributions?.[0]?.author?.name;
+      const firstContribution =
+        complexMatch.userBook?.book?.contributions?.[0]?.author?.name;
 
       assert.strictEqual(title, 'No Title');
       assert.deepStrictEqual(contributions, []);
@@ -180,16 +191,19 @@ describe('Additional Null UserBook Edge Cases', () => {
         userBook: {
           book: {
             editions: null, // Null array
-            contributions: undefined // Undefined array
-          }
-        }
+            contributions: undefined, // Undefined array
+          },
+        },
       };
 
       // Safe array access patterns
-      const editionCount = matchWithNullArrays.userBook?.book?.editions?.length || 0;
+      const editionCount =
+        matchWithNullArrays.userBook?.book?.editions?.length || 0;
       const firstEdition = matchWithNullArrays.userBook?.book?.editions?.[0];
-      const contributionCount = matchWithNullArrays.userBook?.book?.contributions?.length || 0;
-      const firstContributor = matchWithNullArrays.userBook?.book?.contributions?.[0]?.author?.name;
+      const contributionCount =
+        matchWithNullArrays.userBook?.book?.contributions?.length || 0;
+      const firstContributor =
+        matchWithNullArrays.userBook?.book?.contributions?.[0]?.author?.name;
 
       assert.strictEqual(editionCount, 0);
       assert.strictEqual(firstEdition, undefined);
@@ -203,7 +217,7 @@ describe('Additional Null UserBook Edge Cases', () => {
       const problematicMatch = {
         userBook: null,
         edition: null, // Even edition could be null
-        _needsBookIdLookup: true
+        _needsBookIdLookup: true,
       };
 
       // Simulate comprehensive error logging that could crash
@@ -216,7 +230,7 @@ describe('Additional Null UserBook Edge Cases', () => {
         editionId: problematicMatch.edition?.id || 'N/A',
         bookTitle: problematicMatch.userBook?.book?.title || 'Unknown',
         editionFormat: problematicMatch.edition?.format || 'Unknown',
-        needsLookup: problematicMatch._needsBookIdLookup || false
+        needsLookup: problematicMatch._needsBookIdLookup || false,
       };
 
       // All properties should be safely accessible
@@ -239,12 +253,12 @@ describe('Additional Null UserBook Edge Cases', () => {
         { userBook: null, edition: { id: 'edition-1' } },
         { userBook: { id: 'user-1' }, edition: null },
         { userBook: { id: null }, edition: { id: 'edition-2' } },
-        { userBook: { id: 'user-2' }, edition: { id: null } }
+        { userBook: { id: 'user-2' }, edition: { id: null } },
       ];
 
       testCases.forEach((testCase, index) => {
         const match = testCase;
-        
+
         // Safe cache key generation
         let cacheKey = null;
         if (match.userBook?.id && match.edition?.id) {
@@ -252,13 +266,25 @@ describe('Additional Null UserBook Edge Cases', () => {
         }
 
         // Only the case with both valid IDs should generate a key
-        if (index === 2) { // userBook: { id: 'user-2' }, edition: { id: null }
-          assert.strictEqual(cacheKey, null, `Test case ${index} should not generate cache key`);
+        if (index === 2) {
+          // userBook: { id: 'user-2' }, edition: { id: null }
+          assert.strictEqual(
+            cacheKey,
+            null,
+            `Test case ${index} should not generate cache key`,
+          );
         } else if (match.userBook?.id === 'user-2' && match.edition?.id) {
           // This case doesn't exist in our test data, but if it did...
-          assert.ok(cacheKey?.includes('user-2'), 'Should generate valid cache key');
+          assert.ok(
+            cacheKey?.includes('user-2'),
+            'Should generate valid cache key',
+          );
         } else {
-          assert.strictEqual(cacheKey, null, `Test case ${index} should not generate cache key`);
+          assert.strictEqual(
+            cacheKey,
+            null,
+            `Test case ${index} should not generate cache key`,
+          );
         }
       });
     });

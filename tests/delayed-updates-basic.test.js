@@ -50,7 +50,7 @@ describe('Delayed Updates Basic Functionality', () => {
   describe('Configuration and Initialization', () => {
     it('initializes with disabled configuration', () => {
       sessionManager = new SessionManager(cache, { enabled: false });
-      
+
       assert.equal(sessionManager.isEnabled(), false);
       const config = sessionManager.getConfigSummary();
       assert.equal(config.enabled, false);
@@ -64,9 +64,9 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 1800, // 30 minutes
         max_delay: 7200, // 2 hours
-        immediate_completion: false
+        immediate_completion: false,
       });
-      
+
       assert.equal(sessionManager.isEnabled(), true);
       const config = sessionManager.getConfigSummary();
       assert.equal(config.enabled, true);
@@ -80,7 +80,7 @@ describe('Delayed Updates Basic Functionality', () => {
       assert.throws(() => {
         new SessionManager(cache, {
           enabled: true,
-          session_timeout: 30 // Too short
+          session_timeout: 30, // Too short
         });
       }, /Invalid sessionTimeout/);
 
@@ -89,7 +89,7 @@ describe('Delayed Updates Basic Functionality', () => {
         new SessionManager(cache, {
           enabled: true,
           session_timeout: 1800,
-          max_delay: 1200 // Less than session timeout
+          max_delay: 1200, // Less than session timeout
         });
       }, /sessionTimeout.*must be less than maxDelay/);
     });
@@ -101,15 +101,20 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 900,
         max_delay: 3600,
-        immediate_completion: true
+        immediate_completion: true,
       });
     });
 
     it('returns immediate sync when disabled', async () => {
       const disabledManager = new SessionManager(cache, { enabled: false });
-      
+
       const decision = await disabledManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 50, {}, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        50,
+        {},
+        'isbn',
       );
 
       assert.equal(decision.action, 'sync_immediately');
@@ -120,11 +125,16 @@ describe('Delayed Updates Basic Functionality', () => {
     it('returns immediate sync for book completion', async () => {
       const completedBook = {
         is_finished: true,
-        progress_percentage: 100
+        progress_percentage: 100,
       };
 
       const decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 100, completedBook, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        100,
+        completedBook,
+        'isbn',
       );
 
       assert.equal(decision.action, 'sync_immediately');
@@ -136,11 +146,16 @@ describe('Delayed Updates Basic Functionality', () => {
     it('handles new books (no previous progress)', async () => {
       const book = {
         is_finished: false,
-        progress_percentage: 25
+        progress_percentage: 25,
       };
 
       const decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'New Book', 25, book, 'isbn'
+        'user1',
+        'book1',
+        'New Book',
+        25,
+        book,
+        'isbn',
       );
 
       // New books should sync immediately (significant change from null)
@@ -158,36 +173,72 @@ describe('Delayed Updates Basic Functionality', () => {
 
     it('creates active sessions', async () => {
       const result = await cache.updateSessionProgress(
-        'user1', 'book1', 'Test Book', 35, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
       );
 
       assert.equal(result, true);
 
       // Verify the session was created
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, true);
     });
 
     it('completes sessions', async () => {
       // Start with active session
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 30, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        30,
+        'isbn',
+      );
 
       const success = await cache.markSessionComplete(
-        'user1', 'book1', 'Test Book', 35, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
       );
 
       assert.equal(success, true);
 
       // Verify session was completed
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
 
     it('tracks multiple active sessions', async () => {
       // Create multiple books with sessions
       await cache.storeProgress('user1', 'book2', 'Second Book', 15, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
-      await cache.updateSessionProgress('user1', 'book2', 'Second Book', 20, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
+      await cache.updateSessionProgress(
+        'user1',
+        'book2',
+        'Second Book',
+        20,
+        'isbn',
+      );
 
       const activeSessions = await cache.getActiveSessions('user1');
       assert.equal(activeSessions.length, 2);
@@ -200,7 +251,7 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 900,
         max_delay: 3600,
-        immediate_completion: true
+        immediate_completion: true,
       });
     });
 
@@ -209,28 +260,52 @@ describe('Delayed Updates Basic Functionality', () => {
       await cache.storeProgress('user1', 'book1', 'Test Book', 20, 'isbn');
 
       const success = await sessionManager.updateSession(
-        'user1', 'book1', 'Test Book', 25, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
       );
 
       assert.equal(success, true);
 
       // Verify session was updated
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, true);
     });
 
     it('completes sessions through SessionManager', async () => {
       // Start with active session
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 30, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        30,
+        'isbn',
+      );
 
       const success = await sessionManager.completeSession(
-        'user1', 'book1', 'Test Book', 35, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
       );
 
       assert.equal(success, true);
 
       // Verify session was completed
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
   });
@@ -241,7 +316,7 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 900,
         max_delay: 3600,
-        immediate_completion: true
+        immediate_completion: true,
       });
     });
 
@@ -251,11 +326,16 @@ describe('Delayed Updates Basic Functionality', () => {
 
       const book = {
         is_finished: false,
-        progress_percentage: 50 // 20% jump
+        progress_percentage: 50, // 20% jump
       };
 
       const decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 50, book, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        50,
+        book,
+        'isbn',
       );
 
       assert.equal(decision.action, 'sync_immediately');
@@ -265,7 +345,12 @@ describe('Delayed Updates Basic Functionality', () => {
 
     it('handles missing book data gracefully', async () => {
       const decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 50, null, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        50,
+        null,
+        'isbn',
       );
 
       // Should have some reasonable decision (not crash)
@@ -281,22 +366,35 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 900,
         max_delay: 3600,
-        immediate_completion: true
+        immediate_completion: true,
       });
     });
 
     it('handles non-existent books gracefully in cache methods', async () => {
       const updateResult = await cache.updateSessionProgress(
-        'user1', 'nonexistent', 'Non Existent Book', 50, 'isbn'
+        'user1',
+        'nonexistent',
+        'Non Existent Book',
+        50,
+        'isbn',
       );
       assert.equal(updateResult, false);
 
       const completeResult = await cache.markSessionComplete(
-        'user1', 'nonexistent', 'Non Existent Book', 50, 'isbn'
+        'user1',
+        'nonexistent',
+        'Non Existent Book',
+        50,
+        'isbn',
       );
       assert.equal(completeResult, false);
 
-      const hasActive = await cache.hasActiveSession('user1', 'nonexistent', 'Non Existent Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'nonexistent',
+        'Non Existent Book',
+        'isbn',
+      );
       // Should return false or undefined for non-existent books, but be falsy
       assert.equal(!!hasActive, false);
     });
@@ -305,12 +403,20 @@ describe('Delayed Updates Basic Functionality', () => {
       const disabledManager = new SessionManager(cache, { enabled: false });
 
       const updateResult = await disabledManager.updateSession(
-        'user1', 'book1', 'Test Book', 25, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
       );
       assert.equal(updateResult, false);
 
       const completeResult = await disabledManager.completeSession(
-        'user1', 'book1', 'Test Book', 30, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        30,
+        'isbn',
       );
       assert.equal(completeResult, false);
     });
@@ -322,7 +428,7 @@ describe('Delayed Updates Basic Functionality', () => {
         enabled: true,
         session_timeout: 900,
         max_delay: 3600,
-        immediate_completion: true
+        immediate_completion: true,
       });
     });
 
@@ -332,29 +438,61 @@ describe('Delayed Updates Basic Functionality', () => {
 
       // 2. Start reading session with small updates (should delay)
       let decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 22, { is_finished: false }, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        22,
+        { is_finished: false },
+        'isbn',
       );
       assert.equal(decision.shouldDelay, true);
 
       // 3. Continue with small updates
-      await sessionManager.updateSession('user1', 'book1', 'Test Book', 22, 'isbn');
+      await sessionManager.updateSession(
+        'user1',
+        'book1',
+        'Test Book',
+        22,
+        'isbn',
+      );
 
       decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 24, { is_finished: false }, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        24,
+        { is_finished: false },
+        'isbn',
       );
       assert.equal(decision.shouldDelay, true);
 
       // 4. Large jump should force immediate sync
       decision = await sessionManager.shouldDelayUpdate(
-        'user1', 'book1', 'Test Book', 35, { is_finished: false }, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        { is_finished: false },
+        'isbn',
       );
       assert.equal(decision.shouldDelay, false);
       assert.equal(decision.reason, 'significant_progress_change');
 
       // 5. Complete the session
-      await sessionManager.completeSession('user1', 'book1', 'Test Book', 35, 'isbn');
-      
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      await sessionManager.completeSession(
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
+      );
+
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
   });

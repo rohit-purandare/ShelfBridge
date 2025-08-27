@@ -76,17 +76,25 @@ describe('BookCache Session Methods', () => {
 
     it('updates session progress successfully', async () => {
       const result = await cache.updateSessionProgress(
-        'user1', 'book1', 'Test Book', 35, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
       );
 
       assert.equal(result, true);
 
       // Verify the session data was stored
-      const book = cache.db.prepare(`
+      const book = cache.db
+        .prepare(
+          `
         SELECT session_pending_progress, session_is_active, session_last_change
         FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
       assert.equal(book.session_pending_progress, 35);
       assert.equal(book.session_is_active, 1);
@@ -95,7 +103,11 @@ describe('BookCache Session Methods', () => {
 
     it('handles non-existent book gracefully', async () => {
       const result = await cache.updateSessionProgress(
-        'user1', 'nonexistent', 'Non Existent Book', 50, 'isbn'
+        'user1',
+        'nonexistent',
+        'Non Existent Book',
+        50,
+        'isbn',
       );
 
       assert.equal(result, false);
@@ -103,25 +115,47 @@ describe('BookCache Session Methods', () => {
 
     it('updates session timestamp on repeated calls', async () => {
       // First update
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
-      
-      const firstUpdate = cache.db.prepare(`
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
+
+      const firstUpdate = cache.db
+        .prepare(
+          `
         SELECT session_last_change FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
       // Small delay
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Second update
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 30, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        30,
+        'isbn',
+      );
 
-      const secondUpdate = cache.db.prepare(`
+      const secondUpdate = cache.db
+        .prepare(
+          `
         SELECT session_last_change FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
-      assert(secondUpdate.session_last_change > firstUpdate.session_last_change);
+      assert(
+        secondUpdate.session_last_change > firstUpdate.session_last_change,
+      );
     });
   });
 
@@ -131,20 +165,41 @@ describe('BookCache Session Methods', () => {
     });
 
     it('detects active sessions', async () => {
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
 
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, true);
     });
 
     it('returns false for non-active sessions', async () => {
       // Book exists but no active session
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
 
     it('returns false for non-existent books', async () => {
-      const hasActive = await cache.hasActiveSession('user1', 'nonexistent', 'Non Existent', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'nonexistent',
+        'Non Existent',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
 
@@ -153,8 +208,20 @@ describe('BookCache Session Methods', () => {
       await cache.storeProgress('user1', 'book2', 'Second Book', 15, 'isbn');
       await cache.storeProgress('user1', 'book3', 'Third Book', 40, 'isbn');
 
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
-      await cache.updateSessionProgress('user1', 'book2', 'Second Book', 20, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
+      await cache.updateSessionProgress(
+        'user1',
+        'book2',
+        'Second Book',
+        20,
+        'isbn',
+      );
       // book3 has no active session
 
       const activeSessions = await cache.getActiveSessions('user1');
@@ -173,18 +240,34 @@ describe('BookCache Session Methods', () => {
 
     it('finds expired sessions', async () => {
       // Create old session
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
-      
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
+
       // Manually set old timestamp
       const oldTime = new Date(Date.now() - 2000 * 1000).toISOString(); // 2000 seconds ago
-      cache.db.prepare(`
+      cache.db
+        .prepare(
+          `
         UPDATE books 
         SET session_last_change = ? 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).run(oldTime, 'user1', 'book1', 'test book');
+      `,
+        )
+        .run(oldTime, 'user1', 'book1', 'test book');
 
       // Create recent session
-      await cache.updateSessionProgress('user1', 'book2', 'Recent Book', 35, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book2',
+        'Recent Book',
+        35,
+        'isbn',
+      );
 
       const expiredSessions = await cache.getExpiredSessions('user1', 1800); // 30 minutes
       assert.equal(expiredSessions.length, 1);
@@ -193,7 +276,13 @@ describe('BookCache Session Methods', () => {
     });
 
     it('returns empty array when no expired sessions', async () => {
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
 
       const expiredSessions = await cache.getExpiredSessions('user1', 1800);
       assert.equal(expiredSessions.length, 0);
@@ -209,23 +298,37 @@ describe('BookCache Session Methods', () => {
   describe('Session Completion', () => {
     beforeEach(async () => {
       await cache.storeProgress('user1', 'book1', 'Test Book', 20, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 30, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        30,
+        'isbn',
+      );
     });
 
     it('completes session successfully', async () => {
       const result = await cache.markSessionComplete(
-        'user1', 'book1', 'Test Book', 35, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
       );
 
       assert.equal(result, true);
 
       // Verify session was completed
-      const book = cache.db.prepare(`
+      const book = cache.db
+        .prepare(
+          `
         SELECT progress_percent, session_is_active, session_pending_progress, 
                session_last_change, last_hardcover_sync, last_sync
         FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
       assert.equal(book.progress_percent, 35);
       assert.equal(book.session_is_active, 0);
@@ -237,7 +340,11 @@ describe('BookCache Session Methods', () => {
 
     it('handles non-existent book gracefully', async () => {
       const result = await cache.markSessionComplete(
-        'user1', 'nonexistent', 'Non Existent Book', 50, 'isbn'
+        'user1',
+        'nonexistent',
+        'Non Existent Book',
+        50,
+        'isbn',
       );
 
       assert.equal(result, false);
@@ -245,16 +352,26 @@ describe('BookCache Session Methods', () => {
 
     it('updates timestamps correctly', async () => {
       const beforeTime = new Date().toISOString();
-      
-      await cache.markSessionComplete('user1', 'book1', 'Test Book', 40, 'isbn');
-      
+
+      await cache.markSessionComplete(
+        'user1',
+        'book1',
+        'Test Book',
+        40,
+        'isbn',
+      );
+
       const afterTime = new Date().toISOString();
 
-      const book = cache.db.prepare(`
+      const book = cache.db
+        .prepare(
+          `
         SELECT last_hardcover_sync, last_sync, updated_at
         FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
       assert(book.last_hardcover_sync >= beforeTime);
       assert(book.last_hardcover_sync <= afterTime);
@@ -268,40 +385,75 @@ describe('BookCache Session Methods', () => {
   describe('Identifier Type Handling', () => {
     it('works with ASIN identifiers', async () => {
       await cache.storeProgress('user1', 'B123456789', 'ASIN Book', 20, 'asin');
-      
+
       const result = await cache.updateSessionProgress(
-        'user1', 'B123456789', 'ASIN Book', 30, 'asin'
+        'user1',
+        'B123456789',
+        'ASIN Book',
+        30,
+        'asin',
       );
 
       assert.equal(result, true);
 
-      const hasActive = await cache.hasActiveSession('user1', 'B123456789', 'ASIN Book', 'asin');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'B123456789',
+        'ASIN Book',
+        'asin',
+      );
       assert.equal(hasActive, true);
     });
 
     it('maintains identifier type consistency', async () => {
       await cache.storeProgress('user1', 'book1', 'Test Book', 20, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
 
       // Try to access with different identifier type (should not find it)
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'Test Book', 'asin');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'Test Book',
+        'asin',
+      );
       assert.equal(hasActive, false);
     });
   });
 
   describe('Database Constraints and Edge Cases', () => {
     it('handles title normalization consistently', async () => {
-      await cache.storeProgress('user1', 'book1', '  Mixed Case Title  ', 20, 'isbn');
-      
+      await cache.storeProgress(
+        'user1',
+        'book1',
+        '  Mixed Case Title  ',
+        20,
+        'isbn',
+      );
+
       // Update with different casing/spacing
       const result = await cache.updateSessionProgress(
-        'user1', 'book1', 'mixed case title', 25, 'isbn'
+        'user1',
+        'book1',
+        'mixed case title',
+        25,
+        'isbn',
       );
 
       assert.equal(result, true);
 
       // Check with another variation
-      const hasActive = await cache.hasActiveSession('user1', 'book1', 'MIXED CASE TITLE', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'user1',
+        'book1',
+        'MIXED CASE TITLE',
+        'isbn',
+      );
       assert.equal(hasActive, true);
     });
 
@@ -312,19 +464,23 @@ describe('BookCache Session Methods', () => {
       const promises = [
         cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn'),
         cache.updateSessionProgress('user1', 'book1', 'Test Book', 26, 'isbn'),
-        cache.updateSessionProgress('user1', 'book1', 'Test Book', 27, 'isbn')
+        cache.updateSessionProgress('user1', 'book1', 'Test Book', 27, 'isbn'),
       ];
 
       const results = await Promise.all(promises);
-      
+
       // All should succeed
       assert(results.every(result => result === true));
 
       // Final progress should be one of the values
-      const book = cache.db.prepare(`
+      const book = cache.db
+        .prepare(
+          `
         SELECT session_pending_progress FROM books 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).get('user1', 'book1', 'test book');
+      `,
+        )
+        .get('user1', 'book1', 'test book');
 
       assert([25, 26, 27].includes(book.session_pending_progress));
     });
@@ -334,7 +490,11 @@ describe('BookCache Session Methods', () => {
       await cache.close();
 
       const result = await cache.updateSessionProgress(
-        'user1', 'book1', 'Test Book', 25, 'isbn'
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
       );
 
       assert.equal(result, false);

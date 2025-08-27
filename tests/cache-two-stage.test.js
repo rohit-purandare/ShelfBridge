@@ -1,11 +1,18 @@
 /**
  * Cache Integration Tests for Two-Stage Matching
- * 
+ *
  * Tests to ensure the BookCache properly handles two-stage matching results,
  * edition mappings, and cache retrieval for the new matching system.
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import { BookCache } from '../src/book-cache.js';
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +32,7 @@ describe('Cache Two-Stage Integration', () => {
     if (cache) {
       await cache.close();
     }
-    
+
     // Clean up temporary file
     try {
       if (fs.existsSync(tempCachePath)) {
@@ -51,7 +58,7 @@ describe('Cache Two-Stage Integration', () => {
         title,
         editionId,
         bookId,
-        author
+        author,
       );
 
       expect(result).toBe(true);
@@ -61,7 +68,7 @@ describe('Cache Two-Stage Integration', () => {
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
       expect(cachedInfo).not.toBeNull();
@@ -78,7 +85,7 @@ describe('Cache Two-Stage Integration', () => {
         title: 'Test Audiobook',
         editionId: 'audiobook_edition_123',
         bookId: 'audiobook_book_456',
-        author: 'Audiobook Author'
+        author: 'Audiobook Author',
       };
 
       await cache.storeEditionMapping(
@@ -87,14 +94,14 @@ describe('Cache Two-Stage Integration', () => {
         audiobookMapping.title,
         audiobookMapping.editionId,
         audiobookMapping.bookId,
-        audiobookMapping.author
+        audiobookMapping.author,
       );
 
       const retrieved = await cache.getCachedBookInfo(
         audiobookMapping.userId,
         audiobookMapping.titleAuthorId,
         audiobookMapping.title,
-        'title_author'
+        'title_author',
       );
 
       expect(retrieved.edition_id).toBe(audiobookMapping.editionId);
@@ -108,7 +115,7 @@ describe('Cache Two-Stage Integration', () => {
         title: 'Test Ebook',
         editionId: 'ebook_edition_789',
         bookId: 'ebook_book_012',
-        author: 'Ebook Author'
+        author: 'Ebook Author',
       };
 
       await cache.storeEditionMapping(
@@ -117,14 +124,14 @@ describe('Cache Two-Stage Integration', () => {
         ebookMapping.title,
         ebookMapping.editionId,
         ebookMapping.bookId,
-        ebookMapping.author
+        ebookMapping.author,
       );
 
       const retrieved = await cache.getCachedBookInfo(
         ebookMapping.userId,
         ebookMapping.titleAuthorId,
         ebookMapping.title,
-        'title_author'
+        'title_author',
       );
 
       expect(retrieved.edition_id).toBe(ebookMapping.editionId);
@@ -144,7 +151,7 @@ describe('Cache Two-Stage Integration', () => {
         title,
         'old_edition_123',
         'book_456',
-        author
+        author,
       );
 
       // Update with new edition
@@ -154,14 +161,14 @@ describe('Cache Two-Stage Integration', () => {
         title,
         'new_edition_789',
         'book_456',
-        author
+        author,
       );
 
       const retrieved = await cache.getCachedBookInfo(
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
       expect(retrieved.edition_id).toBe('new_edition_789');
@@ -172,7 +179,7 @@ describe('Cache Two-Stage Integration', () => {
       const commonBook = {
         titleAuthorId: 'common-book-id',
         title: 'Common Book',
-        author: 'Shared Author'
+        author: 'Shared Author',
       };
 
       // Store for user 1
@@ -182,7 +189,7 @@ describe('Cache Two-Stage Integration', () => {
         commonBook.title,
         'edition_user1',
         'book_common',
-        commonBook.author
+        commonBook.author,
       );
 
       // Store for user 2 (different edition of same book)
@@ -192,21 +199,21 @@ describe('Cache Two-Stage Integration', () => {
         commonBook.title,
         'edition_user2',
         'book_common',
-        commonBook.author
+        commonBook.author,
       );
 
       const user1Cache = await cache.getCachedBookInfo(
         'user-1',
         commonBook.titleAuthorId,
         commonBook.title,
-        'title_author'
+        'title_author',
       );
 
       const user2Cache = await cache.getCachedBookInfo(
         'user-2',
         commonBook.titleAuthorId,
         commonBook.title,
-        'title_author'
+        'title_author',
       );
 
       expect(user1Cache.edition_id).toBe('edition_user1');
@@ -224,7 +231,7 @@ describe('Cache Two-Stage Integration', () => {
         'Cached Book',
         'cached_edition_123',
         'cached_book_456',
-        'Cached Author'
+        'Cached Author',
       );
     });
 
@@ -233,7 +240,7 @@ describe('Cache Two-Stage Integration', () => {
         'test-user',
         'cached-book-id',
         'Cached Book',
-        'title_author'
+        'title_author',
       );
 
       expect(cached).not.toBeNull();
@@ -248,7 +255,7 @@ describe('Cache Two-Stage Integration', () => {
         'test-user',
         'non-existent-id',
         'Non-existent Book',
-        'title_author'
+        'title_author',
       );
 
       expect(nonExistent).toBeNull();
@@ -259,7 +266,7 @@ describe('Cache Two-Stage Integration', () => {
         'different-user',
         'cached-book-id',
         'Cached Book',
-        'title_author'
+        'title_author',
       );
 
       expect(differentUser).toBeNull();
@@ -270,7 +277,7 @@ describe('Cache Two-Stage Integration', () => {
         'test-user',
         'cached-book-id',
         'CACHED BOOK', // Different case
-        'title_author'
+        'title_author',
       );
 
       expect(caseTest).toBeNull(); // Should not match due to case sensitivity
@@ -290,7 +297,7 @@ describe('Cache Two-Stage Integration', () => {
           title: `Bulk Book ${i}`,
           editionId: `bulk_edition_${i}`,
           bookId: `bulk_book_${i}`,
-          author: `Bulk Author ${i % 20}` // 20 different authors
+          author: `Bulk Author ${i % 20}`, // 20 different authors
         });
       }
 
@@ -302,7 +309,7 @@ describe('Cache Two-Stage Integration', () => {
           mapping.title,
           mapping.editionId,
           mapping.bookId,
-          mapping.author
+          mapping.author,
         );
       }
 
@@ -317,7 +324,7 @@ describe('Cache Two-Stage Integration', () => {
         'bulk-user-0',
         'bulk-book-0',
         'Bulk Book 0',
-        'title_author'
+        'title_author',
       );
 
       expect(sample).not.toBeNull();
@@ -333,7 +340,7 @@ describe('Cache Two-Stage Integration', () => {
           `Performance Book ${i}`,
           `perf_edition_${i}`,
           `perf_book_${i}`,
-          'Performance Author'
+          'Performance Author',
         );
       }
 
@@ -347,8 +354,8 @@ describe('Cache Two-Stage Integration', () => {
             'perf-user',
             `perf-book-${i}`,
             `Performance Book ${i}`,
-            'title_author'
-          )
+            'title_author',
+          ),
         );
       }
 
@@ -371,9 +378,30 @@ describe('Cache Two-Stage Integration', () => {
 
       // Simulate concurrent store operations
       const storePromises = [
-        cache.storeEditionMapping(userId, titleAuthorId, title, 'edition_1', 'book_1', author),
-        cache.storeEditionMapping(userId, titleAuthorId, title, 'edition_2', 'book_1', author),
-        cache.storeEditionMapping(userId, titleAuthorId, title, 'edition_3', 'book_1', author)
+        cache.storeEditionMapping(
+          userId,
+          titleAuthorId,
+          title,
+          'edition_1',
+          'book_1',
+          author,
+        ),
+        cache.storeEditionMapping(
+          userId,
+          titleAuthorId,
+          title,
+          'edition_2',
+          'book_1',
+          author,
+        ),
+        cache.storeEditionMapping(
+          userId,
+          titleAuthorId,
+          title,
+          'edition_3',
+          'book_1',
+          author,
+        ),
       ];
 
       await Promise.all(storePromises);
@@ -383,11 +411,13 @@ describe('Cache Two-Stage Integration', () => {
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
       expect(final).not.toBeNull();
-      expect(['edition_1', 'edition_2', 'edition_3']).toContain(final.edition_id);
+      expect(['edition_1', 'edition_2', 'edition_3']).toContain(
+        final.edition_id,
+      );
       expect(final.book_id).toBe('book_1');
     });
 
@@ -398,7 +428,7 @@ describe('Cache Two-Stage Integration', () => {
         title: 'Book with "Quotes" & Special Chars: 测试',
         editionId: 'special_edition_123',
         bookId: 'special_book_456',
-        author: 'Author with àccénts & símböls'
+        author: 'Author with àccénts & símböls',
       };
 
       await cache.storeEditionMapping(
@@ -407,14 +437,14 @@ describe('Cache Two-Stage Integration', () => {
         specialData.title,
         specialData.editionId,
         specialData.bookId,
-        specialData.author
+        specialData.author,
       );
 
       const retrieved = await cache.getCachedBookInfo(
         specialData.userId,
         specialData.titleAuthorId,
         specialData.title,
-        'title_author'
+        'title_author',
       );
 
       expect(retrieved).not.toBeNull();
@@ -434,7 +464,7 @@ describe('Cache Two-Stage Integration', () => {
         null,
         'null_edition',
         'null_book',
-        null
+        null,
       );
 
       expect(nullResult).toBe(false); // Should fail gracefully
@@ -446,7 +476,7 @@ describe('Cache Two-Stage Integration', () => {
         undefined,
         'undefined_edition',
         'undefined_book',
-        undefined
+        undefined,
       );
 
       expect(undefinedResult).toBe(false); // Should fail gracefully
@@ -462,7 +492,7 @@ describe('Cache Two-Stage Integration', () => {
         longTitle,
         'long_edition',
         'long_book',
-        longAuthor
+        longAuthor,
       );
 
       expect(result).toBe(true);
@@ -471,7 +501,7 @@ describe('Cache Two-Stage Integration', () => {
         'long-data-user',
         'long-data-id',
         longTitle,
-        'title_author'
+        'title_author',
       );
 
       expect(retrieved).not.toBeNull();
@@ -494,7 +524,7 @@ describe('Cache Two-Stage Integration', () => {
         legacyTitle,
         'legacy_edition',
         'legacy_book',
-        legacyAuthor
+        legacyAuthor,
       );
 
       // Store a two-stage entry
@@ -504,7 +534,7 @@ describe('Cache Two-Stage Integration', () => {
         'Two Stage Book',
         'two_stage_edition',
         'two_stage_book',
-        'Two Stage Author'
+        'Two Stage Author',
       );
 
       // Both should be retrievable
@@ -512,14 +542,14 @@ describe('Cache Two-Stage Integration', () => {
         legacyUserId,
         legacyTitleAuthorId,
         legacyTitle,
-        'title_author'
+        'title_author',
       );
 
       const twoStageRetrieved = await cache.getCachedBookInfo(
         'two-stage-user',
         'two-stage-id',
         'Two Stage Book',
-        'title_author'
+        'title_author',
       );
 
       expect(legacyRetrieved).not.toBeNull();

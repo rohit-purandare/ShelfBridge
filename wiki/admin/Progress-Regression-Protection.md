@@ -5,6 +5,7 @@ Progress regression protection is one of ShelfBridge's most important features. 
 ## 🎯 What is Progress Regression Protection?
 
 Progress regression protection prevents:
+
 - ✅ Completed books from being marked as incomplete
 - ✅ High progress from being accidentally reset
 - ✅ Loss of reading history during re-reads
@@ -49,23 +50,23 @@ global:
 global:
   # Enable protection
   prevent_progress_regression: true
-  
+
   # Fine-tune protection behavior
   reread_detection:
     enabled: true
-    
+
     # Progress threshold for detecting re-reads (30% or below = re-read)
     reread_threshold: 30.0
-    
+
     # High progress threshold (85% or above = high progress)
     high_progress_threshold: 85.0
-    
+
     # Block progress drops larger than this (50 percentage points)
     regression_block_threshold: 50.0
-    
+
     # Warn about progress drops larger than this (15 percentage points)
     regression_warn_threshold: 15.0
-    
+
     # Create new reading sessions for re-reads
     create_new_sessions: true
 ```
@@ -84,6 +85,7 @@ Current: 15% progress on 2024-03-01
 ```
 
 **Protection Action**:
+
 ```
 🔄 Re-read detected for "Foundation"
 ✅ Preserving original completion (100% on 2024-01-15)
@@ -102,6 +104,7 @@ Current: 35% progress
 ```
 
 **Protection Action**:
+
 ```
 🛡️ High progress drop detected for "Dune"
 ⚠️ Progress drop: 92% → 35% (57 percentage points)
@@ -121,6 +124,7 @@ Current: 25% progress
 ```
 
 **Protection Action**:
+
 ```
 ⚠️ Progress regression warning for "The Martian"
 📉 Progress drop: 45% → 25% (20 percentage points)
@@ -135,27 +139,27 @@ Current: 25% progress
 global:
   reread_detection:
     # When is something considered a re-read?
-    reread_threshold: 30.0          # 30% or below = likely re-read
-    
+    reread_threshold: 30.0 # 30% or below = likely re-read
+
     # When is progress considered "high"?
-    high_progress_threshold: 85.0   # 85% or above = high progress
-    
+    high_progress_threshold: 85.0 # 85% or above = high progress
+
     # When should we block updates?
-    regression_block_threshold: 50.0  # Block drops >50 percentage points
-    
+    regression_block_threshold: 50.0 # Block drops >50 percentage points
+
     # When should we warn?
-    regression_warn_threshold: 15.0   # Warn about drops >15 percentage points
+    regression_warn_threshold: 15.0 # Warn about drops >15 percentage points
 ```
 
 ### Threshold Examples
 
-| Previous | Current | Threshold Check | Action |
-|----------|---------|----------------|--------|
-| 100% | 15% | Below reread_threshold | ✅ Create new session |
-| 95% | 20% | Below reread_threshold | ✅ Create new session |
-| 90% | 25% | Above block_threshold | 🚫 Block update |
-| 60% | 40% | Above warn_threshold | ⚠️ Warn but allow |
-| 50% | 45% | Below warn_threshold | ✅ Normal update |
+| Previous | Current | Threshold Check        | Action                |
+| -------- | ------- | ---------------------- | --------------------- |
+| 100%     | 15%     | Below reread_threshold | ✅ Create new session |
+| 95%      | 20%     | Below reread_threshold | ✅ Create new session |
+| 90%      | 25%     | Above block_threshold  | 🚫 Block update       |
+| 60%      | 40%     | Above warn_threshold   | ⚠️ Warn but allow     |
+| 50%      | 45%     | Below warn_threshold   | ✅ Normal update      |
 
 ## 🎨 Customization Examples
 
@@ -166,10 +170,10 @@ global:
   prevent_progress_regression: true
   reread_detection:
     enabled: true
-    reread_threshold: 40.0         # Higher threshold for re-reads
-    high_progress_threshold: 75.0  # Lower threshold for high progress
-    regression_block_threshold: 30.0  # Block smaller drops
-    regression_warn_threshold: 10.0   # Warn about small drops
+    reread_threshold: 40.0 # Higher threshold for re-reads
+    high_progress_threshold: 75.0 # Lower threshold for high progress
+    regression_block_threshold: 30.0 # Block smaller drops
+    regression_warn_threshold: 10.0 # Warn about small drops
     create_new_sessions: true
 ```
 
@@ -182,10 +186,10 @@ global:
   prevent_progress_regression: true
   reread_detection:
     enabled: true
-    reread_threshold: 20.0         # Lower threshold for re-reads
-    high_progress_threshold: 90.0  # Higher threshold for high progress
-    regression_block_threshold: 70.0  # Only block large drops
-    regression_warn_threshold: 30.0   # Only warn about large drops
+    reread_threshold: 20.0 # Lower threshold for re-reads
+    high_progress_threshold: 90.0 # Higher threshold for high progress
+    regression_block_threshold: 70.0 # Only block large drops
+    regression_warn_threshold: 30.0 # Only warn about large drops
     create_new_sessions: true
 ```
 
@@ -198,10 +202,10 @@ global:
   prevent_progress_regression: true
   reread_detection:
     enabled: true
-    reread_threshold: 10.0         # Only very low progress = re-read
-    high_progress_threshold: 95.0  # Only near-completion = high progress
-    regression_block_threshold: 80.0  # Only block massive drops
-    regression_warn_threshold: 50.0   # Only warn about huge drops
+    reread_threshold: 10.0 # Only very low progress = re-read
+    high_progress_threshold: 95.0 # Only near-completion = high progress
+    regression_block_threshold: 80.0 # Only block massive drops
+    regression_warn_threshold: 50.0 # Only warn about huge drops
     create_new_sessions: true
 ```
 
@@ -234,10 +238,10 @@ global:
   reread_detection:
     # Create new sessions for re-reads
     create_new_sessions: true
-    
+
     # Preserve original completion dates
     preserve_completion_dates: true
-    
+
     # Mark new sessions appropriately
     mark_as_reread: true
 ```
@@ -248,7 +252,7 @@ global:
 
 ```yaml
 global:
-  prevent_progress_regression: true  # Default for all users
+  prevent_progress_regression: true # Default for all users
 
 users:
   - id: alice
@@ -256,7 +260,7 @@ users:
     abs_url: https://abs.example.com
     abs_token: alice_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
     # Bob wants more aggressive protection
     prevent_progress_regression: true
@@ -266,7 +270,7 @@ users:
     abs_url: https://abs.example.com
     abs_token: bob_token
     hardcover_token: bob_hardcover_token
-    
+
   - id: charlie
     # Charlie wants minimal protection
     prevent_progress_regression: true
@@ -283,6 +287,7 @@ users:
 ### Understanding Protection Messages
 
 **Re-read Detection**:
+
 ```
 🔄 Re-read detected for "Book Title"
 🔸 Previous: 100% completed on 2024-01-15
@@ -291,6 +296,7 @@ users:
 ```
 
 **High Progress Protection**:
+
 ```
 🛡️ High progress drop detected for "Book Title"
 🔸 Previous: 92% progress
@@ -300,6 +306,7 @@ users:
 ```
 
 **Warning Threshold**:
+
 ```
 ⚠️ Progress regression warning for "Book Title"
 🔸 Previous: 45% progress
@@ -326,6 +333,7 @@ docker exec -it shelfbridge node src/main.js cache --show | grep "Book Title"
 ### When to Override
 
 Sometimes you need to override protection:
+
 - Correcting wrong completion status
 - Resetting progress intentionally
 - Fixing sync errors
@@ -368,13 +376,13 @@ users:
     reread_detection:
       reread_threshold: 30.0
       regression_block_threshold: 40.0
-    
+
   - id: child
     # Child might restart books frequently
     prevent_progress_regression: true
     reread_detection:
-      reread_threshold: 50.0        # Higher re-read threshold
-      regression_block_threshold: 60.0  # Allow more flexibility
+      reread_threshold: 50.0 # Higher re-read threshold
+      regression_block_threshold: 60.0 # Allow more flexibility
 ```
 
 ### Scenario: Testing/Development
@@ -385,7 +393,7 @@ users:
 # Solution: Disable protection for testing
 users:
   - id: test_user
-    prevent_progress_regression: false  # Disable for testing
+    prevent_progress_regression: false # Disable for testing
     abs_url: https://abs-test.example.com
     abs_token: test_token
     hardcover_token: test_hardcover_token
@@ -399,7 +407,7 @@ users:
 # Solution: Temporarily disable protection
 global:
   prevent_progress_regression: false  # Disable globally
-  
+
 # After cleanup, re-enable:
 global:
   prevent_progress_regression: true
@@ -410,6 +418,7 @@ global:
 ### Recommended Settings
 
 **For most users:**
+
 ```yaml
 global:
   prevent_progress_regression: true
@@ -423,24 +432,26 @@ global:
 ```
 
 **For heavy re-readers:**
+
 ```yaml
 global:
   prevent_progress_regression: true
   reread_detection:
     enabled: true
-    reread_threshold: 40.0         # Higher threshold
-    regression_block_threshold: 40.0  # More protection
+    reread_threshold: 40.0 # Higher threshold
+    regression_block_threshold: 40.0 # More protection
     create_new_sessions: true
 ```
 
 **For casual readers:**
+
 ```yaml
 global:
   prevent_progress_regression: true
   reread_detection:
     enabled: true
-    reread_threshold: 25.0         # Lower threshold
-    regression_block_threshold: 60.0  # Less strict
+    reread_threshold: 25.0 # Lower threshold
+    regression_block_threshold: 60.0 # Less strict
     create_new_sessions: true
 ```
 
@@ -468,4 +479,4 @@ docker exec -it shelfbridge node src/main.js sync --dry-run | grep -A 5 "protect
 
 ---
 
-**Progress regression protection keeps your reading history safe!** 🛡️📚 
+**Progress regression protection keeps your reading history safe!** 🛡️📚

@@ -131,9 +131,11 @@ jobs:
 
       - name: Check for secrets
         run: |
-          if grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " | grep -v "process.env" > /dev/null; then
-            echo "⚠️ Potential hardcoded secrets found"
-            grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " | grep -v "process.env" || true
+          # Look for actual hardcoded secrets, not just the words token/key/etc
+          # Check for quoted strings that look like API tokens (32+ chars, alphanumeric)
+          if grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" > /dev/null; then
+            echo "⚠️ Potential hardcoded secrets found:"
+            grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" || true
             exit 1
           fi
           echo "✅ No hardcoded secrets detected"

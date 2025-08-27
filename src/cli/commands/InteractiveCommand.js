@@ -32,7 +32,7 @@ export class InteractiveCommand extends BaseCommand {
   async runInteractiveMode() {
     const { config, globalConfig, users } = this.getConfiguration();
     let exit = false;
-    
+
     while (!exit) {
       const { action } = await inquirer.prompt([
         {
@@ -77,7 +77,7 @@ export class InteractiveCommand extends BaseCommand {
     if (globalConfig.parallel) {
       const workers = globalConfig.workers || 3;
       console.log(
-        `\n🔄 Syncing all users in parallel with ${workers} workers...`
+        `\n🔄 Syncing all users in parallel with ${workers} workers...`,
       );
       const semaphore = new Semaphore(workers);
       await Promise.all(
@@ -89,7 +89,7 @@ export class InteractiveCommand extends BaseCommand {
           } finally {
             semaphore.release();
           }
-        })
+        }),
       );
     } else {
       for (const user of users) {
@@ -116,37 +116,37 @@ export class InteractiveCommand extends BaseCommand {
     for (const user of users) {
       // Clean, user-friendly output for interactive mode
       process.stdout.write(
-        `\n=== Testing connections for user: ${user.id} ===\n`
+        `\n=== Testing connections for user: ${user.id} ===\n`,
       );
       let absStatus = false;
       let hcStatus = false;
-      
+
       try {
         const absClient = new AudiobookshelfClient(
           user.abs_url,
           user.abs_token,
           1,
           null,
-          100
+          100,
         );
         absStatus = await absClient.testConnection();
         process.stdout.write(
-          `Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}\n`
+          `Audiobookshelf: ${absStatus ? '✅ Connected' : '❌ Failed'}\n`,
         );
       } catch (e) {
         process.stdout.write(`Audiobookshelf: ❌ Error - ${e.message}\n`);
       }
-      
+
       try {
         const hcClient = new HardcoverClient(user.hardcover_token);
         hcStatus = await hcClient.testConnection();
         process.stdout.write(
-          `Hardcover: ${hcStatus ? '✅ Connected' : '❌ Failed'}\n`
+          `Hardcover: ${hcStatus ? '✅ Connected' : '❌ Failed'}\n`,
         );
       } catch (e) {
         process.stdout.write(`Hardcover: ❌ Error - ${e.message}\n`);
       }
-      
+
       if (absStatus && hcStatus) {
         process.stdout.write('All connections successful!\n');
       } else {
@@ -163,28 +163,28 @@ export class InteractiveCommand extends BaseCommand {
     // Core Sync Settings
     process.stdout.write(`\n📊 Core Sync Settings:\n`);
     process.stdout.write(
-      `  Min Progress Threshold: ${globalConfig.min_progress_threshold}%${config.isExplicitlySet('min_progress_threshold') ? '' : ' (default)'}\n`
+      `  Min Progress Threshold: ${globalConfig.min_progress_threshold}%${config.isExplicitlySet('min_progress_threshold') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Workers: ${globalConfig.workers}${config.isExplicitlySet('workers') ? '' : ' (default)'}\n`
+      `  Workers: ${globalConfig.workers}${config.isExplicitlySet('workers') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}${config.isExplicitlySet('parallel') ? '' : ' (default)'}\n`
+      `  Parallel Processing: ${globalConfig.parallel ? 'ON' : 'OFF'}${config.isExplicitlySet('parallel') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Timezone: ${globalConfig.timezone}${config.isExplicitlySet('timezone') ? '' : ' (default)'}\n`
+      `  Timezone: ${globalConfig.timezone}${config.isExplicitlySet('timezone') ? '' : ' (default)'}\n`,
     );
 
     // Safety and Testing Settings
     process.stdout.write(`\n🛡️  Safety and Testing Settings:\n`);
     process.stdout.write(
-      `  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}${config.isExplicitlySet('dry_run') ? '' : ' (default)'}\n`
+      `  Dry Run Mode: ${globalConfig.dry_run ? 'ON' : 'OFF'}${config.isExplicitlySet('dry_run') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}${config.isExplicitlySet('force_sync') ? '' : ' (default)'}\n`
+      `  Force Sync: ${globalConfig.force_sync ? 'ON' : 'OFF'}${config.isExplicitlySet('force_sync') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Max Books to Process: ${globalConfig.max_books_to_process !== undefined ? globalConfig.max_books_to_process : 'no limit'}${config.isExplicitlySet('max_books_to_process') ? '' : ' (default)'}\n`
+      `  Max Books to Process: ${globalConfig.max_books_to_process !== undefined ? globalConfig.max_books_to_process : 'no limit'}${config.isExplicitlySet('max_books_to_process') ? '' : ' (default)'}\n`,
     );
 
     // Automation Settings
@@ -195,75 +195,75 @@ export class InteractiveCommand extends BaseCommand {
           use24HourTimeFormat: false,
         });
         process.stdout.write(
-          `  Sync Schedule: ${human}${config.isExplicitlySet('sync_schedule') ? '' : ' (default)'}\n`
+          `  Sync Schedule: ${human}${config.isExplicitlySet('sync_schedule') ? '' : ' (default)'}\n`,
         );
       } catch (_e) {
         process.stdout.write(`  Sync Schedule: Invalid cron expression\n`);
       }
     } else {
       process.stdout.write(
-        `  Sync Schedule: 0 3 * * * (default - daily at 3 AM)\n`
+        `  Sync Schedule: 0 3 * * * (default - daily at 3 AM)\n`,
       );
     }
     process.stdout.write(
-      `  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}${config.isExplicitlySet('auto_add_books') ? '' : ' (default)'}\n`
+      `  Auto-add Books: ${globalConfig.auto_add_books ? 'ON' : 'OFF'}${config.isExplicitlySet('auto_add_books') ? '' : ' (default)'}\n`,
     );
 
     // Progress Protection Settings
     process.stdout.write(`\n🔒 Progress Protection Settings:\n`);
     process.stdout.write(
-      `  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}${config.isExplicitlySet('prevent_progress_regression') ? '' : ' (default)'}\n`
+      `  Progress Regression Protection: ${globalConfig.prevent_progress_regression ? 'ON' : 'OFF'}${config.isExplicitlySet('prevent_progress_regression') ? '' : ' (default)'}\n`,
     );
 
     // Re-read Detection Settings
     if (globalConfig.reread_detection) {
       process.stdout.write(`  Re-read Detection:\n`);
       process.stdout.write(
-        `    Re-read Threshold: ${globalConfig.reread_detection.reread_threshold || 30}%${globalConfig.reread_detection.reread_threshold !== undefined ? '' : ' (default)'}\n`
+        `    Re-read Threshold: ${globalConfig.reread_detection.reread_threshold || 30}%${globalConfig.reread_detection.reread_threshold !== undefined ? '' : ' (default)'}\n`,
       );
       process.stdout.write(
-        `    High Progress Threshold: ${globalConfig.reread_detection.high_progress_threshold || 85}%${globalConfig.reread_detection.high_progress_threshold !== undefined ? '' : ' (default)'}\n`
+        `    High Progress Threshold: ${globalConfig.reread_detection.high_progress_threshold || 85}%${globalConfig.reread_detection.high_progress_threshold !== undefined ? '' : ' (default)'}\n`,
       );
       process.stdout.write(
-        `    Regression Block Threshold: ${globalConfig.reread_detection.regression_block_threshold || 50}%${globalConfig.reread_detection.regression_block_threshold !== undefined ? '' : ' (default)'}\n`
+        `    Regression Block Threshold: ${globalConfig.reread_detection.regression_block_threshold || 50}%${globalConfig.reread_detection.regression_block_threshold !== undefined ? '' : ' (default)'}\n`,
       );
       process.stdout.write(
-        `    Regression Warn Threshold: ${globalConfig.reread_detection.regression_warn_threshold || 15}%${globalConfig.reread_detection.regression_warn_threshold !== undefined ? '' : ' (default)'}\n`
+        `    Regression Warn Threshold: ${globalConfig.reread_detection.regression_warn_threshold || 15}%${globalConfig.reread_detection.regression_warn_threshold !== undefined ? '' : ' (default)'}\n`,
       );
     } else {
       process.stdout.write(
-        `  Re-read Detection: using defaults (not configured)\n`
+        `  Re-read Detection: using defaults (not configured)\n`,
       );
     }
 
     // Rate Limiting and Performance
     process.stdout.write(`\n⚡ Rate Limiting and Performance:\n`);
     process.stdout.write(
-      `  Hardcover Semaphore: ${globalConfig.hardcover_semaphore}${config.isExplicitlySet('hardcover_semaphore') ? '' : ' (default)'}\n`
+      `  Hardcover Semaphore: ${globalConfig.hardcover_semaphore}${config.isExplicitlySet('hardcover_semaphore') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Hardcover Rate Limit: ${globalConfig.hardcover_rate_limit || 55} req/min${config.isExplicitlySet('hardcover_rate_limit') ? '' : ' (default)'}\n`
+      `  Hardcover Rate Limit: ${globalConfig.hardcover_rate_limit || 55} req/min${config.isExplicitlySet('hardcover_rate_limit') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`
+      `  Audiobookshelf Semaphore: ${globalConfig.audiobookshelf_semaphore}${config.isExplicitlySet('audiobookshelf_semaphore') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Audiobookshelf Rate Limit: ${globalConfig.audiobookshelf_rate_limit || 600} req/min${config.isExplicitlySet('audiobookshelf_rate_limit') ? '' : ' (default)'}\n`
+      `  Audiobookshelf Rate Limit: ${globalConfig.audiobookshelf_rate_limit || 600} req/min${config.isExplicitlySet('audiobookshelf_rate_limit') ? '' : ' (default)'}\n`,
     );
 
     // Library Fetching Settings
     process.stdout.write(`\n📚 Library Fetching Settings:\n`);
     process.stdout.write(
-      `  Max Books to Fetch: ${globalConfig.max_books_to_fetch === null ? 'no limit' : globalConfig.max_books_to_fetch || 'no limit'}${config.isExplicitlySet('max_books_to_fetch') ? '' : ' (default)'}\n`
+      `  Max Books to Fetch: ${globalConfig.max_books_to_fetch === null ? 'no limit' : globalConfig.max_books_to_fetch || 'no limit'}${config.isExplicitlySet('max_books_to_fetch') ? '' : ' (default)'}\n`,
     );
     process.stdout.write(
-      `  Page Size: ${globalConfig.page_size || 100}${config.isExplicitlySet('page_size') ? '' : ' (default)'}\n`
+      `  Page Size: ${globalConfig.page_size || 100}${config.isExplicitlySet('page_size') ? '' : ' (default)'}\n`,
     );
 
     // Debugging and Logging
     process.stdout.write(`\n🐛 Debugging and Logging:\n`);
     process.stdout.write(
-      `  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}${config.isExplicitlySet('dump_failed_books') ? '' : ' (default)'}\n`
+      `  Dump Failed Books: ${globalConfig.dump_failed_books ? 'ON' : 'OFF'}${config.isExplicitlySet('dump_failed_books') ? '' : ' (default)'}\n`,
     );
 
     // Users
@@ -323,7 +323,7 @@ export class InteractiveCommand extends BaseCommand {
       process.stdout.write('\n=== Cache Statistics ===\n');
       process.stdout.write(`Total books: ${stats.total_books}\n`);
       process.stdout.write(
-        `Recent books (last 7 days): ${stats.recent_books}\n`
+        `Recent books (last 7 days): ${stats.recent_books}\n`,
       );
       process.stdout.write(`Cache size: ${stats.cache_size_mb} MB\n`);
     } finally {
@@ -344,28 +344,24 @@ export class InteractiveCommand extends BaseCommand {
         process.stdout.write('No books in cache\n');
       } else {
         const stmt = cache2.db.prepare(
-          'SELECT * FROM books ORDER BY updated_at DESC'
+          'SELECT * FROM books ORDER BY updated_at DESC',
         );
         const books = stmt.all();
         books.forEach((book, index) => {
           process.stdout.write(`${index + 1}. ${book.title}\n`);
           process.stdout.write(`   User: ${book.user_id}\n`);
           process.stdout.write(
-            `   ${book.identifier_type.toUpperCase()}: ${book.identifier}\n`
+            `   ${book.identifier_type.toUpperCase()}: ${book.identifier}\n`,
           );
           process.stdout.write(`   Edition ID: ${book.edition_id}\n`);
-          process.stdout.write(
-            `   Progress: ${book.progress_percent}%\n`
-          );
-          process.stdout.write(
-            `   Author: ${book.author || 'Unknown'}\n`
-          );
+          process.stdout.write(`   Progress: ${book.progress_percent}%\n`);
+          process.stdout.write(`   Author: ${book.author || 'Unknown'}\n`);
           process.stdout.write(`   Last Sync: ${book.last_sync}\n`);
           process.stdout.write(
-            `   Started At: ${book.started_at || 'Not set'}\n`
+            `   Started At: ${book.started_at || 'Not set'}\n`,
           );
           process.stdout.write(
-            `   Last Listened: ${book.last_listened_at || 'Not set'}\n\n`
+            `   Last Listened: ${book.last_listened_at || 'Not set'}\n\n`,
           );
         });
       }

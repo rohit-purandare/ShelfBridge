@@ -25,6 +25,7 @@ node src/main.js validate
 ```
 
 **Expected output:**
+
 ```
 ✅ Configuration validation passed
 ✅ All required fields present
@@ -43,6 +44,7 @@ node src/main.js validate --connections
 ```
 
 **Expected output:**
+
 ```
 ✅ Configuration validation passed
 🔍 Testing API connections...
@@ -68,6 +70,7 @@ node src/main.js sync --dry-run
 ### Step 2: Understanding Dry Run Output
 
 **Example dry run output:**
+
 ```
 🔍 STARTING SYNC (DRY RUN MODE)
 ==================================================
@@ -87,7 +90,7 @@ node src/main.js sync --dry-run
    🔸 Action: UPDATE progress in Hardcover
    🔸 Current Hardcover progress: 12%
 
-📗 "The Hobbit" by J.R.R. Tolkien  
+📗 "The Hobbit" by J.R.R. Tolkien
    🔸 Progress: 100% (COMPLETED)
    🔸 ISBN: 9780547928227
    🔸 Action: MARK as completed in Hardcover
@@ -118,12 +121,14 @@ node src/main.js sync --dry-run
 ### Step 3: Analyze the Results
 
 **Look for:**
+
 - ✅ **Books to sync**: Good! These will be updated
 - 🎯 **Books to complete**: Excellent! Completed books will be marked
 - ➕ **Books to auto-add**: Check if this is what you want
-- ⏭️  **Books to skip**: Usually due to low progress or no identifiers
+- ⏭️ **Books to skip**: Usually due to low progress or no identifiers
 
 **Common scenarios:**
+
 - **Many skipped books**: Normal if you have many books with <5% progress
 - **Books to auto-add**: Depends on your `auto_add_books` setting
 - **No books found**: Check your API tokens and library access
@@ -143,6 +148,7 @@ node src/main.js sync
 ### Step 5: Verify Success
 
 **Successful sync output:**
+
 ```
 🔍 STARTING SYNC
 ==================================================
@@ -173,11 +179,13 @@ node src/main.js sync
 ### "No books found"
 
 **Possible causes:**
+
 - API token doesn't have library access
 - No books with progress in Audiobookshelf
 - Wrong user ID in configuration
 
 **Debug steps:**
+
 ```bash
 # Check user info
 docker exec -it shelfbridge node src/main.js debug --user your_username
@@ -189,11 +197,13 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "YOUR_ABS_URL/api/me"
 ### "Books not matching"
 
 **Possible causes:**
+
 - Books lack ISBN/ASIN metadata
 - Different editions between services
 - Books not in Hardcover library
 
 **Solutions:**
+
 - Add metadata to books in Audiobookshelf
 - Enable `auto_add_books: true` in configuration
 - Manually add books to Hardcover first
@@ -201,11 +211,13 @@ curl -H "Authorization: Bearer YOUR_TOKEN" "YOUR_ABS_URL/api/me"
 ### "API connection failed"
 
 **Possible causes:**
+
 - Wrong URL or token
 - Network connectivity issues
 - API service temporarily down
 
 **Debug steps:**
+
 ```bash
 # Test connections individually
 node src/main.js validate --connections
@@ -218,11 +230,13 @@ curl -I https://api.hardcover.app/v1/graphql
 ### "Progress not updating"
 
 **Possible causes:**
+
 - Progress hasn't changed since last sync
 - Cache preventing updates
 - Progress below threshold
 
 **Solutions:**
+
 ```bash
 # Force sync (ignore cache)
 node src/main.js sync --force
@@ -240,15 +254,15 @@ node src/main.js cache --clear
 
 ```yaml
 global:
-  min_progress_threshold: 1.0  # Lower threshold
-  auto_add_books: true         # Add books automatically
+  min_progress_threshold: 1.0 # Lower threshold
+  auto_add_books: true # Add books automatically
 ```
 
 ### If Too Many Books Are Auto-Added
 
 ```yaml
 global:
-  auto_add_books: false        # Only add books with significant progress
+  auto_add_books: false # Only add books with significant progress
   min_progress_threshold: 10.0 # Higher threshold
 ```
 
@@ -256,7 +270,7 @@ global:
 
 ```yaml
 global:
-  prevent_progress_regression: true  # Prevent accidental overwrites
+  prevent_progress_regression: true # Prevent accidental overwrites
 ```
 
 ### If Sync Is Slow or Hanging
@@ -265,42 +279,44 @@ global:
 
 ```yaml
 global:
-  max_books_to_fetch: 250  # Reduce total books fetched
-  page_size: 50           # Smaller API responses
-  workers: 1              # Reduce parallel processing
-  parallel: false         # Disable parallel processing
+  max_books_to_fetch: 250 # Reduce total books fetched
+  page_size: 50 # Smaller API responses
+  workers: 1 # Reduce parallel processing
+  parallel: false # Disable parallel processing
 ```
 
 **For testing with limited books:**
 
 ```yaml
 global:
-  max_books_to_process: 10  # Test with just 10 books
-  max_books_to_fetch: 50    # Fetch max 50 books
-  page_size: 25            # Small responses for testing
-  dry_run: true            # Don't make actual changes
+  max_books_to_process: 10 # Test with just 10 books
+  max_books_to_fetch: 50 # Fetch max 50 books
+  page_size: 25 # Small responses for testing
+  dry_run: true # Don't make actual changes
 ```
 
 ## 📊 Understanding Sync Results
 
 ### Sync Actions Explained
 
-| Action | Description | When It Happens |
-|--------|-------------|----------------|
-| **UPDATE** | Progress updated in Hardcover | Progress changed and book exists |
-| **COMPLETE** | Book marked as completed | Progress ≥95% or completion flag |
-| **AUTO-ADD** | Book added to Hardcover | Book not found and auto-add enabled |
-| **SKIP** | No action taken | Below threshold or no changes |
-| **RE-READ** | New reading session created | Completed book restarted |
+| Action       | Description                   | When It Happens                     |
+| ------------ | ----------------------------- | ----------------------------------- |
+| **UPDATE**   | Progress updated in Hardcover | Progress changed and book exists    |
+| **COMPLETE** | Book marked as completed      | Progress ≥95% or completion flag    |
+| **AUTO-ADD** | Book added to Hardcover       | Book not found and auto-add enabled |
+| **SKIP**     | No action taken               | Below threshold or no changes       |
+| **RE-READ**  | New reading session created   | Completed book restarted            |
 
 ### Success Metrics
 
 **Good first sync:**
+
 - ✅ **0 errors**: All API calls successful
 - ✅ **Some synced books**: Progress updated correctly
 - ✅ **Reasonable skip count**: Expected based on your library
 
 **Concerning signs:**
+
 - ❌ **All books skipped**: Check thresholds and tokens
 - ❌ **Many errors**: Check API connectivity
 - ❌ **Wrong progress**: Check book matching
@@ -344,4 +360,4 @@ pm2 start src/main.js --name shelfbridge -- start
 
 ---
 
-**Congratulations!** 🎉 You've successfully run your first sync. ShelfBridge is now keeping your reading progress in sync between Audiobookshelf and Hardcover! 
+**Congratulations!** 🎉 You've successfully run your first sync. ShelfBridge is now keeping your reading progress in sync between Audiobookshelf and Hardcover!

@@ -19,31 +19,37 @@ node src/main.js debug --user alice
 The `debug` command provides comprehensive diagnostic information organized into six main sections:
 
 ### 1. 📋 User Configuration
+
 - **Purpose**: Validates your user setup
 - **Checks**: Required fields, API tokens, URLs
 - **Security**: Masks sensitive tokens
 
 ### 2. 🔌 Connection Testing
+
 - **Purpose**: Tests API connectivity
 - **Tests**: Both Audiobookshelf and Hardcover APIs
 - **Information**: Server details, user information, library statistics
 
 ### 3. 💾 Cache Information
+
 - **Purpose**: Shows cache status and performance
 - **Data**: Total books, cache size, recent activity
 - **User Data**: Books specific to the user being debugged
 
 ### 4. 🔍 Sample API Calls
+
 - **Purpose**: Tests actual data flow
 - **Tests**: Book fetching, identifier matching
 - **Validation**: ISBN/ASIN matching between services
 
 ### 5. 🖥️ System Information
+
 - **Purpose**: Shows runtime environment
 - **Data**: Node.js version, platform, memory usage
 - **Performance**: Process uptime, resource usage
 
 ### 6. ⚙️ Configuration Check
+
 - **Purpose**: Validates global settings
 - **Settings**: Sync behavior, scheduling, automation
 - **Modes**: Dry run, thresholds, protection settings
@@ -60,6 +66,7 @@ node src/main.js debug --user YOUR_USER_ID
 ```
 
 **Look for:**
+
 - ❌ Missing required fields
 - ❌ Invalid API tokens
 - ❌ Incorrect URLs
@@ -75,6 +82,7 @@ node src/main.js debug --user YOUR_USER_ID
 ```
 
 **Look for:**
+
 - ❌ API connection failures
 - ❌ Authentication errors
 - ❌ Server unreachable
@@ -90,6 +98,7 @@ node src/main.js sync --user YOUR_USER_ID --dry-run
 ```
 
 **Look for:**
+
 - ❌ No books found in either service
 - ❌ Book matching failures
 - ❌ Identifier problems (ISBN/ASIN)
@@ -105,6 +114,7 @@ node src/main.js cache --stats
 ```
 
 **Look for:**
+
 - 🔍 High memory usage
 - 🔍 Large cache size
 - 🔍 Long processing times
@@ -113,16 +123,17 @@ node src/main.js cache --stats
 
 ### Status Indicators
 
-| Symbol | Meaning |
-|--------|---------|
-| ✅ | Success/Working |
-| ❌ | Error/Failed |
-| 🔍 | Information |
-| ⏱️ | Timing/Performance |
+| Symbol | Meaning            |
+| ------ | ------------------ |
+| ✅     | Success/Working    |
+| ❌     | Error/Failed       |
+| 🔍     | Information        |
+| ⏱️     | Timing/Performance |
 
 ### Common Patterns
 
 #### Successful Configuration
+
 ```
 📋 USER CONFIGURATION
 ------------------------------
@@ -134,6 +145,7 @@ Hardcover Token: wxyz5678...
 ```
 
 #### Connection Issues
+
 ```
 🔌 CONNECTION TESTING
 ------------------------------
@@ -144,6 +156,7 @@ Hardcover: ❌ Error - Invalid token
 ```
 
 #### Cache Problems
+
 ```
 💾 CACHE INFORMATION
 ------------------------------
@@ -197,6 +210,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 ### Healthy System
 
 A properly configured system should show:
+
 - ✅ All required fields present
 - ✅ Both APIs connected
 - ✅ Cache functioning normally
@@ -206,44 +220,58 @@ A properly configured system should show:
 ### Common Issues and Solutions
 
 #### Missing Configuration
+
 ```
 ❌ Missing required fields: hardcover_token
 ```
+
 **Solution**: Add the missing field to your `config.yaml`
 
 #### API Connection Failed
+
 ```
 Audiobookshelf: ❌ Error - Connection refused
 ```
+
 **Solutions**:
+
 - Check if server is running
 - Verify URL is correct
 - Check firewall settings
 - Validate API token
 
 #### Invalid Token
+
 ```
 Hardcover: ❌ Error - Invalid token
 ```
+
 **Solutions**:
+
 - Regenerate API token
 - Check token hasn't expired
 - Verify token format
 
 #### Cache Issues
+
 ```
 Cache error: SQLITE_BUSY: database is locked
 ```
+
 **Solutions**:
+
 - Stop other ShelfBridge instances
 - Clear cache: `node src/main.js cache --clear`
 - Check file permissions
 
 #### No Books Found
+
 ```
 Found 0 books in ABS
 ```
+
 **Solutions**:
+
 - Check library permissions
 - Verify books exist in Audiobookshelf
 - Check user has access to libraries
@@ -251,26 +279,31 @@ Found 0 books in ABS
 ## 🛠️ Troubleshooting Workflow
 
 ### Step 1: Basic Validation
+
 ```bash
 node src/main.js validate --connections
 ```
 
 ### Step 2: User-Specific Debug
+
 ```bash
 node src/main.js debug --user YOUR_USER_ID
 ```
 
 ### Step 3: Test Dry Run
+
 ```bash
 node src/main.js sync --user YOUR_USER_ID --dry-run
 ```
 
 ### Step 4: Check Logs
+
 ```bash
 tail -f logs/app.log
 ```
 
 ### Step 5: Cache Analysis
+
 ```bash
 node src/main.js cache --stats
 node src/main.js cache --show
@@ -289,6 +322,7 @@ When requesting help, include:
 ### Sanitizing Debug Output
 
 Before sharing debug output, ensure you:
+
 - ✅ Tokens are already masked by the debug command
 - ✅ Remove any personal server URLs if needed
 - ✅ Keep diagnostic information intact
@@ -303,24 +337,28 @@ Before sharing debug output, ensure you:
 ## 💡 Pro Tips
 
 ### Quick Health Check
+
 ```bash
 # One-liner to check everything
 node src/main.js debug --user $(head -1 config/config.yaml | grep -o 'id:.*' | cut -d: -f2 | tr -d ' ')
 ```
 
 ### Automation-Friendly Debug
+
 ```bash
 # JSON output for scripts (if needed)
 node src/main.js debug --user alice 2>&1 | tee debug-output.txt
 ```
 
 ### Performance Monitoring
+
 ```bash
 # Time the debug command
 time node src/main.js debug --user alice
 ```
 
 ### Before/After Comparison
+
 ```bash
 # Before changes
 node src/main.js cache --export before.json
@@ -334,4 +372,4 @@ diff before.json after.json
 
 ---
 
-**Need more help?** Check the [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md) or open an issue on GitHub. 
+**Need more help?** Check the [Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md) or open an issue on GitHub.

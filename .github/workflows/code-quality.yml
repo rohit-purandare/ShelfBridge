@@ -67,10 +67,10 @@ jobs:
             grep -r "console\.debug\|console\.trace\|debugger" src/ || true
           fi
 
-          # Hardcoded secrets (excluding env vars)
-          if grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "process.env" | grep -v "// " > /dev/null 2>&1; then
+          # Hardcoded secrets - look for actual API tokens, not just variable names
+          if grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" > /dev/null 2>&1; then
             echo "⚠️ Potential hardcoded secrets found:"
-            grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "process.env" | grep -v "// " || true
+            grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" || true
             exit 1
           fi
 

@@ -39,7 +39,16 @@ class MockHardcoverClient {
     this.userBooks = [];
   }
 
-  async updateReadingProgress(userBookId, currentProgress, progressPercentage, editionId, useSeconds, startedAt, rereadConfig, readingFormatId) {
+  async updateReadingProgress(
+    userBookId,
+    currentProgress,
+    progressPercentage,
+    editionId,
+    useSeconds,
+    startedAt,
+    rereadConfig,
+    readingFormatId,
+  ) {
     this.updateCalls.push({
       userBookId,
       currentProgress,
@@ -49,12 +58,12 @@ class MockHardcoverClient {
       startedAt,
       rereadConfig,
       readingFormatId,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     return {
       id: `mock-update-${this.updateCalls.length}`,
-      progress: progressPercentage
+      progress: progressPercentage,
     };
   }
 
@@ -86,13 +95,13 @@ class MockBookMatcher {
       match: {
         userBookId: `hardcover-${absBook.id}`,
         edition: { id: `edition-${absBook.id}` },
-        useSeconds: false
+        useSeconds: false,
       },
       extractedMetadata: {
         title: absBook.title || 'Test Book',
         author: absBook.author || 'Test Author',
-        identifiers: { isbn: absBook.id }
-      }
+        identifiers: { isbn: absBook.id },
+      },
     };
 
     return match;
@@ -144,15 +153,20 @@ describe('Delayed Updates Integration', () => {
 
   describe('Disabled Delayed Updates (Default Behavior)', () => {
     beforeEach(() => {
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         // delayed_updates not specified (disabled by default)
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
-      
+
       // Replace the real clients with mocks
       syncManager.audiobookshelf = mockAudiobookshelf;
       syncManager.hardcover = mockHardcover;
@@ -167,7 +181,7 @@ describe('Delayed Updates Integration', () => {
         title: 'Test Book',
         progress_percentage: 45,
         is_finished: false,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -187,20 +201,25 @@ describe('Delayed Updates Integration', () => {
 
   describe('Enabled Delayed Updates', () => {
     beforeEach(() => {
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         delayed_updates: {
           enabled: true,
           session_timeout: 60, // Minimum valid for testing
           max_delay: 3600,
-          immediate_completion: true
+          immediate_completion: true,
         },
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
-      
+
       // Replace the real clients with mocks
       syncManager.audiobookshelf = mockAudiobookshelf;
       syncManager.hardcover = mockHardcover;
@@ -217,7 +236,7 @@ describe('Delayed Updates Integration', () => {
         title: 'Test Book',
         progress_percentage: 42, // Small 2% increase
         is_finished: false,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -233,7 +252,12 @@ describe('Delayed Updates Integration', () => {
       assert.equal(result.books_synced, 0);
 
       // Should have active session
-      const hasActive = await cache.hasActiveSession('testuser', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'testuser',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, true);
     });
 
@@ -246,7 +270,7 @@ describe('Delayed Updates Integration', () => {
         title: 'Test Book',
         progress_percentage: 45, // 15% jump (significant)
         is_finished: false,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -270,7 +294,7 @@ describe('Delayed Updates Integration', () => {
         title: 'Test Book',
         progress_percentage: 100,
         is_finished: true,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -289,7 +313,13 @@ describe('Delayed Updates Integration', () => {
     it('processes expired sessions on next sync', async () => {
       // Create a delayed session
       await cache.storeProgress('testuser', 'book1', 'Test Book', 40, 'isbn');
-      await cache.updateSessionProgress('testuser', 'book1', 'Test Book', 45, 'isbn');
+      await cache.updateSessionProgress(
+        'testuser',
+        'book1',
+        'Test Book',
+        45,
+        'isbn',
+      );
 
       // Wait for session to expire
       await new Promise(resolve => setTimeout(resolve, 2500));
@@ -305,14 +335,31 @@ describe('Delayed Updates Integration', () => {
       assert.equal(updateCalls[0].progressPercentage, 45);
 
       // Session should be completed
-      const hasActive = await cache.hasActiveSession('testuser', 'book1', 'Test Book', 'isbn');
+      const hasActive = await cache.hasActiveSession(
+        'testuser',
+        'book1',
+        'Test Book',
+        'isbn',
+      );
       assert.equal(hasActive, false);
     });
 
     it('handles mixed scenarios in single sync', async () => {
       // Set up multiple books with different scenarios
-      await cache.storeProgress('testuser', 'book1', 'Small Update Book', 30, 'isbn');
-      await cache.storeProgress('testuser', 'book2', 'Large Jump Book', 20, 'isbn');
+      await cache.storeProgress(
+        'testuser',
+        'book1',
+        'Small Update Book',
+        30,
+        'isbn',
+      );
+      await cache.storeProgress(
+        'testuser',
+        'book2',
+        'Large Jump Book',
+        20,
+        'isbn',
+      );
 
       const books = [
         {
@@ -320,29 +367,29 @@ describe('Delayed Updates Integration', () => {
           title: 'Small Update Book',
           progress_percentage: 32, // Small update - should delay
           is_finished: false,
-          last_listened_at: new Date().toISOString()
+          last_listened_at: new Date().toISOString(),
         },
         {
           id: 'book2',
           title: 'Large Jump Book',
           progress_percentage: 35, // 15% jump - should sync immediately
           is_finished: false,
-          last_listened_at: new Date().toISOString()
+          last_listened_at: new Date().toISOString(),
         },
         {
           id: 'book3',
           title: 'New Book',
           progress_percentage: 25, // New book - should sync immediately
           is_finished: false,
-          last_listened_at: new Date().toISOString()
+          last_listened_at: new Date().toISOString(),
         },
         {
           id: 'book4',
           title: 'Completed Book',
           progress_percentage: 100, // Completion - should sync immediately
           is_finished: true,
-          last_listened_at: new Date().toISOString()
-        }
+          last_listened_at: new Date().toISOString(),
+        },
       ];
 
       mockAudiobookshelf.setBooks(books);
@@ -354,11 +401,13 @@ describe('Delayed Updates Integration', () => {
       assert.equal(updateCalls.length, 3); // book2, book3, book4
 
       assert.equal(result.books_delayed, 1); // book1
-      assert.equal(result.books_synced, 2); // book2, book3  
+      assert.equal(result.books_synced, 2); // book2, book3
       assert.equal(result.books_completed, 1); // book4
 
       // Verify specific behaviors
-      const progressValues = updateCalls.map(call => call.progressPercentage).sort();
+      const progressValues = updateCalls
+        .map(call => call.progressPercentage)
+        .sort();
       assert.deepEqual(progressValues, [25, 35, 100]);
     });
   });
@@ -371,11 +420,16 @@ describe('Delayed Updates Integration', () => {
       process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '7200';
       process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = 'false';
 
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         // Config will be loaded from environment variables
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       // Mock the config loading to use our environment variables
@@ -383,7 +437,7 @@ describe('Delayed Updates Integration', () => {
         enabled: true,
         session_timeout: 1800,
         max_delay: 7200,
-        immediate_completion: false
+        immediate_completion: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
@@ -405,20 +459,25 @@ describe('Delayed Updates Integration', () => {
 
   describe('Max Delay Safety Mechanism', () => {
     beforeEach(() => {
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         delayed_updates: {
           enabled: true,
           session_timeout: 3600, // 1 hour
           max_delay: 300, // 5 minutes minimum for testing
-          immediate_completion: true
+          immediate_completion: true,
         },
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
-      
+
       syncManager.audiobookshelf = mockAudiobookshelf;
       syncManager.hardcover = mockHardcover;
       syncManager.bookMatcher = mockBookMatcher;
@@ -428,21 +487,25 @@ describe('Delayed Updates Integration', () => {
     it('forces sync when max delay exceeded', async () => {
       // Store initial progress with old hardcover sync time
       await cache.storeProgress('testuser', 'book1', 'Test Book', 40, 'isbn');
-      
+
       // Set old last_hardcover_sync
       const oldTime = new Date(Date.now() - 5000).toISOString(); // 5 seconds ago
-      await cache.db.prepare(`
+      await cache.db
+        .prepare(
+          `
         UPDATE books 
         SET last_hardcover_sync = ? 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).run(oldTime, 'testuser', 'book1', 'test book');
+      `,
+        )
+        .run(oldTime, 'testuser', 'book1', 'test book');
 
       const book = {
         id: 'book1',
         title: 'Test Book',
         progress_percentage: 42, // Small update that would normally delay
         is_finished: false,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -461,20 +524,25 @@ describe('Delayed Updates Integration', () => {
 
   describe('Error Handling and Resilience', () => {
     beforeEach(() => {
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         delayed_updates: {
           enabled: true,
           session_timeout: 900,
           max_delay: 3600,
-          immediate_completion: true
+          immediate_completion: true,
         },
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
-      
+
       syncManager.audiobookshelf = mockAudiobookshelf;
       syncManager.hardcover = mockHardcover;
       syncManager.bookMatcher = mockBookMatcher;
@@ -490,7 +558,7 @@ describe('Delayed Updates Integration', () => {
         title: 'Test Book',
         progress_percentage: 30,
         is_finished: false,
-        last_listened_at: new Date().toISOString()
+        last_listened_at: new Date().toISOString(),
       };
 
       mockAudiobookshelf.setBooks([book]);
@@ -507,7 +575,13 @@ describe('Delayed Updates Integration', () => {
     it('handles expired session processing errors gracefully', async () => {
       // Create session that will cause error during processing
       await cache.storeProgress('testuser', 'book1', 'Test Book', 40, 'isbn');
-      await cache.updateSessionProgress('testuser', 'book1', 'Test Book', 45, 'isbn');
+      await cache.updateSessionProgress(
+        'testuser',
+        'book1',
+        'Test Book',
+        45,
+        'isbn',
+      );
 
       // Make expired session cause error by removing book match
       syncManager.bookMatcher.setMatch('book1', 'testuser', null);
@@ -517,7 +591,7 @@ describe('Delayed Updates Integration', () => {
 
       // Should not crash when processing expired session fails
       mockAudiobookshelf.setBooks([]);
-      
+
       const result = await syncManager.syncProgress();
 
       // Should complete without throwing
@@ -528,20 +602,25 @@ describe('Delayed Updates Integration', () => {
 
   describe('Performance and Scale', () => {
     beforeEach(() => {
-      const user = { id: 'testuser', abs_url: 'http://test', abs_token: 'token', hardcover_token: 'hc_token' };
+      const user = {
+        id: 'testuser',
+        abs_url: 'http://test',
+        abs_token: 'token',
+        hardcover_token: 'hc_token',
+      };
       const globalConfig = {
         delayed_updates: {
           enabled: true,
           session_timeout: 900,
           max_delay: 3600,
-          immediate_completion: true
+          immediate_completion: true,
         },
         workers: 1,
-        parallel: false
+        parallel: false,
       };
 
       syncManager = new SyncManager(user, globalConfig, false, false);
-      
+
       syncManager.audiobookshelf = mockAudiobookshelf;
       syncManager.hardcover = mockHardcover;
       syncManager.bookMatcher = mockBookMatcher;
@@ -552,14 +631,20 @@ describe('Delayed Updates Integration', () => {
       // Create many books to test performance
       const books = [];
       for (let i = 1; i <= 50; i++) {
-        await cache.storeProgress('testuser', `book${i}`, `Book ${i}`, 20, 'isbn');
-        
+        await cache.storeProgress(
+          'testuser',
+          `book${i}`,
+          `Book ${i}`,
+          20,
+          'isbn',
+        );
+
         books.push({
           id: `book${i}`,
           title: `Book ${i}`,
           progress_percentage: 22, // Small update for each
           is_finished: false,
-          last_listened_at: new Date().toISOString()
+          last_listened_at: new Date().toISOString(),
         });
       }
 

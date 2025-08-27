@@ -19,7 +19,7 @@ describe('YAML Configuration File Validation', () => {
   beforeEach(() => {
     // Save original environment variables
     originalEnv = { ...process.env };
-    
+
     // Clear all ShelfBridge environment variables to ensure YAML takes precedence
     for (const key in process.env) {
       if (key.startsWith('SHELFBRIDGE_')) {
@@ -31,7 +31,7 @@ describe('YAML Configuration File Validation', () => {
   afterEach(() => {
     // Restore original environment variables
     process.env = originalEnv;
-    
+
     // Clean up test config file
     try {
       unlinkSync(testConfigFile);
@@ -74,7 +74,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -131,7 +131,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -170,7 +170,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // Verify nested object is parsed correctly
@@ -204,7 +204,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // Specified values should be set
@@ -237,7 +237,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // All should be converted to JavaScript booleans
@@ -277,28 +277,28 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Verify numeric values and types
       assert.strictEqual(global.min_progress_threshold, 7.5);
       assert.strictEqual(typeof global.min_progress_threshold, 'number');
-      
+
       assert.strictEqual(global.workers, 10);
       assert.strictEqual(typeof global.workers, 'number');
-      
+
       assert.strictEqual(global.hardcover_semaphore, 2);
       assert.strictEqual(typeof global.hardcover_semaphore, 'number');
-      
+
       assert.strictEqual(global.hardcover_rate_limit, 45);
       assert.strictEqual(typeof global.hardcover_rate_limit, 'number');
-      
+
       assert.strictEqual(global.audiobookshelf_rate_limit, 1000);
       assert.strictEqual(typeof global.audiobookshelf_rate_limit, 'number');
-      
+
       assert.strictEqual(global.page_size, 200);
       assert.strictEqual(typeof global.page_size, 'number');
-      
+
       assert.strictEqual(global.max_books_to_fetch, 500);
       assert.strictEqual(typeof global.max_books_to_fetch, 'number');
     });
@@ -318,7 +318,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -330,7 +330,10 @@ users:
 
       assert.strictEqual(users[0].abs_url, 'https://string.example.com:8080');
       assert.strictEqual(users[0].abs_token, 'token_with_special_chars!@#$%');
-      assert.strictEqual(users[0].hardcover_token, 'hc_token_with-dashes_and.dots');
+      assert.strictEqual(
+        users[0].hardcover_token,
+        'hc_token_with-dashes_and.dots',
+      );
     });
   });
 
@@ -356,7 +359,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML values should take precedence
@@ -386,7 +389,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML values should be used
@@ -414,7 +417,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Specified value should be used
@@ -436,7 +439,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -460,7 +463,7 @@ global:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -483,7 +486,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -520,7 +523,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -545,7 +548,7 @@ users:
 `;
 
       writeFileSync(testConfigFile, yamlContent);
-      
+
       // Should throw an error or handle gracefully
       // The exact behavior depends on the YAML parser
       try {
@@ -612,7 +615,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -678,7 +681,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 

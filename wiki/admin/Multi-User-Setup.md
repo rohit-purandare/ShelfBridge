@@ -5,6 +5,7 @@ ShelfBridge supports multiple users in a single configuration, allowing families
 ## 🎯 Overview
 
 Multi-user support allows you to:
+
 - Sync multiple Hardcover accounts from one Audiobookshelf server
 - Handle different users with different preferences
 - Manage family reading accounts
@@ -20,20 +21,20 @@ global:
   min_progress_threshold: 5.0
   auto_add_books: false
   prevent_progress_regression: true
-  sync_schedule: "0 3 * * *"
-  timezone: "America/New_York"
+  sync_schedule: '0 3 * * *'
+  timezone: 'America/New_York'
 
 users:
   - id: alice
     abs_url: https://abs.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
     abs_url: https://abs.example.com
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
-    
+
   - id: charlie
     abs_url: https://abs.example.com
     abs_token: charlie_abs_token
@@ -53,7 +54,7 @@ users:
     abs_url: https://abs-home.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
     abs_url: https://abs-office.example.com
     abs_token: bob_abs_token
@@ -71,7 +72,7 @@ global:
   min_progress_threshold: 5.0
   auto_add_books: false
   prevent_progress_regression: true
-  sync_schedule: "0 3 * * *"
+  sync_schedule: '0 3 * * *'
 
 users:
   - id: alice
@@ -79,21 +80,21 @@ users:
     abs_url: https://abs.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
     # Bob has custom preferences
-    min_progress_threshold: 10.0    # More conservative
-    auto_add_books: true            # Auto-add enabled
-    sync_schedule: "0 4 * * *"      # Different schedule
+    min_progress_threshold: 10.0 # More conservative
+    auto_add_books: true # Auto-add enabled
+    sync_schedule: '0 4 * * *' # Different schedule
     abs_url: https://abs.example.com
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
-    
+
   - id: charlie
     # Charlie is permissive
-    min_progress_threshold: 1.0     # Very low threshold
-    auto_add_books: true            # Auto-add enabled
-    prevent_progress_regression: false  # Disabled
+    min_progress_threshold: 1.0 # Very low threshold
+    auto_add_books: true # Auto-add enabled
+    prevent_progress_regression: false # Disabled
     abs_url: https://abs.example.com
     abs_token: charlie_abs_token
     hardcover_token: charlie_hardcover_token
@@ -103,23 +104,23 @@ users:
 
 ```yaml
 global:
-  sync_schedule: "0 3 * * *"  # Default: 3 AM daily
+  sync_schedule: '0 3 * * *' # Default: 3 AM daily
 
 users:
   - id: alice
-    sync_schedule: "0 2 * * *"      # Alice: 2 AM daily
+    sync_schedule: '0 2 * * *' # Alice: 2 AM daily
     abs_url: https://abs.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
-    sync_schedule: "0 */6 * * *"    # Bob: Every 6 hours
+    sync_schedule: '0 */6 * * *' # Bob: Every 6 hours
     abs_url: https://abs.example.com
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
-    
+
   - id: charlie
-    sync_schedule: "0 3 * * 0"      # Charlie: Weekly on Sunday
+    sync_schedule: '0 3 * * 0' # Charlie: Weekly on Sunday
     abs_url: https://abs.example.com
     abs_token: charlie_abs_token
     hardcover_token: charlie_hardcover_token
@@ -133,34 +134,34 @@ Configure users based on reading habits:
 
 ```yaml
 global:
-  sync_schedule: "0 3 * * *"
-  timezone: "America/New_York"
+  sync_schedule: '0 3 * * *'
+  timezone: 'America/New_York'
 
 users:
   # Heavy reader - syncs everything
   - id: bookworm
     min_progress_threshold: 1.0
     auto_add_books: true
-    sync_schedule: "0 */4 * * *"    # Every 4 hours
+    sync_schedule: '0 */4 * * *' # Every 4 hours
     abs_url: https://abs.example.com
     abs_token: bookworm_abs_token
     hardcover_token: bookworm_hardcover_token
-    
+
   # Casual reader - conservative sync
   - id: casual
     min_progress_threshold: 25.0
     auto_add_books: false
-    sync_schedule: "0 3 * * 0"      # Weekly
+    sync_schedule: '0 3 * * 0' # Weekly
     abs_url: https://abs.example.com
     abs_token: casual_abs_token
     hardcover_token: casual_hardcover_token
-    
+
   # Child account - strict controls
   - id: kid
     min_progress_threshold: 10.0
     auto_add_books: false
     prevent_progress_regression: true
-    sync_schedule: "0 20 * * *"     # 8 PM daily
+    sync_schedule: '0 20 * * *' # 8 PM daily
     abs_url: https://abs.example.com
     abs_token: kid_abs_token
     hardcover_token: kid_hardcover_token
@@ -171,11 +172,13 @@ users:
 ### Obtaining Multiple Tokens
 
 **Audiobookshelf Tokens:**
+
 1. Each user needs their own Audiobookshelf account
 2. Each account generates its own API token
 3. Admin can generate tokens for other users (if admin)
 
 **Hardcover Tokens:**
+
 1. Each user needs their own Hardcover account
 2. Each account generates its own API token
 3. Tokens cannot be shared between accounts
@@ -187,16 +190,17 @@ users:
 users:
   - id: alice
     abs_url: https://abs.example.com
-    abs_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # Alice's token
-    hardcover_token: "hc_sk_alice_1234567890..."           # Alice's token
-    
+    abs_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' # Alice's token
+    hardcover_token: 'hc_sk_alice_1234567890...' # Alice's token
+
   - id: bob
     abs_url: https://abs.example.com
-    abs_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # Bob's token
-    hardcover_token: "hc_sk_bob_9876543210..."             # Bob's token
+    abs_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' # Bob's token
+    hardcover_token: 'hc_sk_bob_9876543210...' # Bob's token
 ```
 
 **Security notes:**
+
 - Never share tokens between users
 - Store tokens securely
 - Rotate tokens regularly
@@ -212,32 +216,32 @@ global:
   min_progress_threshold: 5.0
   auto_add_books: false
   prevent_progress_regression: true
-  timezone: "America/New_York"
+  timezone: 'America/New_York'
 
 users:
   - id: mom
-    sync_schedule: "0 6 * * *"      # 6 AM (early riser)
+    sync_schedule: '0 6 * * *' # 6 AM (early riser)
     abs_url: https://abs.home.local
     abs_token: mom_abs_token
     hardcover_token: mom_hardcover_token
-    
+
   - id: dad
-    sync_schedule: "0 23 * * *"     # 11 PM (night owl)
+    sync_schedule: '0 23 * * *' # 11 PM (night owl)
     abs_url: https://abs.home.local
     abs_token: dad_abs_token
     hardcover_token: dad_hardcover_token
-    
+
   - id: teen
     min_progress_threshold: 10.0
-    sync_schedule: "0 16 * * *"     # 4 PM (after school)
+    sync_schedule: '0 16 * * *' # 4 PM (after school)
     abs_url: https://abs.home.local
     abs_token: teen_abs_token
     hardcover_token: teen_hardcover_token
-    
+
   - id: kid
     min_progress_threshold: 15.0
     auto_add_books: false
-    sync_schedule: "0 19 * * *"     # 7 PM (bedtime story)
+    sync_schedule: '0 19 * * *' # 7 PM (bedtime story)
     abs_url: https://abs.home.local
     abs_token: kid_abs_token
     hardcover_token: kid_hardcover_token
@@ -251,19 +255,19 @@ global:
   min_progress_threshold: 5.0
   auto_add_books: false
   prevent_progress_regression: true
-  sync_schedule: "0 3 * * *"
+  sync_schedule: '0 3 * * *'
 
 users:
   - id: alice_home
     abs_url: https://abs-home.example.com
     abs_token: alice_home_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: alice_office
     abs_url: https://abs-office.example.com
     abs_token: alice_office_token
-    hardcover_token: alice_hardcover_token  # Same Hardcover account
-    
+    hardcover_token: alice_hardcover_token # Same Hardcover account
+
   - id: bob_mobile
     abs_url: https://abs-mobile.example.com
     abs_token: bob_mobile_token
@@ -276,21 +280,21 @@ users:
 # Book club with shared reading goals
 global:
   min_progress_threshold: 5.0
-  auto_add_books: true              # Add all books for group reading
+  auto_add_books: true # Add all books for group reading
   prevent_progress_regression: true
-  sync_schedule: "0 9 * * *"        # Morning sync for group discussions
+  sync_schedule: '0 9 * * *' # Morning sync for group discussions
 
 users:
   - id: member1
     abs_url: https://abs.bookclub.org
     abs_token: member1_abs_token
     hardcover_token: member1_hardcover_token
-    
+
   - id: member2
     abs_url: https://abs.bookclub.org
     abs_token: member2_abs_token
     hardcover_token: member2_hardcover_token
-    
+
   - id: member3
     abs_url: https://abs.bookclub.org
     abs_token: member3_abs_token
@@ -350,15 +354,15 @@ docker exec -it shelfbridge node src/main.js sync --dry-run | grep -A 5 "User:"
 global:
   # Reduce parallel workers to be gentle on APIs
   workers: 2
-  
+
   # Stagger sync times to avoid conflicts
   users:
     - id: alice
-      sync_schedule: "0 3 * * *"
+      sync_schedule: '0 3 * * *'
     - id: bob
-      sync_schedule: "15 3 * * *"    # 15 minutes later
+      sync_schedule: '15 3 * * *' # 15 minutes later
     - id: charlie
-      sync_schedule: "30 3 * * *"    # 30 minutes later
+      sync_schedule: '30 3 * * *' # 30 minutes later
 ```
 
 ## 🎛️ Advanced Multi-User Features
@@ -369,13 +373,13 @@ global:
 # Environment-based user selection
 users:
   - id: alice
-    enabled: true                   # Always sync
+    enabled: true # Always sync
     abs_url: https://abs.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: bob
-    enabled: false                  # Temporarily disabled
+    enabled: false # Temporarily disabled
     abs_url: https://abs.example.com
     abs_token: bob_abs_token
     hardcover_token: bob_hardcover_token
@@ -394,14 +398,14 @@ global:
     friends:
       - david
       - eve
-      
+
 users:
   - id: alice
     group: family
     abs_url: https://abs.example.com
     abs_token: alice_abs_token
     hardcover_token: alice_hardcover_token
-    
+
   - id: david
     group: friends
     abs_url: https://abs-friends.example.com
@@ -414,16 +418,19 @@ users:
 ### Common Issues
 
 **"User not found"**
+
 - Check user ID spelling
 - Verify user exists in configuration
 - Ensure proper YAML indentation
 
 **"Token authentication failed"**
+
 - Verify each user has correct tokens
 - Check that tokens belong to correct accounts
 - Ensure tokens are not expired
 
 **"Different sync results per user"**
+
 - Check user-specific overrides
 - Verify library access per user
 - Review individual thresholds
@@ -480,4 +487,4 @@ docker exec -it shelfbridge node src/main.js cache --stats --user alice
 
 ---
 
-**Multi-user setups make ShelfBridge perfect for families and groups!** 👥📚 
+**Multi-user setups make ShelfBridge perfect for families and groups!** 👥📚

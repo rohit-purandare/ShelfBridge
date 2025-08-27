@@ -2,7 +2,7 @@
 
 /**
  * Simple Two-Stage Matching Test Runner
- * 
+ *
  * A lightweight test runner that validates the core two-stage functionality
  * using the existing project structure without requiring additional dependencies.
  */
@@ -24,31 +24,41 @@ class TestRunner {
 
   assertEqual(actual, expected, message = '') {
     if (actual !== expected) {
-      throw new Error(`Assertion failed: ${message}\n  Expected: ${expected}\n  Actual: ${actual}`);
+      throw new Error(
+        `Assertion failed: ${message}\n  Expected: ${expected}\n  Actual: ${actual}`,
+      );
     }
   }
 
   assertTrue(value, message = '') {
     if (!value) {
-      throw new Error(`Assertion failed: ${message}\n  Expected truthy value, got: ${value}`);
+      throw new Error(
+        `Assertion failed: ${message}\n  Expected truthy value, got: ${value}`,
+      );
     }
   }
 
   assertGreaterThan(actual, expected, message = '') {
     if (actual <= expected) {
-      throw new Error(`Assertion failed: ${message}\n  Expected ${actual} > ${expected}`);
+      throw new Error(
+        `Assertion failed: ${message}\n  Expected ${actual} > ${expected}`,
+      );
     }
   }
 
   assertLessThan(actual, expected, message = '') {
     if (actual >= expected) {
-      throw new Error(`Assertion failed: ${message}\n  Expected ${actual} < ${expected}`);
+      throw new Error(
+        `Assertion failed: ${message}\n  Expected ${actual} < ${expected}`,
+      );
     }
   }
 
   assertNotNull(value, message = '') {
     if (value === null || value === undefined) {
-      throw new Error(`Assertion failed: ${message}\n  Expected non-null value, got: ${value}`);
+      throw new Error(
+        `Assertion failed: ${message}\n  Expected non-null value, got: ${value}`,
+      );
     }
   }
 
@@ -74,10 +84,14 @@ class TestRunner {
     console.log(`Total Tests: ${this.tests.length}`);
     console.log(`Passed: ${this.passed}`);
     console.log(`Failed: ${this.failed}`);
-    console.log(`Success Rate: ${((this.passed / this.tests.length) * 100).toFixed(1)}%`);
+    console.log(
+      `Success Rate: ${((this.passed / this.tests.length) * 100).toFixed(1)}%`,
+    );
 
     if (this.failed === 0) {
-      console.log('\n🎉 All core tests passed! Two-stage matching system is working correctly.');
+      console.log(
+        '\n🎉 All core tests passed! Two-stage matching system is working correctly.',
+      );
     } else {
       console.log('\n⚠️  Some tests failed. Please review the errors above.');
     }
@@ -93,17 +107,21 @@ runner.test('Book Identification - Perfect Match', () => {
   const searchResult = {
     title: 'The Laws of the Skies',
     author_names: ['Gregoire Courtois'],
-    activity: 100
+    activity: 100,
   };
-  
+
   const result = calculateBookIdentificationScore(
     searchResult,
     'The Laws of the Skies',
     'Gregoire Courtois',
-    {}
+    {},
   );
-  
-  runner.assertGreaterThan(result.totalScore, 70, 'Perfect match should have high score');
+
+  runner.assertGreaterThan(
+    result.totalScore,
+    70,
+    'Perfect match should have high score',
+  );
   runner.assertTrue(result.isBookMatch, 'Should be identified as a book match');
   runner.assertEqual(result.confidence, 'high', 'Should have high confidence');
 });
@@ -114,29 +132,53 @@ runner.test('Book Identification - Score Overflow Protection', () => {
     author_names: ['Perfect Author'],
     series: [{ name: 'Perfect Series', sequence: 1 }],
     activity: 100000,
-    publication_year: 2023
+    publication_year: 2023,
   };
-  
+
   const result = calculateBookIdentificationScore(
     extremeResult,
     'Perfect Match',
     'Perfect Author',
     {
       series: [{ name: 'Perfect Series', sequence: 1 }],
-      publicationYear: 2023
-    }
+      publicationYear: 2023,
+    },
   );
-  
-  runner.assertLessThan(result.totalScore, 100.1, 'Score should be capped at 100');
-  runner.assertGreaterThan(result.totalScore, 90, 'Perfect match should still be very high');
+
+  runner.assertLessThan(
+    result.totalScore,
+    100.1,
+    'Score should be capped at 100',
+  );
+  runner.assertGreaterThan(
+    result.totalScore,
+    90,
+    'Perfect match should still be very high',
+  );
 });
 
 runner.test('Book Identification - Null Input Handling', () => {
-  const result = calculateBookIdentificationScore(null, 'Test Title', 'Test Author');
-  
-  runner.assertEqual(result.totalScore, 0, 'Null input should return zero score');
-  runner.assertEqual(result.isBookMatch, false, 'Null input should not be a match');
-  runner.assertEqual(result.confidence, 'none', 'Null input should have no confidence');
+  const result = calculateBookIdentificationScore(
+    null,
+    'Test Title',
+    'Test Author',
+  );
+
+  runner.assertEqual(
+    result.totalScore,
+    0,
+    'Null input should return zero score',
+  );
+  runner.assertEqual(
+    result.isBookMatch,
+    false,
+    'Null input should not be a match',
+  );
+  runner.assertEqual(
+    result.confidence,
+    'none',
+    'Null input should have no confidence',
+  );
 });
 
 // Edition Selector Tests
@@ -149,21 +191,25 @@ runner.test('Edition Selection - Format Preference', () => {
         id: 'audiobook_edition',
         reading_format: { format: 'audiobook' },
         users_count: 100,
-        audio_seconds: 43200
+        audio_seconds: 43200,
       },
       {
         id: 'ebook_edition',
         reading_format: { format: 'ebook' },
         users_count: 150,
-        pages: 300
-      }
-    ]
+        pages: 300,
+      },
+    ],
   };
-  
+
   const result = selectBestEdition(mockBook, { duration: 43200 }, 'audiobook');
-  
+
   runner.assertNotNull(result, 'Should select an edition');
-  runner.assertEqual(result.edition.id, 'audiobook_edition', 'Should prefer audiobook for audiobook user');
+  runner.assertEqual(
+    result.edition.id,
+    'audiobook_edition',
+    'Should prefer audiobook for audiobook user',
+  );
 });
 
 runner.test('Edition Selection - Fallback Logic', () => {
@@ -175,61 +221,88 @@ runner.test('Edition Selection - Fallback Logic', () => {
         id: 'ebook_edition',
         reading_format: { format: 'ebook' },
         users_count: 100,
-        pages: 300
-      }
-    ]
+        pages: 300,
+      },
+    ],
   };
-  
-  const result = selectBestEdition(bookWithoutAudiobook, { duration: 43200 }, 'audiobook');
-  
-  runner.assertNotNull(result, 'Should select an edition even without preferred format');
-  runner.assertEqual(result.edition.id, 'ebook_edition', 'Should fall back to ebook');
+
+  const result = selectBestEdition(
+    bookWithoutAudiobook,
+    { duration: 43200 },
+    'audiobook',
+  );
+
+  runner.assertNotNull(
+    result,
+    'Should select an edition even without preferred format',
+  );
+  runner.assertEqual(
+    result.edition.id,
+    'ebook_edition',
+    'Should fall back to ebook',
+  );
 });
 
 runner.test('Edition Selection - Empty Editions', () => {
   const emptyBook = {
     id: 'empty_book',
     title: 'Empty Book',
-    editions: []
+    editions: [],
   };
-  
+
   const result = selectBestEdition(emptyBook, {}, 'audiobook');
-  
-  runner.assertEqual(result, null, 'Should return null for book with no editions');
+
+  runner.assertEqual(
+    result,
+    null,
+    'Should return null for book with no editions',
+  );
 });
 
 // Format Detection Tests
 runner.test('Format Detection - Audiobook Detection', () => {
   const audiobookMetadata = {
     duration: 43200,
-    narrator: 'Test Narrator'
+    narrator: 'Test Narrator',
   };
-  
+
   const result = detectUserBookFormat(audiobookMetadata);
-  
-  runner.assertEqual(result, 'audiobook', 'Should detect audiobook from duration and narrator');
+
+  runner.assertEqual(
+    result,
+    'audiobook',
+    'Should detect audiobook from duration and narrator',
+  );
 });
 
 runner.test('Format Detection - Ebook Detection', () => {
   const ebookMetadata = {
     format: 'epub',
-    pages: 350
+    pages: 350,
   };
-  
+
   const result = detectUserBookFormat(ebookMetadata);
-  
-  runner.assertEqual(result, 'ebook', 'Should detect ebook from format and pages');
+
+  runner.assertEqual(
+    result,
+    'ebook',
+    'Should detect ebook from format and pages',
+  );
 });
 
 runner.test('Format Detection - Default Fallback', () => {
   const result = detectUserBookFormat({});
-  
-  runner.assertEqual(result, 'ebook', 'Should default to ebook for empty metadata');
+
+  runner.assertEqual(
+    result,
+    'ebook',
+    'Should default to ebook for empty metadata',
+  );
 });
 
 runner.test('Format Detection - Null Input', () => {
   const result = detectUserBookFormat(null);
-  
+
   runner.assertEqual(result, 'ebook', 'Should default to ebook for null input');
 });
 
@@ -246,16 +319,16 @@ runner.test('Integration - Laws of the Skies Scenario', () => {
         reading_format: { format: 'audiobook' },
         users_count: 45,
         audio_seconds: 43200,
-        asin: 'B123456789'
-      }
-    ]
+        asin: 'B123456789',
+      },
+    ],
   };
 
   const audiobookshelfMetadata = {
     title: 'The Laws of the Skies',
     author: 'Gregoire Courtois',
     duration: 43200,
-    narrator: 'Test Narrator'
+    narrator: 'Test Narrator',
   };
 
   // Stage 1: Book Identification
@@ -263,24 +336,39 @@ runner.test('Integration - Laws of the Skies Scenario', () => {
     mockSearchResult,
     audiobookshelfMetadata.title,
     audiobookshelfMetadata.author,
-    audiobookshelfMetadata
+    audiobookshelfMetadata,
   );
 
-  runner.assertGreaterThan(bookScore.totalScore, 70, 'Laws of the Skies should pass book identification');
-  runner.assertTrue(bookScore.isBookMatch, 'Should be identified as a book match');
+  runner.assertGreaterThan(
+    bookScore.totalScore,
+    70,
+    'Laws of the Skies should pass book identification',
+  );
+  runner.assertTrue(
+    bookScore.isBookMatch,
+    'Should be identified as a book match',
+  );
 
   // Stage 2: Edition Selection
   const editionResult = selectBestEdition(
     mockSearchResult,
     audiobookshelfMetadata,
-    detectUserBookFormat(audiobookshelfMetadata)
+    detectUserBookFormat(audiobookshelfMetadata),
   );
 
   runner.assertNotNull(editionResult, 'Should select an edition');
-  runner.assertEqual(editionResult.edition.id, 'edition_audiobook', 'Should select the audiobook edition');
+  runner.assertEqual(
+    editionResult.edition.id,
+    'edition_audiobook',
+    'Should select the audiobook edition',
+  );
 
-  console.log(`   📈 Book Identification Score: ${bookScore.totalScore.toFixed(1)}%`);
-  console.log(`   📚 Selected Edition: ${editionResult.edition.id} (${editionResult.edition.reading_format.format})`);
+  console.log(
+    `   📈 Book Identification Score: ${bookScore.totalScore.toFixed(1)}%`,
+  );
+  console.log(
+    `   📚 Selected Edition: ${editionResult.edition.id} (${editionResult.edition.reading_format.format})`,
+  );
 });
 
 // Performance Test
@@ -288,28 +376,40 @@ runner.test('Performance - Scoring Operations', () => {
   const testData = {
     title: 'Performance Test Book',
     author_names: ['Performance Author'],
-    activity: 1000
+    activity: 1000,
   };
 
   const iterations = 1000;
   const startTime = performance.now();
 
   for (let i = 0; i < iterations; i++) {
-    calculateBookIdentificationScore(testData, 'Performance Test Book', 'Performance Author', {});
+    calculateBookIdentificationScore(
+      testData,
+      'Performance Test Book',
+      'Performance Author',
+      {},
+    );
   }
 
   const endTime = performance.now();
   const averageTime = (endTime - startTime) / iterations;
 
-  runner.assertLessThan(averageTime, 2, 'Average scoring time should be less than 2ms');
-  
+  runner.assertLessThan(
+    averageTime,
+    2,
+    'Average scoring time should be less than 2ms',
+  );
+
   console.log(`   ⚡ Average scoring time: ${averageTime.toFixed(3)}ms`);
 });
 
 // Run all tests
-runner.run().then(success => {
-  process.exit(success ? 0 : 1);
-}).catch(error => {
-  console.error('💥 Test runner failed:', error.message);
-  process.exit(1);
-});
+runner
+  .run()
+  .then(success => {
+    process.exit(success ? 0 : 1);
+  })
+  .catch(error => {
+    console.error('💥 Test runner failed:', error.message);
+    process.exit(1);
+  });

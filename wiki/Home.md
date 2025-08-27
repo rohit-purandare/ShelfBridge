@@ -13,12 +13,14 @@ New to ShelfBridge? Start here:
 ## 📖 User Guides
 
 ### Setup & Installation
+
 - **[Prerequisites](user-guides/Prerequisites.md)** - System requirements and account setup
 - **[Docker Setup](user-guides/Docker-Setup.md)** - Recommended installation method
 - **[Node.js Setup](user-guides/Node-Setup.md)** - Direct Node.js installation
 - **[Manual Docker Setup](user-guides/Manual-Docker-Setup.md)** - Advanced Docker configurations
 
 ### Basic Usage
+
 - **[First Sync](user-guides/First-Sync.md)** - Running your first synchronization
 - **[Understanding Sync Results](user-guides/Understanding-Sync-Results.md)** - Interpreting sync output
 - **[Scheduling Automatic Sync](user-guides/Automatic-Sync.md)** - Set up background synchronization
@@ -26,11 +28,13 @@ New to ShelfBridge? Start here:
 ## ⚙️ Configuration & Administration
 
 ### Configuration
+
 - **[Configuration Guide](admin/Configuration-Guide.md)** - Setup guide for YAML & environment variables
 - **[Configuration Reference](admin/Configuration-Reference.md)** - Complete technical reference for all settings
 - **[Multi-User Setup](admin/Multi-User-Setup.md)** - Managing multiple users
 
 ### Advanced Features
+
 - **[Progress Regression Protection](admin/Progress-Regression-Protection.md)** - Preventing data loss during re-reads
 - **[Auto-Add Books](admin/Auto-Add-Books.md)** - Automatically adding books to Hardcover
 - **[Book Matching Logic](admin/Book-Matching-Logic.md)** - How ASIN/ISBN matching works
@@ -39,6 +43,7 @@ New to ShelfBridge? Start here:
 ## 🔧 Technical Documentation
 
 ### CLI Reference & Performance Tools
+
 - **[Command Line Interface](technical/CLI-Reference.md)** - Complete command reference
 - **[Configuration Validation](technical/Configuration-Validation.md)** - Validating your setup
 - **[Debug Commands](technical/Debug-Commands.md)** - Troubleshooting tools
@@ -46,6 +51,7 @@ New to ShelfBridge? Start here:
 - **[Performance Optimization](technical/consolidation-improvements.md)** - HTTP keep-alive and sync improvements
 
 ### Architecture & APIs
+
 - **[Architecture Overview](technical/Architecture-Overview.md)** - How ShelfBridge works internally
 - **[Pagination System](technical/Pagination-System.md)** - Configurable pagination for large libraries
 - **[Rate Limiting](technical/Rate-Limiting.md)** - API rate limiting implementation
@@ -54,6 +60,7 @@ New to ShelfBridge? Start here:
 - **[Book Caching System](technical/Book-Caching-System.md)** - SQLite cache implementation
 
 ### CI/CD & Automation
+
 - **[GitHub Workflows](technical/GitHub-Workflows.md)** - Automated testing, security, and releases
 - **[Docker Guide](technical/Docker-Guide.md)** - Docker images and deployment
 - **[Environment Variables](admin/Configuration-Guide.md)** - Container configuration
@@ -62,11 +69,13 @@ New to ShelfBridge? Start here:
 ## 🆘 Troubleshooting & FAQ
 
 ### Common Issues
+
 - **[Troubleshooting Guide](troubleshooting/Troubleshooting-Guide.md)** - Solving common problems
 - **[FAQ](troubleshooting/FAQ.md)** - Frequently asked questions
 - **[Error Messages](troubleshooting/Error-Messages.md)** - Understanding error output
 
 ### Specific Issues
+
 - **[Bearer Token Handling](troubleshooting/Bearer-Token-Handling.md)** - Automatic token normalization
 - **[Connection Issues](troubleshooting/Connection-Issues.md)** - API and network problems
 - **[Book Matching Issues](troubleshooting/Book-Matching-Issues.md)** - When books aren't found
@@ -76,12 +85,14 @@ New to ShelfBridge? Start here:
 ## 👨‍💻 Developer Documentation
 
 ### Contributing
+
 - **[Contributing Guide](developer/Contributing.md)** - How to contribute to ShelfBridge
 - **[Development Setup](developer/Development-Setup.md)** - Setting up a development environment
 - **[Code Structure](developer/Code-Structure.md)** - Understanding the codebase
 - **[Testing](developer/Testing.md)** - Running and writing tests
 
 ### Technical Deep Dive
+
 - **[Sync Algorithm](developer/Sync-Algorithm.md)** - How synchronization works
 - **[Book Identification](developer/Book-Identification.md)** - ASIN/ISBN extraction and matching
 - **[Progress Calculation](developer/Progress-Calculation.md)** - Converting between different progress formats
@@ -97,6 +108,7 @@ New to ShelfBridge? Start here:
 ## 📋 Quick Reference
 
 ### Common Commands
+
 ```bash
 # One-time sync
 npm run sync
@@ -122,6 +134,7 @@ npm run test-performance
 ```
 
 ### Configuration Template
+
 ```yaml
 global:
   min_progress_threshold: 5.0
@@ -130,7 +143,7 @@ global:
   # Optional: Adjust for large libraries or resource-constrained devices
   # max_books_to_fetch: 250  # Optional: limit total books fetched
   # page_size: 50           # Reduce from default 100
-  
+
 users:
   - id: your_username
     abs_url: https://your-audiobookshelf-server.com
@@ -140,4 +153,4 @@ users:
 
 ---
 
-**Need help?** Check the [FAQ](troubleshooting/FAQ.md) or [open an issue](https://github.com/rohit-purandare/ShelfBridge/issues) on GitHub. 
+**Need help?** Check the [FAQ](troubleshooting/FAQ.md) or [open an issue](https://github.com/rohit-purandare/ShelfBridge/issues) on GitHub.

@@ -34,26 +34,30 @@ Edit your `config.yaml` to set the sync schedule:
 
 ```yaml
 global:
-  sync_schedule: "0 3 * * *"  # 3 AM daily
-  timezone: "America/New_York"
+  sync_schedule: '0 3 * * *' # 3 AM daily
+  timezone: 'America/New_York'
 ```
 
 **Common schedules:**
+
 ```yaml
 # Daily at 3 AM
-sync_schedule: "0 3 * * *"
+sync_schedule: '0 3 * * *'
 ```
+
 ```yaml
 # Every 6 hours
-sync_schedule: "0 */6 * * *"
+sync_schedule: '0 */6 * * *'
 ```
+
 ```yaml
 # 9 AM and 9 PM
-sync_schedule: "0 9,21 * * *"
+sync_schedule: '0 9,21 * * *'
 ```
+
 ```yaml
 # Weekly on Sunday
-sync_schedule: "0 3 * * 0"
+sync_schedule: '0 3 * * 0'
 ```
 
 ### Docker Management Commands
@@ -97,6 +101,7 @@ node src/main.js interactive
 ```
 
 **What it does:**
+
 - Runs an initial sync immediately
 - Schedules recurring syncs based on `sync_schedule`
 - Keeps running until interrupted (Ctrl+C)
@@ -108,13 +113,13 @@ Edit `config/config.yaml`:
 
 ```yaml
 global:
-  sync_schedule: "0 3 * * *"  # Cron format
-  timezone: "UTC"             # Your timezone
-  
+  sync_schedule: '0 3 * * *' # Cron format
+  timezone: 'UTC' # Your timezone
+
 # Optional: Different schedule per user
 users:
   - id: alice
-    sync_schedule: "0 2 * * *"  # Override global schedule
+    sync_schedule: '0 2 * * *' # Override global schedule
     # ... other config
 ```
 
@@ -146,6 +151,7 @@ crontab -e
 ```
 
 **Cron format:**
+
 ```
 # ┌───────────── minute (0-59)
 # │ ┌───────────── hour (0-23)
@@ -158,6 +164,7 @@ crontab -e
 ```
 
 **Example cron entries:**
+
 ```bash
 # Daily at 3 AM
 0 3 * * * cd /opt/shelfbridge && node src/main.js sync

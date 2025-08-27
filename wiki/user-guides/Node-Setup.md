@@ -5,12 +5,14 @@ This guide covers installing ShelfBridge directly with Node.js. This method is i
 ## ✅ Prerequisites
 
 ### System Requirements
+
 - **Node.js**: Version 18.0.0 or higher
 - **npm**: Version 8.0.0 or higher (usually included with Node.js)
 - **Git**: For cloning the repository
 - **Operating System**: Windows, macOS, or Linux
 
 ### API Requirements
+
 - **Audiobookshelf API token**: [How to get it](Prerequisites.md#audiobookshelf-api-token)
 - **Hardcover API token**: [How to get it](Prerequisites.md#hardcover-api-token)
 
@@ -19,12 +21,14 @@ This guide covers installing ShelfBridge directly with Node.js. This method is i
 ### Option 1: Official Installer (Recommended)
 
 **Windows/macOS:**
+
 1. Go to [nodejs.org](https://nodejs.org/)
 2. Download the LTS version
 3. Run the installer
 4. Restart your terminal/command prompt
 
 **Linux (Ubuntu/Debian):**
+
 ```bash
 # Using NodeSource repository
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
@@ -38,6 +42,7 @@ npm --version
 ### Option 2: Package Managers
 
 **macOS (Homebrew):**
+
 ```bash
 # Install Homebrew if not already installed
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -51,6 +56,7 @@ npm --version
 ```
 
 **Windows (Chocolatey):**
+
 ```powershell
 # Install Chocolatey if not already installed
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
@@ -64,6 +70,7 @@ npm --version
 ```
 
 **Linux (Package Manager):**
+
 ```bash
 # CentOS/RHEL/Fedora
 sudo dnf install nodejs npm
@@ -78,6 +85,7 @@ sudo apk add nodejs npm
 ### Option 3: Node Version Manager (NVM)
 
 **Linux/macOS:**
+
 ```bash
 # Install NVM
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
@@ -95,6 +103,7 @@ npm --version
 ```
 
 **Windows (NVM-Windows):**
+
 ```powershell
 # Download and install from: https://github.com/coreybutler/nvm-windows/releases
 # Then run:
@@ -138,6 +147,7 @@ notepad config/config.yaml  # Windows
 ```
 
 **Configuration example:**
+
 ```yaml
 global:
   min_progress_threshold: 5.0
@@ -240,6 +250,7 @@ sudo nano /etc/systemd/system/shelfbridge.service
 ```
 
 **Example systemd service:**
+
 ```ini
 [Unit]
 Description=ShelfBridge Sync Service
@@ -261,6 +272,7 @@ WantedBy=multi-user.target
 ### Process Management
 
 **Using PM2 (Process Manager):**
+
 ```bash
 # Install PM2
 npm install -g pm2
@@ -319,16 +331,19 @@ node src/main.js cache --clear
 ### Common Issues
 
 **"node: command not found"**
+
 - Node.js is not installed or not in PATH
 - Restart terminal after installation
 - Check PATH environment variable
 
 **"npm install" fails**
+
 - Check Node.js version: `node --version`
 - Clear npm cache: `npm cache clean --force`
 - Try different registry: `npm install --registry https://registry.npmjs.org/`
 
 **Permission errors (Linux/macOS)**
+
 ```bash
 # Fix npm permissions
 sudo chown -R $(whoami) ~/.npm
@@ -338,6 +353,7 @@ sudo chown -R $(whoami) /usr/local/lib/node_modules
 ```
 
 **"Cannot find module" errors**
+
 - Run `npm install` in project directory
 - Check if package.json exists
 - Verify you're in the correct directory
@@ -367,4 +383,4 @@ NODE_ENV=production node src/main.js sync
 
 ---
 
-**Ready to sync?** Continue with the [First Sync Guide](First-Sync.md) to run your first synchronization! 
+**Ready to sync?** Continue with the [First Sync Guide](First-Sync.md) to run your first synchronization!

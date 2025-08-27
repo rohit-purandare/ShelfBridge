@@ -2,8 +2,17 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { RateLimiter, Semaphore } from '../src/utils/concurrency.js';
-import { safeParseInt, safeParseFloat, safeParseBoolean } from '../src/utils/data.js';
-import { formatDuration, formatDurationForLogging, parseDurationString, sleep } from '../src/utils/time.js';
+import {
+  safeParseInt,
+  safeParseFloat,
+  safeParseBoolean,
+} from '../src/utils/data.js';
+import {
+  formatDuration,
+  formatDurationForLogging,
+  parseDurationString,
+  sleep,
+} from '../src/utils/time.js';
 
 /**
  * Tests for utility functions
@@ -19,11 +28,11 @@ describe('RateLimiter', () => {
     const limiter = new RateLimiter(100); // High limit to avoid conflicts
     try {
       const uniqueKey = `test-basic-${Date.now()}-${Math.random()}`;
-      
+
       const start = Date.now();
       await limiter.waitIfNeeded(uniqueKey);
       const elapsed = Date.now() - start;
-      
+
       // Should not wait for the first request
       assert.ok(elapsed < 100, `Expected minimal delay, got ${elapsed}ms`);
     } finally {
@@ -36,14 +45,14 @@ describe('RateLimiter', () => {
     try {
       const uniqueKey1 = `test-independent-1-${Date.now()}-${Math.random()}`;
       const uniqueKey2 = `test-independent-2-${Date.now()}-${Math.random()}`;
-      
+
       // First key - should be immediate
       const start1 = Date.now();
       await limiter.waitIfNeeded(uniqueKey1);
       const elapsed1 = Date.now() - start1;
       assert.ok(elapsed1 < 100);
-      
-      // Different key - should also be immediate  
+
+      // Different key - should also be immediate
       const start2 = Date.now();
       await limiter.waitIfNeeded(uniqueKey2);
       const elapsed2 = Date.now() - start2;
@@ -61,51 +70,54 @@ describe('RateLimiter', () => {
 describe('Semaphore', () => {
   it('allows concurrent access up to the limit', async () => {
     const semaphore = new Semaphore(2); // Allow 2 concurrent operations
-    
+
     let concurrentCount = 0;
     let maxConcurrentCount = 0;
-    
+
     const operation = async () => {
       await semaphore.acquire();
       concurrentCount++;
       maxConcurrentCount = Math.max(maxConcurrentCount, concurrentCount);
-      
+
       // Simulate work
       await new Promise(resolve => setTimeout(resolve, 50));
-      
+
       concurrentCount--;
       semaphore.release();
     };
-    
+
     // Start 4 operations simultaneously
     await Promise.all([operation(), operation(), operation(), operation()]);
-    
+
     // Should never exceed the semaphore limit
-    assert.ok(maxConcurrentCount <= 2, `Max concurrent was ${maxConcurrentCount}, expected <= 2`);
+    assert.ok(
+      maxConcurrentCount <= 2,
+      `Max concurrent was ${maxConcurrentCount}, expected <= 2`,
+    );
   });
 
   it('blocks when semaphore is exhausted', async () => {
     const semaphore = new Semaphore(1); // Only 1 concurrent operation
-    
+
     await semaphore.acquire();
-    
+
     let secondOperationStarted = false;
     const secondOperation = async () => {
       await semaphore.acquire();
       secondOperationStarted = true;
       semaphore.release();
     };
-    
+
     // Start second operation (should be blocked)
     const secondPromise = secondOperation();
-    
+
     // Wait a bit and verify it hasn't started
     await new Promise(resolve => setTimeout(resolve, 50));
     assert.equal(secondOperationStarted, false);
-    
+
     // Release the first semaphore
     semaphore.release();
-    
+
     // Now the second operation should complete
     await secondPromise;
     assert.equal(secondOperationStarted, true);
@@ -162,7 +174,10 @@ describe('Data Utilities', () => {
     });
 
     it('handles large numbers', () => {
-      assert.equal(safeParseFloat('999999999999999999999', 'test'), 999999999999999999999);
+      assert.equal(
+        safeParseFloat('999999999999999999999', 'test'),
+        999999999999999999999,
+      );
       assert.equal(safeParseFloat(Number.MAX_VALUE, 'test'), Number.MAX_VALUE);
       assert.equal(safeParseFloat(Number.MIN_VALUE, 'test'), Number.MIN_VALUE);
     });
@@ -228,7 +243,10 @@ describe('Data Utilities', () => {
       assert.equal(safeParseBoolean({}, true), true);
       assert.equal(safeParseBoolean([], true), true);
       assert.equal(safeParseBoolean(Symbol('test'), false), false);
-      assert.equal(safeParseBoolean(function() {}, true), true);
+      assert.equal(
+        safeParseBoolean(function () {}, true),
+        true,
+      );
     });
 
     it('handles edge cases for numbers', () => {
@@ -241,7 +259,7 @@ describe('Data Utilities', () => {
     it('handles complex objects with custom defaults', () => {
       const obj = { value: true };
       const arr = [1, 2, 3];
-      
+
       assert.equal(safeParseBoolean(obj, true), true);
       assert.equal(safeParseBoolean(obj, false), false);
       assert.equal(safeParseBoolean(arr, true), true);
@@ -264,9 +282,18 @@ describe('Data Utilities', () => {
     });
 
     it('handles very large numbers', () => {
-      assert.equal(safeParseInt('999999999999999999999', 'test'), 999999999999999999999);
-      assert.equal(safeParseInt(Number.MAX_SAFE_INTEGER, 'test'), Number.MAX_SAFE_INTEGER);
-      assert.equal(safeParseInt(Number.MIN_SAFE_INTEGER, 'test'), Number.MIN_SAFE_INTEGER);
+      assert.equal(
+        safeParseInt('999999999999999999999', 'test'),
+        999999999999999999999,
+      );
+      assert.equal(
+        safeParseInt(Number.MAX_SAFE_INTEGER, 'test'),
+        Number.MAX_SAFE_INTEGER,
+      );
+      assert.equal(
+        safeParseInt(Number.MIN_SAFE_INTEGER, 'test'),
+        Number.MIN_SAFE_INTEGER,
+      );
     });
 
     it('handles whitespace correctly', () => {
@@ -333,10 +360,13 @@ describe('Time Utilities', () => {
       const start = Date.now();
       await sleep(10); // Reduced to 10ms for faster tests
       const elapsed = Date.now() - start;
-      
+
       // Allow generous tolerance for timing - CI environments and Node.js versions can vary significantly
       // Minimum: 5ms (timer granularity), Maximum: 100ms (very generous for CI/Node.js 22.x)
-      assert.ok(elapsed >= 5 && elapsed <= 100, `Expected ~10ms delay, got ${elapsed}ms`);
+      assert.ok(
+        elapsed >= 5 && elapsed <= 100,
+        `Expected ~10ms delay, got ${elapsed}ms`,
+      );
     });
   });
 });

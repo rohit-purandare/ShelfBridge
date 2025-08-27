@@ -5,7 +5,11 @@ import { ValidateCommand } from './commands/ValidateCommand.js';
 import { ConfigCommand } from './commands/ConfigCommand.js';
 import { CacheCommand } from './commands/CacheCommand.js';
 import { DebugCommand } from './commands/DebugCommand.js';
-import { SchemaCommand, SchemaDetailCommand, SchemaInputsCommand } from './commands/SchemaCommands.js';
+import {
+  SchemaCommand,
+  SchemaDetailCommand,
+  SchemaInputsCommand,
+} from './commands/SchemaCommands.js';
 import { CronCommand, StartCommand } from './commands/CronCommand.js';
 
 /**
@@ -44,7 +48,9 @@ export class CommandRegistry {
     this.register(new SchemaDetailCommand());
     this.register(new SchemaInputsCommand());
     this.register(new CronCommand(runScheduledSyncFn, showNextScheduledSyncFn));
-    this.register(new StartCommand(runScheduledSyncFn, showNextScheduledSyncFn));
+    this.register(
+      new StartCommand(runScheduledSyncFn, showNextScheduledSyncFn),
+    );
   }
 
   /**
