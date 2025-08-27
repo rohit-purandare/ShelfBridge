@@ -3,18 +3,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-      - 'feature/**'
-      - 'feat/**'
-      - 'fix/**'
-      - 'bugfix/**'
-      - 'hotfix/**'
-      - 'refactor/**'
-      - 'perf/**'
-      - 'ci/**'
-      - 'chore/**'
   pull_request:
     branches: [main]
 

@@ -27,8 +27,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 ### Triggers
 
-- Pull requests to `main`
-- Pushes to feature branches: `feature/*`, `feat/*`, `fix/*`, `bugfix/*`, `hotfix/*`, `refactor/*`, `perf/*`, `ci/*`, `chore/*`
+- Pull requests to `main` (primary validation)
 
 ### Jobs
 
@@ -56,6 +55,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 ### Performance Optimizations
 
+- **Pull request focused**: Only runs on PRs for branch protection (no redundant push triggers)
 - Shallow clone (`fetch-depth: 1`) for speed
 - Matrix strategy for parallel testing
 - Conditional job execution
@@ -131,8 +131,7 @@ ghcr.io/rohit-purandare/shelfbridge:1
 
 ### Triggers
 
-- Pull requests to `main`
-- Pushes to `main`
+- Pull requests to `main` (primary validation)
 
 ### Checks Performed
 
@@ -167,6 +166,7 @@ npm audit --audit-level=high
 
 ### Performance Features
 
+- **Pull request focused**: Only runs on PRs (no redundant push triggers)
 - Shallow clone for speed
 - Node.js dependency caching
 - Minimal permissions (`contents: read`)
