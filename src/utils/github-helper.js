@@ -334,7 +334,7 @@ export function formatWelcomeMessage(version) {
    • Issues & Support: ${createClickableLink(projectInfo.issues, 'Get Help & Report Issues')}
    • Discussions: ${createClickableLink(projectInfo.discussions, 'Community Discussions')}
    • Latest Release: ${createClickableLink(projectInfo.releases, 'Download Latest Version')}
-   • Changelog: ${createClickableLink(projectInfo.changelog, 'What\'s New & Release Notes')}
+   • Changelog: ${createClickableLink(projectInfo.changelog, "What's New & Release Notes")}
 
 💡 Need help? Check the wiki or create an issue for support!
 `;

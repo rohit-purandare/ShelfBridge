@@ -18,10 +18,10 @@ describe('HardcoverClient - Atomic Book Completion', () => {
   describe('markBookCompleted - Success Scenarios', () => {
     it('should succeed when both progress and status updates work', async () => {
       const client = new HardcoverClient(mockToken);
-      
+
       // Mock successful getBookCurrentProgress
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Mock successful progress update
@@ -34,9 +34,9 @@ describe('HardcoverClient - Atomic Book Completion', () => {
                 progress_pages: mockTotalValue,
                 finished_at: '2024-01-15',
                 started_at: '2024-01-01',
-                edition_id: mockEditionId
-              }
-            }
+                edition_id: mockEditionId,
+              },
+            },
           };
         }
         return null;
@@ -45,7 +45,7 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       // Mock successful status update
       client.updateBookStatus = mock.fn(async () => ({
         id: mockUserBookId,
-        status_id: 3
+        status_id: 3,
       }));
 
       // Execute the test
@@ -55,7 +55,7 @@ describe('HardcoverClient - Atomic Book Completion', () => {
         mockTotalValue,
         false, // useSeconds
         '2024-01-15', // finishedAt
-        '2024-01-01'  // startedAt
+        '2024-01-01', // startedAt
       );
 
       // Verify success
@@ -64,9 +64,20 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       assert.strictEqual(result.edition_id, mockEditionId);
 
       // Verify both operations were called
-      assert.strictEqual(client._executeQuery.mock.calls.length, 1, 'Progress update should be called once');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 1, 'Status update should be called once');
-      assert.deepStrictEqual(client.updateBookStatus.mock.calls[0].arguments, [mockUserBookId, 3]);
+      assert.strictEqual(
+        client._executeQuery.mock.calls.length,
+        1,
+        'Progress update should be called once',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        1,
+        'Status update should be called once',
+      );
+      assert.deepStrictEqual(client.updateBookStatus.mock.calls[0].arguments, [
+        mockUserBookId,
+        3,
+      ]);
     });
 
     it('should succeed with audiobook (seconds) format', async () => {
@@ -75,12 +86,15 @@ describe('HardcoverClient - Atomic Book Completion', () => {
 
       // Mock existing progress
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Mock successful progress update with seconds
       client._executeQuery = mock.fn(async (mutation, variables) => {
-        if (mutation.includes('markBookCompleted') && mutation.includes('progress_seconds')) {
+        if (
+          mutation.includes('markBookCompleted') &&
+          mutation.includes('progress_seconds')
+        ) {
           return {
             update_user_book_read: {
               user_book_read: {
@@ -88,16 +102,19 @@ describe('HardcoverClient - Atomic Book Completion', () => {
                 progress_seconds: mockAudioSeconds,
                 finished_at: '2024-01-15',
                 started_at: '2024-01-01',
-                edition_id: mockEditionId
-              }
-            }
+                edition_id: mockEditionId,
+              },
+            },
           };
         }
         return null;
       });
 
       // Mock successful status update
-      client.updateBookStatus = mock.fn(async () => ({ id: mockUserBookId, status_id: 3 }));
+      client.updateBookStatus = mock.fn(async () => ({
+        id: mockUserBookId,
+        status_id: 3,
+      }));
 
       const result = await client.markBookCompleted(
         mockUserBookId,
@@ -105,7 +122,7 @@ describe('HardcoverClient - Atomic Book Completion', () => {
         mockAudioSeconds,
         true, // useSeconds
         '2024-01-15',
-        '2024-01-01'
+        '2024-01-01',
       );
 
       assert.ok(result);
@@ -121,7 +138,7 @@ describe('HardcoverClient - Atomic Book Completion', () => {
 
       // Mock successful new record creation
       client.insertUserBookRead = mock.fn(async () => ({
-        id: mockReadId
+        id: mockReadId,
       }));
 
       // Mock successful progress update
@@ -130,23 +147,34 @@ describe('HardcoverClient - Atomic Book Completion', () => {
           user_book_read: {
             id: mockReadId,
             progress_pages: mockTotalValue,
-            edition_id: mockEditionId
-          }
-        }
+            edition_id: mockEditionId,
+          },
+        },
       }));
 
       // Mock successful status update
-      client.updateBookStatus = mock.fn(async () => ({ id: mockUserBookId, status_id: 3 }));
+      client.updateBookStatus = mock.fn(async () => ({
+        id: mockUserBookId,
+        status_id: 3,
+      }));
 
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
       assert.ok(result);
-      assert.strictEqual(client.insertUserBookRead.mock.calls.length, 1, 'Should create new progress record');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 1, 'Should update status');
+      assert.strictEqual(
+        client.insertUserBookRead.mock.calls.length,
+        1,
+        'Should create new progress record',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        1,
+        'Should update status',
+      );
     });
   });
 
@@ -155,32 +183,47 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const client = new HardcoverClient(mockToken);
 
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Mock failed progress update
       client._executeQuery = mock.fn(async () => null);
 
       // Status update should not be called
-      client.updateBookStatus = mock.fn(async () => ({ id: mockUserBookId, status_id: 3 }));
+      client.updateBookStatus = mock.fn(async () => ({
+        id: mockUserBookId,
+        status_id: 3,
+      }));
 
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
       // Should fail completely
-      assert.strictEqual(result, false, 'Should return false when progress update fails');
-      assert.strictEqual(client._executeQuery.mock.calls.length, 1, 'Progress update should be attempted');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 0, 'Status update should NOT be called when progress fails');
+      assert.strictEqual(
+        result,
+        false,
+        'Should return false when progress update fails',
+      );
+      assert.strictEqual(
+        client._executeQuery.mock.calls.length,
+        1,
+        'Progress update should be attempted',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        0,
+        'Status update should NOT be called when progress fails',
+      );
     });
 
     it('should fail completely when status update fails', async () => {
       const client = new HardcoverClient(mockToken);
 
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Mock successful progress update
@@ -189,9 +232,9 @@ describe('HardcoverClient - Atomic Book Completion', () => {
           user_book_read: {
             id: mockReadId,
             progress_pages: mockTotalValue,
-            edition_id: mockEditionId
-          }
-        }
+            edition_id: mockEditionId,
+          },
+        },
       }));
 
       // Mock failed status update (this is the key test case)
@@ -200,13 +243,25 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
       // Should fail completely even though progress update succeeded
-      assert.strictEqual(result, false, 'Should return false when status update fails');
-      assert.strictEqual(client._executeQuery.mock.calls.length, 1, 'Progress update should be attempted');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 1, 'Status update should be attempted');
+      assert.strictEqual(
+        result,
+        false,
+        'Should return false when status update fails',
+      );
+      assert.strictEqual(
+        client._executeQuery.mock.calls.length,
+        1,
+        'Progress update should be attempted',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        1,
+        'Status update should be attempted',
+      );
     });
 
     it('should fail when new progress record creation fails', async () => {
@@ -225,20 +280,32 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
-      assert.strictEqual(result, false, 'Should fail when new record creation fails');
+      assert.strictEqual(
+        result,
+        false,
+        'Should fail when new record creation fails',
+      );
       assert.strictEqual(client.insertUserBookRead.mock.calls.length, 1);
-      assert.strictEqual(client._executeQuery.mock.calls.length, 0, 'Progress update should not be attempted');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 0, 'Status update should not be attempted');
+      assert.strictEqual(
+        client._executeQuery.mock.calls.length,
+        0,
+        'Progress update should not be attempted',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        0,
+        'Status update should not be attempted',
+      );
     });
 
     it('should handle exceptions gracefully', async () => {
       const client = new HardcoverClient(mockToken);
 
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Mock exception during progress update
@@ -251,11 +318,19 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
-      assert.strictEqual(result, false, 'Should return false when exception occurs');
-      assert.strictEqual(client.updateBookStatus.mock.calls.length, 0, 'Status update should not be called when exception occurs');
+      assert.strictEqual(
+        result,
+        false,
+        'Should return false when exception occurs',
+      );
+      assert.strictEqual(
+        client.updateBookStatus.mock.calls.length,
+        0,
+        'Status update should not be called when exception occurs',
+      );
     });
   });
 
@@ -265,7 +340,7 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const client = new HardcoverClient(mockToken);
 
       client.getBookCurrentProgress = mock.fn(async () => ({
-        latest_read: { id: mockReadId }
+        latest_read: { id: mockReadId },
       }));
 
       // Progress update succeeds
@@ -274,9 +349,9 @@ describe('HardcoverClient - Atomic Book Completion', () => {
           user_book_read: {
             id: mockReadId,
             progress_pages: mockTotalValue,
-            edition_id: mockEditionId
-          }
-        }
+            edition_id: mockEditionId,
+          },
+        },
       }));
 
       // Status update fails
@@ -285,12 +360,16 @@ describe('HardcoverClient - Atomic Book Completion', () => {
       const result = await client.markBookCompleted(
         mockUserBookId,
         mockEditionId,
-        mockTotalValue
+        mockTotalValue,
       );
 
       // NEW BEHAVIOR: Should fail completely (this is the fix)
-      assert.strictEqual(result, false, 'NEW BEHAVIOR: Should fail when status update fails');
-      
+      assert.strictEqual(
+        result,
+        false,
+        'NEW BEHAVIOR: Should fail when status update fails',
+      );
+
       // OLD BEHAVIOR would have returned the progress result here
       // This test ensures we've actually fixed the issue
     });

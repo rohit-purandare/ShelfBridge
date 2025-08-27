@@ -44,6 +44,7 @@ We use several automated security scanning tools to detect potential security is
    - Use environment variables for secrets
 
 2. **Environment Variables**
+
    ```bash
    # Instead of hardcoding in config.yaml
    export ABS_TOKEN="your_token_here"
@@ -54,10 +55,10 @@ We use several automated security scanning tools to detect potential security is
    ```yaml
    # config.yaml.example
    users:
-     - id: "user1"
-       abs_url: "https://your-abs-instance.com"
-       abs_token: "${ABS_TOKEN}"  # Use environment variable
-       hardcover_token: "${HARDCOVER_TOKEN}"
+     - id: 'user1'
+       abs_url: 'https://your-abs-instance.com'
+       abs_token: '${ABS_TOKEN}' # Use environment variable
+       hardcover_token: '${HARDCOVER_TOKEN}'
    ```
 
 ### Code Security
@@ -112,4 +113,4 @@ Before committing code:
 - **npm audit**: Dependency vulnerability scanning
 - **GitHub Actions**: Automated scanning
 - **Husky**: Pre-commit hooks
-- **SARIF**: Standardized security reports 
+- **SARIF**: Standardized security reports

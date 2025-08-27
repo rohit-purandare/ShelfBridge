@@ -16,7 +16,7 @@ describe('Comprehensive Environment Variable Validation', () => {
   beforeEach(() => {
     // Save original environment variables
     originalEnv = { ...process.env };
-    
+
     // Clear all ShelfBridge environment variables
     for (const key in process.env) {
       if (key.startsWith('SHELFBRIDGE_')) {
@@ -182,7 +182,7 @@ describe('Comprehensive Environment Variable Validation', () => {
 
       // Should create two users with trimmed values
       assert.strictEqual(users.length, 2);
-      
+
       assert.strictEqual(users[0].id, 'alice');
       assert.strictEqual(users[0].abs_url, 'https://abs1.com');
       assert.strictEqual(users[0].abs_token, 'token1');
@@ -234,7 +234,8 @@ describe('Comprehensive Environment Variable Validation', () => {
       process.env.SHELFBRIDGE_DELAYED_UPDATES_ENABLED = '  true  ';
       process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT = '  3600  ';
       process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '  7200  ';
-      process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = '  false  ';
+      process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION =
+        '  false  ';
 
       const config = new Config('non-existent-config.yaml');
       const delayedUpdates = config.getGlobal().delayed_updates;
@@ -313,12 +314,14 @@ describe('Comprehensive Environment Variable Validation', () => {
     it('simulates complete Docker Compose environment variable setup', () => {
       // Simulate a complete Docker Compose setup
       process.env.NODE_ENV = 'production';
-      
+
       // User configuration
       process.env.SHELFBRIDGE_USER_0_ID = '  docker_user  ';
-      process.env.SHELFBRIDGE_USER_0_ABS_URL = '  https://audiobookshelf.local  ';
+      process.env.SHELFBRIDGE_USER_0_ABS_URL =
+        '  https://audiobookshelf.local  ';
       process.env.SHELFBRIDGE_USER_0_ABS_TOKEN = '  abs_token_with_spaces  ';
-      process.env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN = '  hc_token_with_spaces  ';
+      process.env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN =
+        '  hc_token_with_spaces  ';
 
       // Global configuration with delayed updates
       process.env.SHELFBRIDGE_WORKERS = '  5  ';

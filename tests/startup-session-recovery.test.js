@@ -45,16 +45,16 @@ describe('Startup Session Recovery', () => {
     } catch (err) {
       // Ignore if file doesn't exist
     }
-    
+
     // Create fresh cache for each test
     cache = new BookCache(testCacheFile);
     await cache.init();
-    
+
     sessionManager = new SessionManager(cache, {
       enabled: true,
       session_timeout: 900,
       max_delay: 3600,
-      immediate_completion: true
+      immediate_completion: true,
     });
   });
 
@@ -63,14 +63,26 @@ describe('Startup Session Recovery', () => {
       // Simulate a shutdown scenario: create active sessions
       await cache.storeProgress('user1', 'book1', 'Test Book 1', 30, 'isbn');
       await cache.storeProgress('user1', 'book2', 'Test Book 2', 45, 'isbn');
-      
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book 1', 35, 'isbn');
-      await cache.updateSessionProgress('user1', 'book2', 'Test Book 2', 50, 'isbn');
+
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book 1',
+        35,
+        'isbn',
+      );
+      await cache.updateSessionProgress(
+        'user1',
+        'book2',
+        'Test Book 2',
+        50,
+        'isbn',
+      );
 
       // Verify sessions are active
       const activeSessions = await cache.getActiveSessions('user1');
       assert.equal(activeSessions.length, 2);
-      
+
       const titles = activeSessions.map(s => s.title).sort();
       assert.deepEqual(titles, ['test book 1', 'test book 2']);
     });
@@ -83,8 +95,20 @@ describe('Startup Session Recovery', () => {
     it('handles completed sessions correctly', async () => {
       // Create and complete a session
       await cache.storeProgress('user1', 'book1', 'Test Book', 30, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 35, 'isbn');
-      await cache.markSessionComplete('user1', 'book1', 'Test Book', 40, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
+      );
+      await cache.markSessionComplete(
+        'user1',
+        'book1',
+        'Test Book',
+        40,
+        'isbn',
+      );
 
       // Should not appear in active sessions
       const activeSessions = await cache.getActiveSessions('user1');
@@ -96,24 +120,37 @@ describe('Startup Session Recovery', () => {
     it('processes active sessions as expired on startup', async () => {
       // Create active sessions that would be processed on startup
       await cache.storeProgress('user1', 'book1', 'Test Book', 30, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 35, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
+      );
 
       // Simulate time passing (set old timestamp)
       const oldTime = new Date(Date.now() - 1000 * 1000).toISOString(); // Very old
-      await cache.db.prepare(`
+      await cache.db
+        .prepare(
+          `
         UPDATE books 
         SET session_last_change = ? 
         WHERE user_id = ? AND identifier = ? AND title = ?
-      `).run(oldTime, 'user1', 'book1', 'test book');
+      `,
+        )
+        .run(oldTime, 'user1', 'book1', 'test book');
 
       let callbackInvoked = false;
       let recoveredSession = null;
 
       // Process expired sessions (simulating startup recovery)
-      const result = await sessionManager.processExpiredSessions('user1', async (sessionData) => {
-        callbackInvoked = true;
-        recoveredSession = sessionData;
-      });
+      const result = await sessionManager.processExpiredSessions(
+        'user1',
+        async sessionData => {
+          callbackInvoked = true;
+          recoveredSession = sessionData;
+        },
+      );
 
       assert.equal(result.processed, 1);
       assert.equal(result.errors, 0);
@@ -126,14 +163,26 @@ describe('Startup Session Recovery', () => {
       // Create sessions for multiple users
       await cache.storeProgress('user1', 'book1', 'User1 Book', 25, 'isbn');
       await cache.storeProgress('user2', 'book2', 'User2 Book', 50, 'isbn');
-      
-      await cache.updateSessionProgress('user1', 'book1', 'User1 Book', 30, 'isbn');
-      await cache.updateSessionProgress('user2', 'book2', 'User2 Book', 55, 'isbn');
+
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'User1 Book',
+        30,
+        'isbn',
+      );
+      await cache.updateSessionProgress(
+        'user2',
+        'book2',
+        'User2 Book',
+        55,
+        'isbn',
+      );
 
       // Check both users have active sessions
       const user1Sessions = await cache.getActiveSessions('user1');
       const user2Sessions = await cache.getActiveSessions('user2');
-      
+
       assert.equal(user1Sessions.length, 1);
       assert.equal(user2Sessions.length, 1);
       assert.equal(user1Sessions[0].title, 'user1 book');
@@ -143,7 +192,13 @@ describe('Startup Session Recovery', () => {
     it('preserves session data integrity during recovery', async () => {
       // Create session with specific data
       await cache.storeProgress('user1', 'book1', 'Test Book', 20, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 25, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        25,
+        'isbn',
+      );
 
       // Get the session data
       const sessions = await cache.getActiveSessions('user1');
@@ -166,7 +221,7 @@ describe('Startup Session Recovery', () => {
       await cache.close();
 
       const activeSessions = await cache.getActiveSessions('user1');
-      
+
       // Should return empty array on error, not crash
       assert.equal(activeSessions.length, 0);
     });
@@ -175,28 +230,48 @@ describe('Startup Session Recovery', () => {
       // Create multiple sessions
       await cache.storeProgress('user1', 'book1', 'Good Book', 30, 'isbn');
       await cache.storeProgress('user1', 'book2', 'Problem Book', 40, 'isbn');
-      
-      await cache.updateSessionProgress('user1', 'book1', 'Good Book', 35, 'isbn');
-      await cache.updateSessionProgress('user1', 'book2', 'Problem Book', 45, 'isbn');
+
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Good Book',
+        35,
+        'isbn',
+      );
+      await cache.updateSessionProgress(
+        'user1',
+        'book2',
+        'Problem Book',
+        45,
+        'isbn',
+      );
 
       // Make sessions expired
       const oldTime = new Date(Date.now() - 1000 * 1000).toISOString();
-      await cache.db.prepare(`
+      await cache.db
+        .prepare(
+          `
         UPDATE books 
         SET session_last_change = ? 
         WHERE user_id = ? AND session_is_active = 1
-      `).run(oldTime, 'user1');
+      `,
+        )
+        .run(oldTime, 'user1');
 
       let processedCount = 0;
       let errorCount = 0;
 
       // Process with one callback that fails
-      const result = await sessionManager.processExpiredSessions('user1', async (sessionData) => {
-        if (sessionData.title === 'problem book') { // Database normalizes to lowercase
-          throw new Error('Simulated processing error');
-        }
-        processedCount++;
-      });
+      const result = await sessionManager.processExpiredSessions(
+        'user1',
+        async sessionData => {
+          if (sessionData.title === 'problem book') {
+            // Database normalizes to lowercase
+            throw new Error('Simulated processing error');
+          }
+          processedCount++;
+        },
+      );
 
       // Should process the good one and count the error
       assert.equal(result.processed, 1);
@@ -224,14 +299,23 @@ describe('Startup Session Recovery', () => {
 
     it('skips session recovery when delayed updates disabled', async () => {
       const disabledManager = new SessionManager(cache, { enabled: false });
-      
+
       // Even with active sessions, should return empty result
       await cache.storeProgress('user1', 'book1', 'Test Book', 30, 'isbn');
-      await cache.updateSessionProgress('user1', 'book1', 'Test Book', 35, 'isbn');
+      await cache.updateSessionProgress(
+        'user1',
+        'book1',
+        'Test Book',
+        35,
+        'isbn',
+      );
 
-      const result = await disabledManager.processExpiredSessions('user1', async () => {
-        throw new Error('Should not be called');
-      });
+      const result = await disabledManager.processExpiredSessions(
+        'user1',
+        async () => {
+          throw new Error('Should not be called');
+        },
+      );
 
       assert.equal(result.processed, 0);
     });
@@ -243,13 +327,25 @@ describe('Startup Session Recovery', () => {
       const books = [
         { id: 'book1', title: 'Book One', progress: 25 },
         { id: 'book2', title: 'Book Two', progress: 67 },
-        { id: 'book3', title: 'Book Three', progress: 89 }
+        { id: 'book3', title: 'Book Three', progress: 89 },
       ];
 
       // Create active sessions for all books
       for (const book of books) {
-        await cache.storeProgress('user1', book.id, book.title, book.progress - 5, 'isbn');
-        await cache.updateSessionProgress('user1', book.id, book.title, book.progress, 'isbn');
+        await cache.storeProgress(
+          'user1',
+          book.id,
+          book.title,
+          book.progress - 5,
+          'isbn',
+        );
+        await cache.updateSessionProgress(
+          'user1',
+          book.id,
+          book.title,
+          book.progress,
+          'isbn',
+        );
       }
 
       // Verify all sessions are active
@@ -258,19 +354,26 @@ describe('Startup Session Recovery', () => {
 
       // Simulate startup recovery by processing as expired
       const oldTime = new Date(Date.now() - 2000 * 1000).toISOString();
-      await cache.db.prepare(`
+      await cache.db
+        .prepare(
+          `
         UPDATE books 
         SET session_last_change = ? 
         WHERE user_id = ? AND session_is_active = 1
-      `).run(oldTime, 'user1');
+      `,
+        )
+        .run(oldTime, 'user1');
 
       const recoveredSessions = [];
-      const result = await sessionManager.processExpiredSessions('user1', async (sessionData) => {
-        recoveredSessions.push({
-          title: sessionData.title,
-          progress: sessionData.finalProgress
-        });
-      });
+      const result = await sessionManager.processExpiredSessions(
+        'user1',
+        async sessionData => {
+          recoveredSessions.push({
+            title: sessionData.title,
+            progress: sessionData.finalProgress,
+          });
+        },
+      );
 
       // All sessions should be recovered
       assert.equal(result.processed, 3);
@@ -278,7 +381,9 @@ describe('Startup Session Recovery', () => {
       assert.equal(recoveredSessions.length, 3);
 
       // Verify correct progress was recovered (titles are normalized to lowercase)
-      const progressMap = new Map(recoveredSessions.map(s => [s.title, s.progress]));
+      const progressMap = new Map(
+        recoveredSessions.map(s => [s.title, s.progress]),
+      );
       assert.equal(progressMap.get('book one'), 25);
       assert.equal(progressMap.get('book two'), 67);
       assert.equal(progressMap.get('book three'), 89);

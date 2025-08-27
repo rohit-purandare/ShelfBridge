@@ -5,6 +5,7 @@ This guide covers advanced Docker configurations and manual setup options for Sh
 ## 🎯 When to Use Manual Docker Setup
 
 **Use manual Docker commands when:**
+
 - Custom container orchestration (Kubernetes, Docker Swarm)
 - Specific networking requirements
 - Integration with existing Docker stacks
@@ -209,6 +210,7 @@ docker service update shelfbridge --image ghcr.io/rohit-purandare/shelfbridge:la
 ### Kubernetes Deployment
 
 **deployment.yaml:**
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -225,30 +227,31 @@ spec:
         app: shelfbridge
     spec:
       containers:
-      - name: shelfbridge
-        image: ghcr.io/rohit-purandare/shelfbridge:latest
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        volumeMounts:
-        - name: config
-          mountPath: /app/config
-        - name: data
-          mountPath: /app/data
+        - name: shelfbridge
+          image: ghcr.io/rohit-purandare/shelfbridge:latest
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '250m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+            - name: data
+              mountPath: /app/data
       volumes:
-      - name: config
-        persistentVolumeClaim:
-          claimName: shelfbridge-config
-      - name: data
-        persistentVolumeClaim:
-          claimName: shelfbridge-data
+        - name: config
+          persistentVolumeClaim:
+            claimName: shelfbridge-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: shelfbridge-data
 ```
 
 **pvc.yaml:**
+
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -505,4 +508,4 @@ docker run -d \
 
 ---
 
-**Advanced Docker setups give you complete control over your ShelfBridge deployment!** 🐳⚙️ 
+**Advanced Docker setups give you complete control over your ShelfBridge deployment!** 🐳⚙️

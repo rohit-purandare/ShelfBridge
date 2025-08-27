@@ -9,5 +9,9 @@ export { ValidateCommand } from './commands/ValidateCommand.js';
 export { ConfigCommand } from './commands/ConfigCommand.js';
 export { CacheCommand } from './commands/CacheCommand.js';
 export { DebugCommand } from './commands/DebugCommand.js';
-export { SchemaCommand, SchemaDetailCommand, SchemaInputsCommand } from './commands/SchemaCommands.js';
+export {
+  SchemaCommand,
+  SchemaDetailCommand,
+  SchemaInputsCommand,
+} from './commands/SchemaCommands.js';
 export { CronCommand, StartCommand } from './commands/CronCommand.js';

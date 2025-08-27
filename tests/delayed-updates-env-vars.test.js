@@ -6,7 +6,7 @@ import { Config } from '../src/config.js';
 /**
  * Tests for delayed updates environment variable parsing
  *
- * Validates that the new SHELFBRIDGE_DELAYED_UPDATES_* environment 
+ * Validates that the new SHELFBRIDGE_DELAYED_UPDATES_* environment
  * variables are correctly parsed and applied to configuration
  */
 
@@ -16,7 +16,7 @@ describe('Delayed Updates Environment Variables', () => {
   beforeEach(() => {
     // Save original environment variables
     originalEnv = { ...process.env };
-    
+
     // Clear any existing delayed updates env vars
     delete process.env.SHELFBRIDGE_DELAYED_UPDATES_ENABLED;
     delete process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT;
@@ -68,12 +68,18 @@ describe('Delayed Updates Environment Variables', () => {
       // Test false value
       process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = 'false';
       const config1 = new Config('non-existent-config.yaml');
-      assert.equal(config1.getGlobal().delayed_updates.immediate_completion, false);
+      assert.equal(
+        config1.getGlobal().delayed_updates.immediate_completion,
+        false,
+      );
 
       // Test true value
       process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = 'true';
       const config2 = new Config('non-existent-config.yaml');
-      assert.equal(config2.getGlobal().delayed_updates.immediate_completion, true);
+      assert.equal(
+        config2.getGlobal().delayed_updates.immediate_completion,
+        true,
+      );
     });
 
     it('handles invalid environment variable values gracefully', () => {
@@ -161,8 +167,8 @@ describe('Delayed Updates Environment Variables', () => {
       // Simulate development environment with longer delays for testing
       process.env.NODE_ENV = 'development';
       process.env.SHELFBRIDGE_DELAYED_UPDATES_ENABLED = 'true';
-      process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT = '60';   // 1 minute (minimum)
-      process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '300';        // 5 minutes (minimum)
+      process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT = '60'; // 1 minute (minimum)
+      process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '300'; // 5 minutes (minimum)
       process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = 'false';
 
       const config = new Config('non-existent-config.yaml');
@@ -177,8 +183,8 @@ describe('Delayed Updates Environment Variables', () => {
     it('supports aggressive API reduction configuration', () => {
       // Configuration for users who want maximum API call reduction
       process.env.SHELFBRIDGE_DELAYED_UPDATES_ENABLED = 'true';
-      process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT = '7200';  // 2 hours (maximum)
-      process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '86400';       // 24 hours (maximum)
+      process.env.SHELFBRIDGE_DELAYED_UPDATES_SESSION_TIMEOUT = '7200'; // 2 hours (maximum)
+      process.env.SHELFBRIDGE_DELAYED_UPDATES_MAX_DELAY = '86400'; // 24 hours (maximum)
       process.env.SHELFBRIDGE_DELAYED_UPDATES_IMMEDIATE_COMPLETION = 'false';
 
       const config = new Config('non-existent-config.yaml');
@@ -195,7 +201,7 @@ describe('Delayed Updates Environment Variables', () => {
     it('respects environment variable precedence over defaults', () => {
       // Environment variables should override defaults
       process.env.SHELFBRIDGE_DELAYED_UPDATES_ENABLED = 'true';
-      
+
       const config = new Config('non-existent-config.yaml');
       assert.equal(config.getGlobal().delayed_updates.enabled, true);
     });

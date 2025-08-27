@@ -34,7 +34,7 @@ export class TestCommand extends BaseCommand {
         console.log(
           success
             ? '✅ All connections successful!'
-            : '❌ One or more connections failed.'
+            : '❌ One or more connections failed.',
         );
       } else {
         for (const user of users) {
@@ -43,7 +43,7 @@ export class TestCommand extends BaseCommand {
           console.log(
             success
               ? '✅ All connections successful!'
-              : '❌ One or more connections failed.'
+              : '❌ One or more connections failed.',
           );
         }
       }

@@ -23,6 +23,7 @@ ShelfBridge sync output consists of several sections:
 ```
 
 **What it tells you:**
+
 - **User**: Which configured user is being synced
 - **Audiobookshelf**: Your server URL (confirms correct connection)
 - **Hardcover**: Connected user name (confirms correct account)
@@ -42,6 +43,7 @@ ShelfBridge sync output consists of several sections:
 ```
 
 **Field explanations:**
+
 - **Title/Author**: Book identification
 - **Progress**: Current listening progress (percentage and time)
 - **ASIN/ISBN**: Book identifier used for matching
@@ -51,18 +53,19 @@ ShelfBridge sync output consists of several sections:
 
 ### Sync Actions Explained
 
-| Action | Emoji | Description | When It Happens |
-|--------|-------|-------------|----------------|
-| **UPDATE** | ✅ | Progress updated in Hardcover | Progress changed and book exists |
-| **COMPLETE** | 🎯 | Book marked as completed | Progress ≥95% or completion flag |
-| **AUTO-ADD** | ➕ | Book added to Hardcover | Book not found and auto-add enabled |
-| **SKIP** | ⏭️ | No action taken | Below threshold or no changes |
-| **RE-READ** | 🔄 | New reading session created | Completed book restarted |
-| **ERROR** | ❌ | Action failed | API error or network issue |
+| Action       | Emoji | Description                   | When It Happens                     |
+| ------------ | ----- | ----------------------------- | ----------------------------------- |
+| **UPDATE**   | ✅    | Progress updated in Hardcover | Progress changed and book exists    |
+| **COMPLETE** | 🎯    | Book marked as completed      | Progress ≥95% or completion flag    |
+| **AUTO-ADD** | ➕    | Book added to Hardcover       | Book not found and auto-add enabled |
+| **SKIP**     | ⏭️    | No action taken               | Below threshold or no changes       |
+| **RE-READ**  | 🔄    | New reading session created   | Completed book restarted            |
+| **ERROR**    | ❌    | Action failed                 | API error or network issue          |
 
 ### Progress Indicators
 
 **Progress Display Formats:**
+
 ```text
 Progress: 45% (3h 24m of 7h 32m)     # Audiobook with time
 Progress: 67% (201 of 300 pages)     # Ebook with pages
@@ -84,6 +87,7 @@ During sync, you'll see real-time progress:
 ```
 
 **Status meanings:**
+
 - **✅ Updated**: Progress successfully synced
 - **✅ Marked**: Book successfully marked as completed
 - **✅ Added**: Book successfully added to Hardcover
@@ -102,22 +106,27 @@ ShelfBridge respects API limits for both services (configurable, with defaults o
 ```
 
 **Rate limit message types:**
+
 - **⚠️ Warning**: When approaching 80% of the configured rate limit (e.g., 44+ for default 55/minute)
 - **⚠️ Exceeded**: When the limit is reached, requests are automatically queued
 
 **Rate limits are configurable** in your `config.yaml`:
+
 ```yaml
 global:
-  hardcover_rate_limit: 55      # 10-60 requests/minute (default: 55)
+  hardcover_rate_limit: 55 # 10-60 requests/minute (default: 55)
   audiobookshelf_rate_limit: 600 # 60-1200 requests/minute (default: 600)
 ```
+
 - **🔄 Waiting**: Shows delay time before next request can be made
 
 **Pagination messages:**
+
 - **📄 Page X**: Shows pagination progress when fetching large libraries
 - **📚 Fetched X books**: Shows total books fetched across all pages
 
 **What this means:**
+
 - **Normal behavior**: Rate limiting prevents API errors
 - **Automatic handling**: Requests are queued, not dropped
 - **Sync continues**: The sync will complete, just takes longer
@@ -141,27 +150,29 @@ global:
 
 ### Summary Statistics
 
-| Metric | Description | Good Range |
-|--------|-------------|------------|
-| **Duration** | Total sync time | 1-30 seconds |
-| **Books processed** | Total books analyzed | Any number |
-| **Books synced** | Progress updates made | 0-50% of processed |
-| **Books completed** | Books marked complete | 0-10% of processed |
-| **Books auto-added** | New books added | Depends on settings |
-| **Books skipped** | Books not synced | 50-90% of processed |
-| **Errors** | Failed operations | 0 (ideally) |
+| Metric               | Description           | Good Range          |
+| -------------------- | --------------------- | ------------------- |
+| **Duration**         | Total sync time       | 1-30 seconds        |
+| **Books processed**  | Total books analyzed  | Any number          |
+| **Books synced**     | Progress updates made | 0-50% of processed  |
+| **Books completed**  | Books marked complete | 0-10% of processed  |
+| **Books auto-added** | New books added       | Depends on settings |
+| **Books skipped**    | Books not synced      | 50-90% of processed |
+| **Errors**           | Failed operations     | 0 (ideally)         |
 
 ## 🎯 Interpreting Results
 
 ### Healthy Sync Results
 
 **Good indicators:**
+
 - **✅ 0 errors**: All API calls successful
 - **✅ Some synced books**: Progress being tracked
 - **✅ Reasonable skip count**: Expected based on library
 - **✅ Fast duration**: Under 30 seconds for most libraries
 
 **Example healthy sync:**
+
 ```
 📊 SYNC SUMMARY
 Duration: 2.1s
@@ -176,12 +187,14 @@ Errors: 0
 ### Concerning Results
 
 **Red flags:**
+
 - **❌ All books skipped**: Check thresholds and tokens
 - **❌ Many errors**: Check API connectivity
 - **❌ Very slow**: >60 seconds indicates problems
 - **❌ No progress updates**: Check book matching
 
 **Example concerning sync:**
+
 ```
 📊 SYNC SUMMARY
 Duration: 45.2s
@@ -196,11 +209,13 @@ Errors: 3
 ### 🚦 Rate Limiting Impact on Sync Time
 
 **Normal rate limiting behavior:**
+
 - **Large libraries**: May take 2-5 minutes for 100+ books
 - **Rate limit warnings**: Expected with frequent API calls
 - **Automatic delays**: Sync pauses to respect API limits
 
 **When rate limiting indicates issues:**
+
 - **Single book taking >60s**: May indicate API problems
 - **Excessive warnings**: Could suggest inefficient batching
 - **Sync failing**: Rate limiting should never cause complete failure
@@ -210,11 +225,13 @@ Errors: 3
 ### All Books Skipped
 
 **Possible causes:**
+
 - **Low progress**: Books below `min_progress_threshold`
 - **No identifiers**: Books missing ISBN/ASIN
 - **No changes**: Progress hasn't changed since last sync
 
 **Solutions:**
+
 ```yaml
 # Lower threshold temporarily
 min_progress_threshold: 1.0
@@ -229,10 +246,12 @@ auto_add_books: true
 ### Many Books Auto-Added
 
 **What it means:**
+
 - Books not found in your Hardcover library
 - ShelfBridge adding them automatically
 
 **If unwanted:**
+
 ```yaml
 # Disable auto-add
 auto_add_books: false
@@ -244,11 +263,13 @@ min_progress_threshold: 10.0
 ### Books Not Matching
 
 **Symptoms:**
+
 - Books auto-added instead of updated
 - Wrong editions matched
 - "Not found in library" messages
 
 **Solutions:**
+
 1. **Add metadata** to books in Audiobookshelf
 2. **Check identifiers** in debug output
 3. **Manually add books** to Hardcover first
@@ -256,6 +277,7 @@ min_progress_threshold: 10.0
 ### Re-reading Detection
 
 **Example output:**
+
 ```
 📗 "The Hobbit" by J.R.R. Tolkien
    🔸 Previous progress: 100% (COMPLETED)
@@ -265,6 +287,7 @@ min_progress_threshold: 10.0
 ```
 
 **What it means:**
+
 - You've completed this book before
 - You're reading it again
 - ShelfBridge creates a new reading session
@@ -282,16 +305,19 @@ When sync errors occur, ShelfBridge can automatically create detailed error repo
 - **Processing timings** for debugging
 
 **File naming format:**
+
 ```
 failed-sync-{user_id}-{timestamp}.txt
 ```
 
 **Example:**
+
 ```
 failed-sync-john_doe-2024-01-15T10-30-45.txt
 ```
 
 **Configuration:**
+
 ```yaml
 global:
   # Enable/disable error dump files (default: true)
@@ -299,6 +325,7 @@ global:
 ```
 
 **Sample error dump content:**
+
 ```
 ================================================================================
 FAILED SYNC BOOKS DUMP
@@ -344,14 +371,17 @@ Total errors: 3
 ### Common Error Patterns
 
 **Rate Limiting:**
+
 - Multiple "API rate limit exceeded" errors
 - Solution: Reduce `workers` setting or enable `parallel: false`
 
 **Missing Identifiers:**
+
 - Books with "no identifier" in actions
 - Solution: Add ISBN/ASIN metadata to books in Audiobookshelf
 
 **Connection Issues:**
+
 - "Failed to connect" or timeout errors
 - Solution: Check network connectivity and API tokens
 
@@ -368,6 +398,7 @@ node src/main.js debug --user alice | grep -A 10 "Book Title"
 ```
 
 **Debug output includes:**
+
 - Raw API responses
 - Book identifier extraction
 - Matching logic details
@@ -378,16 +409,19 @@ node src/main.js debug --user alice | grep -A 10 "Book Title"
 ### Sync Speed Factors
 
 **Fast syncs (1-5 seconds):**
+
 - Small libraries (< 50 books)
 - Good cache hit rate
 - Stable network connection
 
 **Slow syncs (10-60 seconds):**
+
 - Large libraries (> 200 books)
 - Many API calls needed
 - Network latency issues
 
 **Very slow syncs (> 60 seconds):**
+
 - Network problems
 - API rate limiting
 - Database issues
@@ -396,13 +430,13 @@ node src/main.js debug --user alice | grep -A 10 "Book Title"
 
 ```yaml
 # Reduce API calls
-workers: 2  # Fewer parallel workers
+workers: 2 # Fewer parallel workers
 
 # Increase cache efficiency
-force_sync: false  # Use cache when possible
+force_sync: false # Use cache when possible
 
 # Reduce processed books
-min_progress_threshold: 10.0  # Higher threshold
+min_progress_threshold: 10.0 # Higher threshold
 ```
 
 ## 🔄 Comparing Sync Results
@@ -410,6 +444,7 @@ min_progress_threshold: 10.0  # Higher threshold
 ### Track Progress Over Time
 
 **First sync (large):**
+
 ```
 Books processed: 127
 Books synced: 45
@@ -418,6 +453,7 @@ Duration: 15.3s
 ```
 
 **Subsequent syncs (smaller):**
+
 ```
 Books processed: 127
 Books synced: 3
@@ -426,6 +462,7 @@ Duration: 2.1s
 ```
 
 **What this shows:**
+
 - Cache is working effectively
 - Only changed books are being synced
 - Performance improving over time
@@ -446,4 +483,4 @@ Based on your sync results:
 
 ---
 
-**Understanding your sync results helps you optimize ShelfBridge for your specific needs!** 📊✨ 
+**Understanding your sync results helps you optimize ShelfBridge for your specific needs!** 📊✨

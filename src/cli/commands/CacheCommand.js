@@ -39,7 +39,7 @@ export class CacheCommand extends BaseCommand {
         await cache.exportToJson(options.export);
       } else {
         console.log(
-          'Use --clear, --stats, --show, or --export to manage cache'
+          'Use --clear, --stats, --show, or --export to manage cache',
         );
       }
     } catch (error) {
@@ -71,7 +71,7 @@ export class CacheCommand extends BaseCommand {
         SELECT COUNT(*) as count 
         FROM books 
         WHERE identifier_type = 'title_author'
-      `
+      `,
       )
       .get();
     console.log(`Title/author matches cached: ${titleAuthorCount.count}`);
@@ -88,7 +88,7 @@ export class CacheCommand extends BaseCommand {
 
     // Get all books ordered by most recent
     const stmt = cache.db.prepare(
-      'SELECT * FROM books ORDER BY updated_at DESC'
+      'SELECT * FROM books ORDER BY updated_at DESC',
     );
     const books = stmt.all();
 
@@ -99,16 +99,14 @@ export class CacheCommand extends BaseCommand {
         console.log(`${index + 1}. ${book.title}`);
         console.log(`   User: ${book.user_id}`);
         console.log(
-          `   ${book.identifier_type.toUpperCase()}: ${book.identifier}`
+          `   ${book.identifier_type.toUpperCase()}: ${book.identifier}`,
         );
         console.log(`   Edition ID: ${book.edition_id}`);
         console.log(`   Progress: ${book.progress_percent}%`);
         console.log(`   Author: ${book.author || 'Unknown'}`);
         console.log(`   Last Sync: ${book.last_sync}`);
         console.log(`   Started At: ${book.started_at || 'Not set'}`);
-        console.log(
-          `   Last Listened: ${book.last_listened_at || 'Not set'}`
-        );
+        console.log(`   Last Listened: ${book.last_listened_at || 'Not set'}`);
         console.log('');
       });
     }

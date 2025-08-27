@@ -24,7 +24,7 @@ export class BaseCommand {
     const command = program
       .command(this.name)
       .description(this.description)
-      .action(async (options) => {
+      .action(async options => {
         try {
           await this.execute(options);
           this.exitSuccess();
@@ -32,7 +32,7 @@ export class BaseCommand {
           this.handleError(error, options);
         }
       });
-    
+
     this.addOptions(command);
     return command;
   }
@@ -95,7 +95,9 @@ export class BaseCommand {
         severity: 'high',
       });
 
-      console.error('\nPlease check your config/config.yaml file and try again.');
+      console.error(
+        '\nPlease check your config/config.yaml file and try again.',
+      );
       this.exitError();
     }
   }
@@ -108,7 +110,7 @@ export class BaseCommand {
     return {
       config,
       globalConfig: config.getGlobal(),
-      users: config.getUsers()
+      users: config.getUsers(),
     };
   }
 

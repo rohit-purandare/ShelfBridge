@@ -1,12 +1,8 @@
-# CI Workflow
-# Purpose: Run comprehensive tests across multiple Node.js versions
-# Triggers: Push to main, Pull requests to main
-# Tests: Application functionality, native modules, cache, configuration validation
+# Continuous Integration
+# Tests, linting, and Docker builds for pull requests and feature branches
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -15,7 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Run tests across multiple Node.js versions
   test:
+    name: Test (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,7 +22,10 @@ jobs:
         node-version: [20.x, 22.x]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone for CI performance
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -35,23 +36,115 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate ShelfBridge Application
-        uses: ./.github/actions/validate-app
-        env:
-          SHELFBRIDGE_USER_0_ID: ${{ secrets.TEST_USER_ID || 'test_user' }}
-          SHELFBRIDGE_USER_0_ABS_URL: ${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}
-          SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}
-          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
-        with:
-          test-environment: 'ci'
+      - name: Run tests
+        run: npm test
 
-      - name: Run API connection smoke tests (non-blocking)
-        env:
-          SHELFBRIDGE_USER_0_ID: ${{ secrets.TEST_USER_ID || 'test_user' }}
-          SHELFBRIDGE_USER_0_ABS_URL: ${{ secrets.TEST_ABS_URL || 'https://test.audiobookshelf.com' }}
-          SHELFBRIDGE_USER_0_ABS_TOKEN: ${{ secrets.TEST_ABS_TOKEN || 'test_abs_token_1234567890' }}
-          SHELFBRIDGE_USER_0_HARDCOVER_TOKEN: ${{ secrets.TEST_HARDCOVER_TOKEN || 'test_hc_token_1234567890' }}
+      - name: Run linting
+        run: npm run lint
+        if: matrix.node-version == '20.x'
+
+      - name: Check formatting
+        run: npm run format:check
+        if: matrix.node-version == '20.x'
+
+  # Build Docker image for testing (PRs and feature branches)
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone for CI performance
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          load: true
+          tags: |
+            ghcr.io/rohit-purandare/shelfbridge:test
+            ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}
+            ghcr.io/rohit-purandare/shelfbridge:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Test Docker image
         run: |
-          echo "🔌 Running API connection smoke tests on Node ${{ matrix.node-version }}"
-          # Allow failures so external service downtime doesn't block PRs
-          npm run test:connections || echo "⚠️  API connection tests failed – non-blocking"
+          echo "Testing Docker image functionality..."
+
+          # Basic runtime test
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node --version
+
+          # Check main entry point exists
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test ls src/main.js
+
+          # Quick smoke test of application
+          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node -e "console.log('Docker build test passed')"
+
+          echo "✅ Docker image test completed successfully"
+
+      - name: Display test image info
+        run: |
+          echo "🐳 Test images published:"
+          echo "  - ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}"
+          echo "  - ghcr.io/rohit-purandare/shelfbridge:${{ github.sha }}"
+          echo ""
+          echo "📋 Usage:"
+          echo "  docker pull ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}"
+          echo "  docker run ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}"
+
+  # Security and code quality checks
+  security:
+    name: Security & Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone for CI performance
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: npm audit --audit-level=moderate
+
+      - name: Check for secrets
+        run: |
+          # Look for actual hardcoded secrets, not just the words token/key/etc
+          # Check for quoted strings that look like API tokens (32+ chars, alphanumeric)
+          if grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" > /dev/null; then
+            echo "⚠️ Potential hardcoded secrets found:"
+            grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" || true
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets detected"

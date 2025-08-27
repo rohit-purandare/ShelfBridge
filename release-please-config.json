@@ -3,32 +3,58 @@
   "include-component-in-tag": false,
   "draft": false,
   "prerelease": false,
+  "versioning-strategy": "default",
+  "bump-minor-pre-major": false,
+  "bump-patch-for-minor-pre-major": false,
   "packages": {
     ".": {
       "package-name": "shelfbridge",
       "release-type": "node",
       "draft": false,
       "prerelease": false,
-      "pull-request-title-pattern": "chore${scope}: release${component} ${version}",
-      "release-name": "🚀 ShelfBridge ${version}",
+      "pull-request-title-pattern": "chore: release v${version}",
+      "release-name": "🚀 ShelfBridge v${version}",
+      "tag-prefix": "v",
+      "versioning-strategy": "default",
       "changelog-sections": [
-        { "type": "feat", "section": "## 🚀 Features", "hidden": false },
-        { "type": "fix", "section": "## 🔧 Bug Fixes", "hidden": false },
+        {
+          "type": "feat",
+          "section": "## 🚀 Features",
+          "hidden": false
+        },
+        {
+          "type": "fix",
+          "section": "## 🔧 Bug Fixes",
+          "hidden": false
+        },
         {
           "type": "perf",
           "section": "## ⚡ Performance Improvements",
           "hidden": false
         },
-        { "type": "deps", "section": "## 📦 Dependencies", "hidden": true },
         {
-          "type": "build(deps)",
-          "section": "## 📦 Dependencies",
-          "hidden": true
+          "type": "revert",
+          "section": "## ⏪ Reverts",
+          "hidden": false
         },
-        { "type": "revert", "section": "## ⏪ Reverts", "hidden": false },
         {
           "type": "refactor",
           "section": "## ♻️ Code Refactoring",
+          "hidden": false
+        },
+        {
+          "type": "security",
+          "section": "## 🔒 Security",
+          "hidden": false
+        },
+        {
+          "type": "deps",
+          "section": "## 📦 Dependencies",
+          "hidden": false
+        },
+        {
+          "type": "build(deps)",
+          "section": "## 📦 Dependencies",
           "hidden": false
         },
         {

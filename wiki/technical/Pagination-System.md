@@ -9,6 +9,7 @@ The pagination system addresses the problem of large libraries (1000+ books) tha
 ## 🔧 Configuration Options
 
 ### `max_books_to_fetch`
+
 **Type**: Number or null  
 **Default**: `null` (no limit)  
 **Purpose**: Controls the total number of books fetched from Audiobookshelf libraries
@@ -21,13 +22,14 @@ global:
 ```
 
 ### `page_size`
+
 **Type**: Number (25-200)  
 **Default**: `100`  
 **Purpose**: Controls the number of books fetched per API call
 
 ```yaml
 global:
-  page_size: 100  # Fetch 100 books per API call
+  page_size: 100 # Fetch 100 books per API call
 ```
 
 ## 🏗️ How It Works
@@ -39,7 +41,7 @@ global:
 // Library has 1200 books total
 
 // Page 0: Fetches books 1-100
-// Page 1: Fetches books 101-200  
+// Page 1: Fetches books 101-200
 // Page 2: Fetches books 201-300
 // Page 3: Fetches books 301-400
 // Page 4: Fetches books 401-500
@@ -62,21 +64,23 @@ global:
 ### Memory Usage
 
 | Page Size | Memory per Request | API Calls for 500 Books |
-|-----------|-------------------|-------------------------|
-| 25        | ~50-100 KB        | 20 calls                |
-| 50        | ~100-200 KB       | 10 calls                |
-| 100       | ~200-400 KB       | 5 calls                 |
-| 200       | ~400-800 KB       | 3 calls                 |
+| --------- | ------------------ | ----------------------- |
+| 25        | ~50-100 KB         | 20 calls                |
+| 50        | ~100-200 KB        | 10 calls                |
+| 100       | ~200-400 KB        | 5 calls                 |
+| 200       | ~400-800 KB        | 3 calls                 |
 
 ### Network Efficiency
 
 **Small Page Sizes (25-50):**
+
 - ✅ Lower memory usage
 - ✅ Better for slow connections
 - ✅ More reliable on resource-constrained devices
 - ❌ More API calls required
 
 **Large Page Sizes (100-200):**
+
 - ✅ Fewer API calls
 - ✅ Faster on fast connections
 - ❌ Higher memory usage per request
@@ -88,38 +92,38 @@ global:
 
 ```yaml
 global:
-  max_books_to_fetch: 100  # Conservative total
-  page_size: 25           # Small responses
-  workers: 1              # Reduce parallel processing
-  parallel: false         # Disable parallel processing
+  max_books_to_fetch: 100 # Conservative total
+  page_size: 25 # Small responses
+  workers: 1 # Reduce parallel processing
+  parallel: false # Disable parallel processing
 ```
 
 ### Fast Network Connections
 
 ```yaml
 global:
-  max_books_to_fetch: 1000  # More books total
-  page_size: 200           # Larger responses, fewer calls
-  workers: 3               # Standard parallel processing
+  max_books_to_fetch: 1000 # More books total
+  page_size: 200 # Larger responses, fewer calls
+  workers: 3 # Standard parallel processing
 ```
 
 ### Slow or Unreliable Connections
 
 ```yaml
 global:
-  max_books_to_fetch: 500   # Reasonable total
-  page_size: 50            # Smaller responses, more reliable
-  workers: 1               # Conservative parallel processing
+  max_books_to_fetch: 500 # Reasonable total
+  page_size: 50 # Smaller responses, more reliable
+  workers: 1 # Conservative parallel processing
 ```
 
 ### Testing and Development
 
 ```yaml
 global:
-  max_books_to_process: 10  # Test with limited books
-  max_books_to_fetch: 50    # Fetch limited books
-  page_size: 25            # Small responses for testing
-  dry_run: true            # Don't make actual changes
+  max_books_to_process: 10 # Test with limited books
+  max_books_to_fetch: 50 # Fetch limited books
+  page_size: 25 # Small responses for testing
+  dry_run: true # Don't make actual changes
 ```
 
 ## 🔍 Debugging Pagination
@@ -138,14 +142,17 @@ The pagination system provides detailed logging:
 ### Common Issues
 
 **Too Many API Calls:**
+
 - Increase `page_size` to reduce the number of requests
 - Monitor rate limiting messages
 
 **Memory Issues:**
+
 - Decrease `page_size` to reduce memory per request
 - Decrease `max_books_to_fetch` to limit total memory usage
 
 **Slow Performance:**
+
 - Balance `page_size` with network speed
 - Consider adjusting `workers` and `parallel` settings
 
@@ -154,4 +161,4 @@ The pagination system provides detailed logging:
 - **[Configuration Overview](../admin/Configuration-Reference.md)** - Complete configuration reference
 - **[Troubleshooting Guide](../troubleshooting/Troubleshooting-Guide.md)** - Solving pagination issues
 - **[Architecture Overview](Architecture-Overview.md)** - How pagination fits into the overall system
-- **[Rate Limiting](Rate-Limiting.md)** - How pagination interacts with rate limiting 
+- **[Rate Limiting](Rate-Limiting.md)** - How pagination interacts with rate limiting

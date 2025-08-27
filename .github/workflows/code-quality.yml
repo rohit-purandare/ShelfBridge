@@ -1,12 +1,8 @@
-# Code Quality Workflow
-# Purpose: Static analysis, linting, security audits, and configuration validation
-# Triggers: Push to main, Pull requests to main
-# Checks: ESLint, dependency vulnerabilities, debug statements, configuration files
+# Code Quality
+# Static analysis, linting, and configuration validation
 name: Code Quality
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -15,113 +11,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  code-quality:
+  quality:
+    name: Code Quality Checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone for CI performance
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.4'
+          node-version: '20.x'
           cache: 'npm'
-
-      - name: Cache ESLint results
-        uses: actions/cache@v4
-        with:
-          path: ~/.eslintcache
-          key: eslint-${{ runner.os }}-${{ hashFiles('**/*.js', '.eslintrc*', 'package-lock.json') }}
-          restore-keys: |
-            eslint-${{ runner.os }}-
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npx eslint src/ --ext .js --max-warnings 0 --cache
-        continue-on-error: false
+        run: npm run lint
 
-      - name: Check for debug statements
-        run: |
-          echo "Checking for debug statements..."
-          # Check for console.debug, console.trace, debugger statements
-          DEBUG_COUNT=$(grep -r "console\.debug\|console\.trace\|debugger" src/ --exclude-dir=node_modules | wc -l || echo "0")
-          if [ "$DEBUG_COUNT" -gt 0 ]; then
-            echo "⚠️  Found $DEBUG_COUNT debug statements:"
-            grep -r "console\.debug\|console\.trace\|debugger" src/ --exclude-dir=node_modules || true
-            echo "💡 Remove debug statements before production"
-          else
-            echo "✅ No debug statements found"
-          fi
-
-      - name: Check for TODO comments
-        run: |
-          echo "Checking for TODO comments..."
-          TODO_COUNT=$(grep -r "TODO\|FIXME\|XXX" src/ --exclude-dir=node_modules | wc -l || echo "0")
-          if [ "$TODO_COUNT" -gt 0 ]; then
-            echo "⚠️  Found $TODO_COUNT TODO/FIXME comments:"
-            grep -r "TODO\|FIXME\|XXX" src/ --exclude-dir=node_modules || true
-            echo "💡 Consider addressing these before release"
-          else
-            echo "✅ No TODO comments found"
-          fi
+      - name: Check formatting
+        run: npm run format:check
 
       - name: Security audit
-        run: |
-          echo "🔒 Running dependency security audit..."
-          npm audit --audit-level=high || {
-            echo "⚠️  High-severity vulnerabilities found"
-            echo "💡 Run 'npm audit fix' to resolve automatically fixable issues"
-            exit 1
-          }
-          echo "✅ No high-severity vulnerabilities found"
+        run: npm audit --audit-level=high
 
-      - name: Check for hardcoded secrets
+      - name: Validate configuration
         run: |
-          echo "🔍 Checking for potential hardcoded secrets..."
-          SECRET_COUNT=$(grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " | wc -l || echo "0")
-          if [ "$SECRET_COUNT" -gt 0 ]; then
-            echo "⚠️  Found $SECRET_COUNT potential secret references:"
-            grep -r "password\|secret\|token\|key" src/ --include="*.js" | grep -v "// " || true
-            echo "💡 Review these for hardcoded credentials"
-          else
-            echo "✅ No obvious hardcoded secrets found"
-          fi
-
-      - name: Check package.json scripts
-        run: |
-          echo "Validating package.json scripts..."
-          node -e "
-            const pkg = require('./package.json');
-            const required = ['start', 'sync', 'test', 'config', 'cache'];
-            const missing = required.filter(script => !pkg.scripts[script]);
-            if (missing.length > 0) {
-              console.log('❌ Missing required scripts:', missing.join(', '));
-              process.exit(1);
-            }
-            console.log('✅ All required scripts present');
-          "
-
-      - name: Validate configuration example
-        run: |
-          echo "Validating config example file..."
           if [ -f "config/config.yaml.example" ]; then
-            echo "✅ config.yaml.example exists"
-            # Check if it's valid YAML
             node -e "
               const yaml = require('js-yaml');
               const fs = require('fs');
-              try {
-                yaml.load(fs.readFileSync('config/config.yaml.example', 'utf8'));
-                console.log('✅ config.yaml.example is valid YAML');
-              } catch (e) {
-                console.log('❌ config.yaml.example is invalid YAML:', e.message);
-                process.exit(1);
-              }
+              yaml.load(fs.readFileSync('config/config.yaml.example', 'utf8'));
+              console.log('✅ Configuration example is valid');
             "
           else
             echo "❌ config/config.yaml.example not found"
             exit 1
           fi
+
+      - name: Check for issues
+        run: |
+          echo "🔍 Checking for common issues..."
+
+          # Debug statements
+          if grep -r "console\.debug\|console\.trace\|debugger" src/ > /dev/null 2>&1; then
+            echo "⚠️ Debug statements found - consider removing before production"
+            grep -r "console\.debug\|console\.trace\|debugger" src/ || true
+          fi
+
+          # Hardcoded secrets - look for actual API tokens, not just variable names
+          if grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" > /dev/null 2>&1; then
+            echo "⚠️ Potential hardcoded secrets found:"
+            grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" || true
+            exit 1
+          fi
+
+          echo "✅ Code quality checks passed"

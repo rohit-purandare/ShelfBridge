@@ -17,7 +17,10 @@ export class SyncCommand extends BaseCommand {
     command
       .option('--all-users', 'Sync all users')
       .option('-u, --user <userId>', 'Sync specific user')
-      .option('--force', 'Force sync even if progress unchanged (ignores cache)');
+      .option(
+        '--force',
+        'Force sync even if progress unchanged (ignores cache)',
+      );
   }
 
   async execute(options) {
@@ -64,7 +67,7 @@ export class SyncCommand extends BaseCommand {
             } finally {
               semaphore.release();
             }
-          })
+          }),
         );
       } else {
         for (const user of users) {

@@ -1,11 +1,18 @@
 /**
  * Sync Manager Two-Stage Integration Tests
- * 
+ *
  * Tests to ensure sync-manager properly handles two-stage matching results
  * and integrates correctly with auto-add and existing book sync functionality.
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import { SyncManager } from '../src/sync-manager.js';
 
 describe('Sync Manager Two-Stage Integration', () => {
@@ -22,42 +29,42 @@ describe('Sync Manager Two-Stage Integration', () => {
       id: 'test-user',
       hardcover_token: 'test-token',
       audiobookshelf_url: 'http://test-abs.com',
-      audiobookshelf_token: 'abs-token'
+      audiobookshelf_token: 'abs-token',
     };
 
     // Mock global configuration
     mockGlobalConfig = {
       auto_add_books: {
         enabled: true,
-        min_progress_threshold: 20
+        min_progress_threshold: 20,
       },
       title_author_matching: {
         enabled: true,
-        confidence_threshold: 0.7
-      }
+        confidence_threshold: 0.7,
+      },
     };
 
     // Mock HardcoverClient
     mockHardcover = {
       addBookToLibrary: jest.fn(),
       updateBookProgress: jest.fn(),
-      getUserBooks: jest.fn()
+      getUserBooks: jest.fn(),
     };
 
     // Mock BookCache
     mockCache = {
       getCachedBookInfo: jest.fn(),
-      storeEditionMapping: jest.fn()
+      storeEditionMapping: jest.fn(),
     };
 
     // Mock BookMatcher
     mockBookMatcher = {
-      findMatch: jest.fn()
+      findMatch: jest.fn(),
     };
 
     // Create SyncManager instance
     syncManager = new SyncManager(mockUser, mockGlobalConfig, false, false);
-    
+
     // Inject mocks
     syncManager.hardcover = mockHardcover;
     syncManager.cache = mockCache;
@@ -81,11 +88,11 @@ describe('Sync Manager Two-Stage Integration', () => {
             metadata: {
               title: 'Two Stage Test Book',
               author: 'Test Author',
-              narrator: 'Test Narrator'
+              narrator: 'Test Narrator',
             },
-            duration: 43200
-          }
-        }
+            duration: 43200,
+          },
+        },
       };
 
       const mockTwoStageMatch = {
@@ -98,11 +105,11 @@ describe('Sync Manager Two-Stage Integration', () => {
           pages: null,
           audio_seconds: 43200,
           format: 'audiobook',
-          users_count: 150
+          users_count: 150,
         },
         book: {
           id: 'book_67890',
-          title: 'Two Stage Test Book'
+          title: 'Two Stage Test Book',
         },
         _matchType: 'title_author_two_stage',
         _tier: 3,
@@ -110,10 +117,10 @@ describe('Sync Manager Two-Stage Integration', () => {
           totalScore: 75.5,
           breakdown: {
             title: { score: 85, weight: 0.35 },
-            author: { score: 90, weight: 0.25 }
+            author: { score: 90, weight: 0.25 },
           },
           confidence: 'high',
-          isBookMatch: true
+          isBookMatch: true,
         },
         _editionSelectionResult: {
           bookId: 'book_67890',
@@ -121,28 +128,31 @@ describe('Sync Manager Two-Stage Integration', () => {
           edition: {
             id: 'edition_12345',
             reading_format: { format: 'audiobook' },
-            users_count: 150
+            users_count: 150,
           },
           selectionReason: {
-            format: { reason: 'Perfect audiobook format match' }
-          }
+            format: { reason: 'Perfect audiobook format match' },
+          },
         },
-        _needsScoring: false
+        _needsScoring: false,
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockTwoStageMatch);
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'new-user-book-id' }
+        userBook: { id: 'new-user-book-id' },
       });
 
       // Execute sync for single book
-      const result = await syncManager._syncSingleBook(mockAudiobookshelfBook, {});
+      const result = await syncManager._syncSingleBook(
+        mockAudiobookshelfBook,
+        {},
+      );
 
       expect(result.status).toBe('auto_added');
       expect(mockHardcover.addBookToLibrary).toHaveBeenCalledWith(
         'edition_12345',
-        50 // 50% progress
+        50, // 50% progress
       );
     });
 
@@ -150,20 +160,20 @@ describe('Sync Manager Two-Stage Integration', () => {
       const mockEbookMatch = {
         userBook: {
           id: 'existing-user-book',
-          book: { id: 'book_123', title: 'Existing Book' }
+          book: { id: 'book_123', title: 'Existing Book' },
         },
         edition: {
           id: 'edition_ebook',
           format: 'ebook',
-          pages: 300
+          pages: 300,
         },
         _matchType: 'title_author_two_stage',
         _tier: 3,
         _bookIdentificationScore: {
           totalScore: 82.1,
-          confidence: 'high'
+          confidence: 'high',
         },
-        _needsScoring: false
+        _needsScoring: false,
       };
 
       const mockEbookData = {
@@ -175,10 +185,10 @@ describe('Sync Manager Two-Stage Integration', () => {
           media: {
             metadata: {
               title: 'Existing Book',
-              author: 'Test Author'
-            }
-          }
-        }
+              author: 'Test Author',
+            },
+          },
+        },
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockEbookMatch);
@@ -190,7 +200,7 @@ describe('Sync Manager Two-Stage Integration', () => {
       expect(mockHardcover.updateBookProgress).toHaveBeenCalledWith(
         'existing-user-book',
         75, // 75% progress
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -200,25 +210,28 @@ describe('Sync Manager Two-Stage Integration', () => {
         edition: null, // Missing edition
         book: {
           id: 'book_incomplete',
-          title: 'Incomplete Match'
+          title: 'Incomplete Match',
         },
         _matchType: 'title_author_two_stage',
         _bookIdentificationScore: {
           totalScore: 70,
-          confidence: 'medium'
-        }
+          confidence: 'medium',
+        },
       };
 
       const mockAudiobookshelfBook = {
         id: 'abs-incomplete',
         title: 'Incomplete Match',
         author: 'Test Author',
-        progress: 0.3
+        progress: 0.3,
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockIncompleteMatch);
 
-      const result = await syncManager._syncSingleBook(mockAudiobookshelfBook, {});
+      const result = await syncManager._syncSingleBook(
+        mockAudiobookshelfBook,
+        {},
+      );
 
       expect(result.status).toBe('error');
       expect(result.reason).toContain('edition');
@@ -229,30 +242,30 @@ describe('Sync Manager Two-Stage Integration', () => {
         userBook: null,
         edition: {
           id: 'edition_high_conf',
-          format: 'audiobook'
+          format: 'audiobook',
         },
         book: {
           id: 'book_high_conf',
-          title: 'High Confidence Book'
+          title: 'High Confidence Book',
         },
         _matchType: 'title_author_two_stage',
         _bookIdentificationScore: {
           totalScore: 89.5,
-          confidence: 'high'
-        }
+          confidence: 'high',
+        },
       };
 
       const mockBook = {
         id: 'abs-high-conf',
         title: 'High Confidence Book',
         author: 'Confident Author',
-        progress: 0.4
+        progress: 0.4,
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockHighConfidenceMatch);
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'added-book' }
+        userBook: { id: 'added-book' },
       });
 
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
@@ -260,9 +273,7 @@ describe('Sync Manager Two-Stage Integration', () => {
       await syncManager._syncSingleBook(mockBook, {});
 
       // Should log two-stage confidence (89.5%)
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('89.5%')
-      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('89.5%'));
 
       logSpy.mockRestore();
     });
@@ -280,11 +291,11 @@ describe('Sync Manager Two-Stage Integration', () => {
           media: {
             metadata: {
               title: 'Auto Add Book',
-              author: 'Auto Author'
+              author: 'Auto Author',
             },
-            duration: 32400
-          }
-        }
+            duration: 32400,
+          },
+        },
       };
 
       const mockAutoAddMatch = {
@@ -293,24 +304,24 @@ describe('Sync Manager Two-Stage Integration', () => {
           id: 'edition_auto_add',
           asin: 'B987654321',
           audio_seconds: 32400,
-          format: 'audiobook'
+          format: 'audiobook',
         },
         book: {
           id: 'book_auto_add',
-          title: 'Auto Add Book'
+          title: 'Auto Add Book',
         },
         _matchType: 'title_author_two_stage',
         _bookIdentificationScore: {
           totalScore: 78.9,
-          confidence: 'high'
+          confidence: 'high',
         },
-        _needsScoring: false
+        _needsScoring: false,
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockAutoAddMatch);
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'auto-added-book' }
+        userBook: { id: 'auto-added-book' },
       });
 
       const result = await syncManager._syncSingleBook(mockAutoAddBook, {});
@@ -318,7 +329,7 @@ describe('Sync Manager Two-Stage Integration', () => {
       expect(result.status).toBe('auto_added');
       expect(mockHardcover.addBookToLibrary).toHaveBeenCalledWith(
         'edition_auto_add',
-        25 // 25% progress
+        25, // 25% progress
       );
     });
 
@@ -332,23 +343,23 @@ describe('Sync Manager Two-Stage Integration', () => {
           media: {
             metadata: {
               title: 'Low Progress Book',
-              author: 'Test Author'
-            }
-          }
-        }
+              author: 'Test Author',
+            },
+          },
+        },
       };
 
       const mockMatch = {
         userBook: null,
         edition: {
           id: 'edition_low_progress',
-          format: 'ebook'
+          format: 'ebook',
         },
         _matchType: 'title_author_two_stage',
         _bookIdentificationScore: {
           totalScore: 85,
-          confidence: 'high'
-        }
+          confidence: 'high',
+        },
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockMatch);
@@ -365,16 +376,16 @@ describe('Sync Manager Two-Stage Integration', () => {
         id: 'abs-fail-add',
         title: 'Fail Add Book',
         author: 'Fail Author',
-        progress: 0.5
+        progress: 0.5,
       };
 
       const mockMatch = {
         userBook: null,
         edition: {
           id: 'edition_fail_add',
-          format: 'audiobook'
+          format: 'audiobook',
         },
-        _matchType: 'title_author_two_stage'
+        _matchType: 'title_author_two_stage',
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockMatch);
@@ -393,29 +404,29 @@ describe('Sync Manager Two-Stage Integration', () => {
         id: 'abs-cache-test',
         title: 'Cache Test Book',
         author: 'Cache Author',
-        progress: 0.6
+        progress: 0.6,
       };
 
       const mockCacheMatch = {
         userBook: null,
         edition: {
           id: 'edition_cache_test',
-          format: 'ebook'
+          format: 'ebook',
         },
         book: {
           id: 'book_cache_test',
-          title: 'Cache Test Book'
+          title: 'Cache Test Book',
         },
         _matchType: 'title_author_two_stage',
         _bookIdentificationScore: {
-          totalScore: 73.4
-        }
+          totalScore: 73.4,
+        },
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockCacheMatch);
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'cached-book' }
+        userBook: { id: 'cached-book' },
       });
 
       await syncManager._syncSingleBook(mockCacheBook, {});
@@ -427,7 +438,7 @@ describe('Sync Manager Two-Stage Integration', () => {
         'Cache Test Book',
         'edition_cache_test',
         'book_cache_test',
-        'Cache Author'
+        'Cache Author',
       );
     });
 
@@ -436,22 +447,22 @@ describe('Sync Manager Two-Stage Integration', () => {
         id: 'abs-cache-error',
         title: 'Cache Error Book',
         author: 'Cache Error Author',
-        progress: 0.3
+        progress: 0.3,
       };
 
       const mockMatch = {
         userBook: null,
         edition: {
           id: 'edition_cache_error',
-          format: 'audiobook'
+          format: 'audiobook',
         },
-        _matchType: 'title_author_two_stage'
+        _matchType: 'title_author_two_stage',
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockMatch);
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'cache-error-book' }
+        userBook: { id: 'cache-error-book' },
       });
       mockCache.storeEditionMapping.mockRejectedValue(new Error('Cache error'));
 
@@ -467,22 +478,22 @@ describe('Sync Manager Two-Stage Integration', () => {
       const mockLegacyMatch = {
         userBook: {
           id: 'legacy-user-book',
-          book: { id: 'legacy-book', title: 'Legacy Book' }
+          book: { id: 'legacy-book', title: 'Legacy Book' },
         },
         edition: {
           id: 'legacy-edition',
-          format: 'audiobook'
+          format: 'audiobook',
         },
         _matchType: 'asin', // Legacy match type
         _tier: 1,
-        _needsScoring: true // Legacy flag
+        _needsScoring: true, // Legacy flag
       };
 
       const mockLegacyBook = {
         id: 'abs-legacy',
         title: 'Legacy Book',
         author: 'Legacy Author',
-        progress: 0.8
+        progress: 0.8,
       };
 
       mockBookMatcher.findMatch.mockResolvedValue(mockLegacyMatch);
@@ -499,39 +510,39 @@ describe('Sync Manager Two-Stage Integration', () => {
         {
           id: 'abs-two-stage',
           title: 'Two Stage Book',
-          progress: 0.4
+          progress: 0.4,
         },
         {
           id: 'abs-legacy',
-          title: 'Legacy Book', 
-          progress: 0.6
-        }
+          title: 'Legacy Book',
+          progress: 0.6,
+        },
       ];
 
       const mockTwoStageMatch = {
         _matchType: 'title_author_two_stage',
         userBook: null,
-        edition: { id: 'ts-edition' }
+        edition: { id: 'ts-edition' },
       };
 
       const mockLegacyMatch = {
         _matchType: 'isbn',
         userBook: { id: 'legacy-user-book' },
-        edition: { id: 'legacy-edition' }
+        edition: { id: 'legacy-edition' },
       };
 
       mockBookMatcher.findMatch
         .mockResolvedValueOnce(mockTwoStageMatch)
         .mockResolvedValueOnce(mockLegacyMatch);
-      
+
       mockHardcover.addBookToLibrary.mockResolvedValue({
         success: true,
-        userBook: { id: 'new-book' }
+        userBook: { id: 'new-book' },
       });
       mockHardcover.updateBookProgress.mockResolvedValue({ success: true });
 
       const results = await Promise.all(
-        mockBooks.map(book => syncManager._syncSingleBook(book, {}))
+        mockBooks.map(book => syncManager._syncSingleBook(book, {})),
       );
 
       expect(results).toHaveLength(2);

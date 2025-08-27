@@ -32,22 +32,22 @@ normalizeToken(token) {
     }
 
     const trimmedToken = token.trim();
-    
+
     // Check if token starts with "Bearer " (case-insensitive)
     if (trimmedToken.toLowerCase().startsWith('bearer ')) {
         const originalToken = trimmedToken;
         const normalizedToken = trimmedToken.substring(7); // Remove "Bearer "
-        
+
         logger.warn('Token contained "Bearer" prefix - automatically removed', {
             originalLength: originalToken.length,
             normalizedLength: normalizedToken.length,
             originalPrefix: originalToken.substring(0, 15) + '...',
             normalizedPrefix: normalizedToken.substring(0, 15) + '...'
         });
-        
+
         return normalizedToken;
     }
-    
+
     return trimmedToken;
 }
 ```
@@ -65,10 +65,10 @@ The config validator now:
 When a "Bearer " prefix is detected, users see a warning like:
 
 ```
-08:17:50 [warn]: Hardcover token contained "Bearer" prefix - automatically removed 
-service="shelfbridge" version="1.1.8" 
-originalLength=29 normalizedLength=22 
-originalPrefix="bearer hc_sk_12..." 
+08:17:50 [warn]: Hardcover token contained "Bearer" prefix - automatically removed
+service="shelfbridge" version="1.1.8"
+originalLength=29 normalizedLength=22
+originalPrefix="bearer hc_sk_12..."
 normalizedPrefix="hc_sk_123456789..."
 ```
 
@@ -90,6 +90,7 @@ normalizedPrefix="hc_sk_123456789..."
 ## Configuration Examples
 
 ### Correct Format
+
 ```yaml
 users:
   - id: alice
@@ -99,6 +100,7 @@ users:
 ```
 
 ### Will Be Automatically Fixed
+
 ```yaml
 users:
   - id: alice
@@ -136,4 +138,4 @@ The solution handles various edge cases:
 
 - [Configuration Overview](../admin/Configuration-Reference.md)
 - [Troubleshooting Guide](./Troubleshooting-Guide.md)
-- [FAQ](./FAQ.md) 
+- [FAQ](./FAQ.md)

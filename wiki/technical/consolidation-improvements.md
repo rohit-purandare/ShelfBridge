@@ -1,7 +1,9 @@
 # Consolidating to One Optimized Sync Process
 
 ## Problem
+
 Currently there are two sync paths with different performance characteristics:
+
 - Normal sync: `node src/main.js sync` (slower, fresh connections)
 - Interactive sync: `node src/main.js interactive` (faster, reused connections)
 
@@ -17,102 +19,111 @@ Keep only the normal sync command but incorporate interactive mode's performance
 **Solution**: Enable HTTP keep-alive and connection reuse
 
 #### AudiobookshelfClient (`src/audiobookshelf-client.js`)
+
 ```javascript
 import { Agent } from 'https';
 import { Agent as HttpAgent } from 'http';
 
 export class AudiobookshelfClient {
-    constructor(baseUrl, token, semaphoreConcurrency = 1, maxBooksToFetch = null, pageSize = 100, rateLimitPerMinute = 600) {
-        this.baseUrl = baseUrl.replace(/\/$/, '');
-        this.token = this.normalizeToken(token);
-        this.semaphore = new Semaphore(semaphoreConcurrency);
-        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
-        this.maxBooksToFetch = maxBooksToFetch;
-        this.pageSize = pageSize;
+  constructor(
+    baseUrl,
+    token,
+    semaphoreConcurrency = 1,
+    maxBooksToFetch = null,
+    pageSize = 100,
+    rateLimitPerMinute = 600,
+  ) {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.token = this.normalizeToken(token);
+    this.semaphore = new Semaphore(semaphoreConcurrency);
+    this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+    this.maxBooksToFetch = maxBooksToFetch;
+    this.pageSize = pageSize;
 
-        // Create HTTP agents with keep-alive
-        const isHttps = this.baseUrl.startsWith('https');
-        const agent = isHttps ? 
-            new Agent({ 
-                keepAlive: true, 
-                maxSockets: 10,
-                maxFreeSockets: 5,
-                timeout: 60000
-            }) :
-            new HttpAgent({ 
-                keepAlive: true, 
-                maxSockets: 10,
-                maxFreeSockets: 5,
-                timeout: 60000
-            });
-
-        // Create axios instance with optimized config
-        this.axios = axios.create({
-            baseURL: this.baseUrl,
-            headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 30000,
-            httpsAgent: isHttps ? agent : undefined,
-            httpAgent: !isHttps ? agent : undefined,
-            // Optimize for multiple requests
-            maxRedirects: 5,
-            validateStatus: (status) => status < 500 // Don't retry 4xx errors
+    // Create HTTP agents with keep-alive
+    const isHttps = this.baseUrl.startsWith('https');
+    const agent = isHttps
+      ? new Agent({
+          keepAlive: true,
+          maxSockets: 10,
+          maxFreeSockets: 5,
+          timeout: 60000,
+        })
+      : new HttpAgent({
+          keepAlive: true,
+          maxSockets: 10,
+          maxFreeSockets: 5,
+          timeout: 60000,
         });
-        
-        // Store agent for cleanup
-        this._httpAgent = agent;
-    }
 
-    // Add cleanup method
-    cleanup() {
-        if (this._httpAgent) {
-            this._httpAgent.destroy();
-        }
+    // Create axios instance with optimized config
+    this.axios = axios.create({
+      baseURL: this.baseUrl,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+      httpsAgent: isHttps ? agent : undefined,
+      httpAgent: !isHttps ? agent : undefined,
+      // Optimize for multiple requests
+      maxRedirects: 5,
+      validateStatus: status => status < 500, // Don't retry 4xx errors
+    });
+
+    // Store agent for cleanup
+    this._httpAgent = agent;
+  }
+
+  // Add cleanup method
+  cleanup() {
+    if (this._httpAgent) {
+      this._httpAgent.destroy();
     }
+  }
 }
 ```
 
 #### HardcoverClient (`src/hardcover-client.js`)
+
 ```javascript
 import { Agent } from 'https';
 
 export class HardcoverClient {
-    constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
-        this.token = this.normalizeToken(token);
-        this.baseUrl = 'https://api.hardcover.app/v1/graphql';
-        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
-        this.semaphore = new Semaphore(semaphoreConcurrency);
-        
-        // Create HTTPS agent with keep-alive for Hardcover
-        this._httpsAgent = new Agent({ 
-            keepAlive: true, 
-            maxSockets: 5,
-            maxFreeSockets: 2,
-            timeout: 60000
-        });
-        
-        // Create axios instance with optimized config
-        this.client = axios.create({
-            baseURL: this.baseUrl,
-            headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 30000,
-            httpsAgent: this._httpsAgent,
-            maxRedirects: 3,
-            validateStatus: (status) => status < 500
-        });
-    }
+  constructor(token, semaphoreConcurrency = 1, rateLimitPerMinute = 55) {
+    this.token = this.normalizeToken(token);
+    this.baseUrl = 'https://api.hardcover.app/v1/graphql';
+    this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+    this.semaphore = new Semaphore(semaphoreConcurrency);
 
-    // Add cleanup method
-    cleanup() {
-        if (this._httpsAgent) {
-            this._httpsAgent.destroy();
-        }
+    // Create HTTPS agent with keep-alive for Hardcover
+    this._httpsAgent = new Agent({
+      keepAlive: true,
+      maxSockets: 5,
+      maxFreeSockets: 2,
+      timeout: 60000,
+    });
+
+    // Create axios instance with optimized config
+    this.client = axios.create({
+      baseURL: this.baseUrl,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+      httpsAgent: this._httpsAgent,
+      maxRedirects: 3,
+      validateStatus: status => status < 500,
+    });
+  }
+
+  // Add cleanup method
+  cleanup() {
+    if (this._httpsAgent) {
+      this._httpsAgent.destroy();
     }
+  }
 }
 ```
 
@@ -122,33 +133,34 @@ export class HardcoverClient {
 **Solution**: Optimize BookCache initialization
 
 #### BookCache (`src/book-cache.js`)
+
 ```javascript
 export class BookCache {
-    constructor(cacheFile = 'data/.book_cache.db') {
-        this.cacheFile = cacheFile;
-        this.db = null;
-        this._isInitializing = false;
-        this._initializationPromise = null;
-        
-        // Add connection optimization
-        this._optimizationApplied = false;
+  constructor(cacheFile = 'data/.book_cache.db') {
+    this.cacheFile = cacheFile;
+    this.db = null;
+    this._isInitializing = false;
+    this._initializationPromise = null;
+
+    // Add connection optimization
+    this._optimizationApplied = false;
+  }
+
+  async _initDatabase() {
+    // ... existing code ...
+
+    // Apply performance optimizations
+    if (!this._optimizationApplied) {
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = NORMAL');
+      this.db.pragma('cache_size = 2000'); // Increased cache
+      this.db.pragma('temp_store = memory');
+      this.db.pragma('mmap_size = 268435456'); // 256MB mmap
+      this._optimizationApplied = true;
     }
 
-    async _initDatabase() {
-        // ... existing code ...
-
-        // Apply performance optimizations
-        if (!this._optimizationApplied) {
-            this.db.pragma('journal_mode = WAL');
-            this.db.pragma('synchronous = NORMAL');
-            this.db.pragma('cache_size = 2000'); // Increased cache
-            this.db.pragma('temp_store = memory');
-            this.db.pragma('mmap_size = 268435456'); // 256MB mmap
-            this._optimizationApplied = true;
-        }
-        
-        // ... rest of existing code ...
-    }
+    // ... rest of existing code ...
+  }
 }
 ```
 
@@ -158,24 +170,25 @@ export class BookCache {
 **Solution**: Proper resource management
 
 #### SyncManager (`src/sync-manager.js`)
+
 ```javascript
 export class SyncManager {
-    // ... existing constructor ...
+  // ... existing constructor ...
 
-    cleanup() {
-        // Clean up API client connections
-        if (this.audiobookshelf && this.audiobookshelf.cleanup) {
-            this.audiobookshelf.cleanup();
-        }
-        if (this.hardcover && this.hardcover.cleanup) {
-            this.hardcover.cleanup();
-        }
-        
-        // Clean up cache connection
-        if (this.cache) {
-            this.cache.close();
-        }
+  cleanup() {
+    // Clean up API client connections
+    if (this.audiobookshelf && this.audiobookshelf.cleanup) {
+      this.audiobookshelf.cleanup();
     }
+    if (this.hardcover && this.hardcover.cleanup) {
+      this.hardcover.cleanup();
+    }
+
+    // Clean up cache connection
+    if (this.cache) {
+      this.cache.close();
+    }
+  }
 }
 ```
 
@@ -184,23 +197,26 @@ export class SyncManager {
 The current configuration system in `src/config.js` already provides efficient configuration loading and validation. For even better performance in high-frequency sync scenarios, the following optimizations are already implemented:
 
 - **Connection pooling**: HTTP keep-alive agents in both API clients
-- **Rate limiting optimization**: Configurable rate limits for different server capabilities  
+- **Rate limiting optimization**: Configurable rate limits for different server capabilities
 - **Efficient caching**: SQLite-based `BookCache` with optimized pragma settings
 - **Parallel processing**: Configurable worker threads for concurrent operations
 
 ## Implementation Plan
 
 ### Phase 1: HTTP Optimization (Immediate Impact)
+
 1. Add HTTP keep-alive to both API clients
 2. Add cleanup methods to clients
 3. Update SyncManager to call cleanup
 4. Test performance improvement
 
 ### Phase 2: Database Optimization
+
 1. Optimize SQLite pragma settings
 2. Test cache performance
 
 ### Phase 3: Remove Interactive Mode (After Phase 1-2)
+
 1. Deprecate interactive mode sync functionality
 2. Keep interactive mode for configuration/testing only
 3. Update documentation
@@ -246,18 +262,21 @@ time node src/main.js sync --verbose
 I've already implemented the HTTP keep-alive optimizations:
 
 ### ✅ AudiobookshelfClient
+
 - Added HTTP/HTTPS agents with keep-alive
 - Connection pooling (max 10 sockets, 5 free)
 - 30-second connection reuse timeout
 - Proper cleanup method
 
-### ✅ HardcoverClient  
+### ✅ HardcoverClient
+
 - Added HTTPS agent with keep-alive
 - Connection pooling (max 5 sockets, 2 free)
 - 30-second connection reuse timeout
 - Proper cleanup method
 
 ### ✅ SyncManager
+
 - Updated to call cleanup on both API clients
 - Proper resource management
 
@@ -268,4 +287,4 @@ I've already implemented the HTTP keep-alive optimizations:
 3. **Deprecate interactive sync** once you confirm normal sync is fast enough
 4. **Optional**: Implement database optimizations if cache operations are still slow
 
-You should now see **significantly reduced timing differences** between normal sync and interactive mode! 
+You should now see **significantly reduced timing differences** between normal sync and interactive mode!

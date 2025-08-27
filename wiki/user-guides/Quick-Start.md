@@ -15,6 +15,7 @@ Before you start, make sure you have:
 ## 🐳 Option 1: Docker Quick Start (Recommended)
 
 ### 1. Download and Start
+
 ```bash
 # Create a directory for ShelfBridge
 mkdir shelfbridge && cd shelfbridge
@@ -27,6 +28,7 @@ docker-compose up -d
 ```
 
 ### 2. Configure Your Settings
+
 ```bash
 # Edit the configuration file
 # Edit the config/config.yaml file on your host machine using your preferred text editor (e.g., VS Code, nano, vim, Notepad).
@@ -37,6 +39,7 @@ docker-compose up -d
 ```
 
 **Replace the placeholder values with your actual tokens:**
+
 ```yaml
 global:
   min_progress_threshold: 5.0
@@ -53,6 +56,7 @@ users:
 ```
 
 ### 3. Test and Run
+
 ```bash
 # Test your configuration
 docker exec -it shelfbridge node src/main.js validate
@@ -67,6 +71,7 @@ docker-compose logs -f
 ## 📦 Option 2: Node.js Quick Start
 
 ### 1. Install and Setup
+
 ```bash
 # Clone the repository
 git clone https://github.com/rohit-purandare/ShelfBridge.git
@@ -80,12 +85,14 @@ cp config/config.yaml.example config/config.yaml
 ```
 
 ### 2. Configure Your Settings
+
 ```bash
 # Edit the configuration file
 nano config/config.yaml
 ```
 
 **Update with your actual values:**
+
 ```yaml
 global:
   min_progress_threshold: 5.0
@@ -93,12 +100,13 @@ global:
 
 users:
   - id: your_username
-    abs_url: https://your-audiobookshelf-server.com  # e.g., https://abs.mydomain.com
+    abs_url: https://your-audiobookshelf-server.com # e.g., https://abs.mydomain.com
     abs_token: your_actual_audiobookshelf_token
     hardcover_token: your_actual_hardcover_token
 ```
 
 ### 3. Test and Run
+
 ```bash
 # Test your configuration
 node src/main.js validate
@@ -128,12 +136,14 @@ If everything is working correctly, you should see output like this:
 ## 🔄 Set Up Automatic Sync (Optional)
 
 ### Docker
+
 ```bash
 # The container runs automatically with the default schedule (3 AM daily)
 # To customize the schedule, edit the sync_schedule in your config.yaml
 ```
 
 ### Node.js
+
 ```bash
 # Start the background service
 npm start
@@ -142,16 +152,19 @@ npm start
 ## 🆘 Common Issues
 
 ### "Configuration validation failed"
+
 - Check that all URLs start with `http://` or `https://`
 - Verify your API tokens are correct and not placeholder values
 - Make sure your Audiobookshelf server is accessible
 
 ### "No books found"
+
 - Ensure your Audiobookshelf user has access to libraries
 - Check that you have books with reading progress in Audiobookshelf
 - Verify your API token has the correct permissions
 
 ### "GraphQL errors"
+
 - Confirm your Hardcover API token is correct
 - Ensure API access is enabled in your Hardcover account settings
 - Check your internet connection to Hardcover
@@ -173,4 +186,4 @@ Now that you're up and running:
 
 ---
 
-**Still having issues?** Check our [FAQ](../troubleshooting/FAQ.md) or [troubleshooting guide](../troubleshooting/Troubleshooting-Guide.md). 
+**Still having issues?** Check our [FAQ](../troubleshooting/FAQ.md) or [troubleshooting guide](../troubleshooting/Troubleshooting-Guide.md).

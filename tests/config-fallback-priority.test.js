@@ -9,7 +9,7 @@ import { Config } from '../src/config.js';
  *
  * Validates that the configuration system follows the exact priority order:
  * 1. YAML configuration file (highest priority)
- * 2. Environment variables (medium priority) 
+ * 2. Environment variables (medium priority)
  * 3. Built-in defaults (lowest priority)
  */
 
@@ -20,7 +20,7 @@ describe('Configuration Fallback Priority', () => {
   beforeEach(() => {
     // Save original environment variables
     originalEnv = { ...process.env };
-    
+
     // Clear all ShelfBridge environment variables
     for (const key in process.env) {
       if (key.startsWith('SHELFBRIDGE_')) {
@@ -32,7 +32,7 @@ describe('Configuration Fallback Priority', () => {
   afterEach(() => {
     // Restore original environment variables
     process.env = originalEnv;
-    
+
     // Clean up test config file
     try {
       unlinkSync(testConfigFile);
@@ -65,7 +65,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML values should take highest priority
@@ -96,17 +96,17 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Environment variables should override defaults
-      assert.strictEqual(global.workers, 7);                    // From env (not default 3)
-      assert.strictEqual(global.min_progress_threshold, 3.5);   // From env (not default 5.0)
-      assert.strictEqual(global.parallel, false);               // From env (not default true)
-      assert.strictEqual(global.hardcover_rate_limit, 40);      // From env (not default 55)
+      assert.strictEqual(global.workers, 7); // From env (not default 3)
+      assert.strictEqual(global.min_progress_threshold, 3.5); // From env (not default 5.0)
+      assert.strictEqual(global.parallel, false); // From env (not default true)
+      assert.strictEqual(global.hardcover_rate_limit, 40); // From env (not default 55)
 
       // YAML should still take precedence over env and defaults
-      assert.strictEqual(global.timezone, 'Asia/Tokyo');        // From YAML
+      assert.strictEqual(global.timezone, 'Asia/Tokyo'); // From YAML
     });
 
     it('uses defaults when both YAML and environment variables are missing', () => {
@@ -125,20 +125,20 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Defaults should be used for unspecified values
-      assert.strictEqual(global.workers, 3);                    // Default
-      assert.strictEqual(global.min_progress_threshold, 5.0);   // Default
-      assert.strictEqual(global.parallel, true);                // Default
-      assert.strictEqual(global.dry_run, false);                // Default
-      assert.strictEqual(global.hardcover_rate_limit, 55);      // Default
+      assert.strictEqual(global.workers, 3); // Default
+      assert.strictEqual(global.min_progress_threshold, 5.0); // Default
+      assert.strictEqual(global.parallel, true); // Default
+      assert.strictEqual(global.dry_run, false); // Default
+      assert.strictEqual(global.hardcover_rate_limit, 55); // Default
       assert.strictEqual(global.audiobookshelf_rate_limit, 600); // Default
-      assert.strictEqual(global.page_size, 100);                // Default
+      assert.strictEqual(global.page_size, 100); // Default
 
       // YAML value should still be used
-      assert.strictEqual(global.timezone, 'Australia/Sydney');  // From YAML
+      assert.strictEqual(global.timezone, 'Australia/Sydney'); // From YAML
     });
   });
 
@@ -167,15 +167,15 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // YAML should override environment variables
-      assert.strictEqual(delayedUpdates.enabled, true);          // YAML override
-      assert.strictEqual(delayedUpdates.session_timeout, 3600);  // YAML override
+      assert.strictEqual(delayedUpdates.enabled, true); // YAML override
+      assert.strictEqual(delayedUpdates.session_timeout, 3600); // YAML override
 
       // Environment variables should override defaults for missing YAML values
-      assert.strictEqual(delayedUpdates.max_delay, 7200);        // From env (not default 3600)
+      assert.strictEqual(delayedUpdates.max_delay, 7200); // From env (not default 3600)
       assert.strictEqual(delayedUpdates.immediate_completion, false); // From env (not default true)
     });
 
@@ -201,18 +201,18 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // YAML values
-      assert.strictEqual(delayedUpdates.enabled, true);               // From YAML
+      assert.strictEqual(delayedUpdates.enabled, true); // From YAML
       assert.strictEqual(delayedUpdates.immediate_completion, false); // From YAML
 
       // Environment variable fallback
-      assert.strictEqual(delayedUpdates.session_timeout, 2400);       // From env
+      assert.strictEqual(delayedUpdates.session_timeout, 2400); // From env
 
       // Default fallback
-      assert.strictEqual(delayedUpdates.max_delay, 3600);             // Default
+      assert.strictEqual(delayedUpdates.max_delay, 3600); // Default
     });
   });
 
@@ -237,7 +237,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const users = config.getUsers();
 
       // YAML user should take precedence and be at index 0
@@ -268,16 +268,16 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const users = config.getUsers();
 
       // Should have both users - YAML at index 0, environment at index 1
       assert.strictEqual(users.length, 2);
-      
+
       // YAML user
       assert.strictEqual(users[0].id, 'yaml_user');
       assert.strictEqual(users[0].abs_url, 'https://yaml.example.com');
-      
+
       // Environment user
       assert.strictEqual(users[1].id, 'env_user');
       assert.strictEqual(users[1].abs_url, 'https://env.example.com');
@@ -305,19 +305,19 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Invalid YAML values should fall back to environment variables
-      // Note: Since YAML parsing treats "invalid_number" as a string, 
+      // Note: Since YAML parsing treats "invalid_number" as a string,
       // the Config class should handle type conversion appropriately
-      assert.strictEqual(global.min_progress_threshold, 4.5);  // Valid YAML value
+      assert.strictEqual(global.min_progress_threshold, 4.5); // Valid YAML value
 
       // The behavior for invalid YAML values depends on how the Config class handles them
       // These test the actual behavior rather than assumed behavior
       const workersType = typeof global.workers;
       const parallelType = typeof global.parallel;
-      
+
       // Document actual behavior - YAML strings are preserved as strings
       assert.strictEqual(global.workers, 'invalid_number');
       assert.strictEqual(global.parallel, 'invalid_boolean');
@@ -345,24 +345,24 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Valid YAML value should be used
       assert.strictEqual(global.timezone, 'America/New_York');
 
       // Invalid environment variables should fall back to defaults
-      assert.strictEqual(global.workers, 3);                    // Default
-      assert.strictEqual(global.parallel, true);                // Default
-      assert.strictEqual(global.min_progress_threshold, 5.0);   // Default
+      assert.strictEqual(global.workers, 3); // Default
+      assert.strictEqual(global.parallel, true); // Default
+      assert.strictEqual(global.min_progress_threshold, 5.0); // Default
     });
 
     it('validates complete fallback chain with mixed scenarios', () => {
       // Set mix of valid and invalid environment variables
-      process.env.SHELFBRIDGE_WORKERS = '8';                    // Valid
-      process.env.SHELFBRIDGE_PARALLEL = 'invalid_boolean';     // Invalid
-      process.env.SHELFBRIDGE_HARDCOVER_RATE_LIMIT = '45';      // Valid
-      process.env.SHELFBRIDGE_PAGE_SIZE = 'invalid_number';     // Invalid
+      process.env.SHELFBRIDGE_WORKERS = '8'; // Valid
+      process.env.SHELFBRIDGE_PARALLEL = 'invalid_boolean'; // Invalid
+      process.env.SHELFBRIDGE_HARDCOVER_RATE_LIMIT = '45'; // Valid
+      process.env.SHELFBRIDGE_PAGE_SIZE = 'invalid_number'; // Invalid
 
       const yamlContent = `
 global:
@@ -382,16 +382,16 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Test complete fallback chain
-      assert.strictEqual(global.min_progress_threshold, 3.0);   // YAML (highest priority)
-      assert.strictEqual(global.workers, 8);                   // Valid env var
-      assert.strictEqual(global.parallel, true);               // Default (invalid env var)
-      assert.strictEqual(global.hardcover_rate_limit, 45);     // Valid env var
-      assert.strictEqual(global.page_size, 100);               // Default (invalid env var)
-      assert.strictEqual(global.timezone, 'UTC');              // Default (not specified)
+      assert.strictEqual(global.min_progress_threshold, 3.0); // YAML (highest priority)
+      assert.strictEqual(global.workers, 8); // Valid env var
+      assert.strictEqual(global.parallel, true); // Default (invalid env var)
+      assert.strictEqual(global.hardcover_rate_limit, 45); // Valid env var
+      assert.strictEqual(global.page_size, 100); // Default (invalid env var)
+      assert.strictEqual(global.timezone, 'UTC'); // Default (not specified)
     });
   });
 
@@ -399,7 +399,7 @@ users:
     it('uses all defaults when no YAML file and no environment variables', () => {
       // Don't create YAML file, don't set environment variables
       const config = new Config('non-existent-file.yaml');
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
@@ -435,7 +435,7 @@ users:
       process.env.SHELFBRIDGE_USER_0_HARDCOVER_TOKEN = 'envonly_hc';
 
       const config = new Config('non-existent-file.yaml');
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 

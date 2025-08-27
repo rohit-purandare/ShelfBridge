@@ -28,9 +28,7 @@ export class SchemaCommand extends BaseCommand {
       schema.__schema.mutationType.fields.forEach(field => {
         console.log(`- ${field.name}`);
         if (field.args && field.args.length > 0) {
-          console.log(
-            `  Args: ${field.args.map(arg => arg.name).join(', ')}`
-          );
+          console.log(`  Args: ${field.args.map(arg => arg.name).join(', ')}`);
         }
       });
     } else {
@@ -44,7 +42,10 @@ export class SchemaCommand extends BaseCommand {
  */
 export class SchemaDetailCommand extends BaseCommand {
   constructor() {
-    super('schema-detail', 'Get detailed schema information for update_user_book_read');
+    super(
+      'schema-detail',
+      'Get detailed schema information for update_user_book_read',
+    );
   }
 
   async execute(_options) {
@@ -64,23 +65,23 @@ export class SchemaDetailCommand extends BaseCommand {
     if (schema && schema.__schema && schema.__schema.types) {
       // Find the update_user_book_read mutation
       const mutationType = schema.__schema.types.find(
-        type => type.name === 'mutation_root'
+        type => type.name === 'mutation_root',
       );
       if (mutationType && mutationType.fields) {
         const updateMutation = mutationType.fields.find(
-          field => field.name === 'update_user_book_read'
+          field => field.name === 'update_user_book_read',
         );
         if (updateMutation) {
           console.log('update_user_book_read mutation found:');
           if (updateMutation.args && updateMutation.args.length > 0) {
             console.log(
               'Arguments:',
-              updateMutation.args.map(arg => arg.name).join(', ')
+              updateMutation.args.map(arg => arg.name).join(', '),
             );
 
             // Find the input type for the object argument
             const objectArg = updateMutation.args.find(
-              arg => arg.name === 'object'
+              arg => arg.name === 'object',
             );
             if (objectArg && objectArg.type && objectArg.type.ofType) {
               const inputTypeName = objectArg.type.ofType.name;
@@ -88,7 +89,7 @@ export class SchemaDetailCommand extends BaseCommand {
 
               // Find the input type definition
               const inputType = schema.__schema.types.find(
-                type => type.name === inputTypeName
+                type => type.name === inputTypeName,
               );
               if (
                 inputType &&
@@ -128,7 +129,10 @@ export class SchemaDetailCommand extends BaseCommand {
  */
 export class SchemaInputsCommand extends BaseCommand {
   constructor() {
-    super('schema-inputs', 'Print all input types and their fields from the schema');
+    super(
+      'schema-inputs',
+      'Print all input types and their fields from the schema',
+    );
   }
 
   async execute(_options) {
@@ -147,7 +151,7 @@ export class SchemaInputsCommand extends BaseCommand {
 
     if (schema && schema.__schema && schema.__schema.types) {
       const inputTypes = schema.__schema.types.filter(
-        type => type.kind === 'INPUT_OBJECT'
+        type => type.kind === 'INPUT_OBJECT',
       );
       inputTypes.forEach(type => {
         console.log(`\nInput type: ${type.name}`);

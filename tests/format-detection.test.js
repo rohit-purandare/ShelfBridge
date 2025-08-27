@@ -1,6 +1,6 @@
 /**
  * Format Detection Tests
- * 
+ *
  * Tests for the simplified detectUserBookFormat function that trusts
  * what Audiobookshelf tells us directly about media types.
  */
@@ -59,11 +59,8 @@ describe('Format Detection', () => {
       it('should detect audiobook from audio files', () => {
         const metadata = {
           media: {
-            audioFiles: [
-              { path: 'chapter1.mp3' },
-              { path: 'chapter2.m4a' }
-            ]
-          }
+            audioFiles: [{ path: 'chapter1.mp3' }, { path: 'chapter2.m4a' }],
+          },
         };
         expect(detectUserBookFormat(metadata)).toBe('audiobook');
       });
@@ -99,7 +96,7 @@ describe('Format Detection', () => {
         // Duration should override format hints
         const metadata = {
           duration: 43200,
-          format: 'epub'
+          format: 'epub',
         };
         expect(detectUserBookFormat(metadata)).toBe('audiobook');
       });
@@ -140,8 +137,8 @@ describe('Format Detection', () => {
       it('should prioritize explicit mediaType over other indicators', () => {
         const metadata = {
           mediaType: 'ebook',
-          duration: 43200,    // Would normally indicate audiobook
-          narrator: 'Test'    // Would normally indicate audiobook
+          duration: 43200, // Would normally indicate audiobook
+          narrator: 'Test', // Would normally indicate audiobook
         };
         expect(detectUserBookFormat(metadata)).toBe('ebook'); // Should trust mediaType
       });
@@ -149,11 +146,8 @@ describe('Format Detection', () => {
       it('should detect ebook from ebook files', () => {
         const metadata = {
           media: {
-            ebookFiles: [
-              { path: 'book.epub' },
-              { path: 'book.pdf' }
-            ]
-          }
+            ebookFiles: [{ path: 'book.epub' }, { path: 'book.pdf' }],
+          },
         };
         expect(detectUserBookFormat(metadata)).toBe('ebook');
       });
@@ -184,10 +178,10 @@ describe('Format Detection', () => {
     describe('Complex Scenarios', () => {
       it('should handle mixed indicators correctly (audiobook priority)', () => {
         const metadata = {
-          duration: 43200,        // Primary audiobook indicator
-          format: 'epub',         // Ebook indicator
-          narrator: 'John Doe',   // Primary audiobook indicator
-          pages: 300              // Ebook indicator
+          duration: 43200, // Primary audiobook indicator
+          format: 'epub', // Ebook indicator
+          narrator: 'John Doe', // Primary audiobook indicator
+          pages: 300, // Ebook indicator
         };
         expect(detectUserBookFormat(metadata)).toBe('audiobook');
       });
@@ -201,7 +195,7 @@ describe('Format Detection', () => {
         const metadata = {
           title: 'Some Book',
           author: 'Some Author',
-          isbn: '1234567890'
+          isbn: '1234567890',
         };
         expect(detectUserBookFormat(metadata)).toBe('ebook');
       });
@@ -212,11 +206,11 @@ describe('Format Detection', () => {
             metadata: {
               title: 'Test Book',
               author: 'Test Author',
-              narrator: 'Test Narrator'
+              narrator: 'Test Narrator',
             },
             duration: 43200,
-            audioFiles: [{ path: 'audio.mp3' }]
-          }
+            audioFiles: [{ path: 'audio.mp3' }],
+          },
         };
         expect(detectUserBookFormat(metadata)).toBe('audiobook');
       });
@@ -236,8 +230,8 @@ describe('Format Detection', () => {
         const metadata = {
           media: {
             audioFiles: [],
-            ebookFiles: []
-          }
+            ebookFiles: [],
+          },
         };
         expect(detectUserBookFormat(metadata)).toBe('ebook');
       });
@@ -246,8 +240,8 @@ describe('Format Detection', () => {
         const metadata = {
           media: {
             audioFiles: [{ path: 'audio.mp3' }],
-            ebookFiles: [{ path: 'book.epub' }]
-          }
+            ebookFiles: [{ path: 'book.epub' }],
+          },
         };
         expect(detectUserBookFormat(metadata)).toBe('audiobook');
       });
@@ -278,15 +272,15 @@ describe('Format Detection', () => {
             duration: 32400,
             audioFiles: [
               { index: 1, path: '/audiobooks/great_book/01.mp3' },
-              { index: 2, path: '/audiobooks/great_book/02.mp3' }
+              { index: 2, path: '/audiobooks/great_book/02.mp3' },
             ],
             metadata: {
               title: 'The Great Audiobook',
               author: 'Famous Author',
-              narrator: 'Great Narrator'
-            }
+              narrator: 'Great Narrator',
+            },
           },
-          libraryType: 'audiobooks'
+          libraryType: 'audiobooks',
         };
         expect(detectUserBookFormat(audiobookMetadata)).toBe('audiobook');
       });
@@ -299,16 +293,14 @@ describe('Format Detection', () => {
           format: 'epub',
           pages: 350,
           media: {
-            ebookFiles: [
-              { path: '/ebooks/great_book/book.epub' }
-            ],
+            ebookFiles: [{ path: '/ebooks/great_book/book.epub' }],
             metadata: {
               title: 'The Great Ebook',
               author: 'Famous Author',
-              pages: 350
-            }
+              pages: 350,
+            },
           },
-          libraryType: 'books'
+          libraryType: 'books',
         };
         expect(detectUserBookFormat(ebookMetadata)).toBe('ebook');
       });
@@ -318,8 +310,8 @@ describe('Format Detection', () => {
           title: 'Audio Progress Test',
           progress: {
             timeListened: 7200,
-            isFinished: false
-          }
+            isFinished: false,
+          },
         };
         expect(detectUserBookFormat(audiobookProgress)).toBe('audiobook');
 
@@ -327,8 +319,8 @@ describe('Format Detection', () => {
           title: 'Ebook Progress Test',
           progress: {
             pagesRead: 150,
-            isFinished: false
-          }
+            isFinished: false,
+          },
         };
         expect(detectUserBookFormat(ebookProgress)).toBe('ebook');
       });

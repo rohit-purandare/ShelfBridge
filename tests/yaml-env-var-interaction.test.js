@@ -18,7 +18,7 @@ describe('YAML and Environment Variable Interaction', () => {
   beforeEach(() => {
     // Save original environment variables
     originalEnv = { ...process.env };
-    
+
     // Clear all ShelfBridge environment variables
     for (const key in process.env) {
       if (key.startsWith('SHELFBRIDGE_')) {
@@ -30,7 +30,7 @@ describe('YAML and Environment Variable Interaction', () => {
   afterEach(() => {
     // Restore original environment variables
     process.env = originalEnv;
-    
+
     // Clean up test config file
     try {
       unlinkSync(testConfigFile);
@@ -64,7 +64,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML values should take precedence
@@ -102,7 +102,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML values should be used
@@ -136,7 +136,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // Specified YAML value
@@ -175,7 +175,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // String booleans should be parsed correctly (they remain as strings from YAML)
@@ -184,7 +184,7 @@ users:
       assert.strictEqual(global.dry_run, 'false');
       assert.strictEqual(global.force_sync, '1');
       assert.strictEqual(global.auto_add_books, '0');
-      
+
       // Types should be strings (as YAML parsed them)
       assert.strictEqual(typeof global.parallel, 'string');
       assert.strictEqual(typeof global.dry_run, 'string');
@@ -209,7 +209,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // js-yaml doesn't auto-convert yes/no/on/off to booleans
@@ -218,7 +218,7 @@ users:
       assert.strictEqual(global.dry_run, 'no');
       assert.strictEqual(global.force_sync, 'on');
       assert.strictEqual(global.auto_add_books, 'off');
-      
+
       // All should be strings
       assert.strictEqual(typeof global.parallel, 'string');
       assert.strictEqual(typeof global.dry_run, 'string');
@@ -248,7 +248,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const users = config.getUsers();
 
       // YAML user should take precedence over env vars
@@ -279,16 +279,16 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const users = config.getUsers();
 
       // Should have both YAML and environment users
       assert.strictEqual(users.length, 2);
-      
+
       // YAML user (index 0)
       assert.strictEqual(users[0].id, 'yaml_user');
       assert.strictEqual(users[0].abs_url, 'https://yaml.example.com');
-      
+
       // Environment user (index 1)
       assert.strictEqual(users[1].id, 'env_user');
       assert.strictEqual(users[1].abs_url, 'https://env.example.com');
@@ -317,7 +317,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // YAML values should be used
@@ -353,7 +353,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const delayedUpdates = config.getGlobal().delayed_updates;
 
       // All YAML values should override environment variables
@@ -386,7 +386,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
 
       // YAML value should be used
@@ -415,7 +415,7 @@ users:
 
       writeFileSync(testConfigFile, yamlContent);
       const config = new Config(testConfigFile);
-      
+
       const global = config.getGlobal();
       const users = config.getUsers();
 
