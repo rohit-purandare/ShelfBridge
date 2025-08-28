@@ -5,6 +5,12 @@ name: Code Quality
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual trigger'
+        required: false
+        default: 'Manual workflow trigger'
 
 concurrency:
   group: code-quality-${{ github.ref }}

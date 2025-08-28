@@ -28,6 +28,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 ### Triggers
 
 - Pull requests to `main` (primary validation)
+- Manual dispatch via GitHub Actions UI or CLI
 
 ### Jobs
 
@@ -137,6 +138,7 @@ ghcr.io/rohit-purandare/shelfbridge:1
 ### Triggers
 
 - Pull requests to `main` (primary validation)
+- Manual dispatch via GitHub Actions UI or CLI
 
 ### Checks Performed
 
@@ -273,3 +275,47 @@ git checkout main && git pull
 - **Consistent behavior:** Standardized across all workflows
 
 This architecture provides reliable, fast, and secure automation for the ShelfBridge project while following industry best practices.
+
+---
+
+## 🛠️ Troubleshooting & Recovery
+
+### Stuck Status Checks
+
+If PR status checks show "Waiting for status to be reported":
+
+#### Quick Recovery Script
+
+```bash
+# Use the automated recovery tool
+./.github/scripts/refresh-status-checks.sh
+```
+
+#### Manual Solutions
+
+```bash
+# Method 1: Manual workflow dispatch
+gh workflow run "CI" --ref your-branch-name
+gh workflow run "Code Quality" --ref your-branch-name
+
+# Method 2: Empty commit trigger
+git commit --allow-empty -m "chore: trigger status checks refresh"
+git push
+```
+
+#### GitHub UI Method
+
+1. Go to repository Actions tab
+2. Select stuck workflow
+3. Click "Re-run jobs" if available
+4. Or close/reopen the PR
+
+### Comprehensive Troubleshooting
+
+See detailed troubleshooting guide: [`.github/TROUBLESHOOTING_WORKFLOWS.md`](/.github/TROUBLESHOOTING_WORKFLOWS.md)
+
+### Prevention Features
+
+- **Manual dispatch triggers** available on all workflows
+- **Automated recovery script** for quick fixes
+- **Comprehensive documentation** with step-by-step solutions
