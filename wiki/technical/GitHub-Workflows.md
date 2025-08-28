@@ -98,15 +98,19 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 #### 3. **Docker Tags Created**
 
+The Docker metadata action automatically generates semantic version tags using industry standard patterns:
+
 ```
 ghcr.io/rohit-purandare/shelfbridge:latest
-ghcr.io/rohit-purandare/shelfbridge:v1.21.0
-ghcr.io/rohit-purandare/shelfbridge:1.21.0
-ghcr.io/rohit-purandare/shelfbridge:v1.21
-ghcr.io/rohit-purandare/shelfbridge:1.21
+ghcr.io/rohit-purandare/shelfbridge:v1.22.0
+ghcr.io/rohit-purandare/shelfbridge:1.22.0
+ghcr.io/rohit-purandare/shelfbridge:v1.22
+ghcr.io/rohit-purandare/shelfbridge:1.22
 ghcr.io/rohit-purandare/shelfbridge:v1
 ghcr.io/rohit-purandare/shelfbridge:1
 ```
+
+**Technical Implementation:** Due to GitHub's security limitation preventing GITHUB_TOKEN from triggering workflows on tags it creates, the workflow uses the `value` parameter in semver tag patterns to explicitly provide the version from release-please outputs (`needs.release-please.outputs.tag_name`). This ensures proper semver tags are generated when release-please creates releases, even though the git tag doesn't exist in the workflow's git context.
 
 #### 4. **Image Verification**
 
