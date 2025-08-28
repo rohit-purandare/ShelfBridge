@@ -71,6 +71,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           # Fetch tags for semver extraction when building releases
           fetch-depth: ${{ inputs.is_release && '0' || '1' }}
+          fetch-tags: ${{ inputs.is_release }}
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -85,6 +86,16 @@ jobs:
         run: |
           echo "lowercase=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Debug git context (for releases only)
+        if: inputs.is_release
+        run: |
+          echo "🔍 Debug git context for release tagging:"
+          echo "Current ref: ${{ inputs.ref || github.ref }}"
+          echo "Git HEAD: $(git rev-parse HEAD)"
+          echo "Git tags at HEAD: $(git tag --points-at HEAD || echo 'none')"
+          echo "All recent tags: $(git tag -l --sort=-version:refname | head -5 || echo 'none')"
+          echo "Git describe: $(git describe --tags --exact-match HEAD 2>/dev/null || echo 'not a tagged commit')"
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -97,7 +108,8 @@ jobs:
             type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
             type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
-            type=raw,value=latest,enable=${{ (inputs.is_release || github.ref_name == 'main') && github.event_name != 'pull_request' }}
+          flavor: |
+            latest=false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -171,6 +183,12 @@ jobs:
           fi
 
           echo "✅ Basic image validation passed"
+
+      - name: Debug Docker tags (for releases only)
+        if: inputs.is_release
+        run: |
+          echo "🏷️  Generated Docker tags for release:"
+          echo "${{ steps.meta.outputs.tags }}"
 
       - name: Verify published images (non-PR)
         if: github.event_name != 'pull_request'

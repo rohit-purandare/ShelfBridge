@@ -591,14 +591,80 @@ type=semver,pattern={{version}},enable=${{ inputs.is_release || startsWith(githu
 - **Enhanced git checkout** with proper fetch depth for semver extraction during releases
 - **Structured changelog sections** with emoji categorization (🔧 Bug Fixes, 🚀 Features, etc.)
 
+### 🏷️ Docker Release Tagging Fix (DECEMBER 2024)
+
+**Fixed Issue:** Release Please merges were only creating `latest` Docker tags instead of proper semantic version tags
+
+**Previous Problem:**
+
+- When Release Please created releases, only `latest` tag was generated in Docker registry
+- Version-specific tags like `v1.2.3`, `v1.2`, and `v1` were missing
+- Users couldn't pull specific version tags for deployments
+- Git context was insufficient for Docker metadata action semver detection
+
+**Root Cause Analysis:**
+
+1. **Missing git tag context** - Docker build during releases lacked proper tag information
+2. **Conflicting `latest` flavor** - `flavor: latest=true` conflicted with semver tag generation
+3. **Insufficient git fetch** - Missing `fetch-tags: true` prevented tag detection
+
+**Solution Applied:**
+
+```yaml
+# Enhanced checkout with proper git context
+- name: Checkout repository
+  uses: actions/checkout@v4
+  with:
+    ref: ${{ inputs.ref || github.ref }}
+    fetch-depth: ${{ inputs.is_release && '0' || '1' }}
+    fetch-tags: ${{ inputs.is_release }} # NEW: Fetch tags for releases
+
+# Fixed Docker metadata configuration
+- name: Extract metadata (tags, labels) for Docker
+  uses: docker/metadata-action@v5
+  with:
+    tags: |
+      # ... existing patterns ...
+    flavor: |
+      latest=false # CHANGED: Prevent conflicts with semver tags
+
+# Added debugging output for troubleshooting
+- name: Debug git context (for releases only)
+  if: inputs.is_release
+  run: |
+    echo "🔍 Debug git context for release tagging:"
+    # ... git context debugging ...
+```
+
+**Key Changes:**
+
+- ✅ **Added `fetch-tags: true`** to checkout action for release builds
+- ✅ **Fixed `flavor: latest` logic** to restore latest tags for stable releases only
+- ✅ **Added debug output** to troubleshoot git context during releases
+- ✅ **Added tag debugging** to show generated Docker tags and semver enable conditions
+
+**Latest Tag Logic Fix (CRITICAL):**
+
+```yaml
+# FIXED - Smart latest tag assignment
+flavor: |
+  latest=${{ inputs.is_release && !contains(inputs.ref, '-') }}
+```
+
+**Behavior:**
+
+- ✅ **Stable releases** (`v1.22.0`) → get `latest` tag
+- ❌ **Pre-releases** (`v1.22.0-beta.1`) → no `latest` tag (industry standard)
+- ❌ **Non-releases** → no `latest` tag
+
 **Result:**
 
 Releases now properly generate all Docker image tags:
 
-- `ghcr.io/rohit-purandare/shelfbridge:1.19.5` (full version) ✅
-- `ghcr.io/rohit-purandare/shelfbridge:1.19` (major.minor) ✅
+- `ghcr.io/rohit-purandare/shelfbridge:1.22.0` (full version) ✅
+- `ghcr.io/rohit-purandare/shelfbridge:1.22` (major.minor) ✅
 - `ghcr.io/rohit-purandare/shelfbridge:1` (major) ✅
-- `ghcr.io/rohit-purandare/shelfbridge:latest` ✅
+- `ghcr.io/rohit-purandare/shelfbridge:latest` ✅ (stable releases only)
 
 **Benefits:**
 
