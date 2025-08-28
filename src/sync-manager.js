@@ -2034,8 +2034,36 @@ export class SyncManager {
 
         // Store completion data in transaction
         const identifier = extractBookIdentifiers(absBook);
-        const identifierType = identifier.asin ? 'asin' : 'isbn';
-        const identifierValue = identifier.asin || identifier.isbn;
+        let identifierType = identifier.asin ? 'asin' : 'isbn';
+        let identifierValue = identifier.asin || identifier.isbn;
+
+        // If no ISBN/ASIN available, create a fallback identifier using title + author
+        if (
+          !identifierValue ||
+          typeof identifierValue !== 'string' ||
+          identifierValue.trim() === ''
+        ) {
+          const author =
+            absBook.media?.metadata?.authors?.[0]?.name || 'Unknown Author';
+          const fallbackIdentifier = `${title}:${author}`
+            .toLowerCase()
+            .replace(/[^a-z0-9:]/g, '');
+
+          logger.warn(
+            `No ISBN/ASIN found for "${title}" - using fallback identifier`,
+            {
+              userId: this.userId,
+              userBookId,
+              extractedIdentifiers: identifier,
+              title,
+              author,
+              fallbackIdentifier,
+            },
+          );
+
+          identifierValue = fallbackIdentifier;
+          identifierType = 'title_author';
+        }
 
         try {
           logger.debug(`Caching completion data for ${title}`, {

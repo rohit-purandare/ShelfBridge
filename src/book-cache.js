@@ -579,9 +579,11 @@ export class BookCache {
     // Validate identifier type
     if (
       identifierType &&
-      !['isbn', 'asin'].includes(identifierType.toLowerCase())
+      !['isbn', 'asin', 'title_author'].includes(identifierType.toLowerCase())
     ) {
-      errors.push('identifierType must be either "isbn" or "asin"');
+      errors.push(
+        'identifierType must be either "isbn", "asin", or "title_author"',
+      );
     }
 
     // Validate progress if provided using ProgressManager
