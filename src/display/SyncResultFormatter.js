@@ -1,4 +1,5 @@
 import logger from '../logger.js';
+import displayLogger from '../utils/display-logger.js';
 import { dumpFailedSyncBooks } from '../utils/debug.js';
 
 /**
@@ -65,17 +66,14 @@ export class SyncResultFormatter {
    * Display the sync completion header
    */
   _displaySyncHeader(duration) {
-    console.log('═'.repeat(50));
-    console.log('📚 SYNC COMPLETE', `(${duration.toFixed(1)}s)`);
-    console.log('═'.repeat(50));
+    displayLogger.header('📚 SYNC COMPLETE', `${duration.toFixed(1)}s`);
   }
 
   /**
    * Display the sync footer
    */
   _displaySyncFooter() {
-    console.log('═'.repeat(50));
-    console.log();
+    displayLogger.footer();
   }
 
   /**
@@ -302,7 +300,7 @@ export class SyncResultFormatter {
     for (let i = 0; i < Math.max(leftColumn.length, rightColumn.length); i++) {
       const left = (leftColumn[i] || '').padEnd(maxLeftWidth + padding);
       const right = rightColumn[i] || '';
-      console.log(left + right);
+      displayLogger.info(left + right);
     }
   }
 
@@ -310,16 +308,15 @@ export class SyncResultFormatter {
    * Display detailed book results
    */
   _displayDetailedBookResults(bookDetails) {
-    console.log('📖 DETAILED BOOK RESULTS');
-    console.log('═'.repeat(50));
-    console.log();
+    displayLogger.header('📖 DETAILED BOOK RESULTS');
+    displayLogger.blank();
 
     bookDetails.forEach((book, index) => {
       this._displayBookDetails(book);
 
       // Add spacing between books
       if (index < bookDetails.length - 1) {
-        console.log();
+        displayLogger.blank();
       }
     });
   }
@@ -332,7 +329,7 @@ export class SyncResultFormatter {
       this.statusIcons[book.status] || this.statusIcons.default;
 
     // Book header with title and author
-    console.log(
+    displayLogger.info(
       `${statusIcon} ${book.title}${book.author ? ` by ${book.author}` : ''}`,
     );
 
@@ -365,7 +362,7 @@ export class SyncResultFormatter {
 
     // Processing time for debugging
     if (book.timing) {
-      console.log(`   Processing time: ${book.timing}ms`);
+      displayLogger.info(`   Processing time: ${book.timing}ms`);
     }
   }
 
@@ -380,7 +377,7 @@ export class SyncResultFormatter {
           progressChange > 0
             ? `(+${progressChange.toFixed(1)}%)`
             : `(${progressChange.toFixed(1)}%)`;
-        console.log(
+        displayLogger.info(
           `   Progress: ${book.progress.before.toFixed(1)}% → ${book.progress.after.toFixed(1)}% ${changeStr}`,
         );
       } else {
@@ -390,10 +387,10 @@ export class SyncResultFormatter {
         const message = wasSkipped
           ? `   Progress: ${book.progress.before.toFixed(1)}%`
           : `   Progress: ${book.progress.before.toFixed(1)}% (unchanged since last sync)`;
-        console.log(message);
+        displayLogger.info(message);
       }
     } else if (book.progress.before !== null) {
-      console.log(`   Progress: ${book.progress.before.toFixed(1)}%`);
+      displayLogger.info(`   Progress: ${book.progress.before.toFixed(1)}%`);
     }
   }
 
@@ -426,7 +423,7 @@ export class SyncResultFormatter {
       } else {
         cacheInfo += ` Not found (new book)`;
       }
-      console.log(`   ${cacheInfo}`);
+      displayLogger.info(`   ${cacheInfo}`);
     }
   }
 
@@ -440,7 +437,7 @@ export class SyncResultFormatter {
         .map(([k, v]) => `${k.toUpperCase()}=${v}`)
         .join(', ');
       if (identifierStr) {
-        console.log(`   Identifiers: ${identifierStr}`);
+        displayLogger.info(`   Identifiers: ${identifierStr}`);
       }
     }
   }
@@ -461,7 +458,7 @@ export class SyncResultFormatter {
         }
         editionStr += `)`;
       }
-      console.log(`   ${editionStr}`);
+      displayLogger.info(`   ${editionStr}`);
     }
   }
 
@@ -474,7 +471,7 @@ export class SyncResultFormatter {
     const actionText =
       this.actionTexts[book.status] || this.actionTexts.default;
 
-    console.log(`   Action: ${actionIcon} ${actionText}`);
+    displayLogger.info(`   Action: ${actionIcon} ${actionText}`);
   }
 
   /**
@@ -484,11 +481,11 @@ export class SyncResultFormatter {
     if (book.api_response) {
       const response = book.api_response;
       if (response.success) {
-        console.log(
+        displayLogger.info(
           `   API Response: ${response.status_code} OK (${response.duration}s)`,
         );
       } else {
-        console.log(
+        displayLogger.info(
           `   API Response: ${response.status_code} Error (${response.duration}s)`,
         );
       }
@@ -500,7 +497,7 @@ export class SyncResultFormatter {
    */
   _displayReasons(book) {
     if (book.status === 'skipped' && book.reason) {
-      console.log(`   Reason: ${book.reason}`);
+      displayLogger.info(`   Reason: ${book.reason}`);
     }
   }
 
@@ -510,12 +507,12 @@ export class SyncResultFormatter {
   _displayTimingInfo(book) {
     if (book.timestamps) {
       if (book.timestamps.last_listened_at) {
-        console.log(
+        displayLogger.info(
           `   Last Listened: ${new Date(book.timestamps.last_listened_at).toLocaleString()}`,
         );
       }
       if (book.timestamps.completed_at) {
-        console.log(
+        displayLogger.info(
           `   Completion Date: ${new Date(book.timestamps.completed_at).toLocaleString()}`,
         );
       }
@@ -527,9 +524,9 @@ export class SyncResultFormatter {
    */
   _displayErrorDetails(book) {
     if (book.errors && book.errors.length > 0) {
-      console.log(`   Errors:`);
+      displayLogger.info(`   Errors:`);
       book.errors.forEach(error => {
-        console.log(`     ❌ ${error}`);
+        displayLogger.info(`     ❌ ${error}`);
       });
     }
   }
@@ -538,43 +535,42 @@ export class SyncResultFormatter {
    * Display performance metrics
    */
   _displayPerformanceMetrics(result) {
-    console.log();
-    console.log('📊 PERFORMANCE METRICS');
-    console.log('-'.repeat(25));
+    displayLogger.blank();
+    displayLogger.section('📊 PERFORMANCE METRICS');
 
     if (result.memory_usage) {
-      console.log(
+      displayLogger.info(
         `🔄 Memory Usage: ${result.memory_usage.current} (${result.memory_usage.delta} during sync)`,
       );
     }
 
     if (result.cache_stats) {
-      console.log(
+      displayLogger.info(
         `📊 Cache Performance: ${result.cache_stats.hits} hits, ${result.cache_stats.misses} misses`,
       );
     }
 
     if (result.network_stats) {
-      console.log(
+      displayLogger.info(
         `🌐 Network: ${result.network_stats.requests} requests, avg ${result.network_stats.avg_response_time}s response time`,
       );
     }
 
-    console.log('═'.repeat(50));
+    displayLogger.info('═'.repeat(50));
   }
 
   /**
    * Display error summary
    */
   async _displayErrorSummary(result, user, globalConfig) {
-    console.log('\n❌ ERROR SUMMARY');
-    console.log('='.repeat(30));
+    displayLogger.blank();
+    displayLogger.section('❌ ERROR SUMMARY');
 
     result.errors.forEach((error, index) => {
-      console.log(`${index + 1}. ${error}`);
+      displayLogger.info(`${index + 1}. ${error}`);
     });
 
-    console.log('='.repeat(30));
+    displayLogger.info('='.repeat(30));
 
     // Dump failed sync books to file if enabled
     if (globalConfig.dump_failed_books !== false) {
@@ -584,10 +580,12 @@ export class SyncResultFormatter {
           result.book_details?.filter(book => book.status === 'error') || [];
         const dumpFilePath = await dumpFailedSyncBooks(user.id, failedBooks);
         if (dumpFilePath) {
-          console.log(`\n📄 Error details saved to: ${dumpFilePath}`);
+          displayLogger.info(`\n📄 Error details saved to: ${dumpFilePath}`);
         }
       } catch (dumpError) {
-        console.log(`\n⚠️  Failed to save error details: ${dumpError.message}`);
+        displayLogger.warn(
+          `\n⚠️  Failed to save error details: ${dumpError.message}`,
+        );
         logger.error('Failed to dump error details', {
           error: dumpError.message,
           user_id: user.id,

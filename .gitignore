@@ -51,6 +51,9 @@ temp/
 *.swo
 *~
 
+# Claude Code
+.claude/
+
 # OS files
 .DS_Store
 .DS_Store?
