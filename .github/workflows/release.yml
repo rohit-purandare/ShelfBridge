@@ -71,13 +71,13 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/shelfbridge
           tags: |
-            # Version tags
-            type=semver,pattern=v{{version}}
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
-            type=semver,pattern={{major}}
+            # Version tags using release-please outputs
+            type=semver,pattern=v{{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern=v{{major}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
             # Latest tag
             type=raw,value=latest
           flavor: |
