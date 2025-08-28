@@ -5,6 +5,15 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.0...v1.22.1) (2025-08-28)
+
+
+### ## 🔧 Bug Fixes
+
+* correct Docker semver tagging with release-please integration ([38c1b9b](https://github.com/rohit-purandare/ShelfBridge/commit/38c1b9b63bf143e4a11bd4c073a43d2ceac7a3bf))
+* use correct semver tag configuration with value parameter ([dbd4140](https://github.com/rohit-purandare/ShelfBridge/commit/dbd4140f72968617d140c601903b0c3cba88a50a))
+* use correct semver tag configuration with value parameter ([d8b2dd9](https://github.com/rohit-purandare/ShelfBridge/commit/d8b2dd94674628c0b142c9ea8bd4964d7f66bfea))
+
 ## [1.22.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.21.0...v1.22.0) (2025-08-28)
 
 
