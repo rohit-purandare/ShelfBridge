@@ -91,10 +91,12 @@ jobs:
         run: |
           echo "🔍 Debug git context for release tagging:"
           echo "Current ref: ${{ inputs.ref || github.ref }}"
+          echo "Is release build: ${{ inputs.is_release }}"
           echo "Git HEAD: $(git rev-parse HEAD)"
           echo "Git tags at HEAD: $(git tag --points-at HEAD || echo 'none')"
           echo "All recent tags: $(git tag -l --sort=-version:refname | head -5 || echo 'none')"
           echo "Git describe: $(git describe --tags --exact-match HEAD 2>/dev/null || echo 'not a tagged commit')"
+          echo "Expected semver enable: ${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}"
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -109,7 +111,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
             type=semver,pattern={{major}},enable=${{ inputs.is_release || startsWith(github.ref, 'refs/tags/') || startsWith(inputs.ref, 'v') }}
           flavor: |
-            latest=false
+            latest=${{ inputs.is_release && !contains(inputs.ref, '-') }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
