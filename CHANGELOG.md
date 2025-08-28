@@ -5,6 +5,27 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.21.0...v1.22.0) (2025-08-28)
+
+
+### ## 🚀 Features
+
+* add DisplayLogger utility for centralized console output ([84b9324](https://github.com/rohit-purandare/ShelfBridge/commit/84b9324c67983ca8eea3bc45e92cc2a8f0bea101))
+
+
+### ## 🔧 Bug Fixes
+
+* handle books with missing ISBN/ASIN identifiers during completion ([c18c516](https://github.com/rohit-purandare/ShelfBridge/commit/c18c5166ce19e0b50c0fd8bf6e8718b53dd1712d))
+* resolve Docker Hub authentication error in CI workflow ([289cc26](https://github.com/rohit-purandare/ShelfBridge/commit/289cc2600c0c5975a024962896763575ca482427))
+* resolve Git exit code 128 error by removing orphaned submodule directory ([7c57844](https://github.com/rohit-purandare/ShelfBridge/commit/7c578440eff906db69e9d48950391be147961c56))
+* resolve workflow failures and formatting issues ([6c09c56](https://github.com/rohit-purandare/ShelfBridge/commit/6c09c565bd5336e964dbd9f8ee71058ea4366082))
+
+
+### ## ♻️ Code Refactoring
+
+* optimize workflow triggers for efficiency ([a34ec23](https://github.com/rohit-purandare/ShelfBridge/commit/a34ec23363d66b08654c705c732f709f9b25cc70))
+* replace console.log with DisplayLogger in SyncResultFormatter ([6b561ee](https://github.com/rohit-purandare/ShelfBridge/commit/6b561eed31d408a300a0c98186c23ea84eb91a85))
+
 ## [1.21.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.20.5...v1.21.0) (2025-08-26)
 
 
