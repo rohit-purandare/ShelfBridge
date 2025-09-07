@@ -524,14 +524,90 @@ export class SyncManager {
   async _syncSingleBook(absBook, sessionData) {
     const startTime = performance.now();
 
-    // Get metadata from BookMatcher upfront for consistent use throughout sync
-    const matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
-    const { match: hardcoverMatch, extractedMetadata } = matchResult;
-    const title = extractedMetadata.title;
-    const author = extractedMetadata.author;
-    const identifiers = extractedMetadata.identifiers;
+    // Extract basic metadata first (lightweight operation) to enable early progress checking
+    const { extractTitle, extractAuthor } = await import(
+      './matching/utils/audiobookshelf-extractor.js'
+    );
+    const { extractBookIdentifiers } = await import(
+      './matching/utils/identifier-extractor.js'
+    );
+
+    const title = extractTitle(absBook) || 'Unknown Title';
+    const author = extractAuthor(absBook) || 'Unknown Author';
+    const identifiers = extractBookIdentifiers(absBook);
+
+    // OPTIMIZATION: For books with identifiers, check progress change BEFORE expensive book matching
+    const hasIdentifiers = identifiers.isbn || identifiers.asin;
+    let shouldPerformExpensiveMatching = true;
+
+    if (hasIdentifiers && !this.globalConfig.force_sync) {
+      const identifier = identifiers.asin || identifiers.isbn;
+      const identifierType = identifiers.asin ? 'asin' : 'isbn';
+
+      // Validate progress for early check
+      const validatedProgress = ProgressManager.getValidatedProgress(
+        absBook,
+        `book "${title}" early progress check`,
+        { allowNull: false },
+      );
+
+      if (validatedProgress !== null) {
+        const hasChanged = await this.cache.hasProgressChanged(
+          this.userId,
+          identifier,
+          title,
+          validatedProgress,
+          identifierType,
+        );
+
+        if (!hasChanged) {
+          logger.debug(
+            `Early skip for ${title}: Progress unchanged (${validatedProgress.toFixed(1)}%)`,
+          );
+          return {
+            title,
+            author,
+            status: 'skipped',
+            reason: 'Progress unchanged (optimized early check)',
+            progress_before: validatedProgress,
+            progress_after: validatedProgress,
+            progress_changed: false,
+            identifiers: identifiers,
+            cache_found: true,
+            hardcover_status: 'cached',
+            abs_id: absBook.id,
+            timing: performance.now() - startTime,
+            actions: ['Early progress check - no change detected'],
+            errors: [],
+          };
+        }
+        shouldPerformExpensiveMatching = true;
+        logger.debug(
+          `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
+        );
+      }
+    }
+
+    // NOW perform expensive book matching (only for books that need sync or don't have identifiers)
+    let matchResult, hardcoverMatch, extractedMetadata;
+    if (shouldPerformExpensiveMatching) {
+      matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
+      hardcoverMatch = matchResult.match;
+      extractedMetadata = matchResult.extractedMetadata;
+
+      // Use extracted metadata if available, otherwise use the lightweight extraction from above
+      if (!extractedMetadata.title) extractedMetadata.title = title;
+      if (!extractedMetadata.author) extractedMetadata.author = author;
+      if (!extractedMetadata.identifiers)
+        extractedMetadata.identifiers = identifiers;
+    } else {
+      // For books that were skipped, we don't have match results
+      extractedMetadata = { title, author, identifiers };
+      hardcoverMatch = null;
+    }
 
     // Validate progress with explicit error handling and position-based accuracy
+    // (Re-validate even if we did early check, in case validation failed earlier)
     const validatedProgress = ProgressManager.getValidatedProgress(
       absBook,
       `book "${title}" sync`,
@@ -1881,17 +1957,41 @@ export class SyncManager {
     const { userBook, edition } = hardcoverMatch;
     const author = bookAuthor; // Ensure author is available in function scope
 
-    // Check cache first
+    // Check cache first - handle missing identifiers properly for title/author matches
     const identifier = extractBookIdentifiers(absBook);
-    const identifierType = identifier.asin ? 'asin' : 'isbn';
-    const identifierValue = identifier.asin || identifier.isbn;
+    let identifierType, identifierValue;
 
-    const cachedEditionId = await this.cache.getEditionForBook(
-      this.userId,
-      identifierValue,
-      title,
-      identifierType,
-    );
+    if (identifier.asin) {
+      identifierType = 'asin';
+      identifierValue = identifier.asin;
+    } else if (identifier.isbn) {
+      identifierType = 'isbn';
+      identifierValue = identifier.isbn;
+    } else {
+      // Title/author match without identifiers - create synthetic identifier
+      // This prevents the "NOT NULL constraint failed" error
+      identifierType = 'title_author';
+      identifierValue = `title_author_${userBook.id}_${edition.id}`;
+      logger.debug(
+        `Created synthetic identifier for title/author match: ${identifierValue}`,
+        {
+          title: title,
+          userBookId: userBook.id,
+          editionId: edition.id,
+        },
+      );
+    }
+
+    // Only check cache if we have a valid identifier
+    let cachedEditionId = null;
+    if (identifierValue) {
+      cachedEditionId = await this.cache.getEditionForBook(
+        this.userId,
+        identifierValue,
+        title,
+        identifierType,
+      );
+    }
 
     if (cachedEditionId) {
       // Find the cached edition in the book's editions
@@ -1913,29 +2013,49 @@ export class SyncManager {
       // Use author from metadata (already extracted)
 
       try {
-        // Store edition mapping in transaction
-        await this.cache.executeTransaction(
-          [
-            () =>
-              this.cache._storeEditionMappingOperation(
-                this.userId,
-                identifierValue,
-                title,
-                edition.id,
-                identifierType,
-                author,
-              ),
-          ],
-          {
-            description: `Cache edition mapping for ${title}`,
-            timeout: 2000,
-          },
-        );
+        // Only store edition mapping if we have a valid identifier
+        if (identifierValue && identifierType) {
+          await this.cache.executeTransaction(
+            [
+              () =>
+                this.cache._storeEditionMappingOperation(
+                  this.userId,
+                  identifierValue,
+                  title,
+                  edition.id,
+                  identifierType,
+                  author,
+                ),
+            ],
+            {
+              description: `Cache edition mapping for ${title}`,
+              timeout: 2000,
+            },
+          );
+          logger.debug(`Successfully cached edition mapping for ${title}`, {
+            identifier: identifierValue,
+            identifierType: identifierType,
+            editionId: edition.id,
+          });
+        } else {
+          logger.warn(
+            `Skipping cache storage for ${title}: invalid identifier`,
+            {
+              identifierValue: identifierValue,
+              identifierType: identifierType,
+            },
+          );
+        }
 
         return edition;
       } catch (error) {
         logger.error(
           `Failed to cache edition mapping for ${title}: ${error.message}`,
+          {
+            identifier: identifierValue,
+            identifierType: identifierType,
+            stack: error.stack,
+          },
         );
         // Still return the edition even if caching fails
         return edition;
