@@ -383,6 +383,11 @@ Hardcover: ✅ Connected
        libraries:
          include: ["Fiction", "Science Fiction"]
 
+⚠️  IMPORTANT: As of v1.22.2, library filtering now correctly applies to ALL progress
+   items, including items currently in progress. Previously, items in progress
+   from excluded libraries (like Podcasts) would still be processed. This has
+   been fixed to ensure complete library isolation.
+
 💾 CACHE INFORMATION
 ------------------------------
 Total books in cache: 847
