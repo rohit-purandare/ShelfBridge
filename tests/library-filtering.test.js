@@ -88,7 +88,7 @@ describe('Library Filtering', () => {
     });
   });
 
-  describe('Real-world Tyler scenario', () => {
+  describe('Real-world scenario', () => {
     it('should exclude Podcasts from items in progress', async () => {
       const client = new AudiobookshelfClient(
         'https://test.com',
