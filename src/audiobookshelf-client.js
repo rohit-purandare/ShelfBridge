@@ -173,8 +173,8 @@ export class AudiobookshelfClient {
         librariesSkipped: libraryFilter.stats.excluded,
       });
 
-      // Get library items in progress (these have some progress)
-      const progressItems = await this._getItemsInProgress();
+      // Get library items in progress (these have some progress) - filtered by allowed libraries
+      const progressItems = await this._getItemsInProgress(librariesToProcess);
       logger.debug('Found items in progress', { count: progressItems.length });
 
       // Always check for completed books to ensure completion detection on every sync
@@ -340,13 +340,40 @@ export class AudiobookshelfClient {
     }
   }
 
-  async _getItemsInProgress() {
+  async _getItemsInProgress(allowedLibraries = null) {
     try {
       const response = await this._makeRequest(
         'GET',
         '/api/me/items-in-progress',
       );
-      return response.libraryItems || [];
+      const allProgressItems = response.libraryItems || [];
+
+      // If no library filtering is configured, return all items
+      if (!allowedLibraries || allowedLibraries.length === 0) {
+        return allProgressItems;
+      }
+
+      // Create a Set of allowed library IDs for efficient lookups
+      const allowedLibraryIds = new Set(allowedLibraries.map(lib => lib.id));
+
+      // Filter progress items to only include those from allowed libraries
+      const filteredItems = allProgressItems.filter(item => {
+        const itemLibraryId = item.libraryId;
+        return allowedLibraryIds.has(itemLibraryId);
+      });
+
+      // Log filtering results for debugging
+      const excludedCount = allProgressItems.length - filteredItems.length;
+      if (excludedCount > 0) {
+        logger.debug('Filtered items in progress by library', {
+          totalFound: allProgressItems.length,
+          afterFiltering: filteredItems.length,
+          excludedByLibraryFilter: excludedCount,
+          allowedLibraries: allowedLibraries.map(lib => lib.name),
+        });
+      }
+
+      return filteredItems;
     } catch (error) {
       // Check if this is a recoverable error
       if (this._isRecoverableError(error)) {
