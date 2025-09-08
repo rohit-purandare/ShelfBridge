@@ -5,6 +5,20 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.1...v1.22.2) (2025-09-08)
+
+
+### ## 🔧 Bug Fixes
+
+* apply library filtering to items in progress ([8095aa9](https://github.com/rohit-purandare/ShelfBridge/commit/8095aa9e31ff9ffe403f386705d3f4ef0f9cc856))
+* apply prettier formatting to resolve CI code quality checks ([eb86255](https://github.com/rohit-purandare/ShelfBridge/commit/eb86255856aa7adc4697491e08831ebac56a9f02))
+
+
+### ## 🔒 Security
+
+* add comprehensive package overrides for latest versions ([b9b4250](https://github.com/rohit-purandare/ShelfBridge/commit/b9b42504a2f26477170f26057c5d6b75741442f6))
+* update vulnerable packages to latest versions ([7a68637](https://github.com/rohit-purandare/ShelfBridge/commit/7a68637e1af97506ef385685df7438a69a851eac))
+
 ## [1.22.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.0...v1.22.1) (2025-09-07)
 
 
