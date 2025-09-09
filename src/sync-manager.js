@@ -10,6 +10,8 @@ import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Transaction } from './utils/transaction.js';
 import SessionManager from './session-manager.js';
+import { TimestampFormatter } from './sync/utils/TimestampFormatter.js';
+import { CacheKeyGenerator } from './sync/utils/CacheKeyGenerator.js';
 
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
@@ -30,6 +32,9 @@ export class SyncManager {
     setMaxListeners(requiredListeners, this.abortController.signal);
 
     this.timezone = globalConfig.timezone || 'UTC';
+    
+    // Initialize timestamp formatter utility
+    this.timestampFormatter = new TimestampFormatter(this.timezone);
 
     // Resolve library configuration (user-specific overrides global)
     const libraryConfig = user.libraries || globalConfig.libraries || null;
@@ -344,135 +349,20 @@ export class SyncManager {
    * Format timestamp for display using configured timezone
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
    * @returns {string} - Formatted date string for display
+   * @deprecated Use this.timestampFormatter.formatForDisplay() instead
    */
   _formatTimestampForDisplay(timestamp) {
-    if (!timestamp) return 'N/A';
-
-    try {
-      let dateTime;
-
-      if (typeof timestamp === 'string') {
-        // Handle ISO string or timestamp as string
-        if (timestamp.includes('T') || timestamp.includes('-')) {
-          // ISO string format - these are typically in UTC or have timezone info
-          dateTime = DateTime.fromISO(timestamp);
-          if (!dateTime.isValid) {
-            // Try parsing as SQL format or other common formats
-            dateTime = DateTime.fromSQL(timestamp);
-            if (!dateTime.isValid) {
-              dateTime = DateTime.fromFormat(timestamp, 'yyyy-LL-dd HH:mm:ss');
-            }
-          }
-        } else {
-          // Timestamp as string - assume UTC milliseconds
-          const tsNumber = parseInt(timestamp);
-          if (!isNaN(tsNumber)) {
-            dateTime = DateTime.fromMillis(tsNumber, { zone: 'utc' });
-          } else {
-            return 'Invalid timestamp';
-          }
-        }
-      } else if (typeof timestamp === 'number') {
-        // Timestamp in milliseconds - assume UTC
-        dateTime = DateTime.fromMillis(timestamp, { zone: 'utc' });
-      } else {
-        return 'Invalid timestamp';
-      }
-
-      if (!dateTime.isValid) {
-        return 'Invalid timestamp';
-      }
-
-      // Convert to configured timezone and format
-      const configuredTimezone = this.timezone || 'UTC';
-      const localTime = dateTime.setZone(configuredTimezone);
-      return localTime.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ');
-    } catch (error) {
-      logger.error('Error formatting timestamp for display', {
-        timestamp: timestamp,
-        error: error.message,
-      });
-      return 'Error formatting timestamp';
-    }
+    return this.timestampFormatter.formatForDisplay(timestamp);
   }
 
   /**
    * Format date for Hardcover API (YYYY-MM-DD format)
    * @param {string|number} dateValue - Date value (ISO string or timestamp)
    * @returns {string|null} - Formatted date string or null if invalid
+   * @deprecated Use this.timestampFormatter.formatForHardcover() instead
    */
   _formatDateForHardcover(dateValue) {
-    if (!dateValue) return null;
-
-    try {
-      // If we already have an ISO string with timezone, return the local day directly
-      if (typeof dateValue === 'string') {
-        // Common case: we previously set `absBook.started_at = startedAtLocal.toISO()`
-        if (dateValue.includes('T')) {
-          const isoDate = DateTime.fromISO(dateValue);
-          if (isoDate.isValid) {
-            const local = isoDate.setZone(this.timezone || 'UTC');
-            const output = local.toISODate();
-            logger.debug('Formatted date for Hardcover (ISO string)', {
-              input: dateValue,
-              output,
-              timezone: this.timezone,
-            });
-            return output;
-          }
-        }
-
-        // Try parsing as SQL or generic date
-        const sql = DateTime.fromSQL(dateValue, {
-          zone: this.timezone || 'UTC',
-        });
-        if (sql.isValid) {
-          return sql.toISODate();
-        }
-
-        const parsed = DateTime.fromJSDate(new Date(dateValue), {
-          zone: this.timezone || 'UTC',
-        });
-        if (parsed.isValid) {
-          return parsed.toISODate();
-        }
-      }
-
-      // If value is milliseconds (number or numeric string)
-      const millis =
-        typeof dateValue === 'number'
-          ? dateValue
-          : typeof dateValue === 'string' && /^\d+$/.test(dateValue)
-            ? parseInt(dateValue, 10)
-            : null;
-
-      if (millis !== null && !isNaN(millis)) {
-        const local = DateTime.fromMillis(millis, {
-          zone: this.timezone || 'UTC',
-        });
-        if (local.isValid) {
-          const output = local.toISODate();
-          logger.debug('Formatted date for Hardcover (millis)', {
-            input: dateValue,
-            output,
-            timezone: this.timezone,
-          });
-          return output;
-        }
-      }
-
-      logger.warn('Unable to format date for Hardcover', {
-        value: dateValue,
-        type: typeof dateValue,
-      });
-      return null;
-    } catch (error) {
-      logger.error('Error formatting date for Hardcover', {
-        dateValue: dateValue,
-        error: error.message,
-      });
-      return null;
-    }
+    return this.timestampFormatter.formatForHardcover(dateValue);
   }
 
   async _syncBooksParallel(booksToProcess, result, sessionData) {
@@ -763,25 +653,7 @@ export class SyncManager {
 
     // Multi-key cache lookup - check all possible identifiers for this book
     // This handles cases where a book's matching method changes (e.g., title/author -> ISBN)
-    const possibleCacheKeys = [];
-
-    // Add identifier-based keys (highest priority)
-    if (identifiers.asin) {
-      possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
-    }
-    if (identifiers.isbn) {
-      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
-    }
-
-    // Add title/author key if we have a match (fallback)
-    if (
-      hardcoverMatch &&
-      hardcoverMatch.userBook?.id &&
-      hardcoverMatch.edition?.id
-    ) {
-      const titleAuthorKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
-      possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
-    }
+    const possibleCacheKeys = CacheKeyGenerator.generatePossibleKeys(identifiers, hardcoverMatch);
 
     let cachedInfo = { exists: false };
     let cacheSource = null;
@@ -832,14 +704,9 @@ export class SyncManager {
 
     // Set cache storage preferences for new entries
     // Use the best available identifier in priority order: ASIN > ISBN > title_author
-    let identifier = identifiers.asin || identifiers.isbn;
-    let identifierType = identifiers.asin ? 'asin' : 'isbn';
-
-    if (!identifier && hardcoverMatch) {
-      // Generate cache key for title/author matches without identifiers
-      identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
-      identifierType = 'title_author';
-    }
+    const storageKey = CacheKeyGenerator.generateStorageKey(identifiers, hardcoverMatch);
+    let identifier = storageKey?.identifier;
+    let identifierType = storageKey?.identifierType;
 
     // Determine how the match was found using BookMatcher's metadata
     let matchedIdentifierType = null;

@@ -9,7 +9,7 @@
     "interactive": "node src/main.js interactive",
     "cron": "node src/main.js cron",
     "sync": "node src/main.js sync",
-    "test": "node --test tests/network-utilities.test.js tests/progress-manager.test.js tests/task-queue-basic.test.js tests/transaction.test.js tests/utilities.test.js",
+    "test": "node --test tests/network-utilities.test.js tests/progress-manager.test.js tests/task-queue-basic.test.js tests/transaction.test.js tests/utilities.test.js tests/timestamp-formatter.test.js tests/cache-key-generator.test.js tests/phase1-integration.test.js",
     "test:connections": "node src/main.js test",
     "test:native": "node scripts/test-native-modules.js",
     "validate:sqlite": "node scripts/validate-better-sqlite3.js",
