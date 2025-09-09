@@ -212,7 +212,7 @@ export class TimestampFormatter {
         return DateTime.fromMillis(timestamp).isValid;
       }
       return false;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }

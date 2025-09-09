@@ -215,10 +215,11 @@ export class CacheKeyGenerator {
           // ASIN should be 10 characters, alphanumeric
           return /^[A-Z0-9]{10}$/i.test(key.trim());
         
-        case 'isbn':
+        case 'isbn': {
           // ISBN can be ISBN-10 or ISBN-13, with or without hyphens
           const cleanIsbn = key.replace(/[-\s]/g, '');
           return /^(?:\d{10}|\d{13})$/.test(cleanIsbn);
+        }
         
         case 'title_author':
           // Title/author keys should have the expected prefix

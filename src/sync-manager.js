@@ -705,8 +705,8 @@ export class SyncManager {
     // Set cache storage preferences for new entries
     // Use the best available identifier in priority order: ASIN > ISBN > title_author
     const storageKey = CacheKeyGenerator.generateStorageKey(identifiers, hardcoverMatch);
-    let identifier = storageKey?.identifier;
-    let identifierType = storageKey?.identifierType;
+    const identifier = storageKey?.identifier;
+    const identifierType = storageKey?.identifierType;
 
     // Determine how the match was found using BookMatcher's metadata
     let matchedIdentifierType = null;
