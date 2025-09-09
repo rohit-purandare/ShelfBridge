@@ -3,10 +3,10 @@ import logger from '../../logger.js';
 
 /**
  * TimestampFormatter - Centralized timestamp and date formatting utility
- * 
+ *
  * Extracted from SyncManager to follow DRY principles and Single Responsibility Principle.
  * Handles all timestamp/date formatting operations for sync operations.
- * 
+ *
  * Key functions:
  * - Display formatting (with timezone conversion)
  * - Hardcover API formatting (YYYY-MM-DD)
@@ -20,7 +20,7 @@ export class TimestampFormatter {
   /**
    * Format timestamp for display using configured timezone
    * Extracted from SyncManager._formatTimestampForDisplay()
-   * 
+   *
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
    * @returns {string} - Formatted date string for display
    */
@@ -78,7 +78,7 @@ export class TimestampFormatter {
   /**
    * Format date for Hardcover API (YYYY-MM-DD format)
    * Extracted from SyncManager._formatDateForHardcover()
-   * 
+   *
    * @param {string|number} dateValue - Date value (ISO string or timestamp)
    * @returns {string|null} - Formatted date string or null if invalid
    */
@@ -159,7 +159,7 @@ export class TimestampFormatter {
   /**
    * Convert timestamp from UTC milliseconds to configured timezone ISO string
    * Helper method for common timestamp conversion operations
-   * 
+   *
    * @param {number} utcMillis - UTC timestamp in milliseconds
    * @returns {string} - ISO string in configured timezone
    */
@@ -189,18 +189,18 @@ export class TimestampFormatter {
    */
   isValidTimestamp(timestamp) {
     if (!timestamp) return false;
-    
+
     try {
       if (typeof timestamp === 'string') {
         if (timestamp.includes('T') || timestamp.includes('-')) {
           // Try ISO first
           let dt = DateTime.fromISO(timestamp);
           if (dt.isValid) return true;
-          
+
           // Try SQL format
           dt = DateTime.fromSQL(timestamp);
           if (dt.isValid) return true;
-          
+
           // Try generic format
           dt = DateTime.fromFormat(timestamp, 'yyyy-LL-dd HH:mm:ss');
           return dt.isValid;

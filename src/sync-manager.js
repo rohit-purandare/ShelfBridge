@@ -32,7 +32,7 @@ export class SyncManager {
     setMaxListeners(requiredListeners, this.abortController.signal);
 
     this.timezone = globalConfig.timezone || 'UTC';
-    
+
     // Initialize timestamp formatter utility
     this.timestampFormatter = new TimestampFormatter(this.timezone);
 
@@ -653,7 +653,10 @@ export class SyncManager {
 
     // Multi-key cache lookup - check all possible identifiers for this book
     // This handles cases where a book's matching method changes (e.g., title/author -> ISBN)
-    const possibleCacheKeys = CacheKeyGenerator.generatePossibleKeys(identifiers, hardcoverMatch);
+    const possibleCacheKeys = CacheKeyGenerator.generatePossibleKeys(
+      identifiers,
+      hardcoverMatch,
+    );
 
     let cachedInfo = { exists: false };
     let cacheSource = null;
@@ -704,7 +707,10 @@ export class SyncManager {
 
     // Set cache storage preferences for new entries
     // Use the best available identifier in priority order: ASIN > ISBN > title_author
-    const storageKey = CacheKeyGenerator.generateStorageKey(identifiers, hardcoverMatch);
+    const storageKey = CacheKeyGenerator.generateStorageKey(
+      identifiers,
+      hardcoverMatch,
+    );
     const identifier = storageKey?.identifier;
     const identifierType = storageKey?.identifierType;
 
