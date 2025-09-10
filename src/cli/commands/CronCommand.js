@@ -65,7 +65,9 @@ export class CronCommand extends BaseCommand {
       },
     );
 
-    logger.info('Scheduled sync started. Press Ctrl+C to stop.');
+    logger.info(
+      'Scheduler activated - waiting for next scheduled sync. Press Ctrl+C to stop.',
+    );
 
     // Keep the process running
     process.on('SIGINT', () => {
@@ -142,7 +144,9 @@ export class StartCommand extends BaseCommand {
       },
     );
 
-    logger.info('Scheduled sync started. Press Ctrl+C to stop.');
+    logger.info(
+      'Scheduler activated - waiting for next scheduled sync. Press Ctrl+C to stop.',
+    );
 
     // Keep the process running
     process.on('SIGINT', () => {
