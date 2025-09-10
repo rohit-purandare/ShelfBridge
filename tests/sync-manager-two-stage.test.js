@@ -550,4 +550,175 @@ describe('Sync Manager Two-Stage Integration', () => {
       expect(results[1].status).toBe('synced'); // Legacy
     });
   });
+
+  describe('Early Progress Check Optimization', () => {
+    it('should skip expensive matching for title/author books with unchanged progress', async () => {
+      const mockTitleAuthorBook = {
+        id: 'abs-title-author-unchanged',
+        title: 'Unchanged Title Author Book',
+        author: 'Unchanged Author',
+        media: {
+          metadata: {
+            title: 'Unchanged Title Author Book',
+            authors: [{ name: 'Unchanged Author' }],
+            // No ISBN/ASIN - will use title/author matching
+          },
+        },
+        userMediaProgress: {
+          progress: 0.45,
+          isFinished: false,
+        },
+      };
+
+      // Mock cache to have existing data
+      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:unchanged_title_author_book|unchanged_author');
+      mockCache.getCachedBookInfo.mockResolvedValue({
+        exists: true,
+        edition_id: 'cached-edition-unchanged',
+        progress_percent: 45.0,
+        last_sync: '2024-01-01T00:00:00.000Z',
+      });
+      mockCache.hasProgressChanged.mockResolvedValue(false);
+
+      // Mock progress validation
+      const mockProgressManager = await import('../src/progress-manager.js');
+      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(45.0);
+
+      const result = await syncManager._syncSingleBook(mockTitleAuthorBook, null);
+
+      // Should skip without calling expensive operations
+      expect(result.status).toBe('skipped');
+      expect(result.reason).toBe('Progress unchanged (optimized early check)');
+      expect(result.actions[0]).toContain('title_author');
+
+      // Critical: expensive operations should NOT be called
+      expect(mockBookMatcher.findMatch).not.toHaveBeenCalled();
+      expect(mockHardcover.searchBooksForMatching).not.toHaveBeenCalled();
+      
+      // Cache methods should be called correctly
+      expect(mockCache.generateTitleAuthorIdentifier).toHaveBeenCalledWith(
+        'Unchanged Title Author Book',
+        'Unchanged Author'
+      );
+      expect(mockCache.getCachedBookInfo).toHaveBeenCalledWith(
+        'test-user',
+        'title_author:unchanged_title_author_book|unchanged_author',
+        'Unchanged Title Author Book',
+        'title_author'
+      );
+      expect(mockCache.hasProgressChanged).toHaveBeenCalledWith(
+        'test-user',
+        'title_author:unchanged_title_author_book|unchanged_author',
+        'Unchanged Title Author Book',
+        45.0,
+        'title_author'
+      );
+    });
+
+    it('should proceed with matching when title/author progress has changed', async () => {
+      const mockChangedBook = {
+        id: 'abs-title-author-changed',
+        title: 'Changed Title Author Book',
+        author: 'Changed Author',
+        media: {
+          metadata: {
+            title: 'Changed Title Author Book',
+            authors: [{ name: 'Changed Author' }],
+          },
+        },
+        userMediaProgress: {
+          progress: 0.65, // New progress
+          isFinished: false,
+        },
+      };
+
+      // Mock cache to show progress changed
+      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:changed_title_author_book|changed_author');
+      mockCache.getCachedBookInfo.mockResolvedValue({
+        exists: true,
+        edition_id: 'cached-edition-changed',
+        progress_percent: 50.0, // Previous was 50%
+        last_sync: '2024-01-01T00:00:00.000Z',
+      });
+      mockCache.hasProgressChanged.mockResolvedValue(true); // Progress changed!
+
+      // Mock progress validation
+      const mockProgressManager = await import('../src/progress-manager.js');
+      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(65.0);
+
+      // Mock successful match result
+      const mockTitleAuthorMatch = {
+        userBook: { id: 'changed-user-book' },
+        edition: { id: 'changed-edition', format: 'audiobook' },
+        _matchType: 'title_author_two_stage',
+        _bookIdentificationScore: { totalScore: 87.3 },
+      };
+      mockBookMatcher.findMatch.mockResolvedValue(mockTitleAuthorMatch);
+      mockHardcover.updateReadingProgress.mockResolvedValue({ success: true, id: 'progress-update-123' });
+
+      const result = await syncManager._syncSingleBook(mockChangedBook, null);
+
+      // Should proceed with sync since progress changed
+      expect(result.status).not.toBe('skipped');
+      expect(mockBookMatcher.findMatch).toHaveBeenCalled();
+      
+      // Should call progress change check but then proceed
+      expect(mockCache.hasProgressChanged).toHaveBeenCalledWith(
+        'test-user',
+        'title_author:changed_title_author_book|changed_author',
+        'Changed Title Author Book',
+        65.0,
+        'title_author'
+      );
+    });
+
+    it('should handle title/author books with no cache by proceeding with matching', async () => {
+      const mockNewBook = {
+        id: 'abs-new-title-author',
+        title: 'New Title Author Book',
+        author: 'New Author',
+        media: {
+          metadata: {
+            title: 'New Title Author Book',
+            authors: [{ name: 'New Author' }],
+          },
+        },
+        userMediaProgress: {
+          progress: 0.25,
+          isFinished: false,
+        },
+      };
+
+      // Mock no cache data exists
+      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:new_title_author_book|new_author');
+      mockCache.getCachedBookInfo.mockResolvedValue({
+        exists: false, // No cache data
+      });
+
+      // Mock progress validation
+      const mockProgressManager = await import('../src/progress-manager.js');
+      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(25.0);
+
+      // Mock successful match that will auto-add
+      const mockNewMatch = {
+        userBook: null, // Not in library
+        edition: { id: 'new-edition', format: 'ebook' },
+        book: { id: 'new-book', title: 'New Title Author Book' },
+        _matchType: 'title_author_two_stage',
+        _isSearchResult: true,
+      };
+      mockBookMatcher.findMatch.mockResolvedValue(mockNewMatch);
+      mockHardcover.addBookToLibrary.mockResolvedValue({ success: true, id: 'new-user-book' });
+
+      const result = await syncManager._syncSingleBook(mockNewBook, null);
+
+      // Should proceed with matching since no cache exists
+      expect(mockBookMatcher.findMatch).toHaveBeenCalled();
+      expect(result.status).not.toBe('skipped');
+      
+      // Should check cache but not progress since no cache exists
+      expect(mockCache.getCachedBookInfo).toHaveBeenCalled();
+      expect(mockCache.hasProgressChanged).not.toHaveBeenCalled();
+    });
+  });
 });

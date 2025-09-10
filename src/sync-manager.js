@@ -426,54 +426,83 @@ export class SyncManager {
     const author = extractAuthor(absBook) || 'Unknown Author';
     const identifiers = extractBookIdentifiers(absBook);
 
-    // OPTIMIZATION: For books with identifiers, check progress change BEFORE expensive book matching
+    // OPTIMIZATION: For books with identifiers OR cached title/author matches, check progress change BEFORE expensive book matching
     const hasIdentifiers = identifiers.isbn || identifiers.asin;
+    const titleAuthorId = hasIdentifiers
+      ? null
+      : this.cache.generateTitleAuthorIdentifier(title, author);
     let shouldPerformExpensiveMatching = true;
 
-    if (hasIdentifiers && !this.globalConfig.force_sync) {
-      const identifier = identifiers.asin || identifiers.isbn;
-      const identifierType = identifiers.asin ? 'asin' : 'isbn';
+    if ((hasIdentifiers || titleAuthorId) && !this.globalConfig.force_sync) {
+      const identifier = identifiers.asin || identifiers.isbn || titleAuthorId;
+      const identifierType = identifiers.asin
+        ? 'asin'
+        : identifiers.isbn
+          ? 'isbn'
+          : 'title_author';
 
-      // Validate progress for early check
-      const validatedProgress = ProgressManager.getValidatedProgress(
-        absBook,
-        `book "${title}" early progress check`,
-        { allowNull: false },
+      // Check if we have cached data for this book
+      const cachedInfo = await this.cache.getCachedBookInfo(
+        this.userId,
+        identifier,
+        title,
+        identifierType,
       );
 
-      if (validatedProgress !== null) {
-        const hasChanged = await this.cache.hasProgressChanged(
-          this.userId,
-          identifier,
-          title,
-          validatedProgress,
-          identifierType,
+      if (cachedInfo.exists) {
+        // Validate progress for early check
+        const validatedProgress = ProgressManager.getValidatedProgress(
+          absBook,
+          `book "${title}" early progress check`,
+          { allowNull: false },
         );
 
-        if (!hasChanged) {
-          logger.debug(
-            `Early skip for ${title}: Progress unchanged (${validatedProgress.toFixed(1)}%)`,
-          );
-          return {
+        if (validatedProgress !== null) {
+          const hasChanged = await this.cache.hasProgressChanged(
+            this.userId,
+            identifier,
             title,
-            author,
-            status: 'skipped',
-            reason: 'Progress unchanged (optimized early check)',
-            progress_before: validatedProgress,
-            progress_after: validatedProgress,
-            progress_changed: false,
-            identifiers: identifiers,
-            cache_found: true,
-            hardcover_status: 'cached',
-            abs_id: absBook.id,
-            timing: performance.now() - startTime,
-            actions: ['Early progress check - no change detected'],
-            errors: [],
-          };
+            validatedProgress,
+            identifierType,
+          );
+
+          if (!hasChanged) {
+            logger.debug(
+              `Early skip for ${title}: Progress unchanged (${validatedProgress.toFixed(1)}%) - ${identifierType} match`,
+            );
+            return {
+              title,
+              author,
+              status: 'skipped',
+              reason: 'Progress unchanged (optimized early check)',
+              progress_before: validatedProgress,
+              progress_after: validatedProgress,
+              progress_changed: false,
+              identifiers: identifiers,
+              cache_found: true,
+              hardcover_status: 'cached',
+              abs_id: absBook.id,
+              timing: performance.now() - startTime,
+              actions: [
+                `Early progress check - no change detected (${identifierType})`,
+              ],
+              errors: [],
+            };
+          }
+          shouldPerformExpensiveMatching = true;
+          logger.debug(
+            `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync (${identifierType})`,
+          );
         }
-        shouldPerformExpensiveMatching = true;
+      } else if (hasIdentifiers) {
+        // For books with identifiers but no cache, proceed with matching
         logger.debug(
-          `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
+          `No cached data for ${title} with ${identifierType} - proceeding with matching`,
+        );
+      } else {
+        // For title/author books with no cache, we need to do expensive matching
+        logger.debug(
+          `No cached title/author data for ${title} - proceeding with expensive matching`,
         );
       }
     }
