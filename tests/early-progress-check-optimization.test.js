@@ -3,7 +3,7 @@
  *
  * Tests for the enhanced early progress check optimization that prevents
  * unnecessary hardcover searches for title/author matched books with unchanged progress.
- * 
+ *
  * This addresses the issue where title/author matched books were always triggering
  * hardcover API searches even when their progress hadn't changed.
  */
@@ -118,7 +118,7 @@ describe('Early Progress Check Optimization', () => {
 
       // Mock progress validation
       jest.spyOn(ProgressManager, 'getValidatedProgress').mockReturnValue(50.0);
-      
+
       // Mock cache says progress hasn't changed
       mockCache.hasProgressChanged.mockResolvedValue(false);
 
@@ -128,7 +128,7 @@ describe('Early Progress Check Optimization', () => {
       expect(result.status).toBe('skipped');
       expect(result.reason).toBe('Progress unchanged (optimized early check)');
       expect(result.actions[0]).toContain('isbn');
-      
+
       // Expensive operations should NOT be called
       expect(mockBookMatcher.findMatch).not.toHaveBeenCalled();
       expect(mockHardcover.searchBooksForMatching).not.toHaveBeenCalled();
@@ -139,7 +139,7 @@ describe('Early Progress Check Optimization', () => {
       const mockIsbnBook = {
         id: 'abs-isbn-book',
         title: 'ISBN Test Book',
-        author: 'Test Author', 
+        author: 'Test Author',
         media: {
           metadata: {
             title: 'ISBN Test Book',
@@ -155,7 +155,7 @@ describe('Early Progress Check Optimization', () => {
 
       // Mock progress validation
       jest.spyOn(ProgressManager, 'getValidatedProgress').mockReturnValue(70.0);
-      
+
       // Mock cache says progress HAS changed
       mockCache.hasProgressChanged.mockResolvedValue(true);
 
@@ -183,7 +183,7 @@ describe('Early Progress Check Optimization', () => {
         author: 'Test Author',
         media: {
           metadata: {
-            title: 'Title Author Test Book', 
+            title: 'Title Author Test Book',
             authors: [{ name: 'Test Author' }],
             // No ISBN/ASIN - will use title/author matching
           },
@@ -212,7 +212,10 @@ describe('Early Progress Check Optimization', () => {
       // Mock cache says progress hasn't changed
       mockCache.hasProgressChanged.mockResolvedValue(false);
 
-      const result = await syncManager._syncSingleBook(mockTitleAuthorBook, null);
+      const result = await syncManager._syncSingleBook(
+        mockTitleAuthorBook,
+        null,
+      );
 
       // Should skip early without calling expensive operations
       expect(result.status).toBe('skipped');
@@ -227,13 +230,13 @@ describe('Early Progress Check Optimization', () => {
       // Verify correct cache calls
       expect(mockCache.generateTitleAuthorIdentifier).toHaveBeenCalledWith(
         'Title Author Test Book',
-        'Test Author'
+        'Test Author',
       );
       expect(mockCache.getCachedBookInfo).toHaveBeenCalledWith(
         'test-user',
         titleAuthorId,
         'Title Author Test Book',
-        'title_author'
+        'title_author',
       );
     });
 
@@ -281,7 +284,10 @@ describe('Early Progress Check Optimization', () => {
       };
       mockBookMatcher.findMatch.mockResolvedValue(mockTitleAuthorMatch);
 
-      const result = await syncManager._syncSingleBook(mockTitleAuthorBook, null);
+      const result = await syncManager._syncSingleBook(
+        mockTitleAuthorBook,
+        null,
+      );
 
       // Should proceed with expensive matching since progress changed
       expect(mockBookMatcher.findMatch).toHaveBeenCalled();
@@ -293,7 +299,7 @@ describe('Early Progress Check Optimization', () => {
         titleAuthorId,
         'Changed Progress Book',
         60.0,
-        'title_author'
+        'title_author',
       );
     });
 
@@ -336,7 +342,10 @@ describe('Early Progress Check Optimization', () => {
       };
       mockBookMatcher.findMatch.mockResolvedValue(mockNewMatch);
 
-      const result = await syncManager._syncSingleBook(mockNewTitleAuthorBook, null);
+      const result = await syncManager._syncSingleBook(
+        mockNewTitleAuthorBook,
+        null,
+      );
 
       // Should proceed with expensive matching since no cache exists
       expect(mockBookMatcher.findMatch).toHaveBeenCalled();
@@ -347,7 +356,7 @@ describe('Early Progress Check Optimization', () => {
         'test-user',
         titleAuthorId,
         'New Title Author Book',
-        'title_author'
+        'title_author',
       );
     });
   });
@@ -403,7 +412,7 @@ describe('Early Progress Check Optimization', () => {
     it('should handle cache errors gracefully and proceed with matching', async () => {
       const mockErrorBook = {
         id: 'abs-cache-error',
-        title: 'Cache Error Book', 
+        title: 'Cache Error Book',
         author: 'Error Author',
         media: {
           metadata: {
@@ -425,7 +434,9 @@ describe('Early Progress Check Optimization', () => {
       jest.spyOn(ProgressManager, 'getValidatedProgress').mockReturnValue(50.0);
 
       // Mock cache error
-      mockCache.getCachedBookInfo.mockRejectedValue(new Error('Cache connection error'));
+      mockCache.getCachedBookInfo.mockRejectedValue(
+        new Error('Cache connection error'),
+      );
 
       // Mock successful match (fallback)
       const mockMatch = {
@@ -463,7 +474,10 @@ describe('Early Progress Check Optimization', () => {
       // Mock progress validation returns null (invalid)
       jest.spyOn(ProgressManager, 'getValidatedProgress').mockReturnValue(null);
 
-      const result = await syncManager._syncSingleBook(mockInvalidProgressBook, null);
+      const result = await syncManager._syncSingleBook(
+        mockInvalidProgressBook,
+        null,
+      );
 
       // Should skip with appropriate error message
       expect(result.status).toBe('skipped');
@@ -494,7 +508,9 @@ describe('Early Progress Check Optimization', () => {
       };
 
       // Mock title/author identifier
-      mockCache.generateTitleAuthorIdentifier.mockReturnValue('title_author:timed_book|timed_author');
+      mockCache.generateTitleAuthorIdentifier.mockReturnValue(
+        'title_author:timed_book|timed_author',
+      );
 
       // Mock progress validation
       jest.spyOn(ProgressManager, 'getValidatedProgress').mockReturnValue(80.0);
@@ -543,26 +559,34 @@ describe('Early Progress Check Optimization', () => {
 
       // Mock all as cached with unchanged progress
       unchangedBooks.forEach((_, index) => {
-        mockCache.generateTitleAuthorIdentifier.mockReturnValueOnce(`title_author:unchanged_${index+1}|batch_author`);
+        mockCache.generateTitleAuthorIdentifier.mockReturnValueOnce(
+          `title_author:unchanged_${index + 1}|batch_author`,
+        );
       });
 
-      jest.spyOn(ProgressManager, 'getValidatedProgress')
+      jest
+        .spyOn(ProgressManager, 'getValidatedProgress')
         .mockReturnValueOnce(30.0)
         .mockReturnValueOnce(50.0)
         .mockReturnValueOnce(70.0);
 
-      mockCache.getCachedBookInfo.mockResolvedValue({ exists: true, progress_percent: 30.0 });
+      mockCache.getCachedBookInfo.mockResolvedValue({
+        exists: true,
+        progress_percent: 30.0,
+      });
       mockCache.hasProgressChanged.mockResolvedValue(false);
 
       // Process all books
       const results = await Promise.all(
-        unchangedBooks.map(book => syncManager._syncSingleBook(book, null))
+        unchangedBooks.map(book => syncManager._syncSingleBook(book, null)),
       );
 
       // All should be skipped
       results.forEach(result => {
         expect(result.status).toBe('skipped');
-        expect(result.reason).toBe('Progress unchanged (optimized early check)');
+        expect(result.reason).toBe(
+          'Progress unchanged (optimized early check)',
+        );
       });
 
       // No expensive operations should be called at all
@@ -606,26 +630,32 @@ describe('Early Progress Check Optimization', () => {
       ];
 
       // Mock progress validation
-      jest.spyOn(ProgressManager, 'getValidatedProgress')
+      jest
+        .spyOn(ProgressManager, 'getValidatedProgress')
         .mockReturnValueOnce(40.0) // ISBN book
         .mockReturnValueOnce(60.0); // Title/Author book
 
       // Mock title/author identifier for second book
-      mockCache.generateTitleAuthorIdentifier.mockReturnValue('title_author:title_author_book|title_author');
+      mockCache.generateTitleAuthorIdentifier.mockReturnValue(
+        'title_author:title_author_book|title_author',
+      );
 
       // Mock cache - both books have unchanged progress
-      mockCache.getCachedBookInfo.mockResolvedValue({ exists: true, progress_percent: 60.0 });
+      mockCache.getCachedBookInfo.mockResolvedValue({
+        exists: true,
+        progress_percent: 60.0,
+      });
       mockCache.hasProgressChanged.mockResolvedValue(false);
 
       const results = await Promise.all(
-        mixedBooks.map(book => syncManager._syncSingleBook(book, null))
+        mixedBooks.map(book => syncManager._syncSingleBook(book, null)),
       );
 
       // Both should be skipped via early optimization
       expect(results[0].status).toBe('skipped'); // ISBN book
       expect(results[0].actions[0]).toContain('isbn');
-      
-      expect(results[1].status).toBe('skipped'); // Title/Author book  
+
+      expect(results[1].status).toBe('skipped'); // Title/Author book
       expect(results[1].actions[0]).toContain('title_author');
 
       // No expensive operations for either book

@@ -571,7 +571,11 @@ describe('Sync Manager Two-Stage Integration', () => {
       };
 
       // Mock cache to have existing data
-      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:unchanged_title_author_book|unchanged_author');
+      mockCache.generateTitleAuthorIdentifier = jest
+        .fn()
+        .mockReturnValue(
+          'title_author:unchanged_title_author_book|unchanged_author',
+        );
       mockCache.getCachedBookInfo.mockResolvedValue({
         exists: true,
         edition_id: 'cached-edition-unchanged',
@@ -582,9 +586,14 @@ describe('Sync Manager Two-Stage Integration', () => {
 
       // Mock progress validation
       const mockProgressManager = await import('../src/progress-manager.js');
-      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(45.0);
+      jest
+        .spyOn(mockProgressManager.default, 'getValidatedProgress')
+        .mockReturnValue(45.0);
 
-      const result = await syncManager._syncSingleBook(mockTitleAuthorBook, null);
+      const result = await syncManager._syncSingleBook(
+        mockTitleAuthorBook,
+        null,
+      );
 
       // Should skip without calling expensive operations
       expect(result.status).toBe('skipped');
@@ -594,24 +603,24 @@ describe('Sync Manager Two-Stage Integration', () => {
       // Critical: expensive operations should NOT be called
       expect(mockBookMatcher.findMatch).not.toHaveBeenCalled();
       expect(mockHardcover.searchBooksForMatching).not.toHaveBeenCalled();
-      
+
       // Cache methods should be called correctly
       expect(mockCache.generateTitleAuthorIdentifier).toHaveBeenCalledWith(
         'Unchanged Title Author Book',
-        'Unchanged Author'
+        'Unchanged Author',
       );
       expect(mockCache.getCachedBookInfo).toHaveBeenCalledWith(
         'test-user',
         'title_author:unchanged_title_author_book|unchanged_author',
         'Unchanged Title Author Book',
-        'title_author'
+        'title_author',
       );
       expect(mockCache.hasProgressChanged).toHaveBeenCalledWith(
         'test-user',
         'title_author:unchanged_title_author_book|unchanged_author',
         'Unchanged Title Author Book',
         45.0,
-        'title_author'
+        'title_author',
       );
     });
 
@@ -633,7 +642,11 @@ describe('Sync Manager Two-Stage Integration', () => {
       };
 
       // Mock cache to show progress changed
-      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:changed_title_author_book|changed_author');
+      mockCache.generateTitleAuthorIdentifier = jest
+        .fn()
+        .mockReturnValue(
+          'title_author:changed_title_author_book|changed_author',
+        );
       mockCache.getCachedBookInfo.mockResolvedValue({
         exists: true,
         edition_id: 'cached-edition-changed',
@@ -644,7 +657,9 @@ describe('Sync Manager Two-Stage Integration', () => {
 
       // Mock progress validation
       const mockProgressManager = await import('../src/progress-manager.js');
-      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(65.0);
+      jest
+        .spyOn(mockProgressManager.default, 'getValidatedProgress')
+        .mockReturnValue(65.0);
 
       // Mock successful match result
       const mockTitleAuthorMatch = {
@@ -654,21 +669,24 @@ describe('Sync Manager Two-Stage Integration', () => {
         _bookIdentificationScore: { totalScore: 87.3 },
       };
       mockBookMatcher.findMatch.mockResolvedValue(mockTitleAuthorMatch);
-      mockHardcover.updateReadingProgress.mockResolvedValue({ success: true, id: 'progress-update-123' });
+      mockHardcover.updateReadingProgress.mockResolvedValue({
+        success: true,
+        id: 'progress-update-123',
+      });
 
       const result = await syncManager._syncSingleBook(mockChangedBook, null);
 
       // Should proceed with sync since progress changed
       expect(result.status).not.toBe('skipped');
       expect(mockBookMatcher.findMatch).toHaveBeenCalled();
-      
+
       // Should call progress change check but then proceed
       expect(mockCache.hasProgressChanged).toHaveBeenCalledWith(
         'test-user',
         'title_author:changed_title_author_book|changed_author',
         'Changed Title Author Book',
         65.0,
-        'title_author'
+        'title_author',
       );
     });
 
@@ -690,14 +708,18 @@ describe('Sync Manager Two-Stage Integration', () => {
       };
 
       // Mock no cache data exists
-      mockCache.generateTitleAuthorIdentifier = jest.fn().mockReturnValue('title_author:new_title_author_book|new_author');
+      mockCache.generateTitleAuthorIdentifier = jest
+        .fn()
+        .mockReturnValue('title_author:new_title_author_book|new_author');
       mockCache.getCachedBookInfo.mockResolvedValue({
         exists: false, // No cache data
       });
 
       // Mock progress validation
       const mockProgressManager = await import('../src/progress-manager.js');
-      jest.spyOn(mockProgressManager.default, 'getValidatedProgress').mockReturnValue(25.0);
+      jest
+        .spyOn(mockProgressManager.default, 'getValidatedProgress')
+        .mockReturnValue(25.0);
 
       // Mock successful match that will auto-add
       const mockNewMatch = {
@@ -708,14 +730,17 @@ describe('Sync Manager Two-Stage Integration', () => {
         _isSearchResult: true,
       };
       mockBookMatcher.findMatch.mockResolvedValue(mockNewMatch);
-      mockHardcover.addBookToLibrary.mockResolvedValue({ success: true, id: 'new-user-book' });
+      mockHardcover.addBookToLibrary.mockResolvedValue({
+        success: true,
+        id: 'new-user-book',
+      });
 
       const result = await syncManager._syncSingleBook(mockNewBook, null);
 
       // Should proceed with matching since no cache exists
       expect(mockBookMatcher.findMatch).toHaveBeenCalled();
       expect(result.status).not.toBe('skipped');
-      
+
       // Should check cache but not progress since no cache exists
       expect(mockCache.getCachedBookInfo).toHaveBeenCalled();
       expect(mockCache.hasProgressChanged).not.toHaveBeenCalled();
