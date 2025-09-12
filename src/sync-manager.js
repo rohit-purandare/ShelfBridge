@@ -598,10 +598,35 @@ export class SyncManager {
                 errors: [],
               };
             }
-            shouldPerformExpensiveMatching = true;
-            logger.debug(
-              `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync (${identifierType})`,
-            );
+
+            // CACHE OPTIMIZATION: For cached title/author books with progress changes,
+            // use cached edition_id instead of expensive matching
+            if (identifierType === 'title_author' && cachedInfo.edition_id) {
+              logger.debug(
+                `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - using cached edition (${identifierType})`,
+              );
+              shouldPerformExpensiveMatching = false;
+              // Create a mock hardcover match from cached data
+              hardcoverMatch = {
+                userBook: {
+                  id: null, // We don't have userBook.id in cache, will be looked up later
+                  book: {
+                    id: null, // We don't have book.id in cache
+                    title: title,
+                  },
+                },
+                edition: {
+                  id: cachedInfo.edition_id,
+                },
+                _isSearchResult: false,
+                _matchType: 'title_author_cached',
+              };
+            } else {
+              shouldPerformExpensiveMatching = true;
+              logger.debug(
+                `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync (${identifierType})`,
+              );
+            }
           }
         } else if (hasIdentifiers) {
           // For books with identifiers but no cache, proceed with matching
@@ -629,9 +654,12 @@ export class SyncManager {
         if (!extractedMetadata.identifiers)
           extractedMetadata.identifiers = identifiers;
       } else {
-        // For books that were skipped, we don't have match results
+        // For books that were skipped or using cached match, we don't need expensive matching
         extractedMetadata = { title, author, identifiers };
-        hardcoverMatch = null;
+        // hardcoverMatch may already be set from cached data above, don't override it
+        if (hardcoverMatch === undefined) {
+          hardcoverMatch = null;
+        }
       }
 
       // Validate progress with explicit error handling and position-based accuracy
