@@ -930,6 +930,9 @@ export class SyncManager {
         // Check if we found a book via search but it's not in user's library
         const hasSearchResult = matchResult?.match?._isSearchResult;
 
+        // For cache-optimized books, matchResult may be undefined but hardcoverMatch exists
+        const hasCachedMatch = hardcoverMatch && !matchResult;
+
         if (hasSearchResult && !this.globalConfig.auto_add_books) {
           // Book found via search but auto-add is disabled
           logger.info(
@@ -954,6 +957,43 @@ export class SyncManager {
           syncResult.hardcover_edition_id = matchResult.match.edition?.id;
           syncResult.timing = performance.now() - startTime;
           return syncResult;
+        } else if (hasCachedMatch) {
+          // Cache-optimized book but userBook.id is null - need to look up actual userBookId
+          logger.debug(
+            `Cache-optimized book ${title} has null userBookId, looking up actual userBookId`,
+            {
+              cachedEditionId: hardcoverMatch.edition?.id,
+              matchType: hardcoverMatch._matchType,
+            },
+          );
+
+          // Try to find the userBook by edition ID from the user's library
+          const actualUserBook = this.bookMatcher?.findUserBookByEditionId?.(
+            hardcoverMatch.edition?.id,
+          );
+          if (actualUserBook?.id) {
+            logger.debug(`Found actual userBookId for cached book ${title}`, {
+              userBookId: actualUserBook.id,
+              editionId: hardcoverMatch.edition?.id,
+            });
+            hardcoverMatch.userBook.id = actualUserBook.id;
+            // Continue with normal processing
+          } else {
+            logger.error(
+              `Cache-optimized book ${title} not found in user library`,
+              {
+                cachedEditionId: hardcoverMatch.edition?.id,
+                reason:
+                  'Book has cached data but not in current user library - may need library refresh',
+              },
+            );
+            syncResult.actions.push(`Cached book not found in current library`);
+            syncResult.status = 'error';
+            syncResult.reason =
+              'Cached book not found in user library - library data may be stale';
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+          }
         } else if (!this.globalConfig.auto_add_books) {
           // Not found anywhere
           syncResult.actions.push(`Not found in Hardcover library`);
