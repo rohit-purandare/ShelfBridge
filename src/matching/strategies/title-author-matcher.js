@@ -495,6 +495,7 @@ export class TitleAuthorMatcher {
               id: selectedEditionResult.bookId,
               title: selectedEditionResult.title,
             },
+            _isSearchResult: !existingUserBook, // True if not in user's library (enables auto-add)
             _matchType: 'title_author_two_stage',
             _tier: 3,
             _bookIdentificationScore: bestBookMatch._bookIdentificationScore,

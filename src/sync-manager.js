@@ -927,8 +927,35 @@ export class SyncManager {
       }
 
       if (!hardcoverMatch) {
-        // Check if auto-add is enabled and book meets minimum progress threshold
-        if (!this.globalConfig.auto_add_books) {
+        // Check if we found a book via search but it's not in user's library
+        const hasSearchResult = matchResult?.match?._isSearchResult;
+
+        if (hasSearchResult && !this.globalConfig.auto_add_books) {
+          // Book found via search but auto-add is disabled
+          logger.info(
+            `Book found in Hardcover database but not in your library: ${title}`,
+            {
+              foundTitle: matchResult.match.book?.title,
+              foundEditionId: matchResult.match.edition?.id,
+              foundFormat: matchResult.match.edition?.format,
+              userFormat: extractedMetadata.userFormat || 'unknown',
+              solution:
+                'Enable auto_add_books or manually add book to Hardcover library',
+            },
+          );
+
+          syncResult.actions.push(
+            `Found in Hardcover database but not in your library`,
+          );
+          syncResult.status = 'skipped';
+          syncResult.reason =
+            'Book found but not in library - enable auto_add_books or add manually';
+          syncResult.hardcover_book_id = matchResult.match.book?.id;
+          syncResult.hardcover_edition_id = matchResult.match.edition?.id;
+          syncResult.timing = performance.now() - startTime;
+          return syncResult;
+        } else if (!this.globalConfig.auto_add_books) {
+          // Not found anywhere
           syncResult.actions.push(`Not found in Hardcover library`);
           syncResult.status = 'skipped';
           syncResult.reason =
