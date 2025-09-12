@@ -405,7 +405,7 @@ export class BookMatcher {
   findUserBookByEditionId(editionId) {
     const editionLookup = this._getEditionLookup();
     const found = editionLookup[editionId] || null;
-    
+
     // Enhanced debugging for lookup failures
     if (!found) {
       const availableEditions = Object.keys(editionLookup);
@@ -416,7 +416,7 @@ export class BookMatcher {
         lookupTableSize: availableEditions.length,
       });
     }
-    
+
     return found;
   }
 
@@ -428,8 +428,8 @@ export class BookMatcher {
   findUserBookByBookId(bookId) {
     const { bookLookup } = this._getLookupTables();
     const found = bookLookup[bookId] || null;
-    
-    // Enhanced debugging for lookup failures  
+
+    // Enhanced debugging for lookup failures
     if (!found) {
       const availableBooks = Object.keys(bookLookup);
       logger.debug(`Book ID lookup failed`, {
@@ -439,7 +439,7 @@ export class BookMatcher {
         lookupTableSize: availableBooks.length,
       });
     }
-    
+
     return found;
   }
 
