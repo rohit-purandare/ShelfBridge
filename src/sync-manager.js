@@ -926,7 +926,7 @@ export class SyncManager {
         }
       }
 
-      if (!hardcoverMatch) {
+      if (!hardcoverMatch || !hardcoverMatch.userBook?.id) {
         // Check if we found a book via search but it's not in user's library
         const hasSearchResult = matchResult?.match?._isSearchResult;
 
