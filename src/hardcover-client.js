@@ -665,6 +665,15 @@ export class HardcoverClient {
   }
 
   async getBookCurrentProgress(userBookId) {
+    // Validate userBookId before making GraphQL call
+    if (!userBookId || userBookId === null || userBookId === undefined) {
+      logger.error('Cannot get book progress: invalid userBookId', {
+        userBookId: userBookId,
+        reason: 'Book must be in user library before progress can be retrieved',
+      });
+      return { latest_read: null, user_book: null, has_progress: false };
+    }
+
     const query = `
             query getBookProgress($userBookId: Int!) {
                 user_book_reads(where: {user_book_id: {_eq: $userBookId}}, order_by: {id: desc}, limit: 1) {
@@ -727,6 +736,16 @@ export class HardcoverClient {
     useSeconds = false,
     readingFormatId = null,
   ) {
+    // Validate userBookId before making GraphQL call
+    if (!userBookId || userBookId === null || userBookId === undefined) {
+      logger.error('Cannot insert user book read: invalid userBookId', {
+        userBookId: userBookId,
+        editionId: editionId,
+        progress: currentProgress,
+        reason: 'Book must be in user library before progress can be inserted',
+      });
+      throw new Error('Invalid userBookId - book not in user library');
+    }
     const mutation = useSeconds
       ? `
             mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {

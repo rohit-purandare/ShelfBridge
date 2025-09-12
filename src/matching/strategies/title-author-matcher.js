@@ -434,6 +434,11 @@ export class TitleAuthorMatcher {
           existingUserBook = findUserBookByEditionId(
             selectedEditionResult.edition.id,
           );
+          logger.debug(`Exact edition lookup for ${title}`, {
+            searchedEditionId: selectedEditionResult.edition.id,
+            found: !!existingUserBook,
+            userBookId: existingUserBook?.id || 'not found',
+          });
         }
 
         // If not found by edition, check by book ID (different edition of same book)
@@ -447,8 +452,15 @@ export class TitleAuthorMatcher {
                 foundEditionId: selectedEditionResult.edition.id,
                 userBookId: existingUserBook.id,
                 libraryTitle: existingUserBook.book.title,
+                userEditionId: existingUserBook.book.editions?.[0]?.id,
               },
             );
+          } else {
+            logger.debug(`Book ID lookup failed for ${title}`, {
+              searchedBookId: selectedEditionResult.bookId,
+              found: false,
+              reason: 'Book not in user library or lookup function failed',
+            });
           }
         }
 

@@ -2329,6 +2329,21 @@ export class SyncManager {
     absBook,
     author,
   ) {
+    // Validate userBookId before making GraphQL calls
+    if (!userBookId || userBookId === null || userBookId === undefined) {
+      logger.error(`Cannot update progress for ${title}: invalid userBookId`, {
+        userBookId: userBookId,
+        editionId: edition.id,
+        progress: progressPercent,
+        reason: 'Book must be in user library before progress can be updated',
+      });
+      return {
+        status: 'error',
+        reason: 'Invalid userBookId - book not in user library',
+        title,
+      };
+    }
+
     logger.info(`Updating progress for ${title}`, {
       progress: progressPercent,
       userBookId: userBookId,
