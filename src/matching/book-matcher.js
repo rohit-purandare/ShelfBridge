@@ -404,7 +404,20 @@ export class BookMatcher {
    */
   findUserBookByEditionId(editionId) {
     const editionLookup = this._getEditionLookup();
-    return editionLookup[editionId] || null;
+    const found = editionLookup[editionId] || null;
+    
+    // Enhanced debugging for lookup failures
+    if (!found) {
+      const availableEditions = Object.keys(editionLookup);
+      logger.debug(`Edition lookup failed`, {
+        searchedEditionId: editionId,
+        availableEditions: availableEditions.length,
+        sampleEditions: availableEditions.slice(0, 5), // Show first 5 for debugging
+        lookupTableSize: availableEditions.length,
+      });
+    }
+    
+    return found;
   }
 
   /**
@@ -414,7 +427,20 @@ export class BookMatcher {
    */
   findUserBookByBookId(bookId) {
     const { bookLookup } = this._getLookupTables();
-    return bookLookup[bookId] || null;
+    const found = bookLookup[bookId] || null;
+    
+    // Enhanced debugging for lookup failures  
+    if (!found) {
+      const availableBooks = Object.keys(bookLookup);
+      logger.debug(`Book ID lookup failed`, {
+        searchedBookId: bookId,
+        availableBooks: availableBooks.length,
+        sampleBookIds: availableBooks.slice(0, 5),
+        lookupTableSize: availableBooks.length,
+      });
+    }
+    
+    return found;
   }
 
   /**
