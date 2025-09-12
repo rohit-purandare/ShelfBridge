@@ -541,6 +541,9 @@ export class SyncManager {
         : this.cache.generateTitleAuthorIdentifier(title, author);
       let shouldPerformExpensiveMatching = true;
 
+      // Declare variables that will be set by cache optimization or expensive matching
+      let matchResult, hardcoverMatch, extractedMetadata;
+
       if ((hasIdentifiers || titleAuthorId) && !this.globalConfig.force_sync) {
         const identifier =
           identifiers.asin || identifiers.isbn || titleAuthorId;
@@ -599,14 +602,14 @@ export class SyncManager {
               };
             }
 
-            // CACHE OPTIMIZATION: For cached title/author books with progress changes,
+            // CACHE OPTIMIZATION: For ALL cached books with progress changes,
             // use cached edition_id instead of expensive matching
-            if (identifierType === 'title_author' && cachedInfo.edition_id) {
+            if (cachedInfo.edition_id) {
               logger.debug(
                 `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - using cached edition (${identifierType})`,
               );
               shouldPerformExpensiveMatching = false;
-              // Create a mock hardcover match from cached data
+              // Create a hardcover match from cached data
               hardcoverMatch = {
                 userBook: {
                   id: null, // We don't have userBook.id in cache, will be looked up later
@@ -619,7 +622,7 @@ export class SyncManager {
                   id: cachedInfo.edition_id,
                 },
                 _isSearchResult: false,
-                _matchType: 'title_author_cached',
+                _matchType: `${identifierType}_cached`,
               };
             } else {
               shouldPerformExpensiveMatching = true;
@@ -642,7 +645,6 @@ export class SyncManager {
       }
 
       // NOW perform expensive book matching (only for books that need sync or don't have identifiers)
-      let matchResult, hardcoverMatch, extractedMetadata;
       if (shouldPerformExpensiveMatching) {
         matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
         hardcoverMatch = matchResult.match;
