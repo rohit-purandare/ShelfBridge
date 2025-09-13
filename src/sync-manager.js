@@ -1649,24 +1649,50 @@ export class SyncManager {
       // Add the first result to library
       const edition = searchResults[0];
 
-      // Validate search result structure before accessing nested properties
-      if (!edition || !edition.book || !edition.book.id || !edition.id) {
+      // Validate basic edition structure
+      if (!edition || !edition.id) {
         logger.error(
           `Invalid search result structure for auto-add of ${title}`,
           {
             edition: edition,
-            hasBook: !!edition?.book,
-            hasBookId: !!edition?.book?.id,
+            hasEdition: !!edition,
             hasEditionId: !!edition?.id,
             searchResultsCount: searchResults.length,
           },
         );
         throw new Error(
-          `Invalid search result structure - missing required book or edition data`,
+          `Invalid search result structure - missing edition data`,
         );
       }
 
-      const bookId = edition.book.id;
+      // Handle missing book data by looking it up separately
+      let bookId = edition.book?.id;
+      if (!bookId) {
+        logger.debug(`Edition search result missing book data for ${title}, looking up book ID`, {
+          editionId: edition.id,
+          hasBookObject: !!edition.book,
+        });
+        
+        try {
+          const bookInfo = await this.hardcover.getBookIdFromEdition(edition.id);
+          if (bookInfo && bookInfo.bookId) {
+            bookId = bookInfo.bookId;
+            logger.debug(`Retrieved book ID ${bookId} for edition ${edition.id}`);
+          } else {
+            logger.error(`Failed to lookup book ID for edition ${edition.id}`, {
+              bookInfo: bookInfo,
+              editionId: edition.id,
+            });
+            throw new Error(`Cannot determine book ID for edition ${edition.id}`);
+          }
+        } catch (lookupError) {
+          logger.error(`Book ID lookup failed for auto-add of ${title}`, {
+            editionId: edition.id,
+            error: lookupError.message,
+          });
+          throw new Error(`Failed to lookup book ID: ${lookupError.message}`);
+        }
+      }
       const editionId = edition.id;
 
       logger.debug(`Found match in Hardcover`, {
