@@ -1668,24 +1668,33 @@ export class SyncManager {
       // Handle missing book data using multiple fallback strategies
       let bookId = edition.book?.id || edition.book_id; // Try nested object first, then direct field
       if (!bookId) {
-        logger.debug(`Edition search result missing book data for ${title}, looking up book ID`, {
-          editionId: edition.id,
-          hasBookObject: !!edition.book,
-          hasBookIdField: !!edition.book_id,
-          availableFields: Object.keys(edition),
-        });
-        
+        logger.debug(
+          `Edition search result missing book data for ${title}, looking up book ID`,
+          {
+            editionId: edition.id,
+            hasBookObject: !!edition.book,
+            hasBookIdField: !!edition.book_id,
+            availableFields: Object.keys(edition),
+          },
+        );
+
         try {
-          const bookInfo = await this.hardcover.getBookIdFromEdition(edition.id);
+          const bookInfo = await this.hardcover.getBookIdFromEdition(
+            edition.id,
+          );
           if (bookInfo && bookInfo.bookId) {
             bookId = bookInfo.bookId;
-            logger.debug(`Retrieved book ID ${bookId} for edition ${edition.id}`);
+            logger.debug(
+              `Retrieved book ID ${bookId} for edition ${edition.id}`,
+            );
           } else {
             logger.error(`Failed to lookup book ID for edition ${edition.id}`, {
               bookInfo: bookInfo,
               editionId: edition.id,
             });
-            throw new Error(`Cannot determine book ID for edition ${edition.id}`);
+            throw new Error(
+              `Cannot determine book ID for edition ${edition.id}`,
+            );
           }
         } catch (lookupError) {
           logger.error(`Book ID lookup failed for auto-add of ${title}`, {
