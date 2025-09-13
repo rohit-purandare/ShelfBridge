@@ -1795,13 +1795,13 @@ export class SyncManager {
             try {
               // Create hardcover match object for progress sync
               const _hardcoverMatch = {
-                userBook: { 
-                  id: addResult.id, 
-                  book: edition.book || { 
-                    id: bookId, 
+                userBook: {
+                  id: addResult.id,
+                  book: edition.book || {
+                    id: bookId,
                     title: title,
-                    contributions: [] 
-                  } 
+                    contributions: [],
+                  },
                 },
                 edition: edition,
               };
