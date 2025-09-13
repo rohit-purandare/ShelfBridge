@@ -1708,10 +1708,10 @@ export class SyncManager {
 
       logger.debug(`Found match in Hardcover`, {
         title: title,
-        hardcoverTitle: edition.book.title,
+        hardcoverTitle: edition.book?.title || 'Unknown',
         bookId: bookId,
         editionId: editionId,
-        format: edition.format,
+        format: edition.format || edition.reading_format?.format,
         dryRun: this.dryRun,
       });
 
@@ -1740,7 +1740,7 @@ export class SyncManager {
       if (addResult) {
         logger.info(`Successfully added ${title} to library`, {
           userBookId: addResult.id,
-          hardcoverTitle: edition.book.title,
+          hardcoverTitle: edition.book?.title || title,
         });
 
         // Store cache data in transaction
@@ -1795,7 +1795,14 @@ export class SyncManager {
             try {
               // Create hardcover match object for progress sync
               const _hardcoverMatch = {
-                userBook: { id: addResult.id, book: edition.book },
+                userBook: { 
+                  id: addResult.id, 
+                  book: edition.book || { 
+                    id: bookId, 
+                    title: title,
+                    contributions: [] 
+                  } 
+                },
                 edition: edition,
               };
 
