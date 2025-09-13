@@ -1665,12 +1665,14 @@ export class SyncManager {
         );
       }
 
-      // Handle missing book data by looking it up separately
-      let bookId = edition.book?.id;
+      // Handle missing book data using multiple fallback strategies
+      let bookId = edition.book?.id || edition.book_id; // Try nested object first, then direct field
       if (!bookId) {
         logger.debug(`Edition search result missing book data for ${title}, looking up book ID`, {
           editionId: edition.id,
           hasBookObject: !!edition.book,
+          hasBookIdField: !!edition.book_id,
+          availableFields: Object.keys(edition),
         });
         
         try {

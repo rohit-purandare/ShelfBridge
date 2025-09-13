@@ -829,6 +829,7 @@ export class HardcoverClient {
                     id
                     isbn_10
                     isbn_13
+                    book_id
                     pages
                     audio_seconds
                     physical_format
@@ -874,6 +875,7 @@ export class HardcoverClient {
                     isbn_10
                     isbn_13
                     asin
+                    book_id
                     pages
                     audio_seconds
                     physical_format
