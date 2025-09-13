@@ -1648,6 +1648,24 @@ export class SyncManager {
 
       // Add the first result to library
       const edition = searchResults[0];
+
+      // Validate search result structure before accessing nested properties
+      if (!edition || !edition.book || !edition.book.id || !edition.id) {
+        logger.error(
+          `Invalid search result structure for auto-add of ${title}`,
+          {
+            edition: edition,
+            hasBook: !!edition?.book,
+            hasBookId: !!edition?.book?.id,
+            hasEditionId: !!edition?.id,
+            searchResultsCount: searchResults.length,
+          },
+        );
+        throw new Error(
+          `Invalid search result structure - missing required book or edition data`,
+        );
+      }
+
       const bookId = edition.book.id;
       const editionId = edition.id;
 
