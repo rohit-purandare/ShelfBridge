@@ -537,7 +537,7 @@ export class SyncManager {
     const identifiers = extractBookIdentifiers(absBook);
 
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
-    let shouldPerformExpensiveMatching = true;
+    const shouldPerformExpensiveMatching = true;
 
     if (!this.globalConfig.force_sync) {
       // Validate progress for early check
@@ -588,7 +588,9 @@ export class SyncManager {
             }
           } catch (cacheError) {
             // Cache lookup failed for this key, try next
-            logger.debug(`Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`);
+            logger.debug(
+              `Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`,
+            );
             continue;
           }
         }
