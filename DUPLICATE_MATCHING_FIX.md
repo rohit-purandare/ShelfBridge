@@ -13,6 +13,7 @@ The issue was in the sync process flow in `src/sync-manager.js`:
 3. **Secondary Progress Check** (lines 1158-1172): ALL books checked progress again, even if already processed
 
 Books matched by title/author typically lack identifiers, so they:
+
 - Skipped the early optimization
 - Always went through full matching
 - Always hit the secondary progress check
@@ -24,12 +25,14 @@ This resulted in duplicate matching operations for the same books on every sync.
 ### 1. Enhanced Early Progress Optimization
 
 Extended the early progress check to use **multi-key cache lookup** that works for both:
+
 - Books with identifiers (ISBN/ASIN)
 - Books previously cached via any matching method
 
 **Code Location**: `src/sync-manager.js` lines 539-655
 
 **Key Improvements**:
+
 - Multi-key cache lookup tries all possible cache keys (ASIN, ISBN)
 - Falls back gracefully for books without identifiers
 - Prevents expensive matching when progress hasn't changed
@@ -38,6 +41,7 @@ Extended the early progress check to use **multi-key cache lookup** that works f
 ### 2. Cache Key Strategy
 
 The fix leverages the existing multi-key cache system:
+
 - **Primary**: ASIN identifiers (highest priority)
 - **Secondary**: ISBN identifiers
 - **Fallback**: title/author synthetic identifiers (`title_author_{userBookId}_{editionId}`)
@@ -58,29 +62,34 @@ The fix leverages the existing multi-key cache system:
 **Test Categories**:
 
 #### A. Books with Identifiers (ISBN/ASIN)
+
 - ✅ Skip books with unchanged progress when ISBN available
 - ✅ Proceed with sync when ISBN book progress has changed
 - ✅ Handle ASIN books similarly to ISBN books
 - ✅ Verify expensive matching operations are avoided for cached books
 
 #### B. Books Matched by Title/Author
+
 - ✅ Handle title/author matched books without identifiers
 - ✅ Prevent re-matching of previously matched books
 - ✅ Ensure cache lookup works with synthetic identifiers
 - ✅ Verify progress changes trigger appropriate sync actions
 
 #### C. Mixed Scenarios
+
 - ✅ Handle both identifier-based and title/author books in same sync
 - ✅ Verify optimization benefits for identifier books while maintaining functionality for title/author books
 - ✅ Test cache performance with large libraries
 
 #### D. Force Sync Override
+
 - ✅ Bypass all cache optimizations when force_sync enabled
 - ✅ Ensure force sync still respects other configuration options
 
 ### 2. Integration Tests
 
 #### A. Real Library Simulation
+
 ```javascript
 describe('Integration: Large Library Performance', () => {
   it('should efficiently handle 1000+ book library with mixed matching types', async () => {
@@ -93,6 +102,7 @@ describe('Integration: Large Library Performance', () => {
 ```
 
 #### B. Cache State Verification
+
 ```javascript
 describe('Integration: Cache State Management', () => {
   it('should maintain correct cache state across multiple syncs', async () => {
@@ -108,6 +118,7 @@ describe('Integration: Cache State Management', () => {
 ### 3. Performance Tests
 
 #### A. Before/After Comparison
+
 ```javascript
 describe('Performance: Matching Operation Count', () => {
   it('should reduce matching operations for cached books', async () => {
@@ -119,6 +130,7 @@ describe('Performance: Matching Operation Count', () => {
 ```
 
 #### B. Large Library Benchmarks
+
 ```javascript
 describe('Performance: Large Library Sync Time', () => {
   it('should show significant improvement with large cached libraries', async () => {
@@ -132,6 +144,7 @@ describe('Performance: Large Library Sync Time', () => {
 ### 4. Edge Case Tests
 
 #### A. Cache Corruption/Missing Entries
+
 ```javascript
 describe('Edge Cases: Cache Issues', () => {
   it('should handle corrupted cache entries gracefully', async () => {
@@ -145,6 +158,7 @@ describe('Edge Cases: Cache Issues', () => {
 ```
 
 #### B. Identifier Changes
+
 ```javascript
 describe('Edge Cases: Book Identifier Changes', () => {
   it('should handle books that gain/lose identifiers over time', async () => {
@@ -180,6 +194,7 @@ describe('Edge Cases: Book Identifier Changes', () => {
 ### 2. Log Analysis
 
 **Monitor these log messages**:
+
 - ✅ `Early skip for {title}: Progress unchanged via {type} cache`
 - ✅ `Progress changed for {title}: {progress}% - proceeding with sync`
 - ❌ Should NOT see repeated matching for same books with unchanged progress
@@ -187,6 +202,7 @@ describe('Edge Cases: Book Identifier Changes', () => {
 ### 3. Performance Monitoring
 
 **Key Metrics**:
+
 - **Sync duration**: Should decrease for subsequent syncs of same library
 - **API calls**: Reduced Hardcover API calls for cached books
 - **Database queries**: Efficient cache lookups vs full matching operations
@@ -195,17 +211,20 @@ describe('Edge Cases: Book Identifier Changes', () => {
 ## Implementation Notes
 
 ### 1. Backward Compatibility
+
 - ✅ No breaking changes to existing functionality
 - ✅ Force sync still works as expected
 - ✅ All existing cache mechanisms preserved
 - ✅ No changes to cache schema required
 
 ### 2. Configuration Options
+
 - ✅ `force_sync: true` bypasses all optimizations
 - ✅ Title/author matching can still be disabled via config
 - ✅ Existing cache settings remain functional
 
 ### 3. Error Handling
+
 - ✅ Cache lookup failures fall back to normal matching
 - ✅ Invalid cache entries don't break sync process
 - ✅ Database errors are caught and logged appropriately
@@ -213,19 +232,25 @@ describe('Edge Cases: Book Identifier Changes', () => {
 ## Future Improvements
 
 ### 1. Enhanced Title/Author Optimization
+
 Consider implementing a title/author cache lookup that doesn't require exact userBook/edition ID knowledge:
+
 - Title + author hash-based cache keys
 - Fuzzy matching for cached title/author combinations
 - Predictive cache warming for common title/author patterns
 
 ### 2. Cache Performance Monitoring
+
 Add metrics to track:
+
 - Cache hit/miss ratios
 - Average time savings from cache optimization
 - Cache size and cleanup efficiency
 
 ### 3. Intelligent Cache Invalidation
+
 Implement smarter cache invalidation:
+
 - Detect when book metadata changes significantly
 - Handle library reorganizations that affect userBook/edition IDs
 - Automatic cache cleanup for removed books

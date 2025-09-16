@@ -18,20 +18,28 @@ describe('Duplicate Matching Fix Verification', () => {
     console.log('🔍 BEFORE FIX:');
     console.log('  - Books with ISBN/ASIN: Early optimization ✓');
     console.log('  - Books matched by title/author: NO early optimization ❌');
-    console.log('  - Result: Title/author books ALWAYS re-matched on every sync');
+    console.log(
+      '  - Result: Title/author books ALWAYS re-matched on every sync',
+    );
     console.log('');
 
     console.log('🔧 AFTER FIX:');
     console.log('  - Books with ISBN/ASIN: Early optimization ✓');
     console.log('  - Books matched by title/author: Multi-key cache lookup ✓');
-    console.log('  - Result: ALL cached books skip expensive matching when progress unchanged');
+    console.log(
+      '  - Result: ALL cached books skip expensive matching when progress unchanged',
+    );
     console.log('');
 
     // Demonstrate the multi-key cache approach
     const mockCacheKeys = [
       { key: 'B123456789', type: 'asin', scenario: 'Book with ASIN' },
       { key: '9781234567890', type: 'isbn', scenario: 'Book with ISBN' },
-      { key: 'title_author_user123_edition456', type: 'title_author', scenario: 'Title/author matched book' },
+      {
+        key: 'title_author_user123_edition456',
+        type: 'title_author',
+        scenario: 'Title/author matched book',
+      },
     ];
 
     console.log('🚀 OPTIMIZATION STRATEGY:');
@@ -58,7 +66,9 @@ describe('Duplicate Matching Fix Verification', () => {
     console.log('  - Scales efficiently with library size');
     console.log('');
 
-    console.log('✅ Fix verification complete - duplicate matching prevention working correctly\n');
+    console.log(
+      '✅ Fix verification complete - duplicate matching prevention working correctly\n',
+    );
 
     // Basic assertion to ensure the test passes
     assert.strictEqual(true, true, 'Fix verification completed successfully');
@@ -68,9 +78,15 @@ describe('Duplicate Matching Fix Verification', () => {
     console.log('🔬 TECHNICAL IMPLEMENTATION DETAILS:\n');
 
     console.log('📁 Modified Files:');
-    console.log('  - src/sync-manager.js (lines 539-655): Enhanced early progress optimization');
-    console.log('  - tests/early-progress-optimization.test.js: Core cache functionality tests');
-    console.log('  - tests/minimal-duplicate-matching.test.js: Integration demo tests');
+    console.log(
+      '  - src/sync-manager.js (lines 539-655): Enhanced early progress optimization',
+    );
+    console.log(
+      '  - tests/early-progress-optimization.test.js: Core cache functionality tests',
+    );
+    console.log(
+      '  - tests/minimal-duplicate-matching.test.js: Integration demo tests',
+    );
     console.log('');
 
     console.log('⚙️  Key Code Changes:');

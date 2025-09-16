@@ -25,7 +25,7 @@ describe('Duplicate Matching Prevention', () => {
       id: 'test-user-123',
       abs_url: 'http://test-audiobookshelf.local',
       abs_token: 'test-token',
-      hardcover_token: 'test-hardcover-token'
+      hardcover_token: 'test-hardcover-token',
     };
 
     // Mock global configuration
@@ -36,8 +36,8 @@ describe('Duplicate Matching Prevention', () => {
       audiobookshelf_semaphore: 5,
       hardcover_semaphore: 1,
       title_author_matching: {
-        enabled: true
-      }
+        enabled: true,
+      },
     };
 
     // Initialize BookCache for testing
@@ -46,7 +46,7 @@ describe('Duplicate Matching Prevention', () => {
     // Create mock clients with all required methods
     mockAudiobookshelfClient = {
       getReadingProgress: async () => [],
-      cleanup: () => {}
+      cleanup: () => {},
     };
 
     mockHardcoverClient = {
@@ -60,16 +60,16 @@ describe('Duplicate Matching Prevention', () => {
       markBookCompleted: async () => true,
       getBookCurrentProgress: async () => ({ has_progress: false }),
       updateBookStatus: async () => true,
-      getBookIdFromEdition: async (editionId) => ({
+      getBookIdFromEdition: async editionId => ({
         bookId: 'mock-book-id',
         title: 'Mock Book Title',
-        contributions: []
+        contributions: [],
       }),
       getPreferredEditionFromBookId: async () => ({
         bookId: 'mock-book-id',
         title: 'Mock Book Title',
-        edition: { id: 'mock-edition-id', format: 'audiobook' }
-      })
+        edition: { id: 'mock-edition-id', format: 'audiobook' },
+      }),
     };
   });
 
@@ -93,9 +93,9 @@ describe('Duplicate Matching Prevention', () => {
           metadata: {
             title: 'Test Book with ISBN',
             authors: [{ name: 'Test Author' }],
-            isbn: '9781234567890'
-          }
-        }
+            isbn: '9781234567890',
+          },
+        },
       };
 
       // Pre-populate cache with this book's data
@@ -108,7 +108,7 @@ describe('Duplicate Matching Prevention', () => {
         'Test Author',
         45.5,
         Date.now(),
-        Date.now() - 86400000 // Started yesterday
+        Date.now() - 86400000, // Started yesterday
       );
 
       // Mock AudioBookshelf to return this book
@@ -127,7 +127,11 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       // Spy on expensive operations
       let bookMatchingCalled = false;
@@ -142,7 +146,9 @@ describe('Duplicate Matching Prevention', () => {
       const originalUpdateProgress = mockHardcoverClient.updateReadingProgress;
       mockHardcoverClient.updateReadingProgress = async (...args) => {
         hardcoverApiCalled = true;
-        return originalUpdateProgress ? originalUpdateProgress.call(mockHardcoverClient, ...args) : null;
+        return originalUpdateProgress
+          ? originalUpdateProgress.call(mockHardcoverClient, ...args)
+          : null;
       };
 
       // Run sync
@@ -152,13 +158,24 @@ describe('Duplicate Matching Prevention', () => {
       assert.strictEqual(result.books_processed, 1);
       assert.strictEqual(result.books_skipped, 1);
       assert.strictEqual(result.books_synced, 0);
-      assert.strictEqual(bookMatchingCalled, false, 'Book matching should not have been called for cached book');
-      assert.strictEqual(hardcoverApiCalled, false, 'Hardcover API should not have been called for unchanged progress');
+      assert.strictEqual(
+        bookMatchingCalled,
+        false,
+        'Book matching should not have been called for cached book',
+      );
+      assert.strictEqual(
+        hardcoverApiCalled,
+        false,
+        'Hardcover API should not have been called for unchanged progress',
+      );
 
       // Verify the skip reason
       const bookDetail = result.book_details[0];
       assert.strictEqual(bookDetail.status, 'skipped');
-      assert.strictEqual(bookDetail.reason, 'Progress unchanged (optimized early check)');
+      assert.strictEqual(
+        bookDetail.reason,
+        'Progress unchanged (optimized early check)',
+      );
       assert.strictEqual(bookDetail.cache_found, true);
     });
 
@@ -171,9 +188,9 @@ describe('Duplicate Matching Prevention', () => {
           metadata: {
             title: 'Test Book with Changed Progress',
             authors: [{ name: 'Test Author' }],
-            isbn: '9781234567891'
-          }
-        }
+            isbn: '9781234567891',
+          },
+        },
       };
 
       // Pre-populate cache with different progress
@@ -186,7 +203,7 @@ describe('Duplicate Matching Prevention', () => {
         'Test Author',
         45.0, // Different from current 67.3
         Date.now() - 3600000, // 1 hour ago
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       mockAudiobookshelfClient.getReadingProgress = async () => [testBook];
@@ -200,7 +217,11 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       // Track if expensive operations are called
       let bookMatchingCalled = false;
@@ -208,13 +229,24 @@ describe('Duplicate Matching Prevention', () => {
       syncManager.bookMatcher.findMatch = async (...args) => {
         bookMatchingCalled = true;
         // Return null to simulate no match found (will trigger auto-add logic)
-        return { match: null, extractedMetadata: { title: testBook.media.metadata.title, author: 'Test Author', identifiers: { isbn: testBook.media.metadata.isbn } } };
+        return {
+          match: null,
+          extractedMetadata: {
+            title: testBook.media.metadata.title,
+            author: 'Test Author',
+            identifiers: { isbn: testBook.media.metadata.isbn },
+          },
+        };
       };
 
       const result = await syncManager.syncProgress();
 
       // Verify that expensive matching was called since progress changed
-      assert.strictEqual(bookMatchingCalled, true, 'Book matching should have been called for changed progress');
+      assert.strictEqual(
+        bookMatchingCalled,
+        true,
+        'Book matching should have been called for changed progress',
+      );
       assert.strictEqual(result.books_processed, 1);
       // Note: The exact outcome depends on auto-add logic, but the key is that matching was attempted
     });
@@ -229,10 +261,10 @@ describe('Duplicate Matching Prevention', () => {
         media: {
           metadata: {
             title: 'Book Without Identifiers',
-            authors: [{ name: 'Unknown Author' }]
+            authors: [{ name: 'Unknown Author' }],
             // No ISBN or ASIN
-          }
-        }
+          },
+        },
       };
 
       // Pre-populate cache with title/author synthetic identifier
@@ -246,16 +278,19 @@ describe('Duplicate Matching Prevention', () => {
         'Unknown Author',
         33.7, // Same progress - should be skipped
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       mockAudiobookshelfClient.getReadingProgress = async () => [testBook];
 
       // Mock a Hardcover match for this title/author
       const mockHardcoverMatch = {
-        userBook: { id: 'user123', book: { id: 'book456', title: 'Book Without Identifiers' } },
+        userBook: {
+          id: 'user123',
+          book: { id: 'book456', title: 'Book Without Identifiers' },
+        },
         edition: { id: 'edition456', format: 'audiobook' },
-        _matchType: 'title_author'
+        _matchType: 'title_author',
       };
 
       syncManager = new SyncManager(mockUser, mockGlobalConfig, false, false);
@@ -267,7 +302,11 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       // Mock the book matcher to return the title/author match
       syncManager.bookMatcher.findMatch = async () => ({
@@ -275,8 +314,8 @@ describe('Duplicate Matching Prevention', () => {
         extractedMetadata: {
           title: 'Book Without Identifiers',
           author: 'Unknown Author',
-          identifiers: {} // No identifiers
-        }
+          identifiers: {}, // No identifiers
+        },
       });
 
       let hardcoverApiCalled = false;
@@ -294,7 +333,11 @@ describe('Duplicate Matching Prevention', () => {
       // The book should be processed since we can't reliably do early optimization
       // for title/author matches, but it should find the cache entry in the regular flow
       if (result.books_skipped === 1) {
-        assert.strictEqual(hardcoverApiCalled, false, 'Should not call Hardcover API for unchanged progress');
+        assert.strictEqual(
+          hardcoverApiCalled,
+          false,
+          'Should not call Hardcover API for unchanged progress',
+        );
       }
     });
 
@@ -306,9 +349,9 @@ describe('Duplicate Matching Prevention', () => {
         media: {
           metadata: {
             title: 'Previously Matched Book',
-            authors: [{ name: 'Cached Author' }]
-          }
-        }
+            authors: [{ name: 'Cached Author' }],
+          },
+        },
       };
 
       // Simulate a book that was previously matched by title/author and cached
@@ -322,7 +365,7 @@ describe('Duplicate Matching Prevention', () => {
         'Cached Author',
         75.2, // Different progress - should trigger sync
         Date.now() - 7200000, // 2 hours ago
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       mockAudiobookshelfClient.getReadingProgress = async () => [testBook];
@@ -336,7 +379,11 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       // Count how many times expensive matching is called
       let matchingCallCount = 0;
@@ -346,23 +393,29 @@ describe('Duplicate Matching Prevention', () => {
           match: {
             userBook: { id: 'user456', book: { id: 'book789' } },
             edition: { id: 'edition789', format: 'audiobook' },
-            _matchType: 'title_author'
+            _matchType: 'title_author',
           },
           extractedMetadata: {
             title: 'Previously Matched Book',
             author: 'Cached Author',
-            identifiers: {}
-          }
+            identifiers: {},
+          },
         };
       };
 
-      mockHardcoverClient.updateReadingProgress = async () => ({ id: 'update-456' });
+      mockHardcoverClient.updateReadingProgress = async () => ({
+        id: 'update-456',
+      });
 
       await syncManager.syncProgress();
 
       // The key assertion: expensive matching should only be called once
       // The fix ensures that books don't get re-matched on every progress update
-      assert.strictEqual(matchingCallCount, 1, 'Book matching should only be called once per sync');
+      assert.strictEqual(
+        matchingCallCount,
+        1,
+        'Book matching should only be called once per sync',
+      );
     });
   });
 
@@ -376,9 +429,9 @@ describe('Duplicate Matching Prevention', () => {
             metadata: {
               title: 'ISBN Book',
               authors: [{ name: 'ISBN Author' }],
-              isbn: '9781111111111'
-            }
-          }
+              isbn: '9781111111111',
+            },
+          },
         },
         {
           id: 'abs-book-title',
@@ -386,11 +439,11 @@ describe('Duplicate Matching Prevention', () => {
           media: {
             metadata: {
               title: 'Title Author Book',
-              authors: [{ name: 'Title Author' }]
+              authors: [{ name: 'Title Author' }],
               // No identifiers
-            }
-          }
-        }
+            },
+          },
+        },
       ];
 
       // Cache both books
@@ -403,7 +456,7 @@ describe('Duplicate Matching Prevention', () => {
         'ISBN Author',
         25.0, // Same progress
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       await bookCache.storeBookSyncData(
@@ -415,7 +468,7 @@ describe('Duplicate Matching Prevention', () => {
         'Title Author',
         45.0, // Different progress
         Date.now() - 3600000,
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       mockAudiobookshelfClient.getReadingProgress = async () => booksToSync;
@@ -429,18 +482,29 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       let isbnBookMatchingCalled = false;
       let titleBookMatchingCalled = false;
 
-      syncManager.bookMatcher.findMatch = async (absBook) => {
+      syncManager.bookMatcher.findMatch = async absBook => {
         if (absBook.media.metadata.isbn) {
           isbnBookMatchingCalled = true;
         } else {
           titleBookMatchingCalled = true;
         }
-        return { match: null, extractedMetadata: { title: absBook.media.metadata.title, author: 'Test', identifiers: {} } };
+        return {
+          match: null,
+          extractedMetadata: {
+            title: absBook.media.metadata.title,
+            author: 'Test',
+            identifiers: {},
+          },
+        };
       };
 
       const result = await syncManager.syncProgress();
@@ -448,7 +512,11 @@ describe('Duplicate Matching Prevention', () => {
       assert.strictEqual(result.books_processed, 2);
 
       // ISBN book should skip expensive matching due to early optimization
-      assert.strictEqual(isbnBookMatchingCalled, false, 'ISBN book with unchanged progress should skip matching');
+      assert.strictEqual(
+        isbnBookMatchingCalled,
+        false,
+        'ISBN book with unchanged progress should skip matching',
+      );
 
       // Title/author book will go through matching (can't optimize early without identifiers)
       // but shouldn't be re-matched if it finds the cache entry
@@ -465,9 +533,9 @@ describe('Duplicate Matching Prevention', () => {
           metadata: {
             title: 'Force Sync Book',
             authors: [{ name: 'Force Author' }],
-            isbn: '9782222222222'
-          }
-        }
+            isbn: '9782222222222',
+          },
+        },
       };
 
       // Cache with same progress
@@ -480,7 +548,7 @@ describe('Duplicate Matching Prevention', () => {
         'Force Author',
         50.0, // Same progress
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Enable force sync
@@ -497,18 +565,33 @@ describe('Duplicate Matching Prevention', () => {
 
       // Reinitialize book matcher with mocked dependencies
       const { BookMatcher } = await import('../src/matching/book-matcher.js');
-      syncManager.bookMatcher = new BookMatcher(mockHardcoverClient, bookCache, mockGlobalConfig);
+      syncManager.bookMatcher = new BookMatcher(
+        mockHardcoverClient,
+        bookCache,
+        mockGlobalConfig,
+      );
 
       let matchingCalled = false;
       syncManager.bookMatcher.findMatch = async () => {
         matchingCalled = true;
-        return { match: null, extractedMetadata: { title: 'Force Sync Book', author: 'Force Author', identifiers: { isbn: '9782222222222' } } };
+        return {
+          match: null,
+          extractedMetadata: {
+            title: 'Force Sync Book',
+            author: 'Force Author',
+            identifiers: { isbn: '9782222222222' },
+          },
+        };
       };
 
       const result = await syncManager.syncProgress();
 
       // With force_sync enabled, should always proceed with matching
-      assert.strictEqual(matchingCalled, true, 'Force sync should bypass cache optimization');
+      assert.strictEqual(
+        matchingCalled,
+        true,
+        'Force sync should bypass cache optimization',
+      );
       assert.strictEqual(result.books_processed, 1);
     });
   });

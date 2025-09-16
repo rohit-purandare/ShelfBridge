@@ -20,17 +20,17 @@ describe('Minimal Duplicate Matching Prevention', () => {
           metadata: {
             title: 'Test Book',
             authors: [{ name: 'Test Author' }],
-            isbn: '9781234567890'
-          }
+            isbn: '9781234567890',
+          },
         },
         progress_percentage: 45.5,
-        is_finished: false
+        is_finished: false,
       };
 
       // Extract identifiers (simulating the sync-manager logic)
       const identifiers = {
         isbn: testBook.media.metadata.isbn,
-        asin: null
+        asin: null,
       };
 
       const title = testBook.media.metadata.title;
@@ -40,10 +40,14 @@ describe('Minimal Duplicate Matching Prevention', () => {
       const validatedProgress = ProgressManager.getValidatedProgress(
         testBook,
         `book "${title}" test`,
-        { allowNull: false }
+        { allowNull: false },
       );
 
-      assert.strictEqual(validatedProgress, 45.5, 'Progress validation should work');
+      assert.strictEqual(
+        validatedProgress,
+        45.5,
+        'Progress validation should work',
+      );
 
       // Pre-populate cache (simulating previous sync)
       await bookCache.storeBookSyncData(
@@ -55,7 +59,7 @@ describe('Minimal Duplicate Matching Prevention', () => {
         author,
         45.5, // Same progress
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Simulate the early optimization check from sync-manager.js
@@ -86,22 +90,31 @@ describe('Minimal Duplicate Matching Prevention', () => {
           if (!progressChanged) {
             hasChanged = false;
             cacheFoundEarly = true;
-            console.log(`Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`);
+            console.log(
+              `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+            );
             break;
           }
         } catch (cacheError) {
           // Cache lookup failed for this key, try next
-          console.log(`Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`);
+          console.log(
+            `Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`,
+          );
           continue;
         }
       }
 
       // Verify the optimization worked
       assert.strictEqual(hasChanged, false, 'Should detect unchanged progress');
-      assert.strictEqual(cacheFoundEarly, true, 'Should find cache entry early');
+      assert.strictEqual(
+        cacheFoundEarly,
+        true,
+        'Should find cache entry early',
+      );
 
-      console.log(`✅ Early optimization test passed - book would be skipped, avoiding expensive matching`);
-
+      console.log(
+        `✅ Early optimization test passed - book would be skipped, avoiding expensive matching`,
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -119,16 +132,16 @@ describe('Minimal Duplicate Matching Prevention', () => {
           metadata: {
             title: 'Changed Progress Book',
             authors: [{ name: 'Test Author' }],
-            isbn: '9781111111111'
-          }
+            isbn: '9781111111111',
+          },
         },
         progress_percentage: 67.3, // Changed from cached 45.0
-        is_finished: false
+        is_finished: false,
       };
 
       const identifiers = {
         isbn: testBook.media.metadata.isbn,
-        asin: null
+        asin: null,
       };
 
       const title = testBook.media.metadata.title;
@@ -137,7 +150,7 @@ describe('Minimal Duplicate Matching Prevention', () => {
       const validatedProgress = ProgressManager.getValidatedProgress(
         testBook,
         `book "${title}" test`,
-        { allowNull: false }
+        { allowNull: false },
       );
 
       // Pre-populate cache with different progress
@@ -150,7 +163,7 @@ describe('Minimal Duplicate Matching Prevention', () => {
         author,
         45.0, // Different from current 67.3
         Date.now() - 3600000, // 1 hour ago
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Simulate the early optimization check
@@ -180,8 +193,9 @@ describe('Minimal Duplicate Matching Prevention', () => {
 
       // Verify sync should proceed
       assert.strictEqual(hasChanged, true, 'Should detect changed progress');
-      console.log(`✅ Progress change test passed - book would proceed with sync due to changed progress`);
-
+      console.log(
+        `✅ Progress change test passed - book would proceed with sync due to changed progress`,
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();

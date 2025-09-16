@@ -43,7 +43,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Check if progress has changed (same progress)
@@ -52,10 +52,14 @@ describe('Early Progress Optimization', () => {
         isbn,
         title,
         progress,
-        'isbn'
+        'isbn',
       );
 
-      assert.strictEqual(hasChanged, false, 'Should return false when progress unchanged');
+      assert.strictEqual(
+        hasChanged,
+        false,
+        'Should return false when progress unchanged',
+      );
     });
 
     it('should return true when progress has changed for ISBN book', async () => {
@@ -75,7 +79,7 @@ describe('Early Progress Optimization', () => {
         author,
         initialProgress,
         Date.now() - 3600000, // 1 hour ago
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Check if progress has changed (different progress)
@@ -84,10 +88,14 @@ describe('Early Progress Optimization', () => {
         isbn,
         title,
         newProgress,
-        'isbn'
+        'isbn',
       );
 
-      assert.strictEqual(hasChanged, true, 'Should return true when progress changed');
+      assert.strictEqual(
+        hasChanged,
+        true,
+        'Should return true when progress changed',
+      );
     });
 
     it('should work with ASIN identifiers', async () => {
@@ -106,7 +114,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Check if progress has changed (same progress)
@@ -115,10 +123,14 @@ describe('Early Progress Optimization', () => {
         asin,
         title,
         progress,
-        'asin'
+        'asin',
       );
 
-      assert.strictEqual(hasChanged, false, 'Should work with ASIN identifiers');
+      assert.strictEqual(
+        hasChanged,
+        false,
+        'Should work with ASIN identifiers',
+      );
     });
 
     it('should work with title/author synthetic identifiers', async () => {
@@ -137,7 +149,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Check if progress has changed (same progress)
@@ -146,10 +158,14 @@ describe('Early Progress Optimization', () => {
         titleAuthorId,
         title,
         progress,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(hasChanged, false, 'Should work with title/author synthetic identifiers');
+      assert.strictEqual(
+        hasChanged,
+        false,
+        'Should work with title/author synthetic identifiers',
+      );
     });
   });
 
@@ -170,7 +186,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Should find by ISBN
@@ -178,7 +194,7 @@ describe('Early Progress Optimization', () => {
         testUserId,
         isbn,
         title,
-        'isbn'
+        'isbn',
       );
       assert.strictEqual(cachedByIsbn.exists, true, 'Should find by ISBN');
 
@@ -195,14 +211,14 @@ describe('Early Progress Optimization', () => {
         author,
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       const cachedByAsin = await bookCache.getCachedBookInfo(
         testUserId,
         asin,
         title,
-        'asin'
+        'asin',
       );
       assert.strictEqual(cachedByAsin.exists, true, 'Should find by ASIN');
     });
@@ -224,7 +240,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress1,
         Date.now() - 86400000, // Yesterday
-        Date.now() - 172800000 // 2 days ago
+        Date.now() - 172800000, // 2 days ago
       );
 
       // Later, book gains ISBN metadata
@@ -238,7 +254,7 @@ describe('Early Progress Optimization', () => {
         author,
         progress2,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Should find both cache entries
@@ -246,17 +262,25 @@ describe('Early Progress Optimization', () => {
         testUserId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
-      assert.strictEqual(cachedByTitle.exists, true, 'Should find original title/author cache');
+      assert.strictEqual(
+        cachedByTitle.exists,
+        true,
+        'Should find original title/author cache',
+      );
 
       const cachedByIsbn = await bookCache.getCachedBookInfo(
         testUserId,
         isbn,
         title,
-        'isbn'
+        'isbn',
       );
-      assert.strictEqual(cachedByIsbn.exists, true, 'Should find new ISBN cache');
+      assert.strictEqual(
+        cachedByIsbn.exists,
+        true,
+        'Should find new ISBN cache',
+      );
 
       // Progress check should work with both identifiers
       const titleProgressChanged = await bookCache.hasProgressChanged(
@@ -264,16 +288,20 @@ describe('Early Progress Optimization', () => {
         titleAuthorId,
         title,
         progress1,
-        'title_author'
+        'title_author',
       );
-      assert.strictEqual(titleProgressChanged, false, 'Title/author progress unchanged');
+      assert.strictEqual(
+        titleProgressChanged,
+        false,
+        'Title/author progress unchanged',
+      );
 
       const isbnProgressChanged = await bookCache.hasProgressChanged(
         testUserId,
         isbn,
         title,
         progress2,
-        'isbn'
+        'isbn',
       );
       assert.strictEqual(isbnProgressChanged, false, 'ISBN progress unchanged');
     });
@@ -285,12 +313,42 @@ describe('Early Progress Optimization', () => {
 
       // Create multiple books with different identifier types
       const testBooks = [
-        { id: '9781111111111', type: 'isbn', title: 'ISBN Book 1', progress: 10.0 },
-        { id: '9781111111112', type: 'isbn', title: 'ISBN Book 2', progress: 20.0 },
-        { id: 'B111111111', type: 'asin', title: 'ASIN Book 1', progress: 30.0 },
-        { id: 'B111111112', type: 'asin', title: 'ASIN Book 2', progress: 40.0 },
-        { id: 'title_author_user1_ed1', type: 'title_author', title: 'Title Book 1', progress: 50.0 },
-        { id: 'title_author_user2_ed2', type: 'title_author', title: 'Title Book 2', progress: 60.0 },
+        {
+          id: '9781111111111',
+          type: 'isbn',
+          title: 'ISBN Book 1',
+          progress: 10.0,
+        },
+        {
+          id: '9781111111112',
+          type: 'isbn',
+          title: 'ISBN Book 2',
+          progress: 20.0,
+        },
+        {
+          id: 'B111111111',
+          type: 'asin',
+          title: 'ASIN Book 1',
+          progress: 30.0,
+        },
+        {
+          id: 'B111111112',
+          type: 'asin',
+          title: 'ASIN Book 2',
+          progress: 40.0,
+        },
+        {
+          id: 'title_author_user1_ed1',
+          type: 'title_author',
+          title: 'Title Book 1',
+          progress: 50.0,
+        },
+        {
+          id: 'title_author_user2_ed2',
+          type: 'title_author',
+          title: 'Title Book 2',
+          progress: 60.0,
+        },
       ];
 
       // Store all books
@@ -304,7 +362,7 @@ describe('Early Progress Optimization', () => {
           'Test Author',
           book.progress,
           Date.now(),
-          Date.now() - 86400000
+          Date.now() - 86400000,
         );
       }
 
@@ -315,16 +373,23 @@ describe('Early Progress Optimization', () => {
           book.id,
           book.title,
           book.progress,
-          book.type
+          book.type,
         );
-        assert.strictEqual(hasChanged, false, `${book.title} should be unchanged`);
+        assert.strictEqual(
+          hasChanged,
+          false,
+          `${book.title} should be unchanged`,
+        );
       }
 
       const endTime = Date.now();
       const duration = endTime - startTime;
 
       // Performance should be reasonable (under 1 second for 6 books x 2 operations each)
-      assert.ok(duration < 1000, `Cache operations should be fast, took ${duration}ms`);
+      assert.ok(
+        duration < 1000,
+        `Cache operations should be fast, took ${duration}ms`,
+      );
     });
   });
 
@@ -340,11 +405,15 @@ describe('Early Progress Optimization', () => {
         nonExistentId,
         title,
         progress,
-        'isbn'
+        'isbn',
       );
 
       // Should return true (needs sync) when no cache entry exists
-      assert.strictEqual(hasChanged, true, 'Should return true for non-existent cache entries');
+      assert.strictEqual(
+        hasChanged,
+        true,
+        'Should return true for non-existent cache entries',
+      );
     });
 
     it('should handle invalid identifier types', async () => {
@@ -362,7 +431,7 @@ describe('Early Progress Optimization', () => {
         'Test Author',
         progress,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Try to lookup with invalid type - should not find it
@@ -371,10 +440,14 @@ describe('Early Progress Optimization', () => {
         isbn,
         title,
         progress,
-        'invalid_type'
+        'invalid_type',
       );
 
-      assert.strictEqual(hasChanged, true, 'Should return true for invalid identifier types');
+      assert.strictEqual(
+        hasChanged,
+        true,
+        'Should return true for invalid identifier types',
+      );
     });
   });
 });
