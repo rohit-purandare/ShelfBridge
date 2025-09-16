@@ -607,8 +607,9 @@ export class SyncManager {
           }
         }
 
-        // If no identifier-based cache hit, check for title/author cache entry
-        if (hasChanged && !identifiers.asin && !identifiers.isbn) {
+        // ALWAYS check title/author cache for comprehensive optimization
+        // This handles books that gained identifiers after being originally matched by title/author
+        if (hasChanged) {
           // Try MULTIPLE title/author cache patterns for backward compatibility with existing cache entries
           const titleAuthorPatterns = [
             // 1. Current standard pattern (TitleAuthorMatcher)
@@ -2920,12 +2921,34 @@ export class SyncManager {
           const identifiers = {};
           identifiers[sessionData.identifierType] = sessionData.identifier;
 
-          // Try to find existing Hardcover match
-          const matchResult = await this.bookMatcher.findMatchByIdentifier(
-            identifiers,
-            sessionData.title,
-            sessionData.identifierType,
-          );
+          // Try to find existing Hardcover match using stored identifier
+          // For expired sessions, we should use a direct lookup since we have the exact identifier
+          let matchResult = null;
+
+          try {
+            // Create a minimal book object for matching
+            const sessionBook = {
+              id: mockBook.id,
+              media: {
+                metadata: {
+                  title: sessionData.title,
+                  authors: [{ name: 'Session Author' }], // We may not have author stored
+                  ...identifiers, // Add the stored identifier (isbn, asin, or title_author key)
+                },
+              },
+            };
+
+            // Use the standard findMatch flow but skip expensive operations if we have cached data
+            matchResult = await this.bookMatcher.findMatch(
+              sessionBook,
+              this.userId,
+            );
+          } catch (sessionMatchError) {
+            logger.warn(
+              `Session matching failed for ${sessionData.title}: ${sessionMatchError.message}`,
+            );
+            matchResult = null;
+          }
 
           if (matchResult && matchResult.match) {
             // Sync directly to Hardcover using the existing match
