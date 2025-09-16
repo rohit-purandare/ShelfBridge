@@ -26,20 +26,25 @@ describe('Duplicate Matching Final Verification', () => {
         media: {
           metadata: {
             title: 'Book Without Identifiers',
-            authors: [{ name: 'No Identifier Author' }]
+            authors: [{ name: 'No Identifier Author' }],
             // No ISBN or ASIN - will require title/author matching
-          }
-        }
+          },
+        },
       };
 
       const title = absBook.media.metadata.title;
       const author = absBook.media.metadata.authors[0].name;
 
       // Step 1: Simulate the first sync where book gets matched by title/author
-      console.log('\n🔄 Simulating FIRST SYNC (initial title/author matching):');
+      console.log(
+        '\n🔄 Simulating FIRST SYNC (initial title/author matching):',
+      );
 
       // Generate the consistent title/author identifier (same as TitleAuthorMatcher uses)
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       console.log(`  Generated cache identifier: ${titleAuthorId}`);
 
       // Store the book as if it was successfully matched and synced
@@ -52,13 +57,15 @@ describe('Duplicate Matching Final Verification', () => {
         author,
         67.5, // Current progress
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`  ✅ Book cached with title/author identifier`);
 
       // Step 2: Simulate the SECOND SYNC with same progress (should skip expensive matching)
-      console.log('\n🔄 Simulating SECOND SYNC (progress unchanged - should optimize):');
+      console.log(
+        '\n🔄 Simulating SECOND SYNC (progress unchanged - should optimize):',
+      );
 
       // Extract identifiers (will be empty for this book)
       const identifiers = { isbn: null, asin: null };
@@ -67,7 +74,7 @@ describe('Duplicate Matching Final Verification', () => {
       const validatedProgress = ProgressManager.getValidatedProgress(
         absBook,
         `book "${title}" final test`,
-        { allowNull: false }
+        { allowNull: false },
       );
 
       // Simulate the enhanced early optimization logic from sync-manager.js
@@ -83,7 +90,10 @@ describe('Duplicate Matching Final Verification', () => {
 
       // Add title/author key for books without identifiers (THE FIX!)
       if (!identifiers.asin && !identifiers.isbn) {
-        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(title, author);
+        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
         possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
         console.log(`  🔍 Added title/author cache key: ${titleAuthorKey}`);
       }
@@ -106,7 +116,9 @@ describe('Duplicate Matching Final Verification', () => {
         if (!progressChanged) {
           hasChanged = false;
           cacheFoundEarly = true;
-          console.log(`  ✅ CACHE HIT! Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`);
+          console.log(
+            `  ✅ CACHE HIT! Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+          );
           break;
         } else {
           console.log(`  ➡️  Progress changed via ${type} cache`);
@@ -114,15 +126,27 @@ describe('Duplicate Matching Final Verification', () => {
       }
 
       // Verify the optimization worked
-      assert.strictEqual(hasChanged, false, 'Should detect unchanged progress via title/author cache');
-      assert.strictEqual(cacheFoundEarly, true, 'Should find title/author cache entry early');
+      assert.strictEqual(
+        hasChanged,
+        false,
+        'Should detect unchanged progress via title/author cache',
+      );
+      assert.strictEqual(
+        cacheFoundEarly,
+        true,
+        'Should find title/author cache entry early',
+      );
 
-      console.log(`\n🎉 SUCCESS! Book would be skipped - no expensive matching needed`);
+      console.log(
+        `\n🎉 SUCCESS! Book would be skipped - no expensive matching needed`,
+      );
       console.log(`   ❌ BEFORE FIX: Would always re-match title/author books`);
       console.log(`   ✅ AFTER FIX: Skips re-matching when progress unchanged`);
 
       // Step 3: Test with changed progress (should proceed with sync)
-      console.log('\n🔄 Simulating THIRD SYNC (progress changed - should proceed):');
+      console.log(
+        '\n🔄 Simulating THIRD SYNC (progress changed - should proceed):',
+      );
 
       const changedProgress = 75.2; // Different from cached 67.5
       let progressChangedCorrectly = false;
@@ -138,18 +162,29 @@ describe('Duplicate Matching Final Verification', () => {
 
         if (progressChanged) {
           progressChangedCorrectly = true;
-          console.log(`  ✅ Progress change detected via ${type} cache (${changedProgress.toFixed(1)}% vs ${validatedProgress.toFixed(1)}%)`);
+          console.log(
+            `  ✅ Progress change detected via ${type} cache (${changedProgress.toFixed(1)}% vs ${validatedProgress.toFixed(1)}%)`,
+          );
           break;
         }
       }
 
-      assert.strictEqual(progressChangedCorrectly, true, 'Should detect changed progress correctly');
+      assert.strictEqual(
+        progressChangedCorrectly,
+        true,
+        'Should detect changed progress correctly',
+      );
       console.log(`  ➡️  Would proceed with sync due to progress change`);
 
-      console.log('\n✅ Duplicate matching prevention fix verified successfully!');
-      console.log('   📊 Performance benefit: Title/author books now benefit from cache optimization');
-      console.log('   🚀 Scalability: Large libraries with mixed book types will sync much faster');
-
+      console.log(
+        '\n✅ Duplicate matching prevention fix verified successfully!',
+      );
+      console.log(
+        '   📊 Performance benefit: Title/author books now benefit from cache optimization',
+      );
+      console.log(
+        '   🚀 Scalability: Large libraries with mixed book types will sync much faster',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();
