@@ -35,7 +35,7 @@ describe('Multi-Pattern Cache Lookup', () => {
         author,
         55.5,
         Date.now() - 3600000,
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`  Stored with legacy pattern: ${legacyPattern}`);
@@ -63,7 +63,9 @@ describe('Multi-Pattern Cache Lookup', () => {
         }
       }
 
-      console.log(`  Generated patterns to check: ${titleAuthorPatterns.length}`);
+      console.log(
+        `  Generated patterns to check: ${titleAuthorPatterns.length}`,
+      );
       titleAuthorPatterns.forEach((pattern, index) => {
         console.log(`    ${index + 1}. ${pattern}`);
       });
@@ -77,21 +79,37 @@ describe('Multi-Pattern Cache Lookup', () => {
           userId,
           pattern,
           title,
-          'title_author'
+          'title_author',
         );
 
-        console.log(`  Checking pattern "${pattern}": exists=${titleAuthorCached?.exists || false}, hasEdition=${!!(titleAuthorCached?.edition_id)}`);
+        console.log(
+          `  Checking pattern "${pattern}": exists=${titleAuthorCached?.exists || false}, hasEdition=${!!titleAuthorCached?.edition_id}`,
+        );
 
-        if (titleAuthorCached && titleAuthorCached.exists && titleAuthorCached.edition_id) {
+        if (
+          titleAuthorCached &&
+          titleAuthorCached.exists &&
+          titleAuthorCached.edition_id
+        ) {
           bestCacheMatch = titleAuthorCached;
           bestCachePattern = pattern;
-          console.log(`  ✅ FOUND complete cache entry with pattern: ${pattern}`);
+          console.log(
+            `  ✅ FOUND complete cache entry with pattern: ${pattern}`,
+          );
           break;
         }
       }
 
-      assert.strictEqual(!!bestCacheMatch, true, 'Should find cached book with legacy pattern');
-      assert.strictEqual(bestCachePattern, legacyPattern, 'Should find the exact legacy pattern we stored');
+      assert.strictEqual(
+        !!bestCacheMatch,
+        true,
+        'Should find cached book with legacy pattern',
+      );
+      assert.strictEqual(
+        bestCachePattern,
+        legacyPattern,
+        'Should find the exact legacy pattern we stored',
+      );
 
       // Test progress change detection
       const progressChanged = await bookCache.hasProgressChanged(
@@ -99,18 +117,27 @@ describe('Multi-Pattern Cache Lookup', () => {
         bestCachePattern,
         title,
         55.5, // Same progress
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(progressChanged, false, 'Should detect unchanged progress with legacy pattern');
-      console.log(`  ✅ Progress unchanged detected: Would skip title/author search!`);
+      assert.strictEqual(
+        progressChanged,
+        false,
+        'Should detect unchanged progress with legacy pattern',
+      );
+      console.log(
+        `  ✅ Progress unchanged detected: Would skip title/author search!`,
+      );
 
       // === Test Case 2: New pattern compatibility ===
       console.log('\n📚 TEST CASE 2: New pattern still works');
 
       const newTitle = 'New Pattern Book';
       const newAuthor = 'New Author';
-      const newPattern = bookCache.generateTitleAuthorIdentifier(newTitle, newAuthor);
+      const newPattern = bookCache.generateTitleAuthorIdentifier(
+        newTitle,
+        newAuthor,
+      );
 
       await bookCache.storeBookSyncData(
         userId,
@@ -121,7 +148,7 @@ describe('Multi-Pattern Cache Lookup', () => {
         newAuthor,
         33.3,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`  Stored with new pattern: ${newPattern}`);
@@ -131,18 +158,23 @@ describe('Multi-Pattern Cache Lookup', () => {
         userId,
         newPattern,
         newTitle,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(newPatternLookup.exists, true, 'Should find book with new pattern');
+      assert.strictEqual(
+        newPatternLookup.exists,
+        true,
+        'Should find book with new pattern',
+      );
       console.log(`  ✅ New pattern lookup successful`);
 
       console.log('\n🎉 MULTI-PATTERN LOOKUP SUCCESS:');
       console.log('  ✅ Legacy patterns: Found and optimized');
       console.log('  ✅ New patterns: Work as expected');
       console.log('  ✅ Backward compatibility: Fully maintained');
-      console.log('  🚀 Performance: ALL cached books now benefit from optimization!');
-
+      console.log(
+        '  🚀 Performance: ALL cached books now benefit from optimization!',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();

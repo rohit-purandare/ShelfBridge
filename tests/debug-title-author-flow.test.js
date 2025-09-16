@@ -28,10 +28,10 @@ describe('Debug Title/Author Flow', () => {
         media: {
           metadata: {
             title: 'Debug Book Title',
-            authors: [{ name: 'Debug Author' }]
+            authors: [{ name: 'Debug Author' }],
             // NO identifiers - this is key
-          }
-        }
+          },
+        },
       };
 
       const title = absBook.media.metadata.title;
@@ -45,9 +45,14 @@ describe('Debug Title/Author Flow', () => {
       console.log(`  Has ASIN: false`);
 
       // Step 1: Pre-cache this book as if it was previously matched
-      console.log('\n🔄 STEP 1: Pre-cache book (simulating previous successful match)');
+      console.log(
+        '\n🔄 STEP 1: Pre-cache book (simulating previous successful match)',
+      );
 
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -57,7 +62,7 @@ describe('Debug Title/Author Flow', () => {
         author,
         67.5, // Same progress as current
         Date.now() - 3600000, // 1 hour ago
-        Date.now() - 86400000  // Started yesterday
+        Date.now() - 86400000, // Started yesterday
       );
 
       console.log(`  Generated cache ID: ${titleAuthorId}`);
@@ -69,11 +74,13 @@ describe('Debug Title/Author Flow', () => {
 
       const identifiers = {
         isbn: null, // No ISBN
-        asin: null  // No ASIN
+        asin: null, // No ASIN
       };
 
       console.log(`  Extracted identifiers: ${JSON.stringify(identifiers)}`);
-      console.log(`  Has identifiers: ${!!(identifiers.isbn || identifiers.asin)}`);
+      console.log(
+        `  Has identifiers: ${!!(identifiers.isbn || identifiers.asin)}`,
+      );
 
       // Step 3: Early optimization check (sync-manager.js lines 542-671)
       console.log('\n🔄 STEP 3: Early optimization check');
@@ -87,7 +94,7 @@ describe('Debug Title/Author Flow', () => {
         const validatedProgress = ProgressManager.getValidatedProgress(
           absBook,
           `book "${title}" debug test`,
-          { allowNull: false }
+          { allowNull: false },
         );
 
         console.log(`  Validated progress: ${validatedProgress}%`);
@@ -104,12 +111,20 @@ describe('Debug Title/Author Flow', () => {
             possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
           }
 
-          console.log(`  Identifier-based cache keys: ${possibleCacheKeys.length}`);
+          console.log(
+            `  Identifier-based cache keys: ${possibleCacheKeys.length}`,
+          );
 
           // Add title/author key for books without identifiers (THE CRITICAL FIX)
           if (!identifiers.asin && !identifiers.isbn) {
-            const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(title, author);
-            possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
+            const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(
+              title,
+              author,
+            );
+            possibleCacheKeys.push({
+              key: titleAuthorKey,
+              type: 'title_author',
+            });
             console.log(`  ✅ Added title/author cache key: ${titleAuthorKey}`);
           }
 
@@ -127,7 +142,7 @@ describe('Debug Title/Author Flow', () => {
               key,
               title,
               validatedProgress,
-              type
+              type,
             );
 
             console.log(`    Progress changed: ${progressChanged}`);
@@ -143,31 +158,55 @@ describe('Debug Title/Author Flow', () => {
           console.log(`\n  📊 Early optimization result:`);
           console.log(`    Progress changed: ${hasChanged}`);
           console.log(`    Cache found early: ${cacheFoundEarly}`);
-          console.log(`    Should skip expensive matching: ${!hasChanged && cacheFoundEarly}`);
+          console.log(
+            `    Should skip expensive matching: ${!hasChanged && cacheFoundEarly}`,
+          );
 
           if (!hasChanged && cacheFoundEarly) {
-            console.log(`\n  🎉 SUCCESS: Book would be skipped - no title/author search!`);
-            assert.strictEqual(hasChanged, false, 'Should detect unchanged progress');
-            assert.strictEqual(cacheFoundEarly, true, 'Should find cache early');
+            console.log(
+              `\n  🎉 SUCCESS: Book would be skipped - no title/author search!`,
+            );
+            assert.strictEqual(
+              hasChanged,
+              false,
+              'Should detect unchanged progress',
+            );
+            assert.strictEqual(
+              cacheFoundEarly,
+              true,
+              'Should find cache early',
+            );
           } else {
-            console.log(`\n  ❌ FAILURE: Book would proceed to expensive matching`);
-            console.log(`     This means title/author search would still happen!`);
+            console.log(
+              `\n  ❌ FAILURE: Book would proceed to expensive matching`,
+            );
+            console.log(
+              `     This means title/author search would still happen!`,
+            );
 
             // Let's debug why the cache lookup failed
             console.log(`\n  🔬 DEBUG: Why did cache lookup fail?`);
 
             for (const { key, type } of possibleCacheKeys) {
-              const cachedInfo = await bookCache.getCachedBookInfo(userId, key, title, type);
+              const cachedInfo = await bookCache.getCachedBookInfo(
+                userId,
+                key,
+                title,
+                type,
+              );
               console.log(`    ${type} cache (${key}):`);
               console.log(`      Exists: ${cachedInfo.exists}`);
-              console.log(`      Edition ID: ${cachedInfo.edition_id || 'null'}`);
-              console.log(`      Progress: ${cachedInfo.progress_percent || 'null'}`);
+              console.log(
+                `      Edition ID: ${cachedInfo.edition_id || 'null'}`,
+              );
+              console.log(
+                `      Progress: ${cachedInfo.progress_percent || 'null'}`,
+              );
               console.log(`      Last sync: ${cachedInfo.last_sync || 'null'}`);
             }
           }
         }
       }
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();

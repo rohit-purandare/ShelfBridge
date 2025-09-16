@@ -27,7 +27,7 @@ describe('Debug Cache Identifier Mismatch', () => {
       const oldPatternIds = [
         `title_author_user123_edition456`, // Old userBook/edition pattern
         `${title}:${author}`, // Old completion pattern
-        `${title.toLowerCase().replace(/[^a-z0-9:]/g, '')}:${author.toLowerCase().replace(/[^a-z0-9:]/g, '')}` // Old normalized pattern
+        `${title.toLowerCase().replace(/[^a-z0-9:]/g, '')}:${author.toLowerCase().replace(/[^a-z0-9:]/g, '')}`, // Old normalized pattern
       ];
 
       for (const oldId of oldPatternIds) {
@@ -40,7 +40,7 @@ describe('Debug Cache Identifier Mismatch', () => {
           author,
           45.0,
           Date.now() - 86400000,
-          Date.now() - 172800000
+          Date.now() - 172800000,
         );
 
         console.log(`  Stored with old pattern: ${oldId}`);
@@ -49,7 +49,10 @@ describe('Debug Cache Identifier Mismatch', () => {
       // === Scenario 2: New pattern (what we're now looking for) ===
       console.log('\n📚 SCENARIO 2: Generate new identifier pattern');
 
-      const newPatternId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const newPatternId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       console.log(`  New pattern: ${newPatternId}`);
 
       // === Scenario 3: Test cache lookups ===
@@ -60,13 +63,15 @@ describe('Debug Cache Identifier Mismatch', () => {
         userId,
         newPatternId,
         title,
-        'title_author'
+        'title_author',
       );
 
       console.log(`  Lookup with new pattern: ${newPatternLookup.exists}`);
 
       if (!newPatternLookup.exists) {
-        console.log(`  ❌ MISMATCH DETECTED: New pattern can't find old cached books!`);
+        console.log(
+          `  ❌ MISMATCH DETECTED: New pattern can't find old cached books!`,
+        );
 
         // Try finding with old patterns
         for (const oldId of oldPatternIds) {
@@ -74,7 +79,7 @@ describe('Debug Cache Identifier Mismatch', () => {
             userId,
             oldId,
             title,
-            'title_author'
+            'title_author',
           );
           console.log(`    Old pattern (${oldId}): ${oldLookup.exists}`);
         }
@@ -91,8 +96,12 @@ describe('Debug Cache Identifier Mismatch', () => {
       const possibleCacheKeys = [];
 
       // For books without identifiers, add title/author key
-      if (!false && !false) { // No ASIN, No ISBN
-        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(title, author);
+      if (!false && !false) {
+        // No ASIN, No ISBN
+        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
         possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
         console.log(`  Would check cache key: ${titleAuthorKey}`);
       }
@@ -105,7 +114,7 @@ describe('Debug Cache Identifier Mismatch', () => {
           key,
           title,
           45.0, // Same progress
-          type
+          type,
         );
 
         console.log(`  Progress changed for ${key}: ${hasChanged}`);
@@ -121,7 +130,6 @@ describe('Debug Cache Identifier Mismatch', () => {
         console.log(`  ❌ CACHE MISS: Would trigger title/author search`);
         console.log(`  🚨 This explains why you're still seeing searches!`);
       }
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -148,7 +156,9 @@ describe('Debug Cache Identifier Mismatch', () => {
       console.log(`Found ${results.length} title/author cache entries:`);
 
       if (results.length === 0) {
-        console.log('  (No title/author entries in cache - this is a clean test environment)');
+        console.log(
+          '  (No title/author entries in cache - this is a clean test environment)',
+        );
       } else {
         results.forEach((row, index) => {
           console.log(`  ${index + 1}. "${row.title}" by "${row.author}"`);
@@ -158,8 +168,12 @@ describe('Debug Cache Identifier Mismatch', () => {
 
         // Analyze patterns
         const patterns = results.map(r => r.identifier);
-        const hasOldPattern = patterns.some(p => p.includes('title_author_user') || p.includes(':'));
-        const hasNewPattern = patterns.some(p => p.startsWith('title_author:') && p.includes('|'));
+        const hasOldPattern = patterns.some(
+          p => p.includes('title_author_user') || p.includes(':'),
+        );
+        const hasNewPattern = patterns.some(
+          p => p.startsWith('title_author:') && p.includes('|'),
+        );
 
         console.log(`\n  📊 Pattern analysis:`);
         console.log(`    Has old patterns: ${hasOldPattern}`);
@@ -173,7 +187,6 @@ describe('Debug Cache Identifier Mismatch', () => {
           console.log(`    ✅ CONSISTENT: Only new patterns found`);
         }
       }
-
     } finally {
       bookCache.close();
     }

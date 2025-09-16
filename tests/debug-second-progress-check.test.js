@@ -13,7 +13,9 @@ describe('Debug Second Progress Check', () => {
     console.log('\n🔍 DEBUGGING SECOND PROGRESS CHECK ISSUE\n');
 
     // Simulate the scenario where early optimization skips a title/author book
-    console.log('📚 SCENARIO: Title/author book that skipped early optimization');
+    console.log(
+      '📚 SCENARIO: Title/author book that skipped early optimization',
+    );
 
     const identifiers = { isbn: null, asin: null }; // No identifiers
     const hardcoverMatch = null; // Null because early optimization skipped matching
@@ -26,8 +28,12 @@ describe('Debug Second Progress Check', () => {
     let identifierType = identifiers.asin ? 'asin' : 'isbn';
 
     console.log(`\n🔄 STEP 1: Initial identifier setting`);
-    console.log(`  identifier = identifiers.asin || identifiers.isbn = ${identifier}`);
-    console.log(`  identifierType = identifiers.asin ? 'asin' : 'isbn' = ${identifierType}`);
+    console.log(
+      `  identifier = identifiers.asin || identifiers.isbn = ${identifier}`,
+    );
+    console.log(
+      `  identifierType = identifiers.asin ? 'asin' : 'isbn' = ${identifierType}`,
+    );
 
     // This is the logic from sync-manager.js lines 959-965
     if (!identifier && hardcoverMatch) {
@@ -39,25 +45,37 @@ describe('Debug Second Progress Check', () => {
       console.log(`  ❌ Title/author identifier NOT set because:`);
       console.log(`    - identifier exists: ${!!identifier}`);
       console.log(`    - hardcoverMatch exists: ${!!hardcoverMatch}`);
-      console.log(`    - Condition (!identifier && hardcoverMatch): ${!identifier && hardcoverMatch}`);
+      console.log(
+        `    - Condition (!identifier && hardcoverMatch): ${!identifier && hardcoverMatch}`,
+      );
     }
 
-    console.log(`\n🔄 STEP 2: Final identifier values for second progress check`);
+    console.log(
+      `\n🔄 STEP 2: Final identifier values for second progress check`,
+    );
     console.log(`  identifier: ${identifier}`);
     console.log(`  identifierType: ${identifierType}`);
 
     console.log(`\n🚨 PROBLEM IDENTIFIED:`);
     if (identifier === null) {
       console.log(`  ❌ identifier is null - second progress check will fail!`);
-      console.log(`  ❌ This could cause the book to be re-processed incorrectly`);
+      console.log(
+        `  ❌ This could cause the book to be re-processed incorrectly`,
+      );
     } else {
       console.log(`  ✅ identifier is set correctly`);
     }
 
     console.log(`\n💡 SOLUTION NEEDED:`);
-    console.log(`  - Set title/author identifier even when hardcoverMatch is null`);
-    console.log(`  - Ensure second progress check has valid identifier for all books`);
-    console.log(`  - Handle early-optimized books correctly in subsequent logic`);
+    console.log(
+      `  - Set title/author identifier even when hardcoverMatch is null`,
+    );
+    console.log(
+      `  - Ensure second progress check has valid identifier for all books`,
+    );
+    console.log(
+      `  - Handle early-optimized books correctly in subsequent logic`,
+    );
   });
 
   it('should show the correct fix for identifier setting', () => {
@@ -103,8 +121,16 @@ describe('Debug Second Progress Check', () => {
     console.log(`  identifier: ${fixedIdentifier}`);
     console.log(`  identifierType: ${fixedIdentifierType}`);
 
-    assert.strictEqual(fixedIdentifier !== null, true, 'Fixed identifier should never be null');
-    assert.strictEqual(fixedIdentifierType === 'title_author', true, 'Should use title_author type for books without identifiers');
+    assert.strictEqual(
+      fixedIdentifier !== null,
+      true,
+      'Fixed identifier should never be null',
+    );
+    assert.strictEqual(
+      fixedIdentifierType === 'title_author',
+      true,
+      'Should use title_author type for books without identifiers',
+    );
 
     console.log(`\n🎯 THE FIX:`);
     console.log(`  Change the condition from:`);
