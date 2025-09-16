@@ -536,14 +536,10 @@ export class SyncManager {
     const author = extractAuthor(absBook) || 'Unknown Author';
     const identifiers = extractBookIdentifiers(absBook);
 
-    // OPTIMIZATION: For books with identifiers, check progress change BEFORE expensive book matching
-    const hasIdentifiers = identifiers.isbn || identifiers.asin;
+    // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
 
-    if (hasIdentifiers && !this.globalConfig.force_sync) {
-      const identifier = identifiers.asin || identifiers.isbn;
-      const identifierType = identifiers.asin ? 'asin' : 'isbn';
-
+    if (!this.globalConfig.force_sync) {
       // Validate progress for early check
       const validatedProgress = ProgressManager.getValidatedProgress(
         absBook,
@@ -552,18 +548,57 @@ export class SyncManager {
       );
 
       if (validatedProgress !== null) {
-        const hasChanged = await this.cache.hasProgressChanged(
-          this.userId,
-          identifier,
-          title,
-          validatedProgress,
-          identifierType,
-        );
+        // Multi-key cache lookup - check all possible identifiers for this book
+        const possibleCacheKeys = [];
 
-        if (!hasChanged) {
-          logger.debug(
-            `Early skip for ${title}: Progress unchanged (${validatedProgress.toFixed(1)}%)`,
-          );
+        // Add identifier-based keys (highest priority)
+        if (identifiers.asin) {
+          possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
+        }
+        if (identifiers.isbn) {
+          possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+        }
+
+        // For title/author matching, we can't know the userBook/edition IDs yet since we haven't
+        // done the expensive matching. However, we can check if there are any cached entries
+        // for this title using a title-based lookup in the cache.
+        // This is a performance optimization for books that were previously matched by title/author.
+
+        let hasChanged = true; // Default to true (needs sync)
+        let cacheFoundEarly = false;
+
+        // Try each cache key to find existing progress data
+        for (const { key, type } of possibleCacheKeys) {
+          try {
+            const progressChanged = await this.cache.hasProgressChanged(
+              this.userId,
+              key,
+              title,
+              validatedProgress,
+              type,
+            );
+
+            if (!progressChanged) {
+              hasChanged = false;
+              cacheFoundEarly = true;
+              logger.debug(
+                `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+              );
+              break;
+            }
+          } catch (cacheError) {
+            // Cache lookup failed for this key, try next
+            logger.debug(`Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`);
+            continue;
+          }
+        }
+
+        // If no identifier-based cache hit, this could be a title/author matched book
+        // We'll skip the heuristic lookup here since we can't reliably predict the cache key
+        // without doing the expensive matching first. The optimization will still benefit
+        // books with identifiers, which is the majority case.
+
+        if (!hasChanged && cacheFoundEarly) {
           return {
             title,
             author,
@@ -581,10 +616,12 @@ export class SyncManager {
             errors: [],
           };
         }
-        shouldPerformExpensiveMatching = true;
-        logger.debug(
-          `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
-        );
+
+        if (hasChanged) {
+          logger.debug(
+            `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
+          );
+        }
       }
     }
 
