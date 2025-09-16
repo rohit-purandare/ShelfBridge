@@ -28,12 +28,15 @@ describe('Auto-Add Cache Prevention', () => {
         globalConfig: {},
         hardcover: {
           searchBooksByAsin: async () => [],
-          searchBooksByIsbn: async () => []
-        }
+          searchBooksByIsbn: async () => [],
+        },
       };
 
       // Pre-cache a book as if it was previously matched by title/author
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -43,7 +46,7 @@ describe('Auto-Add Cache Prevention', () => {
         author,
         55.5,
         Date.now() - 3600000,
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`Pre-cached book with identifier: ${titleAuthorId}`);
@@ -54,27 +57,35 @@ describe('Auto-Add Cache Prevention', () => {
         media: {
           metadata: {
             title: title,
-            authors: [{ name: author }]
-          }
-        }
+            authors: [{ name: author }],
+          },
+        },
       };
 
       const identifiers = { isbn: null, asin: null }; // No identifiers - would normally trigger fallback
 
       // Bind the method to our mock sync manager
-      const tryAutoAddBook = SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
+      const tryAutoAddBook =
+        SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
 
       // This should skip the title/author fallback due to our cache check
       const result = await tryAutoAddBook(absBook, identifiers, title, author);
 
       // Verify it was skipped due to cache
-      assert.strictEqual(result.status, 'skipped', 'Should skip auto-add for cached books');
-      assert.strictEqual(result.reason, 'Already cached via title/author matching', 'Should provide correct reason');
+      assert.strictEqual(
+        result.status,
+        'skipped',
+        'Should skip auto-add for cached books',
+      );
+      assert.strictEqual(
+        result.reason,
+        'Already cached via title/author matching',
+        'Should provide correct reason',
+      );
       assert.strictEqual(result.cached, true, 'Should indicate it was cached');
 
       console.log('✅ Auto-add correctly skipped for cached book');
       console.log(`   Reason: ${result.reason}`);
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -100,8 +111,8 @@ describe('Auto-Add Cache Prevention', () => {
         globalConfig: {},
         hardcover: {
           searchBooksByAsin: async () => [],
-          searchBooksByIsbn: async () => []
-        }
+          searchBooksByIsbn: async () => [],
+        },
       };
 
       // Mock the TitleAuthorMatcher import and findMatch call
@@ -110,22 +121,30 @@ describe('Auto-Add Cache Prevention', () => {
       // Simulate the auto-add process calling TitleAuthorMatcher
       // Since we can't easily mock the dynamic import, we'll verify the logic flow
 
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
 
       // Verify no cache entry exists
       const existingCache = await bookCache.getCachedBookInfo(
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(existingCache.exists, false, 'Should not find cache entry for new book');
+      assert.strictEqual(
+        existingCache.exists,
+        false,
+        'Should not find cache entry for new book',
+      );
 
-      console.log('✅ New book correctly identified as needing title/author search');
+      console.log(
+        '✅ New book correctly identified as needing title/author search',
+      );
       console.log(`   Generated identifier: ${titleAuthorId}`);
       console.log(`   Cache exists: ${existingCache.exists}`);
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();

@@ -25,7 +25,9 @@ describe('Auto-Add Functionality Preservation', () => {
         searchBooksByAsin: async () => [],
         searchBooksByIsbn: async () => [],
         searchBooksForMatching: async (searchTitle, searchAuthor) => {
-          console.log(`  🔍 Title/author search called for: "${searchTitle}" by "${searchAuthor}"`);
+          console.log(
+            `  🔍 Title/author search called for: "${searchTitle}" by "${searchAuthor}"`,
+          );
 
           // Simulate finding the book in Hardcover's database
           return [
@@ -37,16 +39,18 @@ describe('Auto-Add Functionality Preservation', () => {
                 {
                   id: 'new-edition-id',
                   pages: 300,
-                  format: 'audiobook'
-                }
-              ]
-            }
+                  format: 'audiobook',
+                },
+              ],
+            },
           ];
         },
         addBookToLibrary: async (bookId, status, editionId) => {
-          console.log(`  ✅ Adding book to library: ${bookId}, edition: ${editionId}`);
+          console.log(
+            `  ✅ Adding book to library: ${bookId}, edition: ${editionId}`,
+          );
           return { id: 'new-user-book-id' };
-        }
+        },
       };
 
       // Create mock sync manager
@@ -55,7 +59,7 @@ describe('Auto-Add Functionality Preservation', () => {
         cache: bookCache,
         dryRun: false,
         globalConfig: { auto_add_books: true },
-        hardcover: mockHardcoverClient
+        hardcover: mockHardcoverClient,
       };
 
       const absBook = {
@@ -64,41 +68,56 @@ describe('Auto-Add Functionality Preservation', () => {
         media: {
           metadata: {
             title: title,
-            authors: [{ name: author }]
+            authors: [{ name: author }],
             // No identifiers - will need title/author matching
-          }
-        }
+          },
+        },
       };
 
       const identifiers = { isbn: null, asin: null };
 
-      console.log('\n🔄 Testing auto-add for genuinely new book (no cache entry):');
+      console.log(
+        '\n🔄 Testing auto-add for genuinely new book (no cache entry):',
+      );
       console.log(`  Book: "${title}" by "${author}"`);
       console.log(`  Progress: 25% (above auto-add threshold)`);
 
       // Verify no cache entry exists
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       const existingCache = await bookCache.getCachedBookInfo(
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(existingCache.exists, false, 'Should not find cache entry for new book');
+      assert.strictEqual(
+        existingCache.exists,
+        false,
+        'Should not find cache entry for new book',
+      );
       console.log(`  ✅ Verified no cache entry exists: ${titleAuthorId}`);
 
       // Call _tryAutoAddBook - should proceed with title/author search
-      const tryAutoAddBook = SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
+      const tryAutoAddBook =
+        SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
       const result = await tryAutoAddBook(absBook, identifiers, title, author);
 
       // Should succeed with auto-add
-      assert.strictEqual(result.status, 'auto_added', 'Should successfully auto-add new book');
+      assert.strictEqual(
+        result.status,
+        'auto_added',
+        'Should successfully auto-add new book',
+      );
       assert.strictEqual(result.title, title, 'Should return correct title');
 
       console.log(`  ✅ Auto-add succeeded: ${result.status}`);
-      console.log(`  📚 Book added to library with user book ID: ${result.userBookId}`);
-
+      console.log(
+        `  📚 Book added to library with user book ID: ${result.userBookId}`,
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -118,7 +137,7 @@ describe('Auto-Add Functionality Preservation', () => {
       // Mock hardcover client that finds book by ISBN
       const mockHardcoverClient = {
         searchBooksByAsin: async () => [],
-        searchBooksByIsbn: async (searchIsbn) => {
+        searchBooksByIsbn: async searchIsbn => {
           console.log(`  🔍 ISBN search called for: ${searchIsbn}`);
 
           // Simulate finding the book by ISBN
@@ -127,16 +146,18 @@ describe('Auto-Add Functionality Preservation', () => {
               id: 'isbn-edition-id',
               book: {
                 id: 'isbn-book-id',
-                title: title
+                title: title,
               },
-              format: 'audiobook'
-            }
+              format: 'audiobook',
+            },
           ];
         },
         addBookToLibrary: async (bookId, status, editionId) => {
-          console.log(`  ✅ Adding ISBN book to library: ${bookId}, edition: ${editionId}`);
+          console.log(
+            `  ✅ Adding ISBN book to library: ${bookId}, edition: ${editionId}`,
+          );
           return { id: 'isbn-user-book-id' };
-        }
+        },
       };
 
       const mockSyncManager = {
@@ -144,7 +165,7 @@ describe('Auto-Add Functionality Preservation', () => {
         cache: bookCache,
         dryRun: false,
         globalConfig: { auto_add_books: true },
-        hardcover: mockHardcoverClient
+        hardcover: mockHardcoverClient,
       };
 
       const absBook = {
@@ -154,9 +175,9 @@ describe('Auto-Add Functionality Preservation', () => {
           metadata: {
             title: title,
             authors: [{ name: author }],
-            isbn: isbn
-          }
-        }
+            isbn: isbn,
+          },
+        },
       };
 
       const identifiers = { isbn: isbn, asin: null };
@@ -170,18 +191,26 @@ describe('Auto-Add Functionality Preservation', () => {
         userId,
         isbn,
         title,
-        'isbn'
+        'isbn',
       );
-      assert.strictEqual(isbnCache.exists, false, 'Should not find cache entry for new ISBN book');
+      assert.strictEqual(
+        isbnCache.exists,
+        false,
+        'Should not find cache entry for new ISBN book',
+      );
 
       // Call _tryAutoAddBook - should find by ISBN and add to library
-      const tryAutoAddBook = SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
+      const tryAutoAddBook =
+        SyncManager.prototype._tryAutoAddBook.bind(mockSyncManager);
       const result = await tryAutoAddBook(absBook, identifiers, title, author);
 
       // Should succeed via ISBN search (no title/author fallback needed)
-      assert.strictEqual(result.status, 'auto_added', 'Should successfully auto-add ISBN book');
+      assert.strictEqual(
+        result.status,
+        'auto_added',
+        'Should successfully auto-add ISBN book',
+      );
       console.log(`  ✅ Auto-add succeeded via ISBN: ${result.status}`);
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -200,7 +229,10 @@ describe('Auto-Add Functionality Preservation', () => {
       // === Scenario A: Book already cached (should skip) ===
       const cachedTitle = 'Already Cached Book';
       const cachedAuthor = 'Cached Author';
-      const cachedTitleAuthorId = bookCache.generateTitleAuthorIdentifier(cachedTitle, cachedAuthor);
+      const cachedTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        cachedTitle,
+        cachedAuthor,
+      );
 
       await bookCache.storeBookSyncData(
         userId,
@@ -211,7 +243,7 @@ describe('Auto-Add Functionality Preservation', () => {
         cachedAuthor,
         45.0,
         Date.now() - 3600000,
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`\n  📚 Scenario A: Book already cached`);
@@ -226,20 +258,36 @@ describe('Auto-Add Functionality Preservation', () => {
         globalConfig: { auto_add_books: true },
         hardcover: {
           searchBooksByAsin: async () => [],
-          searchBooksByIsbn: async () => []
-        }
+          searchBooksByIsbn: async () => [],
+        },
       };
 
       const cachedAbsBook = {
         id: 'abs-cached',
-        media: { metadata: { title: cachedTitle, authors: [{ name: cachedAuthor }] } }
+        media: {
+          metadata: { title: cachedTitle, authors: [{ name: cachedAuthor }] },
+        },
       };
 
-      const tryAutoAddA = SyncManager.prototype._tryAutoAddBook.bind(mockSyncManagerA);
-      const resultA = await tryAutoAddA(cachedAbsBook, { isbn: null, asin: null }, cachedTitle, cachedAuthor);
+      const tryAutoAddA =
+        SyncManager.prototype._tryAutoAddBook.bind(mockSyncManagerA);
+      const resultA = await tryAutoAddA(
+        cachedAbsBook,
+        { isbn: null, asin: null },
+        cachedTitle,
+        cachedAuthor,
+      );
 
-      assert.strictEqual(resultA.status, 'skipped', 'Should skip auto-add for cached book');
-      assert.strictEqual(resultA.cached, true, 'Should indicate book was cached');
+      assert.strictEqual(
+        resultA.status,
+        'skipped',
+        'Should skip auto-add for cached book',
+      );
+      assert.strictEqual(
+        resultA.cached,
+        true,
+        'Should indicate book was cached',
+      );
       console.log(`    ✅ Result: ${resultA.status} (${resultA.reason})`);
 
       // === Scenario B: Genuinely new book (should proceed) ===
@@ -250,15 +298,22 @@ describe('Auto-Add Functionality Preservation', () => {
       console.log(`    Title: "${newTitle}"`);
 
       // Verify no cache entry exists
-      const newTitleAuthorId = bookCache.generateTitleAuthorIdentifier(newTitle, newAuthor);
+      const newTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        newTitle,
+        newAuthor,
+      );
       const newBookCache = await bookCache.getCachedBookInfo(
         userId,
         newTitleAuthorId,
         newTitle,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(newBookCache.exists, false, 'Should not find cache for new book');
+      assert.strictEqual(
+        newBookCache.exists,
+        false,
+        'Should not find cache for new book',
+      );
 
       // Mock sync manager that will find the book via title/author search
       const mockSyncManagerB = {
@@ -273,25 +328,28 @@ describe('Auto-Add Functionality Preservation', () => {
           searchBooksForMatching: async () => {
             console.log(`    🔍 Title/author search proceeding for new book`);
             return []; // Simulate no match found (would continue with fallback)
-          }
-        }
+          },
+        },
       };
 
       const newAbsBook = {
         id: 'abs-new',
-        media: { metadata: { title: newTitle, authors: [{ name: newAuthor }] } }
+        media: {
+          metadata: { title: newTitle, authors: [{ name: newAuthor }] },
+        },
       };
 
       // Note: We can't easily test the full TitleAuthorMatcher integration without complex mocking
       // But we can verify that the cache check doesn't prevent the process from starting
-      console.log(`    ✅ No cache found - would proceed with title/author search`);
+      console.log(
+        `    ✅ No cache found - would proceed with title/author search`,
+      );
       console.log(`    ✅ Auto-add functionality preserved for new books`);
 
       console.log('\n🎯 VERIFICATION SUMMARY:');
       console.log('  ✅ Cached books: Skip duplicate title/author searches');
       console.log('  ✅ New books: Still proceed with legitimate auto-add');
       console.log('  ✅ Auto-add functionality fully preserved');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -310,7 +368,10 @@ describe('Auto-Add Functionality Preservation', () => {
       // === Edge Case 1: Incomplete cache entry (no edition_id) ===
       const incompleteTitle = 'Incomplete Cache Entry';
       const incompleteAuthor = 'Incomplete Author';
-      const incompleteTitleAuthorId = bookCache.generateTitleAuthorIdentifier(incompleteTitle, incompleteAuthor);
+      const incompleteTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        incompleteTitle,
+        incompleteAuthor,
+      );
 
       // Store book data without edition_id (simulating incomplete cache)
       await bookCache.init();
@@ -325,14 +386,14 @@ describe('Auto-Add Functionality Preservation', () => {
         incompleteTitle.toLowerCase().trim(),
         incompleteAuthor,
         25.0,
-        Date.now()
+        Date.now(),
       );
 
       const incompleteCache = await bookCache.getCachedBookInfo(
         userId,
         incompleteTitleAuthorId,
         incompleteTitle,
-        'title_author'
+        'title_author',
       );
 
       console.log(`  📚 Edge Case 1: Incomplete cache entry`);
@@ -341,7 +402,11 @@ describe('Auto-Add Functionality Preservation', () => {
 
       // Should proceed with auto-add since edition_id is missing
       const shouldSkip = incompleteCache.exists && incompleteCache.edition_id;
-      assert.strictEqual(shouldSkip, false, 'Should not skip auto-add for incomplete cache entries');
+      assert.strictEqual(
+        shouldSkip,
+        false,
+        'Should not skip auto-add for incomplete cache entries',
+      );
       console.log(`    ✅ Would proceed with auto-add (incomplete cache)`);
 
       // === Edge Case 2: Cache lookup failure ===
@@ -355,14 +420,18 @@ describe('Auto-Add Functionality Preservation', () => {
       const partialTitle = 'Book With Partial Info';
       const partialAuthor = null; // Missing author
 
-      const partialTitleAuthorId = bookCache.generateTitleAuthorIdentifier(partialTitle, partialAuthor || '');
+      const partialTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        partialTitle,
+        partialAuthor || '',
+      );
 
       console.log(`\n  📚 Edge Case 3: Book with missing author`);
       console.log(`    Generated ID: ${partialTitleAuthorId}`);
       console.log(`    ✅ Handles missing author gracefully`);
 
-      console.log('\n✅ All edge cases handled correctly - auto-add functionality preserved');
-
+      console.log(
+        '\n✅ All edge cases handled correctly - auto-add functionality preserved',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();

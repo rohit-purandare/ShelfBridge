@@ -31,9 +31,9 @@ describe('Comprehensive Duplicate Prevention', () => {
           metadata: {
             title: 'Book With ISBN',
             authors: [{ name: 'ISBN Author' }],
-            isbn: '9781234567890'
-          }
-        }
+            isbn: '9781234567890',
+          },
+        },
       };
 
       // Cache the ISBN book
@@ -46,7 +46,7 @@ describe('Comprehensive Duplicate Prevention', () => {
         'ISBN Author',
         45.0,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       // Test early optimization
@@ -55,14 +55,20 @@ describe('Comprehensive Duplicate Prevention', () => {
         '9781234567890',
         'Book With ISBN',
         45.0, // Same progress
-        'isbn'
+        'isbn',
       );
 
-      assert.strictEqual(isbnProgressChanged, false, 'ISBN book should show unchanged progress');
+      assert.strictEqual(
+        isbnProgressChanged,
+        false,
+        'ISBN book should show unchanged progress',
+      );
       console.log('  ✅ Early optimization: ISBN book would be skipped');
 
       // === SCENARIO 2: Book without identifiers (title/author only) ===
-      console.log('\n📚 SCENARIO 2: Book without identifiers (title/author only)');
+      console.log(
+        '\n📚 SCENARIO 2: Book without identifiers (title/author only)',
+      );
 
       const titleAuthorBook = {
         id: 'title-author-book-test',
@@ -71,17 +77,20 @@ describe('Comprehensive Duplicate Prevention', () => {
         media: {
           metadata: {
             title: 'Book Without Identifiers',
-            authors: [{ name: 'Title Author' }]
+            authors: [{ name: 'Title Author' }],
             // No ISBN or ASIN
-          }
-        }
+          },
+        },
       };
 
       const title = titleAuthorBook.media.metadata.title;
       const author = titleAuthorBook.media.metadata.authors[0].name;
 
       // Cache using consistent title/author identifier
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -91,7 +100,7 @@ describe('Comprehensive Duplicate Prevention', () => {
         author,
         67.3,
         Date.now(),
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`  Generated cache identifier: ${titleAuthorId}`);
@@ -102,11 +111,17 @@ describe('Comprehensive Duplicate Prevention', () => {
         titleAuthorId,
         title,
         67.3, // Same progress
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(titleAuthorProgressChanged, false, 'Title/author book should show unchanged progress');
-      console.log('  ✅ Early optimization: Title/author book would be skipped');
+      assert.strictEqual(
+        titleAuthorProgressChanged,
+        false,
+        'Title/author book should show unchanged progress',
+      );
+      console.log(
+        '  ✅ Early optimization: Title/author book would be skipped',
+      );
 
       // === SCENARIO 3: Auto-add prevention ===
       console.log('\n📚 SCENARIO 3: Auto-add cache prevention');
@@ -116,13 +131,23 @@ describe('Comprehensive Duplicate Prevention', () => {
         userId,
         titleAuthorId,
         title,
-        'title_author'
+        'title_author',
       );
 
-      assert.strictEqual(cachedInfo.exists, true, 'Should find cached title/author book');
-      assert.strictEqual(!!cachedInfo.edition_id, true, 'Should have edition_id for complete cache entry');
+      assert.strictEqual(
+        cachedInfo.exists,
+        true,
+        'Should find cached title/author book',
+      );
+      assert.strictEqual(
+        !!cachedInfo.edition_id,
+        true,
+        'Should have edition_id for complete cache entry',
+      );
 
-      console.log('  ✅ Auto-add prevention: Would skip title/author search for cached book');
+      console.log(
+        '  ✅ Auto-add prevention: Would skip title/author search for cached book',
+      );
 
       // === SCENARIO 4: Mixed library (both types) ===
       console.log('\n📚 SCENARIO 4: Mixed library optimization');
@@ -135,7 +160,7 @@ describe('Comprehensive Duplicate Prevention', () => {
         '9781234567890',
         'Book With ISBN',
         45.0,
-        'isbn'
+        'isbn',
       );
       mixedResults.push({ type: 'ISBN', optimized: !isbnCacheCheck });
 
@@ -145,25 +170,40 @@ describe('Comprehensive Duplicate Prevention', () => {
         titleAuthorId,
         title,
         67.3,
-        'title_author'
+        'title_author',
       );
       mixedResults.push({ type: 'Title/Author', optimized: !titleCacheCheck });
 
       // Both should be optimized
       const allOptimized = mixedResults.every(result => result.optimized);
-      assert.strictEqual(allOptimized, true, 'All book types should benefit from cache optimization');
+      assert.strictEqual(
+        allOptimized,
+        true,
+        'All book types should benefit from cache optimization',
+      );
 
       mixedResults.forEach(result => {
-        console.log(`  ✅ ${result.type} book: ${result.optimized ? 'Optimized' : 'Not optimized'}`);
+        console.log(
+          `  ✅ ${result.type} book: ${result.optimized ? 'Optimized' : 'Not optimized'}`,
+        );
       });
 
-      console.log('\n🎉 ALL SCENARIOS PASS - DUPLICATE MATCHING FULLY PREVENTED!');
+      console.log(
+        '\n🎉 ALL SCENARIOS PASS - DUPLICATE MATCHING FULLY PREVENTED!',
+      );
       console.log('\n📊 Performance Benefits:');
-      console.log('  ✅ Books with identifiers: Skip matching via early optimization');
-      console.log('  ✅ Books without identifiers: Skip matching via title/author cache');
-      console.log('  ✅ Auto-add fallback: Skip search for already cached books');
-      console.log('  ✅ Mixed libraries: All book types benefit from optimization');
-
+      console.log(
+        '  ✅ Books with identifiers: Skip matching via early optimization',
+      );
+      console.log(
+        '  ✅ Books without identifiers: Skip matching via title/author cache',
+      );
+      console.log(
+        '  ✅ Auto-add fallback: Skip search for already cached books',
+      );
+      console.log(
+        '  ✅ Mixed libraries: All book types benefit from optimization',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();

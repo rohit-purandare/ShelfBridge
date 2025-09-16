@@ -29,14 +29,21 @@ describe('Auto-Add Logic Validation', () => {
             const id = bookCache.generateTitleAuthorIdentifier(title, author);
 
             await bookCache.storeBookSyncData(
-              userId, id, title, 'complete-edition', 'title_author', author,
-              45.0, Date.now(), Date.now() - 86400000
+              userId,
+              id,
+              title,
+              'complete-edition',
+              'title_author',
+              author,
+              45.0,
+              Date.now(),
+              Date.now() - 86400000,
             );
 
             return { id, title };
           },
           expectedResult: 'SKIP - Already cached',
-          expectedSkip: true
+          expectedSkip: true,
         },
         {
           name: 'No cache entry (new book)',
@@ -47,7 +54,7 @@ describe('Auto-Add Logic Validation', () => {
             return { id, title };
           },
           expectedResult: 'PROCEED - Not cached',
-          expectedSkip: false
+          expectedSkip: false,
         },
         {
           name: 'Cache entry without edition (incomplete)',
@@ -61,13 +68,21 @@ describe('Auto-Add Logic Validation', () => {
               INSERT INTO books (user_id, identifier, identifier_type, title, author, progress_percent, last_sync)
               VALUES (?, ?, ?, ?, ?, ?, ?)
             `);
-            stmt.run(userId, id, 'title_author', title.toLowerCase().trim(), author, 25.0, Date.now());
+            stmt.run(
+              userId,
+              id,
+              'title_author',
+              title.toLowerCase().trim(),
+              author,
+              25.0,
+              Date.now(),
+            );
 
             return { id, title };
           },
           expectedResult: 'PROCEED - Incomplete cache',
-          expectedSkip: false
-        }
+          expectedSkip: false,
+        },
       ];
 
       // Test each scenario
@@ -82,11 +97,12 @@ describe('Auto-Add Logic Validation', () => {
           userId,
           id,
           title,
-          'title_author'
+          'title_author',
         );
 
         // The exact condition used in the auto-add cache check
-        const shouldSkip = existingCache && existingCache.exists && existingCache.edition_id;
+        const shouldSkip =
+          existingCache && existingCache.exists && existingCache.edition_id;
 
         console.log(`   Cache exists: ${existingCache?.exists || false}`);
         console.log(`   Edition ID: ${existingCache?.edition_id || 'null'}`);
@@ -97,7 +113,10 @@ describe('Auto-Add Logic Validation', () => {
           assert.ok(shouldSkip, `${scenario.name} should skip auto-add`);
           console.log(`   ✅ CORRECT: Skips duplicate title/author search`);
         } else {
-          assert.ok(!shouldSkip, `${scenario.name} should proceed with auto-add`);
+          assert.ok(
+            !shouldSkip,
+            `${scenario.name} should proceed with auto-add`,
+          );
           console.log(`   ✅ CORRECT: Proceeds with legitimate auto-add`);
         }
 
@@ -106,10 +125,11 @@ describe('Auto-Add Logic Validation', () => {
 
       console.log('🎯 VALIDATION RESULTS:');
       console.log('  ✅ Complete cache entries: Skip title/author search');
-      console.log('  ✅ Incomplete cache entries: Proceed with title/author search');
+      console.log(
+        '  ✅ Incomplete cache entries: Proceed with title/author search',
+      );
       console.log('  ✅ New books: Proceed with title/author search');
       console.log('  ✅ Auto-add functionality fully preserved and optimized!');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -123,46 +143,55 @@ describe('Auto-Add Logic Validation', () => {
     const testCases = [
       {
         description: 'Complete cache entry',
-        cache: { exists: true, edition_id: 'edition-123', progress_percent: 45.0 },
-        expected: true
+        cache: {
+          exists: true,
+          edition_id: 'edition-123',
+          progress_percent: 45.0,
+        },
+        expected: true,
       },
       {
         description: 'Cache exists but no edition_id',
         cache: { exists: true, edition_id: null, progress_percent: 45.0 },
-        expected: false
+        expected: false,
       },
       {
         description: 'Cache exists but empty edition_id',
         cache: { exists: true, edition_id: '', progress_percent: 45.0 },
-        expected: false
+        expected: false,
       },
       {
         description: 'No cache entry',
         cache: { exists: false },
-        expected: false
+        expected: false,
       },
       {
         description: 'Null cache object',
         cache: null,
-        expected: false
+        expected: false,
       },
       {
         description: 'Undefined cache object',
         cache: undefined,
-        expected: false
-      }
+        expected: false,
+      },
     ];
 
     testCases.forEach((testCase, index) => {
       // This is the exact condition from _tryAutoAddBook
-      const shouldSkip = testCase.cache && testCase.cache.exists && testCase.cache.edition_id;
+      const shouldSkip =
+        testCase.cache && testCase.cache.exists && testCase.cache.edition_id;
 
       console.log(`${index + 1}. ${testCase.description}:`);
       console.log(`   Cache: ${JSON.stringify(testCase.cache)}`);
       console.log(`   Condition result: ${!!shouldSkip}`);
       console.log(`   Expected: ${testCase.expected}`);
 
-      assert.strictEqual(!!shouldSkip, testCase.expected, `${testCase.description} should evaluate correctly`);
+      assert.strictEqual(
+        !!shouldSkip,
+        testCase.expected,
+        `${testCase.description} should evaluate correctly`,
+      );
       console.log(`   ✅ Correct evaluation\n`);
     });
 

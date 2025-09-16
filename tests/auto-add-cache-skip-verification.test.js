@@ -27,7 +27,10 @@ describe('Auto-Add Cache Skip Verification', () => {
       console.log(`  Title: "${cachedTitle}" by "${cachedAuthor}"`);
 
       // Create complete cache entry (simulating successful previous match)
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(cachedTitle, cachedAuthor);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        cachedTitle,
+        cachedAuthor,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -37,7 +40,7 @@ describe('Auto-Add Cache Skip Verification', () => {
         cachedAuthor,
         45.0,
         Date.now() - 3600000,
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
       console.log(`  Generated ID: ${titleAuthorId}`);
@@ -47,16 +50,24 @@ describe('Auto-Add Cache Skip Verification', () => {
         userId,
         titleAuthorId,
         cachedTitle,
-        'title_author'
+        'title_author',
       );
 
       console.log(`  Cache exists: ${existingCache.exists}`);
       console.log(`  Has edition_id: ${!!existingCache.edition_id}`);
 
       // This is the exact condition from the auto-add cache check
-      const shouldSkipAutoAdd = !!(existingCache && existingCache.exists && existingCache.edition_id);
+      const shouldSkipAutoAdd = !!(
+        existingCache &&
+        existingCache.exists &&
+        existingCache.edition_id
+      );
 
-      assert.strictEqual(shouldSkipAutoAdd, true, 'Should skip auto-add for complete cache entry');
+      assert.strictEqual(
+        shouldSkipAutoAdd,
+        true,
+        'Should skip auto-add for complete cache entry',
+      );
       console.log(`  ✅ RESULT: Would skip title/author search (cache hit)`);
 
       // === Test Case 2: Book with incomplete cache entry (should proceed) ===
@@ -66,7 +77,10 @@ describe('Auto-Add Cache Skip Verification', () => {
       console.log(`\n📚 TEST CASE 2: Book with incomplete cache entry`);
       console.log(`  Title: "${incompleteTitle}" by "${incompleteAuthor}"`);
 
-      const incompleteTitleAuthorId = bookCache.generateTitleAuthorIdentifier(incompleteTitle, incompleteAuthor);
+      const incompleteTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        incompleteTitle,
+        incompleteAuthor,
+      );
 
       // Create incomplete cache entry (no edition_id)
       const stmt = bookCache.db.prepare(`
@@ -80,23 +94,30 @@ describe('Auto-Add Cache Skip Verification', () => {
         incompleteTitle.toLowerCase().trim(),
         incompleteAuthor,
         25.0,
-        Date.now()
+        Date.now(),
       );
 
       const incompleteCache = await bookCache.getCachedBookInfo(
         userId,
         incompleteTitleAuthorId,
         incompleteTitle,
-        'title_author'
+        'title_author',
       );
 
       console.log(`  Cache exists: ${incompleteCache.exists}`);
       console.log(`  Has edition_id: ${!!incompleteCache.edition_id}`);
 
-      const shouldSkipIncomplete = incompleteCache && incompleteCache.exists && incompleteCache.edition_id;
+      const shouldSkipIncomplete =
+        incompleteCache && incompleteCache.exists && incompleteCache.edition_id;
 
-      assert.strictEqual(shouldSkipIncomplete, false, 'Should NOT skip auto-add for incomplete cache entry');
-      console.log(`  ✅ RESULT: Would proceed with title/author search (incomplete cache)`);
+      assert.strictEqual(
+        shouldSkipIncomplete,
+        false,
+        'Should NOT skip auto-add for incomplete cache entry',
+      );
+      console.log(
+        `  ✅ RESULT: Would proceed with title/author search (incomplete cache)`,
+      );
 
       // === Test Case 3: Genuinely new book (should proceed) ===
       const newTitle = 'Completely New Book';
@@ -105,27 +126,37 @@ describe('Auto-Add Cache Skip Verification', () => {
       console.log(`\n📚 TEST CASE 3: Genuinely new book (no cache)`);
       console.log(`  Title: "${newTitle}" by "${newAuthor}"`);
 
-      const newTitleAuthorId = bookCache.generateTitleAuthorIdentifier(newTitle, newAuthor);
+      const newTitleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        newTitle,
+        newAuthor,
+      );
       const newCache = await bookCache.getCachedBookInfo(
         userId,
         newTitleAuthorId,
         newTitle,
-        'title_author'
+        'title_author',
       );
 
       console.log(`  Cache exists: ${newCache.exists}`);
 
       const shouldSkipNew = newCache && newCache.exists && newCache.edition_id;
 
-      assert.strictEqual(shouldSkipNew, false, 'Should NOT skip auto-add for new book');
-      console.log(`  ✅ RESULT: Would proceed with title/author search (no cache)`);
+      assert.strictEqual(
+        shouldSkipNew,
+        false,
+        'Should NOT skip auto-add for new book',
+      );
+      console.log(
+        `  ✅ RESULT: Would proceed with title/author search (no cache)`,
+      );
 
       console.log('\n🎯 VERIFICATION SUMMARY:');
       console.log('  ✅ Complete cache entries: Skip title/author search');
-      console.log('  ✅ Incomplete cache entries: Proceed with title/author search');
+      console.log(
+        '  ✅ Incomplete cache entries: Proceed with title/author search',
+      );
       console.log('  ✅ New books: Proceed with title/author search');
       console.log('  ✅ Auto-add functionality fully preserved!');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -144,23 +175,36 @@ describe('Auto-Add Cache Skip Verification', () => {
         {
           name: 'Complete cache entry',
           setup: async () => {
-            const id = bookCache.generateTitleAuthorIdentifier('Complete Book', 'Complete Author');
+            const id = bookCache.generateTitleAuthorIdentifier(
+              'Complete Book',
+              'Complete Author',
+            );
             await bookCache.storeBookSyncData(
-              userId, id, 'Complete Book', 'edition-123', 'title_author', 'Complete Author',
-              50.0, Date.now(), Date.now() - 86400000
+              userId,
+              id,
+              'Complete Book',
+              'edition-123',
+              'title_author',
+              'Complete Author',
+              50.0,
+              Date.now(),
+              Date.now() - 86400000,
             );
             return { id, title: 'Complete Book' };
           },
-          expectedSkip: true
+          expectedSkip: true,
         },
         {
           name: 'No cache entry',
           setup: async () => {
-            const id = bookCache.generateTitleAuthorIdentifier('No Cache Book', 'No Cache Author');
+            const id = bookCache.generateTitleAuthorIdentifier(
+              'No Cache Book',
+              'No Cache Author',
+            );
             return { id, title: 'No Cache Book' };
           },
-          expectedSkip: false
-        }
+          expectedSkip: false,
+        },
       ];
 
       for (const testCase of testCases) {
@@ -168,17 +212,24 @@ describe('Auto-Add Cache Skip Verification', () => {
 
         const { id, title } = await testCase.setup();
 
-        const cache = await bookCache.getCachedBookInfo(userId, id, title, 'title_author');
+        const cache = await bookCache.getCachedBookInfo(
+          userId,
+          id,
+          title,
+          'title_author',
+        );
         const shouldSkip = !!(cache && cache.exists && cache.edition_id);
 
-        assert.strictEqual(shouldSkip, testCase.expectedSkip,
-          `${testCase.name}: Expected skip=${testCase.expectedSkip}, got skip=${shouldSkip}`);
+        assert.strictEqual(
+          shouldSkip,
+          testCase.expectedSkip,
+          `${testCase.name}: Expected skip=${testCase.expectedSkip}, got skip=${shouldSkip}`,
+        );
 
         console.log(`  Expected skip: ${testCase.expectedSkip}`);
         console.log(`  Actual skip: ${shouldSkip}`);
         console.log(`  ✅ Logic correct`);
       }
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
