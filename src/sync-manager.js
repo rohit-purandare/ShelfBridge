@@ -559,10 +559,22 @@ export class SyncManager {
           possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
         }
 
-        // For title/author matching, we can't know the userBook/edition IDs yet since we haven't
-        // done the expensive matching. However, we can check if there are any cached entries
-        // for this title using a title-based lookup in the cache.
-        // This is a performance optimization for books that were previously matched by title/author.
+        // For title/author matching, add the standardized title/author cache identifier
+        // This uses the same pattern as TitleAuthorMatcher for consistency
+        if (!identifiers.asin && !identifiers.isbn) {
+          const titleAuthorId = this.cache.generateTitleAuthorIdentifier(
+            title,
+            author,
+          );
+          possibleCacheKeys.push({ key: titleAuthorId, type: 'title_author' });
+          logger.debug(
+            `Added title/author cache key for early optimization: ${titleAuthorId}`,
+            {
+              title: title,
+              author: author,
+            },
+          );
+        }
 
         let hasChanged = true; // Default to true (needs sync)
         let cacheFoundEarly = false;
@@ -812,14 +824,20 @@ export class SyncManager {
       possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
     }
 
-    // Add title/author key if we have a match (fallback)
-    if (
-      hardcoverMatch &&
-      hardcoverMatch.userBook?.id &&
-      hardcoverMatch.edition?.id
-    ) {
-      const titleAuthorKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
+    // Add title/author key using consistent pattern (same as TitleAuthorMatcher)
+    if (hardcoverMatch && !identifiers.asin && !identifiers.isbn) {
+      const titleAuthorKey = this.cache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
+      logger.debug(
+        `Added consistent title/author cache key: ${titleAuthorKey}`,
+        {
+          title: title,
+          author: author,
+        },
+      );
     }
 
     let cachedInfo = { exists: false };
@@ -875,9 +893,16 @@ export class SyncManager {
     let identifierType = identifiers.asin ? 'asin' : 'isbn';
 
     if (!identifier && hardcoverMatch) {
-      // Generate cache key for title/author matches without identifiers
-      identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
+      // Generate cache key for title/author matches without identifiers using consistent pattern
+      identifier = this.cache.generateTitleAuthorIdentifier(title, author);
       identifierType = 'title_author';
+      logger.debug(
+        `Generated consistent title/author identifier for caching: ${identifier}`,
+        {
+          title: title,
+          author: author,
+        },
+      );
     }
 
     // Determine how the match was found using BookMatcher's metadata
@@ -2007,14 +2032,15 @@ export class SyncManager {
       identifierType = 'isbn';
       identifierValue = identifier.isbn;
     } else {
-      // Title/author match without identifiers - create synthetic identifier
-      // This prevents the "NOT NULL constraint failed" error
+      // Title/author match without identifiers - use consistent pattern
+      // This prevents the "NOT NULL constraint failed" error and ensures cache consistency
       identifierType = 'title_author';
-      identifierValue = `title_author_${userBook.id}_${edition.id}`;
+      identifierValue = this.cache.generateTitleAuthorIdentifier(title, author);
       logger.debug(
-        `Created synthetic identifier for title/author match: ${identifierValue}`,
+        `Generated consistent title/author identifier for edition cache: ${identifierValue}`,
         {
           title: title,
+          author: author,
           userBookId: userBook.id,
           editionId: edition.id,
         },
@@ -2196,7 +2222,7 @@ export class SyncManager {
         let identifierType = identifier.asin ? 'asin' : 'isbn';
         let identifierValue = identifier.asin || identifier.isbn;
 
-        // If no ISBN/ASIN available, create a fallback identifier using title + author
+        // If no ISBN/ASIN available, use consistent title/author identifier pattern
         if (
           !identifierValue ||
           typeof identifierValue !== 'string' ||
@@ -2204,23 +2230,24 @@ export class SyncManager {
         ) {
           const author =
             absBook.media?.metadata?.authors?.[0]?.name || 'Unknown Author';
-          const fallbackIdentifier = `${title}:${author}`
-            .toLowerCase()
-            .replace(/[^a-z0-9:]/g, '');
+          const consistentIdentifier = this.cache.generateTitleAuthorIdentifier(
+            title,
+            author,
+          );
 
           logger.warn(
-            `No ISBN/ASIN found for "${title}" - using fallback identifier`,
+            `No ISBN/ASIN found for "${title}" - using consistent title/author identifier`,
             {
               userId: this.userId,
               userBookId,
               extractedIdentifiers: identifier,
               title,
               author,
-              fallbackIdentifier,
+              consistentIdentifier,
             },
           );
 
-          identifierValue = fallbackIdentifier;
+          identifierValue = consistentIdentifier;
           identifierType = 'title_author';
         }
 
@@ -2335,10 +2362,31 @@ export class SyncManager {
       const transaction = new Transaction(`progress: ${title}`);
       let previousProgress = null;
 
-      // Get previous progress for rollback
+      // Get previous progress for rollback - handle title/author books consistently
       const identifier = extractBookIdentifiers(absBook);
-      const identifierType = identifier.asin ? 'asin' : 'isbn';
-      const identifierValue = identifier.asin || identifier.isbn;
+      let identifierType, identifierValue;
+
+      if (identifier.asin) {
+        identifierType = 'asin';
+        identifierValue = identifier.asin;
+      } else if (identifier.isbn) {
+        identifierType = 'isbn';
+        identifierValue = identifier.isbn;
+      } else {
+        // Title/author book without identifiers - use consistent pattern
+        identifierType = 'title_author';
+        identifierValue = this.cache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
+        logger.debug(
+          `Using title/author identifier for progress rollback: ${identifierValue}`,
+          {
+            title: title,
+            author: author,
+          },
+        );
+      }
 
       previousProgress = await this.cache.getLastProgress(
         this.userId,
