@@ -807,9 +807,15 @@ export class SyncManager {
           // Skip expensive matching and create a synthetic match object using cached data
           shouldPerformExpensiveMatching = false;
 
-          // Create match object from cached data
+          // Create match object from cached data with complete structure
           hardcoverMatch = {
-            userBook: { id: 'cached-user-book' }, // Will be resolved later
+            userBook: {
+              id: 'cached-user-book',
+              book: {
+                id: 'cached-book-id',
+                title: title, // Use the extracted title
+              },
+            },
             edition: { id: cachedMatchInfo.editionId },
             _matchType: cachedMatchInfo.identifierType,
             _fromCache: true,
@@ -2053,8 +2059,8 @@ export class SyncManager {
 
     logger.debug(`Syncing existing book: ${title}`, {
       currentProgress: progressPercent,
-      hardcoverTitle: userBook.book.title,
-      userBookId: userBook.id,
+      hardcoverTitle: userBook?.book?.title || title,
+      userBookId: userBook?.id || 'unknown',
       editionId: edition?.id,
     });
 
