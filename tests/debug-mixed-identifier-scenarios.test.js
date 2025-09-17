@@ -25,7 +25,10 @@ describe('Debug Mixed Identifier Scenarios', () => {
       // === Scenario 1: Book originally matched by title/author (no identifiers) ===
       console.log('📚 SCENARIO 1: Book originally cached via title/author');
 
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -35,7 +38,7 @@ describe('Debug Mixed Identifier Scenarios', () => {
         author,
         45.0,
         Date.now() - 86400000, // Yesterday
-        Date.now() - 172800000  // Started 2 days ago
+        Date.now() - 172800000, // Started 2 days ago
       );
 
       console.log(`  Cached with title/author ID: ${titleAuthorId}`);
@@ -55,9 +58,9 @@ describe('Debug Mixed Identifier Scenarios', () => {
           metadata: {
             title: title,
             authors: [{ name: author }],
-            isbn: isbn // NOW has ISBN
-          }
-        }
+            isbn: isbn, // NOW has ISBN
+          },
+        },
       };
 
       // === Scenario 3: Test early optimization with identifiers present ===
@@ -65,32 +68,40 @@ describe('Debug Mixed Identifier Scenarios', () => {
 
       const identifiers = {
         isbn: isbn,
-        asin: null
+        asin: null,
       };
 
       console.log(`  Identifiers: ${JSON.stringify(identifiers)}`);
-      console.log(`  Has identifiers: ${!!(identifiers.isbn || identifiers.asin)}`);
+      console.log(
+        `  Has identifiers: ${!!(identifiers.isbn || identifiers.asin)}`,
+      );
 
       // The current logic only checks title/author cache if NO identifiers
       const wouldCheckTitleAuthor = !identifiers.asin && !identifiers.isbn;
       console.log(`  Would check title/author cache: ${wouldCheckTitleAuthor}`);
 
       if (!wouldCheckTitleAuthor) {
-        console.log(`  ❌ PROBLEM: Current logic skips title/author cache check!`);
-        console.log(`      This book has existing title/author cache but optimization won't find it`);
+        console.log(
+          `  ❌ PROBLEM: Current logic skips title/author cache check!`,
+        );
+        console.log(
+          `      This book has existing title/author cache but optimization won't find it`,
+        );
 
         // Try ISBN cache lookup (will fail since it was cached with title/author)
         const isbnCached = await bookCache.getCachedBookInfo(
           userId,
           isbn,
           title,
-          'isbn'
+          'isbn',
         );
 
         console.log(`  ISBN cache lookup: ${isbnCached.exists}`);
 
         if (!isbnCached.exists) {
-          console.log(`  ❌ ISBN cache miss - would trigger expensive matching`);
+          console.log(
+            `  ❌ ISBN cache miss - would trigger expensive matching`,
+          );
           console.log(`     But title/author cache exists and could be used!`);
 
           // Verify title/author cache still exists
@@ -98,13 +109,17 @@ describe('Debug Mixed Identifier Scenarios', () => {
             userId,
             titleAuthorId,
             title,
-            'title_author'
+            'title_author',
           );
 
-          console.log(`  Title/author cache exists: ${titleAuthorCached.exists}`);
+          console.log(
+            `  Title/author cache exists: ${titleAuthorCached.exists}`,
+          );
 
           if (titleAuthorCached.exists) {
-            console.log(`  💡 SOLUTION: Check ALL cache types, not just identifier-based`);
+            console.log(
+              `  💡 SOLUTION: Check ALL cache types, not just identifier-based`,
+            );
           }
         }
       }
@@ -124,14 +139,24 @@ describe('Debug Mixed Identifier Scenarios', () => {
       }
 
       // ALWAYS add title/author keys (not just when no identifiers)
-      const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       allPossibleKeys.push({ key: titleAuthorKey, type: 'title_author' });
 
-      console.log(`  Checking ALL possible cache keys (${allPossibleKeys.length}):`);
+      console.log(
+        `  Checking ALL possible cache keys (${allPossibleKeys.length}):`,
+      );
 
       let foundCache = false;
       for (const { key, type } of allPossibleKeys) {
-        const cached = await bookCache.getCachedBookInfo(userId, key, title, type);
+        const cached = await bookCache.getCachedBookInfo(
+          userId,
+          key,
+          title,
+          type,
+        );
         console.log(`    ${type} (${key}): exists=${cached.exists}`);
 
         if (cached.exists && cached.edition_id) {
@@ -144,23 +169,28 @@ describe('Debug Mixed Identifier Scenarios', () => {
             key,
             title,
             45.0, // Same progress
-            type
+            type,
           );
 
           if (!progressChanged) {
-            console.log(`    ✅ Progress unchanged - would skip expensive matching!`);
+            console.log(
+              `    ✅ Progress unchanged - would skip expensive matching!`,
+            );
             break;
           }
         }
       }
 
-      assert.strictEqual(foundCache, true, 'Should find cache entry with comprehensive lookup');
+      assert.strictEqual(
+        foundCache,
+        true,
+        'Should find cache entry with comprehensive lookup',
+      );
 
       console.log('\n🎯 COMPREHENSIVE LOOKUP BENEFITS:');
       console.log('  ✅ Finds books cached with any identifier type');
       console.log('  ✅ Handles books that gain/lose identifiers over time');
       console.log('  ✅ Maximizes cache optimization coverage');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -175,20 +205,20 @@ describe('Debug Mixed Identifier Scenarios', () => {
         name: 'Normal operation',
         config: { force_sync: false },
         progressValid: true,
-        shouldOptimize: true
+        shouldOptimize: true,
       },
       {
         name: 'Force sync enabled',
         config: { force_sync: true },
         progressValid: true,
-        shouldOptimize: false
+        shouldOptimize: false,
       },
       {
         name: 'Invalid progress data',
         config: { force_sync: false },
         progressValid: false,
-        shouldOptimize: false
-      }
+        shouldOptimize: false,
+      },
     ];
 
     scenarios.forEach(scenario => {
@@ -197,16 +227,22 @@ describe('Debug Mixed Identifier Scenarios', () => {
       console.log(`  Progress valid: ${scenario.progressValid}`);
 
       // Simulate the conditions from sync-manager.js
-      const wouldOptimize = !scenario.config.force_sync && scenario.progressValid;
+      const wouldOptimize =
+        !scenario.config.force_sync && scenario.progressValid;
 
       console.log(`  Would run optimization: ${wouldOptimize}`);
       console.log(`  Expected: ${scenario.shouldOptimize}`);
 
-      assert.strictEqual(wouldOptimize, scenario.shouldOptimize,
-        `${scenario.name} should ${scenario.shouldOptimize ? 'optimize' : 'skip optimization'}`);
+      assert.strictEqual(
+        wouldOptimize,
+        scenario.shouldOptimize,
+        `${scenario.name} should ${scenario.shouldOptimize ? 'optimize' : 'skip optimization'}`,
+      );
 
       if (!wouldOptimize && scenario.name !== 'Invalid progress data') {
-        console.log(`  ⚠️  This scenario would bypass optimization and could trigger searches`);
+        console.log(
+          `  ⚠️  This scenario would bypass optimization and could trigger searches`,
+        );
       } else {
         console.log(`  ✅ Behaves correctly`);
       }
@@ -214,6 +250,8 @@ describe('Debug Mixed Identifier Scenarios', () => {
       console.log('');
     });
 
-    console.log('💡 KEY INSIGHT: Check if force_sync is accidentally enabled in config');
+    console.log(
+      '💡 KEY INSIGHT: Check if force_sync is accidentally enabled in config',
+    );
   });
 });

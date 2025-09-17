@@ -40,7 +40,7 @@ describe('Cached Match Reuse', () => {
         author,
         43.246034920646856, // Previous progress from logs
         Date.now() - 86400000,
-        Date.now() - 172800000
+        Date.now() - 172800000,
       );
 
       console.log(`  Cached with ASIN: ${asin} (progress: 43.2%)`);
@@ -56,9 +56,9 @@ describe('Cached Match Reuse', () => {
             title: title,
             authors: [{ name: author }],
             isbn: isbn,
-            asin: asin
-          }
-        }
+            asin: asin,
+          },
+        },
       };
 
       console.log(`  Current progress: ${currentProgress.toFixed(1)}%`);
@@ -68,7 +68,7 @@ describe('Cached Match Reuse', () => {
       const validatedProgress = ProgressManager.getValidatedProgress(
         absBook,
         `book "${title}" reuse test`,
-        { allowNull: false }
+        { allowNull: false },
       );
 
       console.log('\n🔄 EARLY OPTIMIZATION WITH CACHED MATCH REUSE:');
@@ -93,7 +93,12 @@ describe('Cached Match Reuse', () => {
         console.log(`    ${type} key: ${key}`);
 
         // Get full cached info
-        const cachedInfo = await bookCache.getCachedBookInfo(userId, key, title, type);
+        const cachedInfo = await bookCache.getCachedBookInfo(
+          userId,
+          key,
+          title,
+          type,
+        );
 
         if (cachedInfo && cachedInfo.exists && cachedInfo.edition_id) {
           cachedMatchInfo = {
@@ -101,7 +106,7 @@ describe('Cached Match Reuse', () => {
             identifierType: type,
             editionId: cachedInfo.edition_id,
             lastProgress: cachedInfo.progress_percent,
-            lastSync: cachedInfo.last_sync
+            lastSync: cachedInfo.last_sync,
           };
 
           console.log(`      Cache exists: true`);
@@ -110,7 +115,11 @@ describe('Cached Match Reuse', () => {
 
           // Check if progress changed
           const progressChanged = await bookCache.hasProgressChanged(
-            userId, key, title, validatedProgress, type
+            userId,
+            key,
+            title,
+            validatedProgress,
+            type,
           );
 
           console.log(`      Progress changed: ${progressChanged}`);
@@ -121,7 +130,9 @@ describe('Cached Match Reuse', () => {
             console.log(`      ✅ SKIP: Progress unchanged`);
             break;
           } else {
-            console.log(`      ✅ REUSE: Progress changed but will reuse cached match`);
+            console.log(
+              `      ✅ REUSE: Progress changed but will reuse cached match`,
+            );
             // Continue to check other keys but we have reusable match info
           }
         } else {
@@ -137,18 +148,29 @@ describe('Cached Match Reuse', () => {
       if (!hasChanged && cacheFoundEarly) {
         console.log(`    🎉 OUTCOME: Skip entirely (progress unchanged)`);
       } else if (hasChanged && cachedMatchInfo) {
-        console.log(`    🚀 OUTCOME: Skip expensive matching (reuse cached match)`);
-        console.log(`    ⚡ PERFORMANCE: Avoids title/author search while syncing progress`);
-        assert.strictEqual(!!cachedMatchInfo, true, 'Should have cached match info to reuse');
+        console.log(
+          `    🚀 OUTCOME: Skip expensive matching (reuse cached match)`,
+        );
+        console.log(
+          `    ⚡ PERFORMANCE: Avoids title/author search while syncing progress`,
+        );
+        assert.strictEqual(
+          !!cachedMatchInfo,
+          true,
+          'Should have cached match info to reuse',
+        );
       } else {
         console.log(`    ⚠️  OUTCOME: Would perform expensive matching`);
       }
 
       console.log('\n✅ CACHED MATCH REUSE OPTIMIZATION VERIFIED:');
       console.log('  📈 Progress unchanged: Skip entirely');
-      console.log('  📈 Progress changed + cached match: Skip expensive matching');
-      console.log('  📈 No cache data: Perform matching (only for truly new books)');
-
+      console.log(
+        '  📈 Progress changed + cached match: Skip expensive matching',
+      );
+      console.log(
+        '  📈 No cache data: Perform matching (only for truly new books)',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();

@@ -23,7 +23,9 @@ describe('Preserve Matching Method', () => {
       const asin = 'B09RQ3RD3K';
       const isbn = '9781635578362';
 
-      console.log('📚 Scenario: Book matched by title/author but has identifiers');
+      console.log(
+        '📚 Scenario: Book matched by title/author but has identifiers',
+      );
       console.log(`  Title: "${title}"`);
       console.log(`  Author: "${author}"`);
       console.log(`  ASIN: ${asin}`);
@@ -37,7 +39,7 @@ describe('Preserve Matching Method', () => {
         userBook: { id: 'user-book-123', book: { id: 'book-456' } },
         edition: { id: 'edition-789' },
         _matchType: 'title_author_two_stage', // This indicates title/author matching
-        _isSearchResult: false
+        _isSearchResult: false,
       };
 
       console.log(`  Match type: ${titleAuthorMatch._matchType}`);
@@ -48,10 +50,16 @@ describe('Preserve Matching Method', () => {
       let identifier, identifierType;
 
       // This is the logic from sync-manager.js lines 1083-1118
-      if (titleAuthorMatch && (titleAuthorMatch._matchType === 'title_author' || titleAuthorMatch._matchType === 'title_author_two_stage')) {
+      if (
+        titleAuthorMatch &&
+        (titleAuthorMatch._matchType === 'title_author' ||
+          titleAuthorMatch._matchType === 'title_author_two_stage')
+      ) {
         identifier = bookCache.generateTitleAuthorIdentifier(title, author);
         identifierType = 'title_author';
-        console.log(`  ✅ PRESERVED: Using title/author method (${identifier})`);
+        console.log(
+          `  ✅ PRESERVED: Using title/author method (${identifier})`,
+        );
         console.log(`    Reason: Book was originally matched by title/author`);
       } else {
         identifier = identifiers.asin || identifiers.isbn;
@@ -61,8 +69,16 @@ describe('Preserve Matching Method', () => {
       }
 
       // Verify correct behavior
-      assert.strictEqual(identifierType, 'title_author', 'Should preserve title/author caching method');
-      assert.strictEqual(identifier, bookCache.generateTitleAuthorIdentifier(title, author), 'Should use consistent title/author identifier');
+      assert.strictEqual(
+        identifierType,
+        'title_author',
+        'Should preserve title/author caching method',
+      );
+      assert.strictEqual(
+        identifier,
+        bookCache.generateTitleAuthorIdentifier(title, author),
+        'Should use consistent title/author identifier',
+      );
 
       console.log('\n🎯 PRESERVATION BENEFITS:');
       console.log('  ✅ Maintains cache consistency across syncs');
@@ -77,7 +93,7 @@ describe('Preserve Matching Method', () => {
         userBook: { id: 'asin-user-book', book: { id: 'asin-book' } },
         edition: { id: 'asin-edition' },
         _matchType: 'asin',
-        _isSearchResult: false
+        _isSearchResult: false,
       };
 
       console.log(`  Match type: ${asinMatch._matchType}`);
@@ -85,7 +101,11 @@ describe('Preserve Matching Method', () => {
       // Test identifier selection for ASIN-matched book
       let asinIdentifier, asinIdentifierType;
 
-      if (asinMatch && (asinMatch._matchType === 'title_author' || asinMatch._matchType === 'title_author_two_stage')) {
+      if (
+        asinMatch &&
+        (asinMatch._matchType === 'title_author' ||
+          asinMatch._matchType === 'title_author_two_stage')
+      ) {
         asinIdentifier = bookCache.generateTitleAuthorIdentifier(title, author);
         asinIdentifierType = 'title_author';
       } else {
@@ -93,14 +113,21 @@ describe('Preserve Matching Method', () => {
         asinIdentifierType = identifiers.asin ? 'asin' : 'isbn';
       }
 
-      console.log(`  ✅ CORRECT: Using ${asinIdentifierType} method (${asinIdentifier})`);
-      assert.strictEqual(asinIdentifierType, 'asin', 'Should use ASIN for ASIN-matched books');
+      console.log(
+        `  ✅ CORRECT: Using ${asinIdentifierType} method (${asinIdentifier})`,
+      );
+      assert.strictEqual(
+        asinIdentifierType,
+        'asin',
+        'Should use ASIN for ASIN-matched books',
+      );
 
       console.log('\n✅ MATCHING METHOD PRESERVATION VERIFIED:');
-      console.log('  📚 Title/author matched books: Stay with title/author cache');
+      console.log(
+        '  📚 Title/author matched books: Stay with title/author cache',
+      );
       console.log('  🔢 Identifier matched books: Use identifier cache');
       console.log('  🔄 Consistent behavior: No cache method switching');
-
     } finally {
       bookCache.close();
     }

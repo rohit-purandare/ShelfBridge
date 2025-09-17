@@ -21,14 +21,19 @@ describe('Comprehensive Cache Optimization', () => {
       console.log('\n🔍 COMPREHENSIVE CACHE OPTIMIZATION TEST\n');
 
       // === Critical Test: Book originally cached via title/author that later gains ISBN ===
-      console.log('📚 CRITICAL TEST: Book with identifiers that was originally cached via title/author');
+      console.log(
+        '📚 CRITICAL TEST: Book with identifiers that was originally cached via title/author',
+      );
 
       const title = 'Book With Later ISBN';
       const author = 'Metadata Author';
       const isbn = '9781111111111';
 
       // Step 1: Cache book using title/author (original matching)
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       await bookCache.storeBookSyncData(
         userId,
         titleAuthorId,
@@ -38,7 +43,7 @@ describe('Comprehensive Cache Optimization', () => {
         author,
         67.3,
         Date.now() - 86400000,
-        Date.now() - 172800000
+        Date.now() - 172800000,
       );
 
       console.log(`  Original title/author cache: ${titleAuthorId}`);
@@ -50,16 +55,16 @@ describe('Comprehensive Cache Optimization', () => {
           metadata: {
             title: title,
             authors: [{ name: author }],
-            isbn: isbn // NOW has ISBN
-          }
-        }
+            isbn: isbn, // NOW has ISBN
+          },
+        },
       };
 
       const identifiers = { isbn: isbn, asin: null };
       const validatedProgress = ProgressManager.getValidatedProgress(
         absBookWithISBN,
         `book "${title}" comprehensive test`,
-        { allowNull: false }
+        { allowNull: false },
       );
 
       console.log(`  Book now has ISBN: ${isbn}`);
@@ -70,13 +75,22 @@ describe('Comprehensive Cache Optimization', () => {
 
       // Old logic: only check title/author if no identifiers
       const oldWouldCheckTitleAuthor = !identifiers.asin && !identifiers.isbn;
-      console.log(`  Would check title/author cache: ${oldWouldCheckTitleAuthor}`);
+      console.log(
+        `  Would check title/author cache: ${oldWouldCheckTitleAuthor}`,
+      );
 
       if (!oldWouldCheckTitleAuthor) {
         // Would only check ISBN cache (which doesn't exist)
-        const isbnCache = await bookCache.getCachedBookInfo(userId, isbn, title, 'isbn');
+        const isbnCache = await bookCache.getCachedBookInfo(
+          userId,
+          isbn,
+          title,
+          'isbn',
+        );
         console.log(`  ISBN cache exists: ${isbnCache.exists}`);
-        console.log(`  ❌ Result: Cache miss → Would trigger expensive matching`);
+        console.log(
+          `  ❌ Result: Cache miss → Would trigger expensive matching`,
+        );
       }
 
       // Step 4: Test NEW logic (should succeed)
@@ -84,12 +98,24 @@ describe('Comprehensive Cache Optimization', () => {
 
       // New logic: ALWAYS check title/author cache
       const newWouldCheckTitleAuthor = true; // Always check
-      console.log(`  Would check title/author cache: ${newWouldCheckTitleAuthor}`);
+      console.log(
+        `  Would check title/author cache: ${newWouldCheckTitleAuthor}`,
+      );
 
       if (newWouldCheckTitleAuthor) {
         // Check both ISBN and title/author caches
-        const isbnCache = await bookCache.getCachedBookInfo(userId, isbn, title, 'isbn');
-        const titleAuthorCache = await bookCache.getCachedBookInfo(userId, titleAuthorId, title, 'title_author');
+        const isbnCache = await bookCache.getCachedBookInfo(
+          userId,
+          isbn,
+          title,
+          'isbn',
+        );
+        const titleAuthorCache = await bookCache.getCachedBookInfo(
+          userId,
+          titleAuthorId,
+          title,
+          'title_author',
+        );
 
         console.log(`  ISBN cache exists: ${isbnCache.exists}`);
         console.log(`  Title/author cache exists: ${titleAuthorCache.exists}`);
@@ -100,23 +126,34 @@ describe('Comprehensive Cache Optimization', () => {
             titleAuthorId,
             title,
             validatedProgress,
-            'title_author'
+            'title_author',
           );
 
           console.log(`  Progress changed: ${progressChanged}`);
 
           if (!progressChanged) {
-            console.log(`  ✅ CACHE HIT: Would skip expensive matching via title/author cache!`);
-            assert.strictEqual(progressChanged, false, 'Should find title/author cache even when book has identifiers');
+            console.log(
+              `  ✅ CACHE HIT: Would skip expensive matching via title/author cache!`,
+            );
+            assert.strictEqual(
+              progressChanged,
+              false,
+              'Should find title/author cache even when book has identifiers',
+            );
           }
         }
       }
 
       console.log('\n🎉 COMPREHENSIVE OPTIMIZATION SUCCESS:');
-      console.log('  ✅ Books with identifiers: Check both identifier AND title/author cache');
-      console.log('  ✅ Books without identifiers: Check title/author cache with legacy patterns');
-      console.log('  ✅ Maximum coverage: ALL cached books benefit from optimization');
-
+      console.log(
+        '  ✅ Books with identifiers: Check both identifier AND title/author cache',
+      );
+      console.log(
+        '  ✅ Books without identifiers: Check title/author cache with legacy patterns',
+      );
+      console.log(
+        '  ✅ Maximum coverage: ALL cached books benefit from optimization',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -138,36 +175,36 @@ describe('Comprehensive Cache Optimization', () => {
           hasISBN: true,
           hasASIN: false,
           cachedWith: 'isbn',
-          shouldOptimize: true
+          shouldOptimize: true,
         },
         {
           name: 'Book with ISBN, cached with title/author',
           hasISBN: true,
           hasASIN: false,
           cachedWith: 'title_author',
-          shouldOptimize: true // NEW: Should now optimize due to comprehensive lookup
+          shouldOptimize: true, // NEW: Should now optimize due to comprehensive lookup
         },
         {
           name: 'Book with ASIN, cached with ASIN',
           hasISBN: false,
           hasASIN: true,
           cachedWith: 'asin',
-          shouldOptimize: true
+          shouldOptimize: true,
         },
         {
           name: 'Book with ASIN, cached with title/author',
           hasISBN: false,
           hasASIN: true,
           cachedWith: 'title_author',
-          shouldOptimize: true // NEW: Should now optimize due to comprehensive lookup
+          shouldOptimize: true, // NEW: Should now optimize due to comprehensive lookup
         },
         {
           name: 'Book without identifiers, cached with title/author',
           hasISBN: false,
           hasASIN: false,
           cachedWith: 'title_author',
-          shouldOptimize: true
-        }
+          shouldOptimize: true,
+        },
       ];
 
       for (let i = 0; i < testCases.length; i++) {
@@ -176,7 +213,9 @@ describe('Comprehensive Cache Optimization', () => {
 
         const title = `Test Book ${i}`;
         const author = `Test Author ${i}`;
-        const isbn = testCase.hasISBN ? `978${String(i).padStart(10, '0')}` : null;
+        const isbn = testCase.hasISBN
+          ? `978${String(i).padStart(10, '0')}`
+          : null;
         const asin = testCase.hasASIN ? `B${String(i).padStart(9, '0')}` : null;
 
         // Cache the book with the specified method
@@ -193,8 +232,15 @@ describe('Comprehensive Cache Optimization', () => {
         }
 
         await bookCache.storeBookSyncData(
-          userId, cacheId, title, `edition-${i}`, cacheType, author,
-          50.0, Date.now(), Date.now() - 86400000
+          userId,
+          cacheId,
+          title,
+          `edition-${i}`,
+          cacheType,
+          author,
+          50.0,
+          Date.now(),
+          Date.now() - 86400000,
         );
 
         console.log(`   Cached with ${cacheType}: ${cacheId}`);
@@ -208,12 +254,21 @@ describe('Comprehensive Cache Optimization', () => {
         if (asin) possibleCacheKeys.push({ key: asin, type: 'asin' });
 
         // ALWAYS add title/author key (the critical fix)
-        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(title, author);
+        const titleAuthorKey = bookCache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
         possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
 
         let cacheFound = false;
         for (const { key, type } of possibleCacheKeys) {
-          const hasChanged = await bookCache.hasProgressChanged(userId, key, title, 50.0, type);
+          const hasChanged = await bookCache.hasProgressChanged(
+            userId,
+            key,
+            title,
+            50.0,
+            type,
+          );
           if (!hasChanged) {
             cacheFound = true;
             console.log(`   ✅ Cache hit with ${type}: ${key}`);
@@ -222,10 +277,18 @@ describe('Comprehensive Cache Optimization', () => {
         }
 
         if (testCase.shouldOptimize) {
-          assert.strictEqual(cacheFound, true, `${testCase.name} should find cache and optimize`);
+          assert.strictEqual(
+            cacheFound,
+            true,
+            `${testCase.name} should find cache and optimize`,
+          );
           console.log(`   ✅ Optimization: SUCCESS`);
         } else {
-          assert.strictEqual(cacheFound, false, `${testCase.name} should not find cache`);
+          assert.strictEqual(
+            cacheFound,
+            false,
+            `${testCase.name} should not find cache`,
+          );
           console.log(`   ➡️  Optimization: Would proceed with matching`);
         }
 
@@ -236,7 +299,6 @@ describe('Comprehensive Cache Optimization', () => {
       console.log('  ✅ ALL identifier combinations optimized');
       console.log('  ✅ ALL cache combinations found');
       console.log('  ✅ Zero duplicate matching scenarios remaining');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
