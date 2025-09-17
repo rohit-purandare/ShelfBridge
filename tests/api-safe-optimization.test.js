@@ -32,7 +32,7 @@ describe('API-Safe Optimization', () => {
         author,
         40.0,
         Date.now() - 86400000,
-        Date.now() - 172800000
+        Date.now() - 172800000,
       );
 
       console.log('📚 Test scenario:');
@@ -51,7 +51,7 @@ describe('API-Safe Optimization', () => {
         userId,
         asin,
         title,
-        'asin'
+        'asin',
       );
 
       if (cachedInfo && cachedInfo.exists && cachedInfo.edition_id) {
@@ -60,7 +60,7 @@ describe('API-Safe Optimization', () => {
           asin,
           title,
           currentProgress,
-          'asin'
+          'asin',
         );
 
         console.log(`  Cache found: ${cachedInfo.exists}`);
@@ -70,7 +70,9 @@ describe('API-Safe Optimization', () => {
         if (!progressChanged) {
           console.log(`  ✅ Would skip entirely (progress unchanged)`);
         } else {
-          console.log(`  ✅ Would proceed with standard matching (progress changed)`);
+          console.log(
+            `  ✅ Would proceed with standard matching (progress changed)`,
+          );
           console.log(`    - No synthetic objects created`);
           console.log(`    - Uses real Hardcover library data`);
           console.log(`    - Safe API calls with valid IDs`);
@@ -78,20 +80,31 @@ describe('API-Safe Optimization', () => {
 
         // Verify we don't create problematic fake IDs
         console.log('\n🔍 ID validation:');
-        console.log(`  Real edition ID: ${cachedInfo.edition_id} (string: ${typeof cachedInfo.edition_id})`);
+        console.log(
+          `  Real edition ID: ${cachedInfo.edition_id} (string: ${typeof cachedInfo.edition_id})`,
+        );
         console.log(`  Would NOT create fake userBook ID`);
         console.log(`  Would use standard BookMatcher to get real IDs`);
 
-        assert.strictEqual(typeof cachedInfo.edition_id, 'string', 'Edition ID should be string');
-        assert.notStrictEqual(cachedInfo.edition_id, 'cached-user-book', 'Should not use fake ID');
+        assert.strictEqual(
+          typeof cachedInfo.edition_id,
+          'string',
+          'Edition ID should be string',
+        );
+        assert.notStrictEqual(
+          cachedInfo.edition_id,
+          'cached-user-book',
+          'Should not use fake ID',
+        );
       }
 
       console.log('\n✅ API-SAFE OPTIMIZATION VERIFIED:');
-      console.log('  ✅ Progress unchanged: Skip entirely (major optimization)');
+      console.log(
+        '  ✅ Progress unchanged: Skip entirely (major optimization)',
+      );
       console.log('  ✅ Progress changed: Standard matching (safe API calls)');
       console.log('  ✅ No synthetic objects: Avoids ID validation errors');
       console.log('  ✅ Real Hardcover data: All API calls use valid IDs');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -114,11 +127,17 @@ describe('API-Safe Optimization', () => {
     console.log('  ❌ Complex object recreation that can have bugs');
 
     console.log('\n📊 Performance vs Safety Balance:');
-    console.log('  🚀 MAJOR OPTIMIZATION: Skip matching when progress unchanged (~80% of cases)');
-    console.log('  🛡️  SAFETY FIRST: Use standard flow when progress changed (~20% of cases)');
+    console.log(
+      '  🚀 MAJOR OPTIMIZATION: Skip matching when progress unchanged (~80% of cases)',
+    );
+    console.log(
+      '  🛡️  SAFETY FIRST: Use standard flow when progress changed (~20% of cases)',
+    );
     console.log('  ⚖️  RESULT: Major performance gain with zero API risk');
 
-    console.log('\n✅ This approach eliminates duplicate title/author searches');
+    console.log(
+      '\n✅ This approach eliminates duplicate title/author searches',
+    );
     console.log('   while maintaining full API compatibility and safety.');
   });
 });
