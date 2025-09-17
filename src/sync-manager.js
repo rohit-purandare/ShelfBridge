@@ -1076,26 +1076,49 @@ export class SyncManager {
       });
     }
 
-    // Set cache storage preferences for new entries
-    // Use the best available identifier in priority order: ASIN > ISBN > title_author
-    let identifier = identifiers.asin || identifiers.isbn;
-    let identifierType = identifiers.asin ? 'asin' : 'isbn';
+    // Set cache storage preferences - preserve original matching method when possible
+    let identifier, identifierType;
 
-    if (!identifier) {
-      // Generate cache key for books without identifiers (regardless of hardcoverMatch status)
-      // This ensures early-optimized books also have valid identifiers for subsequent checks
+    // If book was matched by title/author, preserve that cache method to maintain consistency
+    if (
+      hardcoverMatch &&
+      (hardcoverMatch._matchType === 'title_author' ||
+        hardcoverMatch._matchType === 'title_author_two_stage')
+    ) {
       identifier = this.cache.generateTitleAuthorIdentifier(title, author);
       identifierType = 'title_author';
       logger.debug(
-        `Generated consistent title/author identifier: ${identifier}`,
+        `Preserving title/author cache method for ${title} (originally matched by title/author)`,
         {
-          title: title,
-          author: author,
-          reason: hardcoverMatch
-            ? 'for hardcover match caching'
-            : 'for early-optimized book',
+          matchType: hardcoverMatch._matchType,
+          titleAuthorId: identifier,
         },
       );
+    } else {
+      // Use identifier priority for books matched by ASIN/ISBN: ASIN > ISBN > title_author
+      identifier = identifiers.asin || identifiers.isbn;
+      identifierType = identifiers.asin ? 'asin' : 'isbn';
+
+      if (!identifier) {
+        // Generate title/author identifier for books without identifiers
+        identifier = this.cache.generateTitleAuthorIdentifier(title, author);
+        identifierType = 'title_author';
+        logger.debug(
+          `Generated title/author identifier for book without identifiers: ${identifier}`,
+          {
+            title: title,
+            author: author,
+          },
+        );
+      } else {
+        logger.debug(
+          `Using ${identifierType} identifier for caching: ${identifier}`,
+          {
+            title: title,
+            matchMethod: 'identifier-based',
+          },
+        );
+      }
     }
 
     // Determine how the match was found using BookMatcher's metadata
