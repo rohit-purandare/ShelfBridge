@@ -864,7 +864,11 @@ export class SyncManager {
     } else {
       // For books that were skipped during early optimization
       extractedMetadata = { title, author, identifiers };
-      hardcoverMatch = null;
+
+      // Only set hardcoverMatch to null if it wasn't already set by direct edition sync
+      if (!hardcoverMatch) {
+        hardcoverMatch = null;
+      }
     }
 
     // Validate progress with explicit error handling and position-based accuracy
