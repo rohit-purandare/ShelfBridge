@@ -35,7 +35,7 @@ describe('Variable Initialization Fix', () => {
         author,
         40.0,
         Date.now() - 86400000,
-        Date.now() - 172800000
+        Date.now() - 172800000,
       );
 
       console.log(`  Pre-cached book: "${title}"`);
@@ -55,14 +55,16 @@ describe('Variable Initialization Fix', () => {
       // Declare variables early (the fix)
       let matchResult, hardcoverMatch, extractedMetadata;
 
-      console.log('  Variables declared: matchResult, hardcoverMatch, extractedMetadata');
+      console.log(
+        '  Variables declared: matchResult, hardcoverMatch, extractedMetadata',
+      );
 
       // Test cache lookup
       const cachedInfo = await bookCache.getCachedBookInfo(
         userId,
         asin,
         title,
-        'asin'
+        'asin',
       );
 
       if (cachedInfo && cachedInfo.exists && cachedInfo.edition_id) {
@@ -70,7 +72,7 @@ describe('Variable Initialization Fix', () => {
           identifier: asin,
           identifierType: 'asin',
           editionId: cachedInfo.edition_id,
-          lastProgress: cachedInfo.progress_percent
+          lastProgress: cachedInfo.progress_percent,
         };
 
         const progressChanged = await bookCache.hasProgressChanged(
@@ -78,7 +80,7 @@ describe('Variable Initialization Fix', () => {
           asin,
           title,
           validatedProgress,
-          'asin'
+          'asin',
         );
 
         if (progressChanged) {
@@ -90,7 +92,7 @@ describe('Variable Initialization Fix', () => {
             userBook: { id: 'cached-user-book' },
             edition: { id: cachedMatchInfo.editionId },
             _matchType: cachedMatchInfo.identifierType,
-            _fromCache: true
+            _fromCache: true,
           };
           extractedMetadata = { title, author, identifiers };
 
@@ -102,14 +104,21 @@ describe('Variable Initialization Fix', () => {
       }
 
       // Verify no initialization errors
-      assert.strictEqual(typeof hardcoverMatch, 'object', 'hardcoverMatch should be initialized');
-      assert.strictEqual(typeof extractedMetadata, 'object', 'extractedMetadata should be initialized');
+      assert.strictEqual(
+        typeof hardcoverMatch,
+        'object',
+        'hardcoverMatch should be initialized',
+      );
+      assert.strictEqual(
+        typeof extractedMetadata,
+        'object',
+        'extractedMetadata should be initialized',
+      );
 
       console.log('\n✅ VARIABLE INITIALIZATION FIX VERIFIED:');
       console.log('  ✅ No "before initialization" errors');
       console.log('  ✅ Cached match reuse works correctly');
       console.log('  ✅ All variables properly declared');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -125,7 +134,9 @@ describe('Variable Initialization Fix', () => {
 
     console.log('📚 Path 1: Early skip (progress unchanged)');
     // Early skip path - variables should remain undefined but accessible
-    console.log(`  shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`);
+    console.log(
+      `  shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`,
+    );
     console.log(`  hardcoverMatch: ${hardcoverMatch}`);
     console.log(`  ✅ No errors accessing undefined variables`);
 
@@ -135,7 +146,7 @@ describe('Variable Initialization Fix', () => {
     hardcoverMatch = {
       userBook: { id: 'test' },
       edition: { id: 'test-edition' },
-      _fromCache: true
+      _fromCache: true,
     };
     extractedMetadata = { title: 'Test', author: 'Test', identifiers: {} };
 
