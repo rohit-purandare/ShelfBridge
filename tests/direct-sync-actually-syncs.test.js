@@ -17,7 +17,9 @@ describe('Direct Sync Actually Syncs', () => {
     let matchResult, hardcoverMatch, extractedMetadata;
 
     console.log('📚 Initial state:');
-    console.log(`  shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`);
+    console.log(
+      `  shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`,
+    );
     console.log(`  hardcoverMatch: ${hardcoverMatch}`);
 
     // Simulate direct edition sync setting the match
@@ -28,16 +30,22 @@ describe('Direct Sync Actually Syncs', () => {
         id: 9172465, // Real ID from logs
         book: {
           id: 480689,
-          title: 'Cleopatra and Frankenstein'
-        }
+          title: 'Cleopatra and Frankenstein',
+        },
       },
       edition: { id: '30420670' },
       _matchType: 'asin',
-      _fromCache: true
+      _fromCache: true,
     };
-    extractedMetadata = { title: 'Cleopatra and Frankenstein', author: 'Coco Mellors', identifiers: {} };
+    extractedMetadata = {
+      title: 'Cleopatra and Frankenstein',
+      author: 'Coco Mellors',
+      identifiers: {},
+    };
 
-    console.log(`  Set shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`);
+    console.log(
+      `  Set shouldPerformExpensiveMatching: ${shouldPerformExpensiveMatching}`,
+    );
     console.log(`  Created hardcoverMatch: ${!!hardcoverMatch}`);
     console.log(`  UserBook ID: ${hardcoverMatch.userBook.id}`);
 
@@ -53,7 +61,9 @@ describe('Direct Sync Actually Syncs', () => {
         hardcoverMatch = null;
         console.log('  Set hardcoverMatch to null (was undefined)');
       } else {
-        console.log('  ✅ Preserved existing hardcoverMatch from direct edition sync');
+        console.log(
+          '  ✅ Preserved existing hardcoverMatch from direct edition sync',
+        );
       }
     }
 
@@ -67,7 +77,11 @@ describe('Direct Sync Actually Syncs', () => {
     const wouldBeSkipped = !hardcoverMatch;
     console.log(`  Would be marked as skipped: ${wouldBeSkipped}`);
 
-    assert.strictEqual(!!hardcoverMatch, true, 'hardcoverMatch should be preserved');
+    assert.strictEqual(
+      !!hardcoverMatch,
+      true,
+      'hardcoverMatch should be preserved',
+    );
     assert.strictEqual(wouldBeSkipped, false, 'Book should NOT be skipped');
 
     if (!wouldBeSkipped) {
