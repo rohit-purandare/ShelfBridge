@@ -36,13 +36,16 @@ describe('Diagnose Cleopatra Issue', () => {
         author,
         43.246034920646856, // From real logs
         Date.now() - 86400000,
-        Date.now() - 172800000
+        Date.now() - 172800000,
       );
 
       console.log(`  Created ASIN cache: ${asin} (progress: 43.2%)`);
 
       // Scenario 2: Incomplete title/author cache (from logs showing edition_id: null)
-      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(title, author);
+      const titleAuthorId = bookCache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
 
       // Simulate incomplete cache entry (edition_id: null like in the logs)
       const stmt = bookCache.db.prepare(`
@@ -56,10 +59,12 @@ describe('Diagnose Cleopatra Issue', () => {
         title.toLowerCase().trim(),
         author,
         0, // From logs: progress_percent: 0
-        Date.now() - 86400000
+        Date.now() - 86400000,
       );
 
-      console.log(`  Created incomplete title/author cache: ${titleAuthorId} (edition_id: null)`);
+      console.log(
+        `  Created incomplete title/author cache: ${titleAuthorId} (edition_id: null)`,
+      );
 
       // Test what early optimization would find
       console.log('\n🔄 Early optimization simulation:');
@@ -71,27 +76,51 @@ describe('Diagnose Cleopatra Issue', () => {
       console.log(`  Identifiers: ASIN=${asin}, ISBN=${isbn}`);
 
       // Test identifier-based cache lookup
-      const asinCache = await bookCache.getCachedBookInfo(userId, asin, title, 'asin');
-      console.log(`  ASIN cache: exists=${asinCache.exists}, edition_id=${asinCache.edition_id}`);
+      const asinCache = await bookCache.getCachedBookInfo(
+        userId,
+        asin,
+        title,
+        'asin',
+      );
+      console.log(
+        `  ASIN cache: exists=${asinCache.exists}, edition_id=${asinCache.edition_id}`,
+      );
 
       if (asinCache.exists) {
         const asinProgressChanged = await bookCache.hasProgressChanged(
-          userId, asin, title, currentProgress, 'asin'
+          userId,
+          asin,
+          title,
+          currentProgress,
+          'asin',
         );
         console.log(`  ASIN progress changed: ${asinProgressChanged}`);
 
         if (asinProgressChanged) {
-          console.log(`  ✅ ASIN cache found BUT progress changed → would proceed to matching`);
+          console.log(
+            `  ✅ ASIN cache found BUT progress changed → would proceed to matching`,
+          );
         }
       }
 
       // Test title/author cache lookup
-      const titleAuthorCache = await bookCache.getCachedBookInfo(userId, titleAuthorId, title, 'title_author');
-      console.log(`  Title/author cache: exists=${titleAuthorCache.exists}, edition_id=${titleAuthorCache.edition_id}`);
+      const titleAuthorCache = await bookCache.getCachedBookInfo(
+        userId,
+        titleAuthorId,
+        title,
+        'title_author',
+      );
+      console.log(
+        `  Title/author cache: exists=${titleAuthorCache.exists}, edition_id=${titleAuthorCache.edition_id}`,
+      );
 
       if (titleAuthorCache.exists && !titleAuthorCache.edition_id) {
-        console.log(`  ❌ PROBLEM: Title/author cache is incomplete (edition_id: null)`);
-        console.log(`     TitleAuthorMatcher will reject this and trigger search!`);
+        console.log(
+          `  ❌ PROBLEM: Title/author cache is incomplete (edition_id: null)`,
+        );
+        console.log(
+          `     TitleAuthorMatcher will reject this and trigger search!`,
+        );
       }
 
       // Test comprehensive cache lookup
@@ -100,27 +129,40 @@ describe('Diagnose Cleopatra Issue', () => {
       const allPossibleKeys = [
         { key: asin, type: 'asin' },
         { key: isbn, type: 'isbn' },
-        { key: titleAuthorId, type: 'title_author' }
+        { key: titleAuthorId, type: 'title_author' },
       ];
 
       let foundValidCache = false;
       for (const { key, type } of allPossibleKeys) {
-        const cache = await bookCache.getCachedBookInfo(userId, key, title, type);
-        console.log(`  ${type} (${key}): exists=${cache.exists}, edition_id=${cache.edition_id || 'null'}`);
+        const cache = await bookCache.getCachedBookInfo(
+          userId,
+          key,
+          title,
+          type,
+        );
+        console.log(
+          `  ${type} (${key}): exists=${cache.exists}, edition_id=${cache.edition_id || 'null'}`,
+        );
 
         if (cache.exists && cache.edition_id) {
           foundValidCache = true;
           console.log(`    ✅ Valid cache entry found`);
 
           const progressChanged = await bookCache.hasProgressChanged(
-            userId, key, title, currentProgress, type
+            userId,
+            key,
+            title,
+            currentProgress,
+            type,
           );
           console.log(`    Progress changed: ${progressChanged}`);
 
           if (!progressChanged) {
             console.log(`    🎉 Would skip matching entirely`);
           } else {
-            console.log(`    ➡️  Would proceed with matching (progress changed)`);
+            console.log(
+              `    ➡️  Would proceed with matching (progress changed)`,
+            );
           }
         } else if (cache.exists) {
           console.log(`    ⚠️  Incomplete cache entry (missing edition_id)`);
@@ -138,7 +180,6 @@ describe('Diagnose Cleopatra Issue', () => {
       console.log('  - Title/author cache is incomplete (edition_id: null)');
       console.log('  - BookMatcher falls back to title/author search');
       console.log('  - Need to fix incomplete cache entries');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();

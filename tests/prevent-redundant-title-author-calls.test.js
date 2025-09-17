@@ -24,8 +24,15 @@ describe('Prevent Redundant Title/Author Calls', () => {
 
       // Simulate the real scenario: Book has complete ASIN cache
       await bookCache.storeBookSyncData(
-        userId, asin, title, 'known-edition-456', 'asin', author,
-        30.0, Date.now() - 86400000, Date.now() - 172800000
+        userId,
+        asin,
+        title,
+        'known-edition-456',
+        'asin',
+        author,
+        30.0,
+        Date.now() - 86400000,
+        Date.now() - 172800000,
       );
 
       console.log('📚 Scenario: Book with complete ASIN cache');
@@ -37,7 +44,10 @@ describe('Prevent Redundant Title/Author Calls', () => {
       const identifiers = { asin: asin, isbn: null };
       const allCacheKeys = [
         { key: asin, type: 'asin' },
-        { key: bookCache.generateTitleAuthorIdentifier(title, author), type: 'title_author' }
+        {
+          key: bookCache.generateTitleAuthorIdentifier(title, author),
+          type: 'title_author',
+        },
       ];
 
       let knownEditionId = null;
@@ -47,8 +57,15 @@ describe('Prevent Redundant Title/Author Calls', () => {
       console.log('\n🔍 Checking for ANY cached edition information:');
 
       for (const { key, type } of allCacheKeys) {
-        const cache = await bookCache.getCachedBookInfo(userId, key, title, type);
-        console.log(`  ${type} cache: exists=${cache.exists}, edition_id=${cache.edition_id || 'null'}`);
+        const cache = await bookCache.getCachedBookInfo(
+          userId,
+          key,
+          title,
+          type,
+        );
+        console.log(
+          `  ${type} cache: exists=${cache.exists}, edition_id=${cache.edition_id || 'null'}`,
+        );
 
         if (cache.exists && cache.edition_id) {
           knownEditionId = cache.edition_id;
@@ -70,7 +87,11 @@ describe('Prevent Redundant Title/Author Calls', () => {
         console.log(`    - Avoid title/author search entirely`);
 
         // This would be the ultimate optimization
-        assert.strictEqual(typeof knownEditionId, 'string', 'Should have edition ID from cache');
+        assert.strictEqual(
+          typeof knownEditionId,
+          'string',
+          'Should have edition ID from cache',
+        );
         console.log(`    ✅ Could implement direct edition sync optimization`);
       } else {
         console.log(`  ⚠️  No complete cache found - matching needed`);
@@ -80,8 +101,9 @@ describe('Prevent Redundant Title/Author Calls', () => {
       console.log('  1. Check ALL cache sources for edition information');
       console.log('  2. If edition known: Skip ALL matching, sync directly');
       console.log('  3. If edition unknown: Proceed with standard matching');
-      console.log('  4. Result: Maximum performance, zero redundant operations');
-
+      console.log(
+        '  4. Result: Maximum performance, zero redundant operations',
+      );
     } finally {
       await bookCache.clearCache();
       bookCache.close();
@@ -107,7 +129,9 @@ describe('Prevent Redundant Title/Author Calls', () => {
     console.log('  5. No searches, no API calls, just progress update');
 
     console.log('\n📊 Performance comparison:');
-    console.log('  Current: ~6 API calls (ASIN search, ISBN search, title/author search, edition lookup)');
+    console.log(
+      '  Current: ~6 API calls (ASIN search, ISBN search, title/author search, edition lookup)',
+    );
     console.log('  Optimized: 1 API call (just progress update)');
     console.log('  Improvement: 83% reduction in API calls');
 

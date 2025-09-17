@@ -25,8 +25,15 @@ describe('Direct Edition Sync', () => {
 
       // Pre-cache with complete ASIN data
       await bookCache.storeBookSyncData(
-        userId, asin, title, editionId, 'asin', author,
-        40.0, Date.now() - 86400000, Date.now() - 172800000
+        userId,
+        asin,
+        title,
+        editionId,
+        'asin',
+        author,
+        40.0,
+        Date.now() - 86400000,
+        Date.now() - 172800000,
       );
 
       console.log('📚 Setup:');
@@ -47,15 +54,15 @@ describe('Direct Edition Sync', () => {
                 id: editionId,
                 format: 'audiobook',
                 pages: 300,
-                audio_seconds: 32400
-              }
-            ]
-          }
-        }
+                audio_seconds: 32400,
+              },
+            ],
+          },
+        },
       ];
 
       // Mock the _findUserBookByEditionId method
-      const mockFindUserBookByEditionId = (searchEditionId) => {
+      const mockFindUserBookByEditionId = searchEditionId => {
         for (const userBook of mockUserLibrary) {
           for (const edition of userBook.book.editions) {
             if (edition.id === searchEditionId) {
@@ -72,34 +79,57 @@ describe('Direct Edition Sync', () => {
       const identifiers = { asin: asin, isbn: null };
 
       // Get cached info
-      const cachedInfo = await bookCache.getCachedBookInfo(userId, asin, title, 'asin');
+      const cachedInfo = await bookCache.getCachedBookInfo(
+        userId,
+        asin,
+        title,
+        'asin',
+      );
 
       console.log(`  Cache found: ${cachedInfo.exists}`);
       console.log(`  Edition ID: ${cachedInfo.edition_id}`);
 
       if (cachedInfo.exists && cachedInfo.edition_id) {
         const progressChanged = await bookCache.hasProgressChanged(
-          userId, asin, title, currentProgress, 'asin'
+          userId,
+          asin,
+          title,
+          currentProgress,
+          'asin',
         );
 
         console.log(`  Progress changed: ${progressChanged}`);
 
         if (progressChanged) {
           // Test the direct edition sync logic
-          const userBookFromLibrary = mockFindUserBookByEditionId(cachedInfo.edition_id);
+          const userBookFromLibrary = mockFindUserBookByEditionId(
+            cachedInfo.edition_id,
+          );
 
           console.log(`  UserBook found in library: ${!!userBookFromLibrary}`);
 
           if (userBookFromLibrary) {
-            const edition = userBookFromLibrary.book.editions.find(e => e.id === cachedInfo.edition_id);
+            const edition = userBookFromLibrary.book.editions.find(
+              e => e.id === cachedInfo.edition_id,
+            );
 
             console.log(`  Edition found: ${!!edition}`);
-            console.log(`  UserBook ID: ${userBookFromLibrary.id} (${typeof userBookFromLibrary.id})`);
+            console.log(
+              `  UserBook ID: ${userBookFromLibrary.id} (${typeof userBookFromLibrary.id})`,
+            );
             console.log(`  Edition ID: ${edition?.id}`);
 
             // Verify we have real IDs for API calls
-            assert.strictEqual(typeof userBookFromLibrary.id, 'number', 'UserBook ID should be integer');
-            assert.strictEqual(typeof edition.id, 'string', 'Edition ID should be string');
+            assert.strictEqual(
+              typeof userBookFromLibrary.id,
+              'number',
+              'UserBook ID should be integer',
+            );
+            assert.strictEqual(
+              typeof edition.id,
+              'string',
+              'Edition ID should be string',
+            );
 
             console.log(`  ✅ DIRECT SYNC POSSIBLE:`);
             console.log(`    - Real userBook ID: ${userBookFromLibrary.id}`);
@@ -116,7 +146,6 @@ describe('Direct Edition Sync', () => {
       console.log('  ✅ Skips ALL matching strategies when edition known');
       console.log('  ✅ Direct progress sync (minimal API calls)');
       console.log('  ✅ Eliminates title/author searches completely');
-
     } finally {
       await bookCache.clearCache();
       bookCache.close();
