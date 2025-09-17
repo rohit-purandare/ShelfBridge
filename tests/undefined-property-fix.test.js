@@ -18,12 +18,12 @@ describe('Undefined Property Fix', () => {
         id: 'cached-user-book',
         book: {
           id: 'cached-book-id',
-          title: 'Test Book' // Now includes title
-        }
+          title: 'Test Book', // Now includes title
+        },
       },
       edition: { id: 'cached-edition-id' },
       _matchType: 'asin',
-      _fromCache: true
+      _fromCache: true,
     };
 
     const { userBook, edition } = incompleteHardcoverMatch;
@@ -42,9 +42,21 @@ describe('Undefined Property Fix', () => {
     console.log(`  Safe edition ID: ${safeEditionId}`);
 
     // Should not throw errors
-    assert.strictEqual(typeof safeHardcoverTitle, 'string', 'Should safely get title');
-    assert.strictEqual(typeof safeUserBookId, 'string', 'Should safely get user book ID');
-    assert.strictEqual(typeof safeEditionId, 'string', 'Should safely get edition ID');
+    assert.strictEqual(
+      typeof safeHardcoverTitle,
+      'string',
+      'Should safely get title',
+    );
+    assert.strictEqual(
+      typeof safeUserBookId,
+      'string',
+      'Should safely get user book ID',
+    );
+    assert.strictEqual(
+      typeof safeEditionId,
+      'string',
+      'Should safely get edition ID',
+    );
 
     console.log('  ✅ No undefined property errors');
 
@@ -64,7 +76,11 @@ describe('Undefined Property Fix', () => {
 
     assert.strictEqual(safeTitle2, title, 'Should fallback to provided title');
     assert.strictEqual(safeId2, 'unknown', 'Should fallback to unknown');
-    assert.strictEqual(safeEdition2, undefined, 'Should handle undefined gracefully');
+    assert.strictEqual(
+      safeEdition2,
+      undefined,
+      'Should handle undefined gracefully',
+    );
 
     console.log('  ✅ Handles undefined objects gracefully');
 
@@ -82,7 +98,7 @@ describe('Undefined Property Fix', () => {
       identifier: 'B123456789',
       identifierType: 'asin',
       editionId: 'test-edition-123',
-      lastProgress: 40.0
+      lastProgress: 40.0,
     };
 
     const title = 'Complete Structure Test';
@@ -95,12 +111,12 @@ describe('Undefined Property Fix', () => {
         id: 'cached-user-book',
         book: {
           id: 'cached-book-id',
-          title: title
-        }
+          title: title,
+        },
       },
       edition: { id: cachedMatchInfo.editionId },
       _matchType: cachedMatchInfo.identifierType,
-      _fromCache: true
+      _fromCache: true,
     };
 
     console.log('📚 Cached match object structure:');
@@ -112,11 +128,31 @@ describe('Undefined Property Fix', () => {
     console.log(`  _fromCache: ${hardcoverMatch._fromCache}`);
 
     // Verify all required properties exist
-    assert.strictEqual(typeof hardcoverMatch.userBook, 'object', 'userBook should be object');
-    assert.strictEqual(typeof hardcoverMatch.userBook.book, 'object', 'userBook.book should be object');
-    assert.strictEqual(typeof hardcoverMatch.userBook.book.title, 'string', 'userBook.book.title should be string');
-    assert.strictEqual(typeof hardcoverMatch.edition, 'object', 'edition should be object');
-    assert.strictEqual(typeof hardcoverMatch.edition.id, 'string', 'edition.id should be string');
+    assert.strictEqual(
+      typeof hardcoverMatch.userBook,
+      'object',
+      'userBook should be object',
+    );
+    assert.strictEqual(
+      typeof hardcoverMatch.userBook.book,
+      'object',
+      'userBook.book should be object',
+    );
+    assert.strictEqual(
+      typeof hardcoverMatch.userBook.book.title,
+      'string',
+      'userBook.book.title should be string',
+    );
+    assert.strictEqual(
+      typeof hardcoverMatch.edition,
+      'object',
+      'edition should be object',
+    );
+    assert.strictEqual(
+      typeof hardcoverMatch.edition.id,
+      'string',
+      'edition.id should be string',
+    );
 
     console.log('  ✅ All required properties present');
 
@@ -126,7 +162,11 @@ describe('Undefined Property Fix', () => {
     const safeUserBookId = userBook?.id || 'unknown';
 
     assert.strictEqual(safeTitle, title, 'Should safely access title');
-    assert.strictEqual(safeUserBookId, 'cached-user-book', 'Should safely access user book ID');
+    assert.strictEqual(
+      safeUserBookId,
+      'cached-user-book',
+      'Should safely access user book ID',
+    );
 
     console.log('\n✅ COMPLETE OBJECT STRUCTURE VERIFIED:');
     console.log('  ✅ Cached match objects have all required properties');
