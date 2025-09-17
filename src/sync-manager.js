@@ -792,40 +792,18 @@ export class SyncManager {
           };
         }
 
-        // OPTIMIZATION: If progress changed but we have cached match info, skip expensive re-matching
-        if (hasChanged && cachedMatchInfo) {
-          logger.debug(
-            `${title}: Progress changed but reusing cached match to avoid expensive re-matching`,
-            {
-              cachedIdentifier: cachedMatchInfo.identifier,
-              cachedType: cachedMatchInfo.identifierType,
-              editionId: cachedMatchInfo.editionId,
-              progressChange: `${cachedMatchInfo.lastProgress}% → ${validatedProgress.toFixed(1)}%`,
-            },
-          );
-
-          // Skip expensive matching and create a synthetic match object using cached data
-          shouldPerformExpensiveMatching = false;
-
-          // Create match object from cached data with complete structure
-          hardcoverMatch = {
-            userBook: {
-              id: 'cached-user-book',
-              book: {
-                id: 'cached-book-id',
-                title: title, // Use the extracted title
+        if (hasChanged) {
+          if (cachedMatchInfo) {
+            logger.debug(
+              `${title}: Progress changed, cache found but will proceed with standard matching for safety`,
+              {
+                cachedIdentifier: cachedMatchInfo.identifier,
+                cachedType: cachedMatchInfo.identifierType,
+                progressChange: `${cachedMatchInfo.lastProgress}% → ${validatedProgress.toFixed(1)}%`,
+                reason: 'avoiding synthetic object complexity',
               },
-            },
-            edition: { id: cachedMatchInfo.editionId },
-            _matchType: cachedMatchInfo.identifierType,
-            _fromCache: true,
-          };
-
-          extractedMetadata = { title, author, identifiers };
-          logger.debug(
-            `Reusing cached match for ${title} - skipping expensive matching operations`,
-          );
-        } else if (hasChanged) {
+            );
+          }
           logger.debug(
             `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
           );
@@ -845,13 +823,9 @@ export class SyncManager {
       if (!extractedMetadata.identifiers)
         extractedMetadata.identifiers = identifiers;
     } else {
-      // For books that were skipped or using cached match info
+      // For books that were skipped during early optimization
       extractedMetadata = { title, author, identifiers };
-
-      // hardcoverMatch is already set if we're reusing cached data, otherwise null
-      if (!hardcoverMatch) {
-        hardcoverMatch = null;
-      }
+      hardcoverMatch = null;
     }
 
     // Validate progress with explicit error handling and position-based accuracy
