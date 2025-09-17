@@ -539,6 +539,9 @@ export class SyncManager {
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
 
+    // Declare variables that might be set during optimization
+    let matchResult, hardcoverMatch, extractedMetadata;
+
     if (!this.globalConfig.force_sync) {
       // Validate progress for early check
       const validatedProgress = ProgressManager.getValidatedProgress(
@@ -825,7 +828,6 @@ export class SyncManager {
     }
 
     // NOW perform expensive book matching (only for books that truly need it)
-    let matchResult, hardcoverMatch, extractedMetadata;
     if (shouldPerformExpensiveMatching) {
       matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
       hardcoverMatch = matchResult.match;
