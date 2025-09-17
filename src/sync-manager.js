@@ -795,18 +795,57 @@ export class SyncManager {
         if (hasChanged) {
           if (cachedMatchInfo) {
             logger.debug(
-              `${title}: Progress changed, cache found but will proceed with standard matching for safety`,
+              `${title}: Progress changed but found complete cache data - implementing direct edition sync`,
               {
                 cachedIdentifier: cachedMatchInfo.identifier,
                 cachedType: cachedMatchInfo.identifierType,
+                editionId: cachedMatchInfo.editionId,
                 progressChange: `${cachedMatchInfo.lastProgress}% → ${validatedProgress.toFixed(1)}%`,
-                reason: 'avoiding synthetic object complexity',
               },
             );
+
+            // ULTIMATE OPTIMIZATION: Skip ALL matching when we have complete cache data
+            shouldPerformExpensiveMatching = false;
+
+            // Find the actual userBook from Hardcover library using the cached edition
+            const userBookFromLibrary = this._findUserBookByEditionId(
+              cachedMatchInfo.editionId,
+            );
+
+            if (userBookFromLibrary) {
+              // Create complete match object using real library data
+              hardcoverMatch = {
+                userBook: userBookFromLibrary,
+                edition: userBookFromLibrary.book.editions.find(
+                  e => e.id === cachedMatchInfo.editionId,
+                ),
+                _matchType: cachedMatchInfo.identifierType,
+                _fromCache: true,
+              };
+
+              logger.debug(
+                `Direct edition sync for ${title} - skipping ALL matching strategies`,
+                {
+                  editionId: cachedMatchInfo.editionId,
+                  userBookId: userBookFromLibrary.id,
+                  cacheSource: cachedMatchInfo.identifierType,
+                },
+              );
+            } else {
+              logger.warn(
+                `Cannot find userBook for cached edition ${cachedMatchInfo.editionId} - falling back to standard matching`,
+                {
+                  title: title,
+                  editionId: cachedMatchInfo.editionId,
+                },
+              );
+              // Fall back to standard matching if we can't resolve the userBook
+            }
+          } else {
+            logger.debug(
+              `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
+            );
           }
-          logger.debug(
-            `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
-          );
         }
       }
     }
