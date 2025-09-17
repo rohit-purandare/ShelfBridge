@@ -579,24 +579,62 @@ export class SyncManager {
         let hasChanged = true; // Default to true (needs sync)
         let cacheFoundEarly = false;
 
-        // Try each cache key to find existing progress data
+        // Try each cache key to find existing progress data and cached match info
+        let cachedMatchInfo = null;
+
         for (const { key, type } of possibleCacheKeys) {
           try {
-            const progressChanged = await this.cache.hasProgressChanged(
+            // Get full cached info to reuse match data even if progress changed
+            const cachedInfo = await this.cache.getCachedBookInfo(
               this.userId,
               key,
               title,
-              validatedProgress,
               type,
             );
 
-            if (!progressChanged) {
-              hasChanged = false;
-              cacheFoundEarly = true;
-              logger.debug(
-                `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+            if (cachedInfo && cachedInfo.exists && cachedInfo.edition_id) {
+              // Store cached match info for potential reuse
+              cachedMatchInfo = {
+                identifier: key,
+                identifierType: type,
+                editionId: cachedInfo.edition_id,
+                lastProgress: cachedInfo.progress_percent,
+                lastSync: cachedInfo.last_sync,
+              };
+
+              // Check if progress changed
+              const progressChanged = await this.cache.hasProgressChanged(
+                this.userId,
+                key,
+                title,
+                validatedProgress,
+                type,
               );
-              break;
+
+              if (!progressChanged) {
+                hasChanged = false;
+                cacheFoundEarly = true;
+                logger.debug(
+                  `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+                  {
+                    cacheKey: key,
+                    cacheType: type,
+                    editionId: cachedInfo.edition_id,
+                  },
+                );
+                break;
+              } else {
+                logger.debug(
+                  `${title}: Progress changed via ${type} cache (${cachedInfo.progress_percent}% → ${validatedProgress.toFixed(1)}%) - will reuse cached match`,
+                  {
+                    cacheKey: key,
+                    cacheType: type,
+                    editionId: cachedInfo.edition_id,
+                    canReuseCachedMatch: true,
+                  },
+                );
+                // Don't break - we found cache info and will reuse it to avoid expensive matching
+              }
             }
           } catch (cacheError) {
             // Cache lookup failed for this key, try next
@@ -751,7 +789,34 @@ export class SyncManager {
           };
         }
 
-        if (hasChanged) {
+        // OPTIMIZATION: If progress changed but we have cached match info, skip expensive re-matching
+        if (hasChanged && cachedMatchInfo) {
+          logger.debug(
+            `${title}: Progress changed but reusing cached match to avoid expensive re-matching`,
+            {
+              cachedIdentifier: cachedMatchInfo.identifier,
+              cachedType: cachedMatchInfo.identifierType,
+              editionId: cachedMatchInfo.editionId,
+              progressChange: `${cachedMatchInfo.lastProgress}% → ${validatedProgress.toFixed(1)}%`,
+            },
+          );
+
+          // Skip expensive matching and create a synthetic match object using cached data
+          shouldPerformExpensiveMatching = false;
+
+          // Create match object from cached data
+          hardcoverMatch = {
+            userBook: { id: 'cached-user-book' }, // Will be resolved later
+            edition: { id: cachedMatchInfo.editionId },
+            _matchType: cachedMatchInfo.identifierType,
+            _fromCache: true,
+          };
+
+          extractedMetadata = { title, author, identifiers };
+          logger.debug(
+            `Reusing cached match for ${title} - skipping expensive matching operations`,
+          );
+        } else if (hasChanged) {
           logger.debug(
             `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
           );
@@ -759,7 +824,7 @@ export class SyncManager {
       }
     }
 
-    // NOW perform expensive book matching (only for books that need sync or don't have identifiers)
+    // NOW perform expensive book matching (only for books that truly need it)
     let matchResult, hardcoverMatch, extractedMetadata;
     if (shouldPerformExpensiveMatching) {
       matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
@@ -772,9 +837,13 @@ export class SyncManager {
       if (!extractedMetadata.identifiers)
         extractedMetadata.identifiers = identifiers;
     } else {
-      // For books that were skipped, we don't have match results
+      // For books that were skipped or using cached match info
       extractedMetadata = { title, author, identifiers };
-      hardcoverMatch = null;
+
+      // hardcoverMatch is already set if we're reusing cached data, otherwise null
+      if (!hardcoverMatch) {
+        hardcoverMatch = null;
+      }
     }
 
     // Validate progress with explicit error handling and position-based accuracy
