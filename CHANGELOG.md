@@ -5,6 +5,31 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.2...v1.22.3) (2025-09-18)
+
+
+### ## 🔧 Bug Fixes
+
+* comprehensive cache optimization eliminates all duplicate title/author searches ([54e9ee8](https://github.com/rohit-purandare/ShelfBridge/commit/54e9ee82c652fc97b5bc466df5acb185c8721204))
+* ensure consistent title/author cache identifiers across all operations ([1e932a7](https://github.com/rohit-purandare/ShelfBridge/commit/1e932a7b5e9ba94f263744419e2651e632268b8f))
+* implement direct edition sync to eliminate all title/author searches ([8bf39cd](https://github.com/rohit-purandare/ShelfBridge/commit/8bf39cd25a1edf6870226f611d695ba7b2dbf479))
+* implement multi-pattern cache lookup for backward compatibility ([a36b267](https://github.com/rohit-purandare/ShelfBridge/commit/a36b267ec3c8575ba6d709a2682442e699470ff9))
+* preserve hardcoverMatch from direct edition sync to enable actual progress updates ([f1af459](https://github.com/rohit-purandare/ShelfBridge/commit/f1af4595394e0447155b4dd122402f0e93333847))
+* preserve hardcoverMatch from direct edition sync to enable actual progress updates ([f866ec9](https://github.com/rohit-purandare/ShelfBridge/commit/f866ec94d75563b2b7a330c7de92b332ea8a1218))
+* preserve original matching method to prevent cache inconsistencies ([3a4087e](https://github.com/rohit-purandare/ShelfBridge/commit/3a4087e1d5a2897d5828efb74b25ed4c50191ab9))
+* prevent duplicate matching for title/author books during progres… ([0c6c915](https://github.com/rohit-purandare/ShelfBridge/commit/0c6c915558ac55baca4eaab40430c4158a5dd2b2))
+* prevent duplicate matching for title/author books during progress updates ([6174932](https://github.com/rohit-purandare/ShelfBridge/commit/61749324fcb5b2a61f29f48197e56d08f8e599e5))
+* prevent title/author searches in auto-add fallback for cached books ([182a83f](https://github.com/rohit-purandare/ShelfBridge/commit/182a83f5797caa3e451822b0ef37f77acf76af1b))
+* remove synthetic objects to prevent API validation errors ([029e642](https://github.com/rohit-purandare/ShelfBridge/commit/029e64211ae6b30de140c93e86962834c260b338))
+* resolve 'Cannot access hardcoverMatch before initialization' error ([744b5d0](https://github.com/rohit-purandare/ShelfBridge/commit/744b5d0d25688c89b24e74f8911a419755bf930f))
+* resolve 'Cannot read properties of undefined' error in _syncExistingBook ([8675e0b](https://github.com/rohit-purandare/ShelfBridge/commit/8675e0b72efd0e869d913073ea825f9e835dfec4))
+* reuse cached match data to eliminate searches for books with changed progress ([ae5cd4e](https://github.com/rohit-purandare/ShelfBridge/commit/ae5cd4e66351ede8c4a339698a37dbbbe452e4da))
+
+
+### ## 🔒 Security
+
+* update axios to 1.12.2 to fix DoS vulnerability ([47cbcf1](https://github.com/rohit-purandare/ShelfBridge/commit/47cbcf1772f7727545ea0acb011a4f6638931ed1))
+
 ## [1.22.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.1...v1.22.2) (2025-09-08)
 
 
