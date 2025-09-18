@@ -536,14 +536,13 @@ export class SyncManager {
     const author = extractAuthor(absBook) || 'Unknown Author';
     const identifiers = extractBookIdentifiers(absBook);
 
-    // OPTIMIZATION: For books with identifiers, check progress change BEFORE expensive book matching
-    const hasIdentifiers = identifiers.isbn || identifiers.asin;
+    // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
 
-    if (hasIdentifiers && !this.globalConfig.force_sync) {
-      const identifier = identifiers.asin || identifiers.isbn;
-      const identifierType = identifiers.asin ? 'asin' : 'isbn';
+    // Declare variables that might be set during optimization
+    let matchResult, hardcoverMatch, extractedMetadata;
 
+    if (!this.globalConfig.force_sync) {
       // Validate progress for early check
       const validatedProgress = ProgressManager.getValidatedProgress(
         absBook,
@@ -552,18 +551,229 @@ export class SyncManager {
       );
 
       if (validatedProgress !== null) {
-        const hasChanged = await this.cache.hasProgressChanged(
-          this.userId,
-          identifier,
-          title,
-          validatedProgress,
-          identifierType,
-        );
+        // Multi-key cache lookup - check all possible identifiers for this book
+        const possibleCacheKeys = [];
 
-        if (!hasChanged) {
-          logger.debug(
-            `Early skip for ${title}: Progress unchanged (${validatedProgress.toFixed(1)}%)`,
+        // Add identifier-based keys (highest priority)
+        if (identifiers.asin) {
+          possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
+        }
+        if (identifiers.isbn) {
+          possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+        }
+
+        // For title/author matching, add the standardized title/author cache identifier
+        // This uses the same pattern as TitleAuthorMatcher for consistency
+        if (!identifiers.asin && !identifiers.isbn) {
+          const titleAuthorId = this.cache.generateTitleAuthorIdentifier(
+            title,
+            author,
           );
+          possibleCacheKeys.push({ key: titleAuthorId, type: 'title_author' });
+          logger.debug(
+            `Added title/author cache key for early optimization: ${titleAuthorId}`,
+            {
+              title: title,
+              author: author,
+            },
+          );
+        }
+
+        let hasChanged = true; // Default to true (needs sync)
+        let cacheFoundEarly = false;
+
+        // Try each cache key to find existing progress data and cached match info
+        let cachedMatchInfo = null;
+
+        for (const { key, type } of possibleCacheKeys) {
+          try {
+            // Get full cached info to reuse match data even if progress changed
+            const cachedInfo = await this.cache.getCachedBookInfo(
+              this.userId,
+              key,
+              title,
+              type,
+            );
+
+            if (cachedInfo && cachedInfo.exists && cachedInfo.edition_id) {
+              // Store cached match info for potential reuse
+              cachedMatchInfo = {
+                identifier: key,
+                identifierType: type,
+                editionId: cachedInfo.edition_id,
+                lastProgress: cachedInfo.progress_percent,
+                lastSync: cachedInfo.last_sync,
+              };
+
+              // Check if progress changed
+              const progressChanged = await this.cache.hasProgressChanged(
+                this.userId,
+                key,
+                title,
+                validatedProgress,
+                type,
+              );
+
+              if (!progressChanged) {
+                hasChanged = false;
+                cacheFoundEarly = true;
+                logger.debug(
+                  `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+                  {
+                    cacheKey: key,
+                    cacheType: type,
+                    editionId: cachedInfo.edition_id,
+                  },
+                );
+                break;
+              } else {
+                logger.debug(
+                  `${title}: Progress changed via ${type} cache (${cachedInfo.progress_percent}% → ${validatedProgress.toFixed(1)}%) - will reuse cached match`,
+                  {
+                    cacheKey: key,
+                    cacheType: type,
+                    editionId: cachedInfo.edition_id,
+                    canReuseCachedMatch: true,
+                  },
+                );
+                // Don't break - we found cache info and will reuse it to avoid expensive matching
+              }
+            }
+          } catch (cacheError) {
+            // Cache lookup failed for this key, try next
+            logger.debug(
+              `Early cache lookup failed for ${title} with ${type} key: ${cacheError.message}`,
+            );
+            continue;
+          }
+        }
+
+        // ALWAYS check title/author cache for comprehensive optimization
+        // This handles books that gained identifiers after being originally matched by title/author
+        if (hasChanged) {
+          // Try MULTIPLE title/author cache patterns for backward compatibility with existing cache entries
+          const titleAuthorPatterns = [
+            // 1. Current standard pattern (TitleAuthorMatcher)
+            this.cache.generateTitleAuthorIdentifier(title, author),
+            // 2. Legacy patterns that might exist in cache from previous versions
+            `${title}:${author}`, // Old completion pattern
+            `${title.toLowerCase().replace(/[^a-z0-9:]/g, '')}:${author.toLowerCase().replace(/[^a-z0-9:]/g, '')}`, // Old normalized pattern
+          ];
+
+          // Also try to find any existing cache patterns for this book
+          try {
+            const stmt = this.cache.db.prepare(`
+              SELECT identifier FROM books
+              WHERE user_id = ? AND identifier_type = 'title_author' AND title = ?
+              LIMIT 5
+            `);
+            const existingEntries = stmt.all(
+              this.userId,
+              title.toLowerCase().trim(),
+            );
+
+            for (const entry of existingEntries) {
+              if (!titleAuthorPatterns.includes(entry.identifier)) {
+                titleAuthorPatterns.push(entry.identifier);
+              }
+            }
+          } catch (legacyLookupError) {
+            logger.debug(
+              `Legacy pattern lookup failed for ${title}: ${legacyLookupError.message}`,
+            );
+          }
+
+          logger.debug(
+            `Checking multiple title/author cache patterns for ${title}`,
+            {
+              patterns: titleAuthorPatterns,
+              patternCount: titleAuthorPatterns.length,
+            },
+          );
+
+          try {
+            let bestCacheMatch = null;
+            let bestCachePattern = null;
+
+            // Try each pattern to find any existing cache entry
+            for (const pattern of titleAuthorPatterns) {
+              const titleAuthorCached = await this.cache.getCachedBookInfo(
+                this.userId,
+                pattern,
+                title,
+                'title_author',
+              );
+
+              if (
+                titleAuthorCached &&
+                titleAuthorCached.exists &&
+                titleAuthorCached.edition_id
+              ) {
+                bestCacheMatch = titleAuthorCached;
+                bestCachePattern = pattern;
+                logger.debug(
+                  `Found complete cache entry with pattern: ${pattern}`,
+                  {
+                    editionId: titleAuthorCached.edition_id,
+                    lastSync: titleAuthorCached.last_sync,
+                  },
+                );
+                break;
+              } else if (titleAuthorCached && titleAuthorCached.exists) {
+                logger.debug(
+                  `Found incomplete cache entry with pattern: ${pattern} (no edition_id)`,
+                );
+              }
+            }
+
+            if (bestCacheMatch) {
+              // We found a complete cache entry - check if progress changed
+              const titleAuthorProgressChanged =
+                await this.cache.hasProgressChanged(
+                  this.userId,
+                  bestCachePattern,
+                  title,
+                  validatedProgress,
+                  'title_author',
+                );
+
+              if (!titleAuthorProgressChanged) {
+                hasChanged = false;
+                cacheFoundEarly = true;
+                shouldPerformExpensiveMatching = false; // Skip expensive matching entirely
+                logger.debug(
+                  `Early skip for ${title}: Progress unchanged via title/author cache (${validatedProgress.toFixed(1)}%)`,
+                  {
+                    cachePattern: bestCachePattern,
+                    editionId: bestCacheMatch.edition_id,
+                    cachedProgress: bestCacheMatch.progress_percent,
+                  },
+                );
+              } else {
+                logger.debug(
+                  `Title/author book ${title}: Progress changed (${bestCacheMatch.progress_percent}% → ${validatedProgress.toFixed(1)}%) - proceeding with sync`,
+                  {
+                    cachePattern: bestCachePattern,
+                  },
+                );
+              }
+            } else {
+              logger.debug(
+                `No complete title/author cache entry found for ${title} with any pattern - will perform matching`,
+                {
+                  patternsChecked: titleAuthorPatterns.length,
+                  patterns: titleAuthorPatterns,
+                },
+              );
+            }
+          } catch (titleAuthorCacheError) {
+            logger.debug(
+              `Title/author cache lookup failed for ${title}: ${titleAuthorCacheError.message}`,
+            );
+          }
+        }
+
+        if (!hasChanged && cacheFoundEarly) {
           return {
             title,
             author,
@@ -581,15 +791,66 @@ export class SyncManager {
             errors: [],
           };
         }
-        shouldPerformExpensiveMatching = true;
-        logger.debug(
-          `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
-        );
+
+        if (hasChanged) {
+          if (cachedMatchInfo) {
+            logger.debug(
+              `${title}: Progress changed but found complete cache data - implementing direct edition sync`,
+              {
+                cachedIdentifier: cachedMatchInfo.identifier,
+                cachedType: cachedMatchInfo.identifierType,
+                editionId: cachedMatchInfo.editionId,
+                progressChange: `${cachedMatchInfo.lastProgress}% → ${validatedProgress.toFixed(1)}%`,
+              },
+            );
+
+            // ULTIMATE OPTIMIZATION: Skip ALL matching when we have complete cache data
+            shouldPerformExpensiveMatching = false;
+
+            // Find the actual userBook from Hardcover library using the cached edition
+            const userBookFromLibrary = this._findUserBookByEditionId(
+              cachedMatchInfo.editionId,
+            );
+
+            if (userBookFromLibrary) {
+              // Create complete match object using real library data
+              hardcoverMatch = {
+                userBook: userBookFromLibrary,
+                edition: userBookFromLibrary.book.editions.find(
+                  e => e.id === cachedMatchInfo.editionId,
+                ),
+                _matchType: cachedMatchInfo.identifierType,
+                _fromCache: true,
+              };
+
+              logger.debug(
+                `Direct edition sync for ${title} - skipping ALL matching strategies`,
+                {
+                  editionId: cachedMatchInfo.editionId,
+                  userBookId: userBookFromLibrary.id,
+                  cacheSource: cachedMatchInfo.identifierType,
+                },
+              );
+            } else {
+              logger.warn(
+                `Cannot find userBook for cached edition ${cachedMatchInfo.editionId} - falling back to standard matching`,
+                {
+                  title: title,
+                  editionId: cachedMatchInfo.editionId,
+                },
+              );
+              // Fall back to standard matching if we can't resolve the userBook
+            }
+          } else {
+            logger.debug(
+              `Progress changed for ${title}: ${validatedProgress.toFixed(1)}% - proceeding with sync`,
+            );
+          }
+        }
       }
     }
 
-    // NOW perform expensive book matching (only for books that need sync or don't have identifiers)
-    let matchResult, hardcoverMatch, extractedMetadata;
+    // NOW perform expensive book matching (only for books that truly need it)
     if (shouldPerformExpensiveMatching) {
       matchResult = await this.bookMatcher.findMatch(absBook, this.userId);
       hardcoverMatch = matchResult.match;
@@ -601,9 +862,13 @@ export class SyncManager {
       if (!extractedMetadata.identifiers)
         extractedMetadata.identifiers = identifiers;
     } else {
-      // For books that were skipped, we don't have match results
+      // For books that were skipped during early optimization
       extractedMetadata = { title, author, identifiers };
-      hardcoverMatch = null;
+
+      // Only set hardcoverMatch to null if it wasn't already set by direct edition sync
+      if (!hardcoverMatch) {
+        hardcoverMatch = null;
+      }
     }
 
     // Validate progress with explicit error handling and position-based accuracy
@@ -773,14 +1038,20 @@ export class SyncManager {
       possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
     }
 
-    // Add title/author key if we have a match (fallback)
-    if (
-      hardcoverMatch &&
-      hardcoverMatch.userBook?.id &&
-      hardcoverMatch.edition?.id
-    ) {
-      const titleAuthorKey = `title_author_${hardcoverMatch.userBook.id}_${hardcoverMatch.edition.id}`;
+    // Add title/author key using consistent pattern (same as TitleAuthorMatcher)
+    if (hardcoverMatch && !identifiers.asin && !identifiers.isbn) {
+      const titleAuthorKey = this.cache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
       possibleCacheKeys.push({ key: titleAuthorKey, type: 'title_author' });
+      logger.debug(
+        `Added consistent title/author cache key: ${titleAuthorKey}`,
+        {
+          title: title,
+          author: author,
+        },
+      );
     }
 
     let cachedInfo = { exists: false };
@@ -830,15 +1101,49 @@ export class SyncManager {
       });
     }
 
-    // Set cache storage preferences for new entries
-    // Use the best available identifier in priority order: ASIN > ISBN > title_author
-    let identifier = identifiers.asin || identifiers.isbn;
-    let identifierType = identifiers.asin ? 'asin' : 'isbn';
+    // Set cache storage preferences - preserve original matching method when possible
+    let identifier, identifierType;
 
-    if (!identifier && hardcoverMatch) {
-      // Generate cache key for title/author matches without identifiers
-      identifier = `title_author_${hardcoverMatch.userBook?.id}_${hardcoverMatch.edition?.id}`;
+    // If book was matched by title/author, preserve that cache method to maintain consistency
+    if (
+      hardcoverMatch &&
+      (hardcoverMatch._matchType === 'title_author' ||
+        hardcoverMatch._matchType === 'title_author_two_stage')
+    ) {
+      identifier = this.cache.generateTitleAuthorIdentifier(title, author);
       identifierType = 'title_author';
+      logger.debug(
+        `Preserving title/author cache method for ${title} (originally matched by title/author)`,
+        {
+          matchType: hardcoverMatch._matchType,
+          titleAuthorId: identifier,
+        },
+      );
+    } else {
+      // Use identifier priority for books matched by ASIN/ISBN: ASIN > ISBN > title_author
+      identifier = identifiers.asin || identifiers.isbn;
+      identifierType = identifiers.asin ? 'asin' : 'isbn';
+
+      if (!identifier) {
+        // Generate title/author identifier for books without identifiers
+        identifier = this.cache.generateTitleAuthorIdentifier(title, author);
+        identifierType = 'title_author';
+        logger.debug(
+          `Generated title/author identifier for book without identifiers: ${identifier}`,
+          {
+            title: title,
+            author: author,
+          },
+        );
+      } else {
+        logger.debug(
+          `Using ${identifierType} identifier for caching: ${identifier}`,
+          {
+            title: title,
+            matchMethod: 'identifier-based',
+          },
+        );
+      }
     }
 
     // Determine how the match was found using BookMatcher's metadata
@@ -1332,7 +1637,50 @@ export class SyncManager {
       }
 
       if (searchResults.length === 0) {
-        // Try title/author fallback if identifier searches failed
+        // Before trying title/author fallback, check if this book is already cached
+        // This prevents duplicate title/author searches for previously matched books
+        const titleAuthorId = this.cache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
+
+        try {
+          const existingCache = await this.cache.getCachedBookInfo(
+            this.userId,
+            titleAuthorId,
+            title,
+            'title_author',
+          );
+
+          if (
+            existingCache &&
+            existingCache.exists &&
+            existingCache.edition_id
+          ) {
+            logger.info(
+              `Auto-add skipped for "${title}" - already cached via title/author matching`,
+              {
+                titleAuthorId: titleAuthorId,
+                editionId: existingCache.edition_id,
+                lastSync: existingCache.last_sync,
+              },
+            );
+
+            // Return success since book is already known/cached
+            return {
+              status: 'skipped',
+              reason: 'Already cached via title/author matching',
+              title,
+              cached: true,
+            };
+          }
+        } catch (cacheCheckError) {
+          logger.debug(
+            `Cache check failed for auto-add ${title}: ${cacheCheckError.message}`,
+          );
+        }
+
+        // Try title/author fallback if identifier searches failed AND not already cached
         logger.info(
           `Auto-add identifier search failed for "${title}", trying title/author fallback`,
           {
@@ -1343,6 +1691,7 @@ export class SyncManager {
             targetTitle: title,
             targetAuthor: author || 'N/A',
             fallbackEnabled: !this.dryRun,
+            titleAuthorId: titleAuthorId,
           },
         );
 
@@ -1727,8 +2076,8 @@ export class SyncManager {
 
     logger.debug(`Syncing existing book: ${title}`, {
       currentProgress: progressPercent,
-      hardcoverTitle: userBook.book.title,
-      userBookId: userBook.id,
+      hardcoverTitle: userBook?.book?.title || title,
+      userBookId: userBook?.id || 'unknown',
       editionId: edition?.id,
     });
 
@@ -1968,14 +2317,15 @@ export class SyncManager {
       identifierType = 'isbn';
       identifierValue = identifier.isbn;
     } else {
-      // Title/author match without identifiers - create synthetic identifier
-      // This prevents the "NOT NULL constraint failed" error
+      // Title/author match without identifiers - use consistent pattern
+      // This prevents the "NOT NULL constraint failed" error and ensures cache consistency
       identifierType = 'title_author';
-      identifierValue = `title_author_${userBook.id}_${edition.id}`;
+      identifierValue = this.cache.generateTitleAuthorIdentifier(title, author);
       logger.debug(
-        `Created synthetic identifier for title/author match: ${identifierValue}`,
+        `Generated consistent title/author identifier for edition cache: ${identifierValue}`,
         {
           title: title,
+          author: author,
           userBookId: userBook.id,
           editionId: edition.id,
         },
@@ -2157,7 +2507,7 @@ export class SyncManager {
         let identifierType = identifier.asin ? 'asin' : 'isbn';
         let identifierValue = identifier.asin || identifier.isbn;
 
-        // If no ISBN/ASIN available, create a fallback identifier using title + author
+        // If no ISBN/ASIN available, use consistent title/author identifier pattern
         if (
           !identifierValue ||
           typeof identifierValue !== 'string' ||
@@ -2165,23 +2515,24 @@ export class SyncManager {
         ) {
           const author =
             absBook.media?.metadata?.authors?.[0]?.name || 'Unknown Author';
-          const fallbackIdentifier = `${title}:${author}`
-            .toLowerCase()
-            .replace(/[^a-z0-9:]/g, '');
+          const consistentIdentifier = this.cache.generateTitleAuthorIdentifier(
+            title,
+            author,
+          );
 
           logger.warn(
-            `No ISBN/ASIN found for "${title}" - using fallback identifier`,
+            `No ISBN/ASIN found for "${title}" - using consistent title/author identifier`,
             {
               userId: this.userId,
               userBookId,
               extractedIdentifiers: identifier,
               title,
               author,
-              fallbackIdentifier,
+              consistentIdentifier,
             },
           );
 
-          identifierValue = fallbackIdentifier;
+          identifierValue = consistentIdentifier;
           identifierType = 'title_author';
         }
 
@@ -2296,10 +2647,31 @@ export class SyncManager {
       const transaction = new Transaction(`progress: ${title}`);
       let previousProgress = null;
 
-      // Get previous progress for rollback
+      // Get previous progress for rollback - handle title/author books consistently
       const identifier = extractBookIdentifiers(absBook);
-      const identifierType = identifier.asin ? 'asin' : 'isbn';
-      const identifierValue = identifier.asin || identifier.isbn;
+      let identifierType, identifierValue;
+
+      if (identifier.asin) {
+        identifierType = 'asin';
+        identifierValue = identifier.asin;
+      } else if (identifier.isbn) {
+        identifierType = 'isbn';
+        identifierValue = identifier.isbn;
+      } else {
+        // Title/author book without identifiers - use consistent pattern
+        identifierType = 'title_author';
+        identifierValue = this.cache.generateTitleAuthorIdentifier(
+          title,
+          author,
+        );
+        logger.debug(
+          `Using title/author identifier for progress rollback: ${identifierValue}`,
+          {
+            title: title,
+            author: author,
+          },
+        );
+      }
 
       previousProgress = await this.cache.getLastProgress(
         this.userId,
@@ -2666,12 +3038,34 @@ export class SyncManager {
           const identifiers = {};
           identifiers[sessionData.identifierType] = sessionData.identifier;
 
-          // Try to find existing Hardcover match
-          const matchResult = await this.bookMatcher.findMatchByIdentifier(
-            identifiers,
-            sessionData.title,
-            sessionData.identifierType,
-          );
+          // Try to find existing Hardcover match using stored identifier
+          // For expired sessions, we should use a direct lookup since we have the exact identifier
+          let matchResult = null;
+
+          try {
+            // Create a minimal book object for matching
+            const sessionBook = {
+              id: mockBook.id,
+              media: {
+                metadata: {
+                  title: sessionData.title,
+                  authors: [{ name: 'Session Author' }], // We may not have author stored
+                  ...identifiers, // Add the stored identifier (isbn, asin, or title_author key)
+                },
+              },
+            };
+
+            // Use the standard findMatch flow but skip expensive operations if we have cached data
+            matchResult = await this.bookMatcher.findMatch(
+              sessionBook,
+              this.userId,
+            );
+          } catch (sessionMatchError) {
+            logger.warn(
+              `Session matching failed for ${sessionData.title}: ${sessionMatchError.message}`,
+            );
+            matchResult = null;
+          }
 
           if (matchResult && matchResult.match) {
             // Sync directly to Hardcover using the existing match
