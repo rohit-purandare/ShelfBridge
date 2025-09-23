@@ -30,7 +30,7 @@ describe('Real-World Behavior Simulation', () => {
         { id: 6, is_finished: true, progress_percentage: 100, title: 'Book 6' },
         { id: 7, is_finished: true, progress_percentage: 100, title: 'Book 7' },
         { id: 8, is_finished: true, progress_percentage: 100, title: 'Book 8' },
-        { id: 9, is_finished: true, progress_percentage: 100, title: 'Book 9' }
+        { id: 9, is_finished: true, progress_percentage: 100, title: 'Book 9' },
       ];
 
       let completedBooksDetected = 0;
@@ -45,7 +45,7 @@ describe('Real-World Behavior Simulation', () => {
           book,
           `sync-book-${book.id}`,
           {},
-          null
+          null,
         );
 
         if (isComplete) {
@@ -58,7 +58,7 @@ describe('Real-World Behavior Simulation', () => {
         // Progress validation should return 100% consistently
         const validatedProgress = ProgressManager.getValidatedProgress(
           book,
-          `validate-book-${book.id}`
+          `validate-book-${book.id}`,
         );
 
         assert.equal(validatedProgress, 100);
@@ -81,16 +81,28 @@ describe('Real-World Behavior Simulation', () => {
         is_finished: true,
         progress_percentage: 100,
         current_time: 7200,
-        media: { duration: 7200 }
+        media: { duration: 7200 },
       };
 
       // First processing (cache miss scenario)
-      const firstCheck = ProgressManager.isBookComplete(completeBookData, 'first-process');
-      const firstProgress = ProgressManager.getValidatedProgress(completeBookData, 'first-validate');
+      const firstCheck = ProgressManager.isBookComplete(
+        completeBookData,
+        'first-process',
+      );
+      const firstProgress = ProgressManager.getValidatedProgress(
+        completeBookData,
+        'first-validate',
+      );
 
       // Second processing (cache hit scenario - but same validation logic)
-      const secondCheck = ProgressManager.isBookComplete(completeBookData, 'second-process');
-      const secondProgress = ProgressManager.getValidatedProgress(completeBookData, 'second-validate');
+      const secondCheck = ProgressManager.isBookComplete(
+        completeBookData,
+        'second-process',
+      );
+      const secondProgress = ProgressManager.getValidatedProgress(
+        completeBookData,
+        'second-validate',
+      );
 
       assert.equal(firstCheck, true);
       assert.equal(secondCheck, true);
@@ -101,7 +113,7 @@ describe('Real-World Behavior Simulation', () => {
       const changeResult = ProgressManager.detectProgressChange(
         firstProgress,
         secondProgress,
-        { context: 'cache-comparison' }
+        { context: 'cache-comparison' },
       );
 
       assert.equal(changeResult.hasChange, false);
@@ -121,7 +133,7 @@ describe('Real-World Behavior Simulation', () => {
       const newCompletionChange = ProgressManager.detectProgressChange(
         previousProgress,
         newProgress,
-        { context: 'newly-completed' }
+        { context: 'newly-completed' },
       );
 
       // This represents a genuine completion transition
@@ -136,7 +148,7 @@ describe('Real-World Behavior Simulation', () => {
       const noChangeResult = ProgressManager.detectProgressChange(
         alreadyCompleteProgress,
         stillCompleteProgress,
-        { context: 'already-completed' }
+        { context: 'already-completed' },
       );
 
       // No change detected for already complete books
@@ -157,10 +169,10 @@ describe('Real-World Behavior Simulation', () => {
   describe('Edge Cases and Error Conditions', () => {
     it('handles mixed completion statuses correctly', () => {
       const mixedBooks = [
-        { id: 1, is_finished: true, progress_percentage: 100 },   // Already complete
-        { id: 2, is_finished: false, progress_percentage: 85 },   // In progress
-        { id: 3, is_finished: true, progress_percentage: 100 },   // Already complete
-        { id: 4, is_finished: false, progress_percentage: 5 },    // Just started
+        { id: 1, is_finished: true, progress_percentage: 100 }, // Already complete
+        { id: 2, is_finished: false, progress_percentage: 85 }, // In progress
+        { id: 3, is_finished: true, progress_percentage: 100 }, // Already complete
+        { id: 4, is_finished: false, progress_percentage: 5 }, // Just started
       ];
 
       let completedCount = 0;
@@ -171,7 +183,7 @@ describe('Real-World Behavior Simulation', () => {
           book,
           `mixed-book-${book.id}`,
           {},
-          null
+          null,
         );
 
         if (isComplete) {
@@ -195,13 +207,13 @@ describe('Real-World Behavior Simulation', () => {
         is_finished: false, // Not explicitly marked finished
         progress_percentage: 99.5,
         current_time: 3570, // 59.5 minutes
-        media: { duration: 3600 } // 60 minutes total (30 seconds remaining)
+        media: { duration: 3600 }, // 60 minutes total (30 seconds remaining)
       };
 
       const audioComplete = ProgressManager.isComplete(99.5, {
         context: 'position-based-audio',
         format: 'audiobook',
-        _bookData: almostCompleteAudiobook
+        _bookData: almostCompleteAudiobook,
       });
 
       // Should be detected as complete due to position-based logic
@@ -212,13 +224,13 @@ describe('Real-World Behavior Simulation', () => {
         is_finished: false,
         progress_percentage: 99.0,
         pages: 300,
-        current_page: 298 // 2 pages remaining
+        current_page: 298, // 2 pages remaining
       };
 
       const bookComplete = ProgressManager.isComplete(99.0, {
         context: 'position-based-book',
         format: 'ebook',
-        _bookData: almostCompleteBook
+        _bookData: almostCompleteBook,
       });
 
       // Should be detected as complete due to position-based logic
@@ -231,12 +243,16 @@ describe('Real-World Behavior Simulation', () => {
     it('verifies regression analysis does not interfere with completion detection', () => {
       // Test scenario where a book was complete but shows lower progress
       // (potential re-reading scenario)
-      const regressionResult = ProgressManager.analyzeProgressRegression(100, 15, {
-        context: 'reread-scenario',
-        rereadThreshold: 30,
-        highProgressThreshold: 85,
-        blockThreshold: 50
-      });
+      const regressionResult = ProgressManager.analyzeProgressRegression(
+        100,
+        15,
+        {
+          context: 'reread-scenario',
+          rereadThreshold: 30,
+          highProgressThreshold: 85,
+          blockThreshold: 50,
+        },
+      );
 
       assert.equal(regressionResult.isRegression, true);
       assert.equal(regressionResult.isPotentialReread, true);
@@ -245,7 +261,7 @@ describe('Real-World Behavior Simulation', () => {
       // However, the current completion status is based on current data
       const currentCompletion = ProgressManager.isComplete(15, {
         context: 'current-status-check',
-        threshold: 95
+        threshold: 95,
       });
 
       assert.equal(currentCompletion, false);
@@ -267,11 +283,11 @@ describe('Real-World Behavior Simulation', () => {
 
       const syncScenario = {
         totalBooks: 30,
-        skippedBooks: 20,      // Cache hits, early skip
-        progressUpdates: 5,    // Progress changed but not complete
-        alreadyComplete: 3,    // Complete books that went through processing
-        newlyComplete: 1,      // Books that became complete this sync
-        errorBooks: 1          // Books with sync errors
+        skippedBooks: 20, // Cache hits, early skip
+        progressUpdates: 5, // Progress changed but not complete
+        alreadyComplete: 3, // Complete books that went through processing
+        newlyComplete: 1, // Books that became complete this sync
+        errorBooks: 1, // Books with sync errors
       };
 
       // Validate the scenario adds up
@@ -283,7 +299,7 @@ describe('Real-World Behavior Simulation', () => {
 
       assert.equal(
         processedBooks + syncScenario.skippedBooks,
-        syncScenario.totalBooks
+        syncScenario.totalBooks,
       );
 
       // In the sync result, this would show as:
@@ -322,10 +338,10 @@ describe('Real-World Behavior Simulation', () => {
       // Simulate the original scenario
       const scenario = {
         totalBooks: 54,
-        booksSkipped: 44,           // Correctly skipped via cache
-        booksAlreadyComplete: 9,    // Already complete, but processed
-        booksNewlyComplete: 0,      // No genuinely new completions
-        otherUpdates: 1            // Other changes
+        booksSkipped: 44, // Correctly skipped via cache
+        booksAlreadyComplete: 9, // Already complete, but processed
+        booksNewlyComplete: 0, // No genuinely new completions
+        otherUpdates: 1, // Other changes
       };
 
       // The behavior is identical in both cases:

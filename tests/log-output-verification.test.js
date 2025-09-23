@@ -32,7 +32,7 @@ describe('Log Output Verification Tests', () => {
       }),
       error: mock.fn((message, data) => {
         logMessages.push({ level: 'error', message, data });
-      })
+      }),
     };
 
     // We'll need to inject the logger into ProgressManager
@@ -49,7 +49,7 @@ describe('Log Output Verification Tests', () => {
       const result = ProgressManager.isComplete(85, {
         isFinished: true,
         context: 'log-verification-test',
-        format: 'audiobook'
+        format: 'audiobook',
       });
 
       assert.equal(result, true);
@@ -63,7 +63,7 @@ describe('Log Output Verification Tests', () => {
       const result = ProgressManager.isComplete(98, {
         threshold: 95,
         context: 'progress-completion-test',
-        format: 'ebook'
+        format: 'ebook',
       });
 
       assert.equal(result, true);
@@ -72,13 +72,13 @@ describe('Log Output Verification Tests', () => {
     it('uses "detected" language for time-based audiobook completion', () => {
       const bookData = {
         current_time: 3540, // 59 minutes
-        media: { duration: 3600 } // 60 minutes total (1 minute remaining)
+        media: { duration: 3600 }, // 60 minutes total (1 minute remaining)
       };
 
       const result = ProgressManager.isComplete(98.33, {
         context: 'time-based-completion-test',
         format: 'audiobook',
-        _bookData: bookData
+        _bookData: bookData,
       });
 
       assert.equal(result, true);
@@ -87,13 +87,13 @@ describe('Log Output Verification Tests', () => {
     it('uses "detected" language for page-based book completion', () => {
       const bookData = {
         pages: 300,
-        current_page: 298 // 2 pages remaining
+        current_page: 298, // 2 pages remaining
       };
 
       const result = ProgressManager.isComplete(99.33, {
         context: 'page-based-completion-test',
         format: 'ebook',
-        _bookData: bookData
+        _bookData: bookData,
       });
 
       assert.equal(result, true);
@@ -104,56 +104,68 @@ describe('Log Output Verification Tests', () => {
     it('verifies completion detection messages use correct language', async () => {
       // Read the actual source file to verify our changes
       const fs = await import('fs');
-      const progressManagerSource = fs.readFileSync('./src/progress-manager.js', 'utf-8');
+      const progressManagerSource = fs.readFileSync(
+        './src/progress-manager.js',
+        'utf-8',
+      );
 
       // Verify that "detected" language is used instead of "marked"
       assert.ok(
-        progressManagerSource.includes('Book detected as complete via isFinished flag'),
-        'Should use "detected" language for isFinished flag completion'
+        progressManagerSource.includes(
+          'Book detected as complete via isFinished flag',
+        ),
+        'Should use "detected" language for isFinished flag completion',
       );
 
       assert.ok(
         progressManagerSource.includes('Book detected as complete by progress'),
-        'Should use "detected" language for progress-based completion'
+        'Should use "detected" language for progress-based completion',
       );
 
       assert.ok(
-        progressManagerSource.includes('Audiobook detected as complete by time remaining'),
-        'Should use "detected" language for time-based completion'
+        progressManagerSource.includes(
+          'Audiobook detected as complete by time remaining',
+        ),
+        'Should use "detected" language for time-based completion',
       );
 
       assert.ok(
-        progressManagerSource.includes('Book detected as complete by pages remaining'),
-        'Should use "detected" language for page-based completion'
+        progressManagerSource.includes(
+          'Book detected as complete by pages remaining',
+        ),
+        'Should use "detected" language for page-based completion',
       );
 
       // Verify that old "marked" language is NOT present
       assert.ok(
         !progressManagerSource.includes('Book marked as complete'),
-        'Should not use "marked" language for completion'
+        'Should not use "marked" language for completion',
       );
 
       assert.ok(
         !progressManagerSource.includes('Book considered complete'),
-        'Should not use "considered" language for completion'
+        'Should not use "considered" language for completion',
       );
     });
 
     it('verifies sync result formatter uses correct language', async () => {
       const fs = await import('fs');
-      const syncFormatterSource = fs.readFileSync('./src/display/SyncResultFormatter.js', 'utf-8');
+      const syncFormatterSource = fs.readFileSync(
+        './src/display/SyncResultFormatter.js',
+        'utf-8',
+      );
 
       // Verify the summary line uses correct language
       assert.ok(
         syncFormatterSource.includes('completed books processed'),
-        'Should use "completed books processed" instead of "marked complete"'
+        'Should use "completed books processed" instead of "marked complete"',
       );
 
       // Verify old language is not present
       assert.ok(
         !syncFormatterSource.includes('marked complete') ||
-        syncFormatterSource.match(/marked complete/g)?.length === 0,
-        'Should not use "marked complete" language in summary'
+          syncFormatterSource.match(/marked complete/g)?.length === 0,
+        'Should not use "marked complete" language in summary',
       );
     });
   });
@@ -164,19 +176,19 @@ describe('Log Output Verification Tests', () => {
         is_finished: true,
         progress_percentage: 100,
         current_time: 7200,
-        media: { duration: 7200 }
+        media: { duration: 7200 },
       };
 
       // First check
       const isComplete1 = ProgressManager.isBookComplete(
         completeBookData,
-        'behavioral-test-1'
+        'behavioral-test-1',
       );
 
       // Second check (simulating re-sync)
       const isComplete2 = ProgressManager.isBookComplete(
         completeBookData,
-        'behavioral-test-2'
+        'behavioral-test-2',
       );
 
       // Both should be true, but this is detection, not marking
@@ -186,20 +198,24 @@ describe('Log Output Verification Tests', () => {
       // Progress should be identical
       const progress1 = ProgressManager.getValidatedProgress(
         completeBookData,
-        'progress-check-1'
+        'progress-check-1',
       );
       const progress2 = ProgressManager.getValidatedProgress(
         completeBookData,
-        'progress-check-2'
+        'progress-check-2',
       );
 
       assert.equal(progress1, 100);
       assert.equal(progress2, 100);
 
       // No change should be detected
-      const changeResult = ProgressManager.detectProgressChange(progress1, progress2, {
-        context: 'no-change-verification'
-      });
+      const changeResult = ProgressManager.detectProgressChange(
+        progress1,
+        progress2,
+        {
+          context: 'no-change-verification',
+        },
+      );
 
       assert.equal(changeResult.hasChange, false);
       assert.equal(changeResult.direction, 'none');
@@ -214,7 +230,7 @@ describe('Log Output Verification Tests', () => {
       const changeResult = ProgressManager.detectProgressChange(
         previousProgress,
         newProgress,
-        { context: 'newly-completed-book' }
+        { context: 'newly-completed-book' },
       );
 
       assert.equal(changeResult.hasChange, true);
@@ -224,11 +240,11 @@ describe('Log Output Verification Tests', () => {
       // This would be a legitimate case where the book is newly completed
       const wasComplete = ProgressManager.isComplete(previousProgress, {
         threshold: 99,
-        context: 'previous-state'
+        context: 'previous-state',
       });
       const isComplete = ProgressManager.isComplete(newProgress, {
         threshold: 99,
-        context: 'current-state'
+        context: 'current-state',
       });
 
       assert.equal(wasComplete, false);
@@ -243,12 +259,12 @@ describe('Log Output Verification Tests', () => {
 
       const atThreshold = ProgressManager.isComplete(thresholdProgress, {
         threshold: 95,
-        context: 'at-threshold-test'
+        context: 'at-threshold-test',
       });
 
       const justBelow = ProgressManager.isComplete(94.9, {
         threshold: 95,
-        context: 'just-below-threshold'
+        context: 'just-below-threshold',
       });
 
       assert.equal(atThreshold, true);
@@ -257,13 +273,13 @@ describe('Log Output Verification Tests', () => {
       // Test precision-based completion for audiobooks
       const preciseAudiobook = {
         current_time: 3540, // 1 minute remaining
-        media: { duration: 3600 }
+        media: { duration: 3600 },
       };
 
       const preciseResult = ProgressManager.isComplete(98.33, {
         context: 'precise-audiobook-test',
         format: 'audiobook',
-        _bookData: preciseAudiobook
+        _bookData: preciseAudiobook,
       });
 
       assert.equal(preciseResult, true);
@@ -280,14 +296,14 @@ describe('Log Output Verification Tests', () => {
           is_finished: true,
           progress_percentage: 100,
           current_time: 3600,
-          media: { duration: 3600 }
+          media: { duration: 3600 },
         },
         {
           is_finished: true,
           progress_percentage: 100,
           current_time: 7200,
-          media: { duration: 7200 }
-        }
+          media: { duration: 7200 },
+        },
       ];
 
       let completedBooksProcessed = 0;
@@ -296,7 +312,7 @@ describe('Log Output Verification Tests', () => {
       alreadyCompleteBooks.forEach((bookData, index) => {
         const isComplete = ProgressManager.isBookComplete(
           bookData,
-          `sync-book-${index}`
+          `sync-book-${index}`,
         );
 
         if (isComplete) {
@@ -315,16 +331,28 @@ describe('Log Output Verification Tests', () => {
     it('validates that cache hits properly skip processing', () => {
       const bookData = {
         is_finished: true,
-        progress_percentage: 100
+        progress_percentage: 100,
       };
 
       // First processing
-      const firstCheck = ProgressManager.isBookComplete(bookData, 'first-process');
-      const firstProgress = ProgressManager.getValidatedProgress(bookData, 'first-validate');
+      const firstCheck = ProgressManager.isBookComplete(
+        bookData,
+        'first-process',
+      );
+      const firstProgress = ProgressManager.getValidatedProgress(
+        bookData,
+        'first-validate',
+      );
 
       // Second processing (simulating cache scenario)
-      const secondCheck = ProgressManager.isBookComplete(bookData, 'second-process');
-      const secondProgress = ProgressManager.getValidatedProgress(bookData, 'second-validate');
+      const secondCheck = ProgressManager.isBookComplete(
+        bookData,
+        'second-process',
+      );
+      const secondProgress = ProgressManager.getValidatedProgress(
+        bookData,
+        'second-validate',
+      );
 
       // Both should be identical
       assert.equal(firstCheck, secondCheck);
@@ -334,7 +362,7 @@ describe('Log Output Verification Tests', () => {
       const changeResult = ProgressManager.detectProgressChange(
         firstProgress,
         secondProgress,
-        { context: 'cache-hit-simulation' }
+        { context: 'cache-hit-simulation' },
       );
 
       assert.equal(changeResult.hasChange, false);

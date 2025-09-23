@@ -19,7 +19,7 @@ describe('Completion Detection Behavior Tests', () => {
       const mockLogger = {
         debug: mock.fn(),
         warn: mock.fn(),
-        info: mock.fn()
+        info: mock.fn(),
       };
 
       // Mock the logger to capture log messages
@@ -30,14 +30,14 @@ describe('Completion Detection Behavior Tests', () => {
         is_finished: true,
         progress_percentage: 100,
         current_time: 3600,
-        media: { duration: 3600 }
+        media: { duration: 3600 },
       };
 
       const result = ProgressManager.isComplete(100, {
         isFinished: true,
         context: 'already-complete-book-test',
         format: 'audiobook',
-        _bookData: completeBookData
+        _bookData: completeBookData,
       });
 
       assert.equal(result, true);
@@ -46,7 +46,7 @@ describe('Completion Detection Behavior Tests', () => {
       const isAlreadyComplete = ProgressManager.isComplete(100, {
         isFinished: true,
         context: 'detection-test',
-        format: 'audiobook'
+        format: 'audiobook',
       });
 
       assert.equal(isAlreadyComplete, true);
@@ -56,7 +56,7 @@ describe('Completion Detection Behavior Tests', () => {
       const result = ProgressManager.isComplete(100, {
         threshold: 95,
         context: 'high-progress-test',
-        format: 'ebook'
+        format: 'ebook',
       });
 
       assert.equal(result, true);
@@ -66,7 +66,7 @@ describe('Completion Detection Behavior Tests', () => {
       const result = ProgressManager.isComplete(75, {
         threshold: 95,
         context: 'incomplete-book-test',
-        format: 'audiobook'
+        format: 'audiobook',
       });
 
       assert.equal(result, false);
@@ -76,13 +76,13 @@ describe('Completion Detection Behavior Tests', () => {
       // Test audiobook with 1 minute remaining (should be complete)
       const nearCompleteAudiobook = {
         current_time: 3540, // 59 minutes
-        media: { duration: 3600 } // 60 minutes total
+        media: { duration: 3600 }, // 60 minutes total
       };
 
       const result = ProgressManager.isComplete(98.33, {
         context: 'near-complete-audiobook',
         format: 'audiobook',
-        _bookData: nearCompleteAudiobook
+        _bookData: nearCompleteAudiobook,
       });
 
       assert.equal(result, true);
@@ -90,13 +90,13 @@ describe('Completion Detection Behavior Tests', () => {
       // Test book with 2 pages remaining (should be complete)
       const nearCompleteBook = {
         pages: 300,
-        current_page: 298
+        current_page: 298,
       };
 
       const bookResult = ProgressManager.isComplete(99.33, {
         context: 'near-complete-book',
         format: 'ebook',
-        _bookData: nearCompleteBook
+        _bookData: nearCompleteBook,
       });
 
       assert.equal(bookResult, true);
@@ -106,7 +106,7 @@ describe('Completion Detection Behavior Tests', () => {
   describe('Progress Change Detection', () => {
     it('correctly identifies no change when progress is identical', () => {
       const changeResult = ProgressManager.detectProgressChange(100, 100, {
-        context: 'no-change-test'
+        context: 'no-change-test',
       });
 
       assert.equal(changeResult.hasChange, false);
@@ -117,7 +117,7 @@ describe('Completion Detection Behavior Tests', () => {
     it('correctly identifies significant progress increases', () => {
       const changeResult = ProgressManager.detectProgressChange(85, 100, {
         context: 'progress-increase-test',
-        threshold: 0.1
+        threshold: 0.1,
       });
 
       assert.equal(changeResult.hasChange, true);
@@ -127,7 +127,7 @@ describe('Completion Detection Behavior Tests', () => {
 
     it('correctly handles new books (no previous progress)', () => {
       const changeResult = ProgressManager.detectProgressChange(null, 75, {
-        context: 'new-book-test'
+        context: 'new-book-test',
       });
 
       assert.equal(changeResult.hasChange, true);
@@ -139,7 +139,7 @@ describe('Completion Detection Behavior Tests', () => {
     it('handles tiny progress changes within threshold', () => {
       const changeResult = ProgressManager.detectProgressChange(85.05, 85.08, {
         context: 'tiny-change-test',
-        threshold: 0.1
+        threshold: 0.1,
       });
 
       assert.equal(changeResult.hasChange, false);
@@ -149,12 +149,16 @@ describe('Completion Detection Behavior Tests', () => {
 
   describe('Regression Analysis', () => {
     it('does not flag completion reduction as false regression when re-reading', () => {
-      const regressionResult = ProgressManager.analyzeProgressRegression(100, 5, {
-        context: 'reread-scenario',
-        rereadThreshold: 30,
-        highProgressThreshold: 85,
-        blockThreshold: 50
-      });
+      const regressionResult = ProgressManager.analyzeProgressRegression(
+        100,
+        5,
+        {
+          context: 'reread-scenario',
+          rereadThreshold: 30,
+          highProgressThreshold: 85,
+          blockThreshold: 50,
+        },
+      );
 
       assert.equal(regressionResult.isRegression, true);
       assert.equal(regressionResult.isPotentialReread, true);
@@ -163,11 +167,15 @@ describe('Completion Detection Behavior Tests', () => {
     });
 
     it('correctly handles minor regressions within tolerance', () => {
-      const regressionResult = ProgressManager.analyzeProgressRegression(87, 85, {
-        context: 'minor-regression',
-        warnThreshold: 15,
-        blockThreshold: 50
-      });
+      const regressionResult = ProgressManager.analyzeProgressRegression(
+        87,
+        85,
+        {
+          context: 'minor-regression',
+          warnThreshold: 15,
+          blockThreshold: 50,
+        },
+      );
 
       assert.equal(regressionResult.isRegression, true);
       assert.equal(regressionResult.shouldBlock, false);
@@ -181,7 +189,7 @@ describe('Completion Detection Behavior Tests', () => {
       const audiobookEdition = {
         audio_seconds: 14400, // 4 hours
         pages: null,
-        reading_format: { format: 'Listened' }
+        reading_format: { format: 'Listened' },
       };
 
       const format = ProgressManager.getFormatFromEdition(audiobookEdition);
@@ -192,7 +200,7 @@ describe('Completion Detection Behavior Tests', () => {
       const ebookEdition = {
         audio_seconds: null,
         pages: 250,
-        reading_format: { format: 'Ebook' }
+        reading_format: { format: 'Ebook' },
       };
 
       const format = ProgressManager.getFormatFromEdition(ebookEdition);
@@ -203,7 +211,7 @@ describe('Completion Detection Behavior Tests', () => {
       const physicalEdition = {
         audio_seconds: null,
         pages: 300,
-        reading_format: { format: 'Read' }
+        reading_format: { format: 'Read' },
       };
 
       const format = ProgressManager.getFormatFromEdition(physicalEdition);
@@ -214,7 +222,7 @@ describe('Completion Detection Behavior Tests', () => {
       const unknownEdition = {
         audio_seconds: null,
         pages: null,
-        reading_format: null
+        reading_format: null,
       };
 
       const format = ProgressManager.getFormatFromEdition(unknownEdition);
@@ -229,7 +237,7 @@ describe('Completion Detection Behavior Tests', () => {
         is_finished: true,
         progress_percentage: 100,
         current_time: 7200,
-        media: { duration: 7200 }
+        media: { duration: 7200 },
       };
 
       // First check - should detect as complete
@@ -237,7 +245,7 @@ describe('Completion Detection Behavior Tests', () => {
         alreadyCompleteBook,
         'first-check',
         {},
-        null
+        null,
       );
       assert.equal(isComplete1, true);
 
@@ -246,18 +254,18 @@ describe('Completion Detection Behavior Tests', () => {
         alreadyCompleteBook,
         'second-check',
         {},
-        null
+        null,
       );
       assert.equal(isComplete2, true);
 
       // Progress validation should consistently return 100%
       const validatedProgress1 = ProgressManager.getValidatedProgress(
         alreadyCompleteBook,
-        'validation-check-1'
+        'validation-check-1',
       );
       const validatedProgress2 = ProgressManager.getValidatedProgress(
         alreadyCompleteBook,
-        'validation-check-2'
+        'validation-check-2',
       );
 
       assert.equal(validatedProgress1, 100);
@@ -267,7 +275,7 @@ describe('Completion Detection Behavior Tests', () => {
       const changeResult = ProgressManager.detectProgressChange(
         validatedProgress1,
         validatedProgress2,
-        { context: 'already-complete-recheck' }
+        { context: 'already-complete-recheck' },
       );
 
       assert.equal(changeResult.hasChange, false);
@@ -276,17 +284,25 @@ describe('Completion Detection Behavior Tests', () => {
 
     it('simulates newly completed book vs already completed book', () => {
       // Newly completed book (progress went from 98% to 100%)
-      const newlyCompleteProgress = ProgressManager.detectProgressChange(98, 100, {
-        context: 'newly-complete-book'
-      });
+      const newlyCompleteProgress = ProgressManager.detectProgressChange(
+        98,
+        100,
+        {
+          context: 'newly-complete-book',
+        },
+      );
 
       assert.equal(newlyCompleteProgress.hasChange, true);
       assert.equal(newlyCompleteProgress.direction, 'increase');
 
       // Already completed book (progress stays at 100%)
-      const alreadyCompleteProgress = ProgressManager.detectProgressChange(100, 100, {
-        context: 'already-complete-book'
-      });
+      const alreadyCompleteProgress = ProgressManager.detectProgressChange(
+        100,
+        100,
+        {
+          context: 'already-complete-book',
+        },
+      );
 
       assert.equal(alreadyCompleteProgress.hasChange, false);
       assert.equal(alreadyCompleteProgress.direction, 'none');
@@ -300,14 +316,15 @@ describe('Completion Detection Behavior Tests', () => {
       const currentSeconds = ProgressManager.calculateCurrentPosition(
         audioProgress,
         audioDuration,
-        { type: 'seconds' }
+        { type: 'seconds' },
       );
 
-      const recalculatedProgress = ProgressManager.calculateProgressFromPosition(
-        currentSeconds,
-        audioDuration,
-        { type: 'seconds' }
-      );
+      const recalculatedProgress =
+        ProgressManager.calculateProgressFromPosition(
+          currentSeconds,
+          audioDuration,
+          { type: 'seconds' },
+        );
 
       assert.equal(Math.round(recalculatedProgress), audioProgress);
 
@@ -318,14 +335,13 @@ describe('Completion Detection Behavior Tests', () => {
       const currentPage = ProgressManager.calculateCurrentPosition(
         bookProgress,
         totalPages,
-        { type: 'pages' }
+        { type: 'pages' },
       );
 
-      const recalculatedBookProgress = ProgressManager.calculateProgressFromPosition(
-        currentPage,
-        totalPages,
-        { type: 'pages' }
-      );
+      const recalculatedBookProgress =
+        ProgressManager.calculateProgressFromPosition(currentPage, totalPages, {
+          type: 'pages',
+        });
 
       assert.equal(Math.round(recalculatedBookProgress), bookProgress);
     });
@@ -338,19 +354,25 @@ describe('Completion Detection Behavior Tests', () => {
 
       const invalidResult = ProgressManager.isBookComplete(
         { invalid: 'data' },
-        'invalid-data-test'
+        'invalid-data-test',
       );
       assert.equal(invalidResult, false);
     });
 
     it('handles malformed progress data', () => {
-      const result = ProgressManager.validateProgress('invalid', 'malformed-test');
+      const result = ProgressManager.validateProgress(
+        'invalid',
+        'malformed-test',
+      );
       assert.equal(result, null);
 
       const nanResult = ProgressManager.validateProgress(NaN, 'nan-test');
       assert.equal(nanResult, null);
 
-      const infiniteResult = ProgressManager.validateProgress(Infinity, 'infinite-test');
+      const infiniteResult = ProgressManager.validateProgress(
+        Infinity,
+        'infinite-test',
+      );
       assert.equal(infiniteResult, null);
     });
 
@@ -364,7 +386,9 @@ describe('Completion Detection Behavior Tests', () => {
       const lowResult = ProgressManager.isZeroProgress(3, { threshold: 5 });
       assert.equal(lowResult, true);
 
-      const aboveThresholdResult = ProgressManager.isZeroProgress(7, { threshold: 5 });
+      const aboveThresholdResult = ProgressManager.isZeroProgress(7, {
+        threshold: 5,
+      });
       assert.equal(aboveThresholdResult, false);
     });
   });
