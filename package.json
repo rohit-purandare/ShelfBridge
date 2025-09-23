@@ -63,6 +63,9 @@
       "prettier --write",
       "eslint --max-warnings 0"
     ],
+    "tests/**/*.js": [
+      "prettier --write"
+    ],
     "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
