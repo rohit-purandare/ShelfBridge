@@ -346,7 +346,7 @@ export class ProgressManager {
     // Explicit finished flag takes precedence for ALL formats
     if (isFinished === true || isFinished === 1) {
       logger.debug(
-        `Book marked as complete via isFinished flag in ${context}`,
+        `Book detected as complete via isFinished flag in ${context}`,
         {
           format,
           explicitFlag: isFinished,
@@ -387,7 +387,7 @@ export class ProgressManager {
     );
 
     if (isCompleteByProgress) {
-      logger.debug(`Book considered complete by progress in ${context}`, {
+      logger.debug(`Book detected as complete by progress in ${context}`, {
         progress: validatedProgress,
         threshold,
         format,
@@ -430,7 +430,7 @@ export class ProgressManager {
 
             if (timeRemaining <= this.COMPLETION_TIME_REMAINING_SECONDS) {
               logger.debug(
-                `Audiobook complete by time remaining in ${context}`,
+                `Audiobook detected as complete by time remaining in ${context}`,
                 {
                   currentSeconds,
                   totalSeconds,
@@ -471,13 +471,16 @@ export class ProgressManager {
             const pagesRemaining = totalPages - currentPage;
 
             if (pagesRemaining <= this.COMPLETION_PAGES_REMAINING) {
-              logger.debug(`Book complete by pages remaining in ${context}`, {
-                currentPage,
-                totalPages,
-                pagesRemaining,
-                format,
-                detectionMethod: 'precise-page-based',
-              });
+              logger.debug(
+                `Book detected as complete by pages remaining in ${context}`,
+                {
+                  currentPage,
+                  totalPages,
+                  pagesRemaining,
+                  format,
+                  detectionMethod: 'precise-page-based',
+                },
+              );
               preciseDetectionUsed = true;
               return true;
             }
