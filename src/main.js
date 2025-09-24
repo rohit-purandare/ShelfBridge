@@ -507,7 +507,11 @@ async function runScheduledSync(config) {
     const globalConfig = config.getGlobal();
     const users = config.getUsers();
 
-    logger.info('Starting scheduled sync', { userCount: users.length });
+    logger.info('Starting scheduled sync', {
+      service: 'shelfbridge',
+      version: currentVersion,
+      userCount: users.length,
+    });
 
     // Check for and process any active sessions from previous app shutdown
     if (globalConfig.delayed_updates && globalConfig.delayed_updates.enabled) {

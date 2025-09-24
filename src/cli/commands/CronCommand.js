@@ -42,7 +42,9 @@ export class CronCommand extends BaseCommand {
     const { config } = this.getConfiguration();
     const cronConfig = config.getCronConfig();
 
-    logger.info('Starting scheduled sync', {
+    logger.info('Starting scheduled sync service', {
+      service: 'shelfbridge',
+      version: currentVersion,
       schedule: cronConfig.schedule,
       timezone: cronConfig.timezone,
     });
@@ -119,10 +121,7 @@ export class StartCommand extends BaseCommand {
     const { config } = this.getConfiguration();
     const cronConfig = config.getCronConfig();
 
-    logger.info('Starting scheduled sync', {
-      schedule: cronConfig.schedule,
-      timezone: cronConfig.timezone,
-    });
+    // StartCommand will use the main.js runScheduledSync logging
 
     // Run initial sync
     logger.info('Running initial sync...');

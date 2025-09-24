@@ -88,8 +88,11 @@ export class SyncManager {
 
   async syncProgress() {
     const startTime = Date.now();
-    logger.debug(`Starting sync for user: ${this.userId}`);
-    console.log(`🔄 Starting sync for ${this.userId}`);
+    logger.info('Starting sync for user', {
+      service: 'shelfbridge',
+      version: '1.22.3',
+      user_id: this.userId,
+    });
 
     // Increment sync count (for tracking purposes)
     const _syncTracking = await this.cache.incrementSyncCount(this.userId);
@@ -98,7 +101,11 @@ export class SyncManager {
     await this._processExpiredSessions();
 
     // Simple unified sync message (completion detection now always runs)
-    console.log(`🔄 Starting sync...`);
+    logger.info('Starting sync', {
+      service: 'shelfbridge',
+      version: '1.22.3',
+      user_id: this.userId,
+    });
 
     const result = {
       books_processed: 0,
