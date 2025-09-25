@@ -36,18 +36,18 @@ try {
     if (fs.existsSync(file)) {
       try {
         fs.accessSync(file, fs.constants.W_OK);
-      } catch (accessError) {
+      } catch (_accessError) {
         // Try to fix permissions on existing log file
         try {
           fs.chmodSync(file, 0o644);
           fs.accessSync(file, fs.constants.W_OK);
           console.warn(`[logging] Fixed permissions for existing log file: ${file}`);
-        } catch (chmodError) {
+        } catch (_chmodError) {
           // If we can't fix it, remove the file and let winston recreate it
           try {
             fs.unlinkSync(file);
             console.warn(`[logging] Removed non-writable log file: ${file} (will be recreated)`);
-          } catch (unlinkError) {
+          } catch (_unlinkError) {
             throw new Error(`Cannot write to existing log file ${file} and cannot fix/remove it`);
           }
         }
