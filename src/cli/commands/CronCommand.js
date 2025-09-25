@@ -124,7 +124,6 @@ export class StartCommand extends BaseCommand {
     // StartCommand will use the main.js runScheduledSync logging
 
     // Run initial sync
-    logger.info('Running initial sync...');
     await this.runScheduledSync(config);
     await this.showNextScheduledSync(cronConfig);
 

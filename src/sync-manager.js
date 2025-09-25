@@ -100,13 +100,6 @@ export class SyncManager {
     // Process expired sessions before starting new sync
     await this._processExpiredSessions();
 
-    // Simple unified sync message (completion detection now always runs)
-    logger.info('Starting sync', {
-      service: 'shelfbridge',
-      version: '1.22.3',
-      user_id: this.userId,
-    });
-
     const result = {
       books_processed: 0,
       books_synced: 0,
