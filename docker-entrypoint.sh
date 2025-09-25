@@ -108,6 +108,18 @@ create_and_verify_permissions /app/config
 create_and_verify_permissions /app/data
 create_and_verify_permissions /app/logs
 
+# Fix permissions on any existing log files from previous runs
+if [ -d "/app/logs" ]; then
+    # Only fix permissions if running as root (can change ownership)
+    if [ "$(id -u)" == "0" ]; then
+        find /app/logs -name "shelfbridge-*.log" -type f -exec chown ${PUID}:${PGID} {} \; -exec chmod 644 {} \; 2>/dev/null || true
+        echo "Fixed permissions for existing log files (if any)"
+    else
+        # If running as non-root, just try to make files writable by owner
+        find /app/logs -name "shelfbridge-*.log" -type f -exec chmod u+w {} \; 2>/dev/null || true
+    fi
+fi
+
 # For bind mounts, ensure host directories are created by writing to them
 # This forces Docker to create the directories on the host side even if container exits early
 touch /app/config/.docker-init 2>/dev/null || true
