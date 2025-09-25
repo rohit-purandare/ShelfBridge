@@ -37,11 +37,22 @@ try {
       fs.accessSync(file, fs.constants.W_OK);
     }
   }
-} catch (_e) {
+} catch (e) {
   fileLoggingEnabled = false;
   console.warn(
     `[logging] Falling back to console-only logging. Directory not writable: ${logsDir}`,
   );
+  console.warn(`[logging] Error details: ${e.message}`);
+
+  // Add diagnostic information
+  try {
+    const stats = fs.statSync(logsDir);
+    console.warn(`[logging] Directory exists: ${fs.existsSync(logsDir)}`);
+    console.warn(`[logging] Directory stats: mode=${stats.mode.toString(8)}, uid=${stats.uid}, gid=${stats.gid}`);
+    console.warn(`[logging] Process uid=${process.getuid()}, gid=${process.getgid()}`);
+  } catch (statError) {
+    console.warn(`[logging] Could not get directory stats: ${statError.message}`);
+  }
 }
 
 // Custom format for structured logging
