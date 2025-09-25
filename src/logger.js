@@ -41,14 +41,20 @@ try {
         try {
           fs.chmodSync(file, 0o644);
           fs.accessSync(file, fs.constants.W_OK);
-          console.warn(`[logging] Fixed permissions for existing log file: ${file}`);
+          console.warn(
+            `[logging] Fixed permissions for existing log file: ${file}`,
+          );
         } catch (_chmodError) {
           // If we can't fix it, remove the file and let winston recreate it
           try {
             fs.unlinkSync(file);
-            console.warn(`[logging] Removed non-writable log file: ${file} (will be recreated)`);
+            console.warn(
+              `[logging] Removed non-writable log file: ${file} (will be recreated)`,
+            );
           } catch (_unlinkError) {
-            throw new Error(`Cannot write to existing log file ${file} and cannot fix/remove it`);
+            throw new Error(
+              `Cannot write to existing log file ${file} and cannot fix/remove it`,
+            );
           }
         }
       }
