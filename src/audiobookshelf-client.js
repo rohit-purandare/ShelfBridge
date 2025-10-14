@@ -423,12 +423,26 @@ export class AudiobookshelfClient {
           // Check ALL books' progress in parallel (semaphore will throttle)
           const progressPromises = libraryItems.map(async item => {
             try {
+              // Method 1: Try progress API
               const progress = await this._getUserProgress(item.id);
+              const apiFinished = progress && progress.isFinished;
 
-              if (progress && progress.isFinished) {
+              // Method 2: Check book metadata (fallback)
+              const metadataFinished =
+                ProgressManager.extractFinishedFlag(item);
+
+              const isCompleted = apiFinished || metadataFinished;
+
+              if (isCompleted) {
                 logger.debug(
                   `Found completed book: ${item.media?.metadata?.title || item.id}`,
+                  {
+                    apiFinished,
+                    metadataFinished,
+                    detectionMethod: apiFinished ? 'api' : 'metadata',
+                  },
                 );
+
                 return {
                   id: item.id,
                   libraryId: library.id,
@@ -438,9 +452,27 @@ export class AudiobookshelfClient {
               }
               return null;
             } catch (error) {
-              // Skip books we can't get progress for
+              // Don't silently skip - try metadata fallback
+              logger.warn(
+                `API error for book ${item.id}, trying metadata fallback: ${error.message}`,
+              );
+
+              const metadataFinished =
+                ProgressManager.extractFinishedFlag(item);
+              if (metadataFinished) {
+                logger.debug(
+                  `Found completed book via metadata fallback: ${item.media?.metadata?.title || item.id}`,
+                );
+                return {
+                  id: item.id,
+                  libraryId: library.id,
+                  title: item.media?.metadata?.title || 'Unknown',
+                  isCompleted: true,
+                };
+              }
+
               logger.debug(
-                `Could not get progress for book ${item.id}: ${error.message}`,
+                `Could not determine completion status for book ${item.id}: ${error.message}`,
               );
               return null;
             }

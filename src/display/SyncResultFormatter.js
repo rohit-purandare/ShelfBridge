@@ -223,7 +223,9 @@ export class SyncResultFormatter {
           leftColumn.push(`├─ ${result.books_synced} would update progress`);
         }
         if (result.books_completed > 0) {
-          leftColumn.push(`├─ ${result.books_completed} would mark complete`);
+          leftColumn.push(
+            `├─ ${result.books_completed} completed books would be processed`,
+          );
         }
         if (result.books_auto_added > 0) {
           leftColumn.push(`├─ ${result.books_auto_added} would auto-add`);
@@ -237,7 +239,9 @@ export class SyncResultFormatter {
         leftColumn.push(`├─ ${result.books_synced} progress updated`);
       }
       if (result.books_completed > 0) {
-        leftColumn.push(`├─ ${result.books_completed} marked complete`);
+        leftColumn.push(
+          `├─ ${result.books_completed} completed books processed`,
+        );
       }
       if (result.books_auto_added > 0) {
         leftColumn.push(`├─ ${result.books_auto_added} auto-added`);

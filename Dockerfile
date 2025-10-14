@@ -86,9 +86,10 @@ RUN mkdir -p /app/.config-template && \
         echo "# Copy this file to config.yaml and edit with your credentials" >> /app/.config-template/config.yaml.example; \
     fi
 
-# Create logs directory and set ownership to node user
+# Create logs directory with proper permissions for node user
 # Alpine's node user has UID 1000 by default
-RUN mkdir -p logs && \
+RUN mkdir -p logs data config && \
+    chmod 755 logs data config && \
     chown -R node:node /app
 
 # Add comprehensive health check to ensure better-sqlite3 is always working

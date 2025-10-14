@@ -34,14 +34,54 @@ try {
   ];
   for (const file of candidates) {
     if (fs.existsSync(file)) {
-      fs.accessSync(file, fs.constants.W_OK);
+      try {
+        fs.accessSync(file, fs.constants.W_OK);
+      } catch (_accessError) {
+        // Try to fix permissions on existing log file
+        try {
+          fs.chmodSync(file, 0o644);
+          fs.accessSync(file, fs.constants.W_OK);
+          console.warn(
+            `[logging] Fixed permissions for existing log file: ${file}`,
+          );
+        } catch (_chmodError) {
+          // If we can't fix it, remove the file and let winston recreate it
+          try {
+            fs.unlinkSync(file);
+            console.warn(
+              `[logging] Removed non-writable log file: ${file} (will be recreated)`,
+            );
+          } catch (_unlinkError) {
+            throw new Error(
+              `Cannot write to existing log file ${file} and cannot fix/remove it`,
+            );
+          }
+        }
+      }
     }
   }
-} catch (_e) {
+} catch (e) {
   fileLoggingEnabled = false;
   console.warn(
     `[logging] Falling back to console-only logging. Directory not writable: ${logsDir}`,
   );
+  console.warn(`[logging] Error details: ${e.message}`);
+
+  // Add diagnostic information
+  try {
+    const stats = fs.statSync(logsDir);
+    console.warn(`[logging] Directory exists: ${fs.existsSync(logsDir)}`);
+    console.warn(
+      `[logging] Directory stats: mode=${stats.mode.toString(8)}, uid=${stats.uid}, gid=${stats.gid}`,
+    );
+    console.warn(
+      `[logging] Process uid=${process.getuid()}, gid=${process.getgid()}`,
+    );
+  } catch (statError) {
+    console.warn(
+      `[logging] Could not get directory stats: ${statError.message}`,
+    );
+  }
 }
 
 // Custom format for structured logging

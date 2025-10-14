@@ -60,4 +60,16 @@ export default [
       'no-console': 'off', // Allow console.log in test files
     },
   },
+  {
+    files: ['tests/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-console': 'off', // Allow console.log in test files
+      'no-unused-vars': 'off', // Test files may have unused imports for mocking
+    },
+  },
 ];
