@@ -5,6 +5,21 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.3...v1.22.4) (2025-10-14)
+
+
+### ## 🔧 Bug Fixes
+
+* apply prettier formatting to test files ([ad98c7c](https://github.com/rohit-purandare/ShelfBridge/commit/ad98c7c19b0aa139d23bc35fbc545d2806f2d5b0))
+* clarify completion detection log messages to eliminate user conf… ([a89aa4a](https://github.com/rohit-purandare/ShelfBridge/commit/a89aa4a3fe4b7f8ee8ec1115704ec30bd607b93a))
+* clarify completion detection log messages to eliminate user confusion ([56276d4](https://github.com/rohit-purandare/ShelfBridge/commit/56276d44ffb5e07ca0383678cb54c9ffc8d4f60f))
+* eliminate duplicate startup messages and unify logging format ([0180bc8](https://github.com/rohit-purandare/ShelfBridge/commit/0180bc86427b7c77a0377fc55c971dd805353d53))
+* handle existing log file permissions in Docker containers ([75a4b85](https://github.com/rohit-purandare/ShelfBridge/commit/75a4b8584828df4584bc5d490a3eced05b940005))
+* implement robust completion detection with dual-method fallback ([57bb93a](https://github.com/rohit-purandare/ShelfBridge/commit/57bb93a027afd3f4e157e8de7cb28ede29ae3576))
+* remove duplicate logging messages in sync flow ([8339391](https://github.com/rohit-purandare/ShelfBridge/commit/83393913d93093dd2db6471ce5eab1bcfa66fa08))
+* resolve Docker logging permissions timing issue ([ce7e346](https://github.com/rohit-purandare/ShelfBridge/commit/ce7e346dfb041556af2e05c794d7d3e8fde51f47))
+* resolve ESLint unused variable warnings in logger.js ([03748c3](https://github.com/rohit-purandare/ShelfBridge/commit/03748c3e35ab092dcd3a72d60e75f3fa402fb247))
+
 ## [1.22.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.2...v1.22.3) (2025-09-18)
 
 
