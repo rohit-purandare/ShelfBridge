@@ -457,7 +457,8 @@ export class BookCache {
     let originalBusyTimeout;
     try {
       // Get current busy timeout and set a new one
-      originalBusyTimeout = this.db.pragma('busy_timeout', true);
+      const result = this.db.pragma('busy_timeout');
+      originalBusyTimeout = result[0]?.timeout;
       this.db.pragma(`busy_timeout = ${timeout}`);
     } catch (error) {
       logger.debug(`Could not set database timeout: ${error.message}`);
