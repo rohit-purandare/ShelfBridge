@@ -20,9 +20,8 @@ export async function testApiConnections(user) {
 
   try {
     // Test Audiobookshelf connection
-    const { AudiobookshelfClient } = await import(
-      '../audiobookshelf-client.js'
-    );
+    const { AudiobookshelfClient } =
+      await import('../audiobookshelf-client.js');
     const absClient = new AudiobookshelfClient(user.abs_url, user.abs_token);
     results.abs = await absClient.testConnection();
 

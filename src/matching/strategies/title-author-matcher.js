@@ -107,9 +107,8 @@ export class TitleAuthorMatcher {
       );
 
       // Extract source book metadata for logging
-      const { extractSeries, extractPublicationYear } = await import(
-        '../utils/audiobookshelf-extractor.js'
-      );
+      const { extractSeries, extractPublicationYear } =
+        await import('../utils/audiobookshelf-extractor.js');
       const sourceSeries = extractSeries(absBook);
       const sourceYear = extractPublicationYear(absBook);
 

@@ -247,15 +247,13 @@ describe('DisplayLogger', () => {
 
   describe('singleton export', () => {
     test('default export provides singleton instance', async () => {
-      const { default: defaultLogger } = await import(
-        '../src/utils/display-logger.js'
-      );
+      const { default: defaultLogger } =
+        await import('../src/utils/display-logger.js');
       assert(defaultLogger instanceof DisplayLogger);
 
       // Should be the same instance when imported again
-      const { default: defaultLogger2 } = await import(
-        '../src/utils/display-logger.js'
-      );
+      const { default: defaultLogger2 } =
+        await import('../src/utils/display-logger.js');
       assert.strictEqual(defaultLogger, defaultLogger2);
     });
   });
