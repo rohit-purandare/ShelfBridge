@@ -288,9 +288,8 @@ describe('SyncResultFormatter Integration with DisplayLogger', () => {
       const mockConfig = { dump_failed_books: true };
 
       // Mock the dumpFailedSyncBooks function to simulate failure
-      const originalDumpFailedSyncBooks = await import(
-        '../src/utils/debug.js'
-      ).then(m => m.dumpFailedSyncBooks);
+      const originalDumpFailedSyncBooks =
+        await import('../src/utils/debug.js').then(m => m.dumpFailedSyncBooks);
 
       try {
         // Test error handling in dump function

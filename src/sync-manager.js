@@ -525,12 +525,10 @@ export class SyncManager {
     const startTime = performance.now();
 
     // Extract basic metadata first (lightweight operation) to enable early progress checking
-    const { extractTitle, extractAuthor } = await import(
-      './matching/utils/audiobookshelf-extractor.js'
-    );
-    const { extractBookIdentifiers } = await import(
-      './matching/utils/identifier-extractor.js'
-    );
+    const { extractTitle, extractAuthor } =
+      await import('./matching/utils/audiobookshelf-extractor.js');
+    const { extractBookIdentifiers } =
+      await import('./matching/utils/identifier-extractor.js');
 
     const title = extractTitle(absBook) || 'Unknown Title';
     const author = extractAuthor(absBook) || 'Unknown Author';
@@ -1698,9 +1696,8 @@ export class SyncManager {
         if (!this.dryRun) {
           try {
             // Use existing TitleAuthorMatcher instead of duplicating logic
-            const { TitleAuthorMatcher } = await import(
-              './matching/strategies/title-author-matcher.js'
-            );
+            const { TitleAuthorMatcher } =
+              await import('./matching/strategies/title-author-matcher.js');
             const titleAuthorMatcher = new TitleAuthorMatcher(
               this.hardcover,
               this.cache,

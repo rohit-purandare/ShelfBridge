@@ -11,9 +11,8 @@ import { describe, it } from 'node:test';
  */
 
 // We'll import the SyncResultFormatter to test the display output
-const { SyncResultFormatter } = await import(
-  '../src/display/SyncResultFormatter.js'
-);
+const { SyncResultFormatter } =
+  await import('../src/display/SyncResultFormatter.js');
 
 describe('Sync Output Integration Tests', () => {
   describe('SyncResultFormatter Output Language', () => {

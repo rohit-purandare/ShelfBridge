@@ -592,6 +592,7 @@ global:
   title_author_matching:
     confidence_threshold: 0.60 # Down from 0.70
 
+
 # Improve book metadata in Audiobookshelf
 # Add series, narrator, duration information
 ```
