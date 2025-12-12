@@ -413,7 +413,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
       );
     });
 
-    it('should update status for other unknown status IDs (4, 5, etc)', async () => {
+    it('should NOT update status for other unknown status IDs (4, 5, etc)', async () => {
       const client = new HardcoverClient(mockToken);
 
       // Mock book with unknown status_id
@@ -459,16 +459,12 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         '2024-01-01',
       );
 
-      // Verify updateBookStatus WAS called (status 4 should be updated)
+      // Verify updateBookStatus was NOT called (only status_id = 1 is updated)
       assert.strictEqual(
         client.updateBookStatus.mock.calls.length,
-        1,
-        'updateBookStatus should be called for unknown status_id',
+        0,
+        'updateBookStatus should NOT be called for unknown status_id',
       );
-      assert.deepStrictEqual(client.updateBookStatus.mock.calls[0].arguments, [
-        mockUserBookId,
-        2,
-      ]);
     });
 
     it('should handle new reading session creation with Want to Read status', async () => {

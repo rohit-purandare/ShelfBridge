@@ -245,18 +245,14 @@ export class HardcoverClient {
     // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
 
-    // If book is in "Want to Read" or any other non-reading status, update to "Currently Reading"
+    // If book is in "Want to Read" status, update to "Currently Reading"
     // Status IDs: 1 = Want to Read, 2 = Currently Reading, 3 = Read (Completed)
-    if (
-      progressInfo?.user_book?.status_id &&
-      progressInfo.user_book.status_id !== 2 &&
-      progressInfo.user_book.status_id !== 3
-    ) {
+    if (progressInfo?.user_book?.status_id === 1) {
       logger.info(
-        `Book status is ${progressInfo.user_book.status_id}, updating to "Currently Reading" (status_id: 2)`,
+        'Book status is "Want to Read", updating to "Currently Reading" (status_id: 2)',
         {
           userBookId,
-          currentStatus: progressInfo.user_book.status_id,
+          currentStatus: 1,
           newStatus: 2,
         },
       );
