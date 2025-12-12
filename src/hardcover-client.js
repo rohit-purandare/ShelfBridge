@@ -245,6 +245,24 @@ export class HardcoverClient {
     // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
 
+    // If book is in "Want to Read" or any other non-reading status, update to "Currently Reading"
+    // Status IDs: 1 = Want to Read, 2 = Currently Reading, 3 = Read (Completed)
+    if (
+      progressInfo?.user_book?.status_id &&
+      progressInfo.user_book.status_id !== 2 &&
+      progressInfo.user_book.status_id !== 3
+    ) {
+      logger.info(
+        `Book status is ${progressInfo.user_book.status_id}, updating to "Currently Reading" (status_id: 2)`,
+        {
+          userBookId,
+          currentStatus: progressInfo.user_book.status_id,
+          newStatus: 2,
+        },
+      );
+      await this.updateBookStatus(userBookId, 2);
+    }
+
     // Enhanced re-reading detection
     const edition = progressInfo?.latest_read?.edition || null;
     const shouldCreateNewSession = this._shouldCreateNewReadingSession(

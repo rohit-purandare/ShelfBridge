@@ -93,7 +93,42 @@ During sync, you'll see real-time progress:
 - **✅ Added**: Book successfully added to Hardcover
 - **⏭️ Skipped**: Book intentionally skipped
 - **🔄 Created**: New reading session for re-read
+- **📖 Status updated**: Book status changed (e.g., "Want to Read" → "Currently Reading")
 - **❌ Failed**: Action failed (see error details)
+
+### 📖 Automatic Status Updates
+
+ShelfBridge automatically manages book statuses in Hardcover:
+
+```text
+[info]: Book status is 1, updating to "Currently Reading" (status_id: 2)
+  userBookId: 12345
+  currentStatus: 1
+  newStatus: 2
+✅ Updated "Project Hail Mary" progress: 0% → 15%
+```
+
+**What this means:**
+
+- **Status 1 (Want to Read)**: Book was in your "Want to Read" shelf
+- **Status 2 (Currently Reading)**: Book automatically moved to "Currently Reading"
+- **Status 3 (Read/Completed)**: Book is marked as finished
+
+**When status updates occur:**
+
+- **Want to Read → Currently Reading**: When syncing progress for books in "Want to Read"
+- **No change**: Books already in "Currently Reading" or "Read" stay unchanged
+- **Before progress sync**: Status is updated first, then progress is synced
+
+**Log messages you'll see:**
+
+```text
+# Status update needed
+[info]: Book status is 1, updating to "Currently Reading" (status_id: 2)
+
+# Status already correct (no message shown)
+# Progress update proceeds directly
+```
 
 ### 🚦 Rate Limiting Messages
 
