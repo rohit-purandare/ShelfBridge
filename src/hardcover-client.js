@@ -240,7 +240,6 @@ export class HardcoverClient {
     useSeconds = false,
     startedAt = null,
     rereadConfig = null,
-    readingFormatId = null,
   ) {
     // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
@@ -306,12 +305,11 @@ export class HardcoverClient {
 
       const mutation = useSeconds
         ? `
-                mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+                mutation UpdateBookProgress($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
                     update_user_book_read(id: $id, object: {
                         progress_seconds: $seconds,
                         edition_id: $editionId,
-                        started_at: $startedAt,
-                        reading_format_id: $readingFormatId
+                        started_at: $startedAt
                     }) {
                         error
                         user_book_read {
@@ -325,12 +323,11 @@ export class HardcoverClient {
                 }
             `
         : `
-                mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+                mutation UpdateBookProgress($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
                     update_user_book_read(id: $id, object: {
                         progress_pages: $pages,
                         edition_id: $editionId,
-                        started_at: $startedAt,
-                        reading_format_id: $readingFormatId
+                        started_at: $startedAt
                     }) {
                         error
                         user_book_read {
@@ -350,14 +347,12 @@ export class HardcoverClient {
             seconds: safeParseInt(currentProgress, 'currentProgress'),
             editionId: safeParseInt(editionId, 'editionId'),
             startedAt: startedAt ? startedAt.slice(0, 10) : null,
-            readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
           }
         : {
             id: safeParseInt(readId, 'readId'),
             pages: safeParseInt(currentProgress, 'currentProgress'),
             editionId: safeParseInt(editionId, 'editionId'),
             startedAt: startedAt ? startedAt.slice(0, 10) : null,
-            readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
           };
 
       logger.debug(
@@ -376,8 +371,29 @@ export class HardcoverClient {
           );
           return updatedRecord;
         }
+        // Check for reading_format related errors in the response
+        if (
+          result &&
+          result.update_user_book_read &&
+          result.update_user_book_read.error
+        ) {
+          const errorMsg = result.update_user_book_read.error;
+          if (
+            errorMsg.toLowerCase().includes('reading_format') ||
+            errorMsg.toLowerCase().includes('format')
+          ) {
+            logger.error(`Reading format related error: ${errorMsg}`);
+          }
+        }
         return false;
       } catch (error) {
+        // Check if error message mentions reading_format
+        if (
+          error.message.toLowerCase().includes('reading_format') ||
+          error.message.toLowerCase().includes('format')
+        ) {
+          logger.error(`Reading format related error: ${error.message}`);
+        }
         logger.error('Error updating reading progress:', error.message);
         return false;
       }
@@ -739,16 +755,14 @@ export class HardcoverClient {
     editionId,
     startedAt,
     useSeconds = false,
-    readingFormatId = null,
   ) {
     const mutation = useSeconds
       ? `
-            mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+            mutation InsertUserBookRead($id: Int!, $seconds: Int, $editionId: Int, $startedAt: date) {
                 insert_user_book_read(user_book_id: $id, user_book_read: {
                     progress_seconds: $seconds,
                     edition_id: $editionId,
-                    started_at: $startedAt,
-                    reading_format_id: $readingFormatId
+                    started_at: $startedAt
                 }) {
                     error
                     user_book_read {
@@ -763,12 +777,11 @@ export class HardcoverClient {
             }
         `
       : `
-            mutation InsertUserBookRead($id: Int!, $pages: Int, $editionId: Int, $startedAt: date, $readingFormatId: Int) {
+            mutation InsertUserBookRead($id: Int!, $pages: Int, $editionId: Int, $startedAt: date) {
                 insert_user_book_read(user_book_id: $id, user_book_read: {
                     progress_pages: $pages,
                     edition_id: $editionId,
-                    started_at: $startedAt,
-                    reading_format_id: $readingFormatId
+                    started_at: $startedAt
                 }) {
                     error
                     user_book_read {
@@ -788,14 +801,12 @@ export class HardcoverClient {
           seconds: safeParseInt(currentProgress, 'currentProgress'),
           editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
-          readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
         }
       : {
           id: safeParseInt(userBookId, 'userBookId'),
           pages: safeParseInt(currentProgress, 'currentProgress'),
           editionId: safeParseInt(editionId, 'editionId'),
           startedAt,
-          readingFormatId: safeParseInt(readingFormatId, 'readingFormatId'),
         };
     try {
       const result = await this._executeQuery(mutation, variables);
@@ -810,8 +821,29 @@ export class HardcoverClient {
         );
         return newRecord;
       }
+      // Check for reading_format related errors in the response
+      if (
+        result &&
+        result.insert_user_book_read &&
+        result.insert_user_book_read.error
+      ) {
+        const errorMsg = result.insert_user_book_read.error;
+        if (
+          errorMsg.toLowerCase().includes('reading_format') ||
+          errorMsg.toLowerCase().includes('format')
+        ) {
+          logger.error(`Reading format related error: ${errorMsg}`);
+        }
+      }
       return null;
     } catch (error) {
+      // Check if error message mentions reading_format
+      if (
+        error.message.toLowerCase().includes('reading_format') ||
+        error.message.toLowerCase().includes('format')
+      ) {
+        logger.error(`Reading format related error: ${error.message}`);
+      }
       logger.error('Error inserting user book read:', error.message);
       return null;
     }
