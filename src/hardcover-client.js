@@ -282,7 +282,6 @@ export class HardcoverClient {
         editionId,
         startDate,
         useSeconds,
-        readingFormatId,
       );
     }
 
