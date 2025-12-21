@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # ===== BUILD STAGE =====
-FROM node:20-alpine as builder
+FROM node:20.19.6-alpine as builder
 
 # Install build dependencies for native modules
 RUN apk add --no-cache \
@@ -54,7 +54,7 @@ RUN --mount=type=cache,target=/root/.npm \
     echo "🎯 ALPINE MUSL COMPATIBILITY VERIFIED!"
 
 # ===== RUNTIME STAGE =====
-FROM node:20-alpine as runtime
+FROM node:20.19.6-alpine as runtime
 
 # Install runtime dependencies (dumb-init for proper signal handling, and su-exec for user switching)
 RUN apk add --no-cache \
