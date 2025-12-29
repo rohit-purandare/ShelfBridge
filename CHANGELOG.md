@@ -5,6 +5,22 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.4...v1.22.5) (2025-12-29)
+
+
+### ## 🔧 Bug Fixes
+
+* automatically update Want to Read books to Currently Reading ([b1c25d1](https://github.com/rohit-purandare/ShelfBridge/commit/b1c25d164f2b1af2a56c4212329f99fe946d42d4))
+* breaking change on format_id + other fixes ([f3c59d4](https://github.com/rohit-purandare/ShelfBridge/commit/f3c59d45d5cc35b558fdade9b5595d5f7afc0703))
+* resolve ESLint chalk dependency issues and remove undefined readingFormatId ([bed6630](https://github.com/rohit-purandare/ShelfBridge/commit/bed6630cc5966c3b8c333dbcce9a8a23204e731f))
+* return full edition object in ASIN cross-edition matching ([de4b422](https://github.com/rohit-purandare/ShelfBridge/commit/de4b422ed1d29040ba82767c70a0a28e70f90d4b))
+
+
+### ## ♻️ Code Refactoring
+
+* remove reading_format_id from Hardcover API mutations ([db9e8ae](https://github.com/rohit-purandare/ShelfBridge/commit/db9e8ae249345fab5210ed7098c3f6e72aa760b0))
+* simplify status update to only check Want to Read ([ee0bb2b](https://github.com/rohit-purandare/ShelfBridge/commit/ee0bb2b42af7b227a2ca4c985af7d25f6cdbb753))
+
 ## [1.22.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.3...v1.22.4) (2025-10-14)
 
 
