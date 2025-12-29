@@ -315,32 +315,6 @@ export class SyncManager {
   }
 
   /**
-   * Get Hardcover's reading_format_id for mutations
-   * @param {Object} edition - Edition object with reading_format
-   * @returns {number} - Reading format ID: 1=Read, 2=Listened, 3=Both, 4=Ebook
-   */
-  _getReadingFormatId(edition) {
-    const hardcoverFormat = edition.reading_format?.format;
-
-    switch (hardcoverFormat) {
-      case 'Read':
-        return 1;
-      case 'Listened':
-        return 2;
-      case 'Both':
-        return 3;
-      case 'Ebook':
-        return 4;
-      default:
-        // Fallback based on edition capabilities
-        if (edition.audio_seconds && edition.audio_seconds > 0) {
-          return 2; // Listened (audiobook)
-        }
-        return 1; // Read (default for text-based books)
-    }
-  }
-
-  /**
    * Format timestamp for display using configured timezone
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
    * @returns {string} - Formatted date string for display
@@ -2683,8 +2657,10 @@ export class SyncManager {
         format: useSeconds ? 'audiobook (seconds)' : 'text (pages)',
       });
 
-      // Get reading format ID for enhanced accuracy
-      const readingFormatId = this._getReadingFormatId(edition);
+      // Log edition format for monitoring
+      logger.info(
+        `Updating progress for edition ${edition.id} with format: ${edition.reading_format?.format}`,
+      );
 
       const result = await this.hardcover.updateReadingProgress(
         userBookId,
@@ -2694,7 +2670,6 @@ export class SyncManager {
         useSeconds,
         this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
         this.globalConfig.reread_detection, // Pass reread configuration
-        readingFormatId, // Enhanced format accuracy
       );
 
       if (result && result.id) {
@@ -2737,8 +2712,10 @@ export class SyncManager {
                 previousProgressPercent: previousProgress,
               });
 
-              // Get reading format ID for rollback accuracy
-              const rollbackReadingFormatId = this._getReadingFormatId(edition);
+              // Log edition format for monitoring (rollback)
+              logger.info(
+                `Rolling back progress for edition ${edition.id} with format: ${edition.reading_format?.format}`,
+              );
 
               await this.hardcover.updateReadingProgress(
                 userBookId,
@@ -2748,7 +2725,6 @@ export class SyncManager {
                 useSeconds,
                 this._formatDateForHardcover(absBook.started_at),
                 this.globalConfig.reread_detection,
-                rollbackReadingFormatId, // Enhanced format accuracy
               );
             } catch (rollbackError) {
               logger.error(`Failed to rollback progress for ${title}`, {
@@ -3123,7 +3099,6 @@ export class SyncManager {
           hardcoverMatch.useSeconds || false,
           mockBook.started_at,
           this.globalConfig.reread_detection,
-          null, // reading format ID
         );
 
         if (result && result.id) {

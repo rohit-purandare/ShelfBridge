@@ -25,6 +25,15 @@ ShelfBridge is a comprehensive audiobook progress synchronization solution with 
 - **Started/finished timestamp sync** with timezone support
 - **Progress percentage calculation** for both audiobooks and ebooks
 - **Multiple identifier support** (ASIN, ISBN-10, ISBN-13)
+- **Automatic status transitions** from "Want to Read" to "Currently Reading"
+
+### Automatic Status Updates
+
+- **Smart status detection** checks book status during sync
+- **"Want to Read" auto-transition** moves books to "Currently Reading" when progress is detected
+- **Status preservation** maintains "Currently Reading" and "Completed" statuses
+- **Seamless integration** happens automatically without user intervention
+- **Progress-first updates** ensures status changes before progress sync for consistency
 
 ### Book Matching Engine
 

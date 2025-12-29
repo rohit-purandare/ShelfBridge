@@ -76,16 +76,31 @@ export class AsinMatcher {
                     },
                   );
 
-                  // Find the user's preferred edition (first one found)
-                  const userEdition = existingUserBook.book.editions?.[0];
-                  const userEditionId = userEdition?.id;
+                  // Find the edition that matches the search result
+                  // First try to find the edition by ID from the search result
+                  let userEdition = null;
+                  if (result.id) {
+                    userEdition = existingUserBook.book.editions?.find(
+                      e => e.id === result.id,
+                    );
+                  }
 
+                  // If not found by ID, try to find by ASIN
+                  if (!userEdition && identifiers.asin) {
+                    userEdition = existingUserBook.book.editions?.find(
+                      e => e.asin === identifiers.asin,
+                    );
+                  }
+
+                  // Fall back to first edition if no specific match found
+                  if (!userEdition) {
+                    userEdition = existingUserBook.book.editions?.[0];
+                  }
+
+                  // Return the full edition object to ensure all fields (including audio_seconds) are available
                   return {
                     userBook: existingUserBook,
-                    edition: {
-                      id: userEditionId,
-                      format: userEdition?.format || 'unknown',
-                    },
+                    edition: userEdition,
                     _matchType: 'asin_cross_edition',
                     _tier: 1,
                     _needsScoring: false,
