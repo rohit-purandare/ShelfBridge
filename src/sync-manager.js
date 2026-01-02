@@ -3115,9 +3115,11 @@ export class SyncManager {
     identifierType,
   ) {
     try {
+      let result = null;
+
       if (!this.dryRun) {
         // Update reading progress on Hardcover
-        const result = await this.hardcover.updateReadingProgress(
+        result = await this.hardcover.updateReadingProgress(
           hardcoverMatch.userBookId,
           progressPercent,
           progressPercent,
