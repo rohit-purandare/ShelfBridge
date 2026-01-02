@@ -244,9 +244,13 @@ export class HardcoverClient {
     // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
 
+    // Track status for return value
+    let currentStatusId = progressInfo?.user_book?.status_id || null;
+    let statusWasUpdated = false;
+
     // If book is in "Want to Read" status, update to "Currently Reading"
     // Status IDs: 1 = Want to Read, 2 = Currently Reading, 3 = Read (Completed)
-    if (progressInfo?.user_book?.status_id === 1) {
+    if (currentStatusId === 1) {
       logger.info(
         'Book status is "Want to Read", updating to "Currently Reading" (status_id: 2)',
         {
@@ -256,6 +260,8 @@ export class HardcoverClient {
         },
       );
       await this.updateBookStatus(userBookId, 2);
+      currentStatusId = 2;
+      statusWasUpdated = true;
     }
 
     // Enhanced re-reading detection
@@ -276,13 +282,21 @@ export class HardcoverClient {
       const startDate = startedAt
         ? startedAt.slice(0, 10)
         : new Date().toISOString().slice(0, 10);
-      return await this.insertUserBookRead(
+      const result = await this.insertUserBookRead(
         userBookId,
         currentProgress,
         editionId,
         startDate,
         useSeconds,
       );
+      // Include status information in the response
+      return {
+        ...result,
+        _statusInfo: {
+          currentStatusId,
+          statusWasUpdated,
+        },
+      };
     }
 
     // Check for potentially dangerous progress regression
@@ -368,7 +382,14 @@ export class HardcoverClient {
           logger.debug(
             `Updated progress - start date now: ${updatedRecord.started_at}`,
           );
-          return updatedRecord;
+          // Include status information in the response
+          return {
+            ...updatedRecord,
+            _statusInfo: {
+              currentStatusId,
+              statusWasUpdated,
+            },
+          };
         }
         // Check for reading_format related errors in the response
         if (
@@ -401,13 +422,21 @@ export class HardcoverClient {
       const startDate = startedAt
         ? startedAt.slice(0, 10)
         : new Date().toISOString().slice(0, 10);
-      return await this.insertUserBookRead(
+      const result = await this.insertUserBookRead(
         userBookId,
         currentProgress,
         editionId,
         startDate,
         useSeconds,
       );
+      // Include status information in the response
+      return {
+        ...result,
+        _statusInfo: {
+          currentStatusId,
+          statusWasUpdated,
+        },
+      };
     }
   }
 

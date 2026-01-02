@@ -1431,24 +1431,35 @@ export class SyncManager {
       };
     }
 
-    // Check if progress has changed (unless force sync is enabled)
+    // Check if book needs sync (status, progress, edition, or session changes)
     if (!this.globalConfig.force_sync) {
-      const hasChanged = await this.cache.hasProgressChanged(
+      const syncCheck = await this.cache.needsSyncCheck(
         this.userId,
         identifier,
         title,
         progressPercent,
         identifierType,
+        hardcoverMatch.edition?.id,
       );
 
-      if (!hasChanged) {
-        logger.debug(`Skipping ${title}: Progress unchanged`);
+      if (!syncCheck.needsSync) {
+        logger.debug(`Skipping ${title}: ${syncCheck.reason}`);
         syncResult.status = 'skipped';
-        syncResult.reason = 'Progress unchanged';
+        syncResult.reason = syncCheck.reason;
         syncResult.timing = performance.now() - startTime;
         return syncResult;
-      } else {
-        syncResult.progress_changed = true;
+      }
+
+      // Log what triggered the sync
+      if (syncCheck.changes.statusChanged) {
+        logger.info(
+          `${title}: Status check triggered sync (Want to Read → Currently Reading)`,
+        );
+      }
+      if (syncCheck.changes.editionChanged) {
+        logger.info(`${title}: Edition change detected, forcing sync`);
+      }
+      if (syncCheck.changes.progressChanged) {
         // Log progress change details for debugging
         const previousProgress = await this.cache.getLastProgress(
           this.userId,
@@ -1463,6 +1474,8 @@ export class SyncManager {
         );
         logger.debug(`Progress change detected for ${title}`, changeAnalysis);
       }
+
+      syncResult.progress_changed = syncCheck.changes.progressChanged;
     } else {
       syncResult.progress_changed = true;
     }
@@ -1920,6 +1933,8 @@ export class SyncManager {
             currentProgress, // Use actual current progress instead of 0
             absBook.last_listened_at,
             absBook.started_at,
+            2, // Auto-added books start with "Currently Reading" status
+            editionId, // Store edition_id for cache comparison
           );
 
           // If there's meaningful progress, immediately sync it to Hardcover
@@ -2522,6 +2537,8 @@ export class SyncManager {
             absBook.last_listened_at,
             absBook.started_at,
             absBook.finished_at,
+            3, // Completed books have status "Read"
+            edition.id, // Store edition_id for cache comparison
           );
 
           await transaction.commit();
@@ -2735,6 +2752,9 @@ export class SyncManager {
         });
 
         try {
+          // Extract status from result
+          const statusId = result._statusInfo?.currentStatusId || null;
+
           // Store progress data using helper method to avoid scoping issues
           await this._storeProgressData(
             identifierValue,
@@ -2744,6 +2764,8 @@ export class SyncManager {
             edition.id,
             progressPercent,
             absBook,
+            statusId,
+            edition.id, // Pass edition_id for cache comparison
           );
 
           await transaction.commit();
@@ -2959,6 +2981,8 @@ export class SyncManager {
     editionId,
     progressPercent,
     absBook,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     logger.debug(`Caching progress data for ${title}`, {
       identifier: identifierValue,
@@ -2976,6 +3000,8 @@ export class SyncManager {
       progressPercent,
       absBook.last_listened_at,
       absBook.started_at,
+      statusId,
+      hardcoverEditionId,
     );
   }
 
@@ -3112,6 +3138,9 @@ export class SyncManager {
         );
       }
 
+      // Extract status from result if available
+      const statusId = result?._statusInfo?.currentStatusId || null;
+
       // Store the final progress in cache
       await this.cache.storeProgress(
         this.userId,
@@ -3121,6 +3150,8 @@ export class SyncManager {
         identifierType,
         mockBook.last_listened_at,
         mockBook.started_at,
+        statusId, // Status retrieved from updateReadingProgress result
+        hardcoverMatch.edition?.id, // Store edition_id for cache comparison
       );
     } catch (err) {
       logger.error(
