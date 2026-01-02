@@ -427,6 +427,44 @@ export class BookCache {
       logger.debug(`Could not create session timeout index: ${err.message}`);
     }
 
+    // Migration 6: Add status_id and hardcover_edition_id columns for status-aware caching
+    try {
+      this.db.prepare('SELECT status_id FROM books LIMIT 1').get();
+      logger.debug('Migration 6: status_id column already exists');
+    } catch (err) {
+      if (err.message.includes('no such column: status_id')) {
+        try {
+          this.db.exec(
+            'ALTER TABLE books ADD COLUMN status_id INTEGER DEFAULT NULL',
+          );
+          this.db.exec(
+            'ALTER TABLE books ADD COLUMN hardcover_edition_id INTEGER DEFAULT NULL',
+          );
+          logger.debug(
+            'Migration 6: Added status_id and hardcover_edition_id columns',
+          );
+
+          // Create index for efficient status queries
+          try {
+            this.db.exec(
+              'CREATE INDEX IF NOT EXISTS idx_books_status ON books(user_id, status_id)',
+            );
+            logger.debug(
+              'Migration 6: Added status index for efficient queries',
+            );
+          } catch (indexErr) {
+            logger.debug(`Could not create status index: ${indexErr.message}`);
+          }
+        } catch (alterErr) {
+          logger.error(`Migration 6 failed: ${alterErr.message}`);
+          throw alterErr;
+        }
+      } else {
+        logger.error(`Migration 6 check failed: ${err.message}`);
+        throw err;
+      }
+    }
+
     logger.debug('Database migrations completed successfully');
   }
 
@@ -613,6 +651,8 @@ export class BookCache {
    * @param {number} progressPercent - Progress percentage
    * @param {string} lastListenedAt - Last listened timestamp
    * @param {string} startedAt - Started reading timestamp
+   * @param {number} statusId - Book status ID (1=Want to Read, 2=Currently Reading, 3=Read)
+   * @param {number} hardcoverEditionId - Hardcover edition ID for cache comparison
    */
   async storeBookSyncData(
     userId,
@@ -624,6 +664,8 @@ export class BookCache {
     progressPercent,
     lastListenedAt = null,
     startedAt = null,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     // Validate input data
     const validationErrors = this._validateBookData(
@@ -656,6 +698,8 @@ export class BookCache {
           identifierType,
           lastListenedAt,
           startedAt,
+          statusId,
+          hardcoverEditionId,
         ),
     ];
 
@@ -674,6 +718,8 @@ export class BookCache {
    * @param {string} lastListenedAt - Last listened timestamp
    * @param {string} startedAt - Started reading timestamp
    * @param {string} finishedAt - Finished reading timestamp
+   * @param {number} statusId - Book status ID (typically 3 for completed)
+   * @param {number} hardcoverEditionId - Hardcover edition ID for cache comparison
    */
   async storeBookCompletionData(
     userId,
@@ -683,6 +729,8 @@ export class BookCache {
     lastListenedAt = null,
     startedAt = null,
     finishedAt = null,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     // Validate input data
     const validationErrors = this._validateBookData(
@@ -706,6 +754,8 @@ export class BookCache {
           identifierType,
           lastListenedAt,
           startedAt,
+          statusId,
+          hardcoverEditionId,
         ),
       () =>
         this._storeCompletionTimestamp(
@@ -774,21 +824,25 @@ export class BookCache {
     identifierType,
     lastListenedAt,
     startedAt,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     const normalizedTitle = title.toLowerCase().trim();
     const currentTime = new Date().toISOString();
 
     const upsertStmt = this.db.prepare(`
-            INSERT INTO books (user_id, identifier, identifier_type, title, progress_percent, last_sync, updated_at, last_listened_at, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, identifier, title) 
-            DO UPDATE SET 
+            INSERT INTO books (user_id, identifier, identifier_type, title, progress_percent, last_sync, updated_at, last_listened_at, started_at, status_id, hardcover_edition_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, identifier, title)
+            DO UPDATE SET
                 identifier_type = excluded.identifier_type,
                 progress_percent = excluded.progress_percent,
                 last_sync = excluded.last_sync,
                 updated_at = excluded.updated_at,
                 last_listened_at = excluded.last_listened_at,
-                started_at = excluded.started_at
+                started_at = excluded.started_at,
+                status_id = excluded.status_id,
+                hardcover_edition_id = excluded.hardcover_edition_id
         `);
 
     const result = upsertStmt.run(
@@ -801,6 +855,8 @@ export class BookCache {
       currentTime,
       lastListenedAt,
       startedAt,
+      statusId,
+      hardcoverEditionId,
     );
     logger.debug(`Stored progress for ${title}: ${progressPercent}%`);
     return result;
@@ -942,6 +998,8 @@ export class BookCache {
     identifierType = 'isbn',
     lastListenedAt = null,
     startedAt = null,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     await this.init();
 
@@ -966,6 +1024,8 @@ export class BookCache {
         identifierType,
         lastListenedAt,
         startedAt,
+        statusId,
+        hardcoverEditionId,
       );
     } catch (err) {
       logger.error(`Error storing progress for ${title}: ${err.message}`);
@@ -1028,6 +1088,118 @@ export class BookCache {
         `Error checking progress change for ${title}: ${err.message}`,
       );
       return true; // Assume changed on error
+    }
+  }
+
+  /**
+   * Check if a book needs to be synced based on multiple conditions:
+   * - Progress changed
+   * - Status is "Want to Read" (needs status update)
+   * - Edition changed
+   *
+   * @param {string} userId - User ID
+   * @param {string} identifier - Book identifier (ISBN/ASIN)
+   * @param {string} title - Book title
+   * @param {number} currentProgress - Current progress percentage
+   * @param {string} identifierType - Type of identifier
+   * @param {number} currentEditionId - Current edition ID from Hardcover
+   * @returns {Promise<Object>} - Object with needsSync flag, reason, and changes breakdown
+   */
+  async needsSyncCheck(
+    userId,
+    identifier,
+    title,
+    currentProgress,
+    identifierType = 'isbn',
+    currentEditionId = null,
+  ) {
+    await this.init();
+
+    const result = {
+      needsSync: false,
+      reason: '',
+      changes: {
+        progressChanged: false,
+        statusChanged: false,
+        editionChanged: false,
+      },
+    };
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT progress_percent, status_id, hardcover_edition_id
+        FROM books
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+
+      const normalizedTitle = title.toLowerCase().trim();
+      const cached = stmt.get(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+
+      if (!cached) {
+        result.needsSync = true;
+        result.reason = 'No cached data';
+        result.changes.progressChanged = true;
+        return result;
+      }
+
+      // Check 1: Progress change
+      const progressChangeResult = ProgressManager.detectProgressChange(
+        cached.progress_percent,
+        currentProgress,
+        {
+          threshold: 0.01, // 0.01% tolerance
+          context: `${title} sync check`,
+        },
+      );
+      result.changes.progressChanged = progressChangeResult.hasChange;
+
+      // Check 2: Status is "Want to Read" (always needs sync to update status)
+      if (cached.status_id === 1) {
+        result.changes.statusChanged = true;
+        logger.debug(
+          `Status check for ${title}: Want to Read status detected, needs sync`,
+        );
+      }
+
+      // Check 3: Edition changed
+      if (
+        cached.hardcover_edition_id &&
+        currentEditionId &&
+        currentEditionId !== cached.hardcover_edition_id
+      ) {
+        result.changes.editionChanged = true;
+        logger.debug(
+          `Edition changed for ${title}: ${cached.hardcover_edition_id} → ${currentEditionId}`,
+        );
+      }
+
+      // Determine if sync needed
+      result.needsSync = Object.values(result.changes).some(v => v === true);
+
+      if (result.needsSync) {
+        const reasons = [];
+        if (result.changes.progressChanged) reasons.push('progress changed');
+        if (result.changes.statusChanged)
+          reasons.push('status is Want to Read');
+        if (result.changes.editionChanged) reasons.push('edition changed');
+        result.reason = reasons.join(', ');
+      } else {
+        result.reason = 'No changes detected';
+      }
+
+      return result;
+    } catch (err) {
+      logger.error(`Error in needsSyncCheck for ${title}: ${err.message}`);
+      // On error, assume sync is needed to be safe
+      result.needsSync = true;
+      result.reason = 'Error checking cache';
+      result.changes.progressChanged = true;
+      return result;
     }
   }
 
