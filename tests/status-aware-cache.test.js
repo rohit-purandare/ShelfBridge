@@ -250,11 +250,7 @@ describe('BookCache - Status-Aware Sync Check', () => {
     );
 
     // Should trigger sync for multiple reasons
-    assert.strictEqual(
-      syncCheck.needsSync,
-      true,
-      'Sync should be triggered',
-    );
+    assert.strictEqual(syncCheck.needsSync, true, 'Sync should be triggered');
     assert.strictEqual(
       syncCheck.changes.progressChanged,
       true,

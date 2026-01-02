@@ -73,11 +73,7 @@ describe('Want to Read Status Update - Edition Change Integration', () => {
     );
 
     // VERIFY: Sync should be triggered for TWO reasons
-    assert.strictEqual(
-      syncCheck.needsSync,
-      true,
-      'Sync should be triggered',
-    );
+    assert.strictEqual(syncCheck.needsSync, true, 'Sync should be triggered');
     assert.strictEqual(
       syncCheck.changes.statusChanged,
       true,

@@ -449,11 +449,11 @@ export class BookCache {
             this.db.exec(
               'CREATE INDEX IF NOT EXISTS idx_books_status ON books(user_id, status_id)',
             );
-            logger.debug('Migration 6: Added status index for efficient queries');
-          } catch (indexErr) {
             logger.debug(
-              `Could not create status index: ${indexErr.message}`,
+              'Migration 6: Added status index for efficient queries',
             );
+          } catch (indexErr) {
+            logger.debug(`Could not create status index: ${indexErr.message}`);
           }
         } catch (alterErr) {
           logger.error(`Migration 6 failed: ${alterErr.message}`);
@@ -1184,7 +1184,8 @@ export class BookCache {
       if (result.needsSync) {
         const reasons = [];
         if (result.changes.progressChanged) reasons.push('progress changed');
-        if (result.changes.statusChanged) reasons.push('status is Want to Read');
+        if (result.changes.statusChanged)
+          reasons.push('status is Want to Read');
         if (result.changes.editionChanged) reasons.push('edition changed');
         result.reason = reasons.join(', ');
       } else {
