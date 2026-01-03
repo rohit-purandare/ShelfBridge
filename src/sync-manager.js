@@ -587,16 +587,35 @@ export class SyncManager {
               );
 
               if (!progressChanged) {
-                hasChanged = false;
-                cacheFoundEarly = true;
-                logger.debug(
-                  `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
-                  {
-                    cacheKey: key,
-                    cacheType: type,
-                    editionId: cachedInfo.edition_id,
-                  },
-                );
+                // Check if book needs completion processing even though progress hasn't changed
+                const needsCompletionProcessing =
+                  validatedProgress >= 95 && !cachedInfo.finished_at;
+
+                if (needsCompletionProcessing) {
+                  logger.debug(
+                    `${title}: Progress unchanged but needs completion processing (${validatedProgress.toFixed(1)}%, no finished_at)`,
+                    {
+                      cacheKey: key,
+                      cacheType: type,
+                      editionId: cachedInfo.edition_id,
+                      progress: validatedProgress,
+                      finishedAt: cachedInfo.finished_at,
+                    },
+                  );
+                  // Don't skip - let it go through normal flow for completion detection
+                  hasChanged = true; // Force processing
+                } else {
+                  hasChanged = false;
+                  cacheFoundEarly = true;
+                  logger.debug(
+                    `Early skip for ${title}: Progress unchanged via ${type} cache (${validatedProgress.toFixed(1)}%)`,
+                    {
+                      cacheKey: key,
+                      cacheType: type,
+                      editionId: cachedInfo.edition_id,
+                    },
+                  );
+                }
                 break;
               } else {
                 logger.debug(
@@ -710,17 +729,35 @@ export class SyncManager {
                 );
 
               if (!titleAuthorProgressChanged) {
-                hasChanged = false;
-                cacheFoundEarly = true;
-                shouldPerformExpensiveMatching = false; // Skip expensive matching entirely
-                logger.debug(
-                  `Early skip for ${title}: Progress unchanged via title/author cache (${validatedProgress.toFixed(1)}%)`,
-                  {
-                    cachePattern: bestCachePattern,
-                    editionId: bestCacheMatch.edition_id,
-                    cachedProgress: bestCacheMatch.progress_percent,
-                  },
-                );
+                // Check if book needs completion processing even though progress hasn't changed
+                const needsCompletionProcessing =
+                  validatedProgress >= 95 && !bestCacheMatch.finished_at;
+
+                if (needsCompletionProcessing) {
+                  logger.debug(
+                    `${title}: Progress unchanged but needs completion processing (${validatedProgress.toFixed(1)}%, no finished_at)`,
+                    {
+                      cachePattern: bestCachePattern,
+                      editionId: bestCacheMatch.edition_id,
+                      progress: validatedProgress,
+                      finishedAt: bestCacheMatch.finished_at,
+                    },
+                  );
+                  // Don't skip - let it go through normal flow for completion detection
+                  hasChanged = true; // Force processing
+                } else {
+                  hasChanged = false;
+                  cacheFoundEarly = true;
+                  shouldPerformExpensiveMatching = false; // Skip expensive matching entirely
+                  logger.debug(
+                    `Early skip for ${title}: Progress unchanged via title/author cache (${validatedProgress.toFixed(1)}%)`,
+                    {
+                      cachePattern: bestCachePattern,
+                      editionId: bestCacheMatch.edition_id,
+                      cachedProgress: bestCacheMatch.progress_percent,
+                    },
+                  );
+                }
               } else {
                 logger.debug(
                   `Title/author book ${title}: Progress changed (${bestCacheMatch.progress_percent}% → ${validatedProgress.toFixed(1)}%) - proceeding with sync`,
