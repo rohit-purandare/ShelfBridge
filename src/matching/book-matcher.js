@@ -459,17 +459,54 @@ export class BookMatcher {
       (currentEdition?.pages && currentEdition.pages > 0)
     );
 
-    if (hasLength) {
-      // Current edition already has length data, no need to search
-      logger.debug('Current edition already has length data', {
-        editionId: currentEdition.id,
-        hasAudioSeconds: !!currentEdition.audio_seconds,
-        hasPages: !!currentEdition.pages,
+    // Apply format mapping if available (with error handling)
+    let currentEditionFormat;
+    try {
+      currentEditionFormat = this.formatMapper
+        ? this.formatMapper(currentEdition)
+        : currentEdition?.format;
+    } catch (error) {
+      logger.warn('Format mapper error, falling back to direct format', {
+        error: error.message,
+        editionId: currentEdition?.id,
       });
+      currentEditionFormat = currentEdition?.format;
+    }
+
+    // Check if format matches source (handle undefined formats gracefully)
+    const formatMatches =
+      sourceFormat &&
+      currentEditionFormat &&
+      currentEditionFormat === sourceFormat;
+
+    if (hasLength && formatMatches) {
+      // Current edition has length data AND format matches - optimal match
+      logger.debug(
+        'Current edition already has length data and format matches',
+        {
+          editionId: currentEdition.id,
+          format: currentEditionFormat,
+          sourceFormat: sourceFormat,
+          hasAudioSeconds: !!currentEdition.audio_seconds,
+          hasPages: !!currentEdition.pages,
+        },
+      );
       return match;
     }
 
-    // Current edition lacks length data - search for better edition
+    // If we get here, either:
+    // 1. No length data (need to find edition with length), OR
+    // 2. Has length but wrong format (need to find better format match)
+    if (hasLength && !formatMatches) {
+      logger.debug('Current edition has length but format mismatch', {
+        editionId: currentEdition.id,
+        currentFormat: currentEditionFormat,
+        sourceFormat: sourceFormat,
+        reason: 'searching_for_better_format_match',
+      });
+    }
+
+    // Search for better edition (either with length data or better format match)
     const book = match.userBook.book;
 
     if (!book || !book.editions || book.editions.length <= 1) {
@@ -484,17 +521,35 @@ export class BookMatcher {
       return match;
     }
 
-    logger.debug('Searching for better edition with length data', {
+    const searchReason = hasLength ? 'format_mismatch' : 'missing_length_data';
+
+    logger.debug('Searching for better edition', {
       bookId: book.id,
       bookTitle: book.title,
       currentEditionId: currentEdition.id,
+      currentFormat: currentEditionFormat,
       totalEditions: book.editions.length,
       sourceFormat,
       matchType,
+      searchReason,
+      hasLength,
     });
+
+    // Validate editions array (defensive programming)
+    if (!Array.isArray(book.editions)) {
+      logger.warn('Book editions is not an array, keeping original match', {
+        bookId: book.id,
+        editionsType: typeof book.editions,
+      });
+      return match;
+    }
 
     // Find all editions with length data (positive values only)
     const editionsWithLength = book.editions.filter(edition => {
+      // Safety check: skip malformed editions
+      if (!edition || typeof edition !== 'object') {
+        return false;
+      }
       return !!(
         (edition.audio_seconds && edition.audio_seconds > 0) ||
         (edition.pages && edition.pages > 0)
@@ -561,11 +616,67 @@ export class BookMatcher {
 
     const bestEdition = scoredEditions[0];
 
+    // Safety check: ensure we have a valid scored edition
+    if (!bestEdition || !bestEdition.edition) {
+      logger.warn('Scoring returned invalid result, keeping original match', {
+        bookId: book.id,
+        scoredCount: scoredEditions.length,
+      });
+      return match;
+    }
+
+    // Calculate current edition's score for comparison (if it has length)
+    let currentEditionScore = 0;
+    if (hasLength) {
+      // Score current edition using same logic
+      if (formatMatches) currentEditionScore += 40;
+      if (currentEdition.audio_seconds && currentEdition.pages) {
+        currentEditionScore += 30;
+      } else if (currentEdition.audio_seconds || currentEdition.pages) {
+        currentEditionScore += 15;
+      }
+      const completenessFields = [
+        'asin',
+        'isbn_10',
+        'isbn_13',
+        'format',
+        'users_count',
+      ];
+      const completeness = completenessFields.filter(
+        field => currentEdition[field],
+      ).length;
+      currentEditionScore += (completeness / completenessFields.length) * 20;
+      if (currentEdition.users_count) {
+        currentEditionScore += Math.min(
+          10,
+          Math.log10(currentEdition.users_count + 1),
+        );
+      }
+    }
+
+    // Only upgrade if new edition is significantly better
+    // Require at least 5 point improvement to avoid lateral moves
+    const MIN_IMPROVEMENT = 5;
+    const improvement = bestEdition.score - currentEditionScore;
+
+    if (improvement < MIN_IMPROVEMENT) {
+      logger.debug('New edition not significantly better, keeping original', {
+        bookId: book.id,
+        currentScore: currentEditionScore.toFixed(2),
+        bestScore: bestEdition.score.toFixed(2),
+        improvement: improvement.toFixed(2),
+        minRequired: MIN_IMPROVEMENT,
+      });
+      return match;
+    }
+
     logger.debug('Found better edition with length data', {
       bookId: book.id,
       originalEditionId: currentEdition.id,
       newEditionId: bestEdition.edition.id,
-      score: bestEdition.score.toFixed(2),
+      currentScore: currentEditionScore.toFixed(2),
+      newScore: bestEdition.score.toFixed(2),
+      improvement: improvement.toFixed(2),
       hasAudioSeconds: !!bestEdition.edition.audio_seconds,
       hasPages: !!bestEdition.edition.pages,
       formatMatch: bestEdition.edition.format === sourceFormat,
@@ -579,7 +690,10 @@ export class BookMatcher {
       _originalEditionId: currentEdition.id,
       _matchType: `${matchType}_cross_edition_enriched`,
       _editionUpgraded: true,
-      _upgradeReason: 'length_data_enrichment',
+      _upgradeReason: hasLength
+        ? 'format_match_improvement'
+        : 'length_data_enrichment',
+      _scoreImprovement: improvement,
     };
   }
 

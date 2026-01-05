@@ -516,6 +516,186 @@ describe('Cross-Edition Enhancement', () => {
     });
   });
 
+  describe('_enhanceMatchWithLengthData() - Format Mismatch with Length', () => {
+    it('should upgrade when current edition has length but wrong format', () => {
+      const match = {
+        userBook: {
+          book: {
+            id: 'book-1',
+            editions: [
+              { id: 'ed-1', format: 'ebook', pages: 300 }, // Matched, has length, wrong format
+              {
+                id: 'ed-2',
+                format: 'audiobook',
+                audio_seconds: 36000,
+                users_count: 1000,
+              }, // Right format with length
+            ],
+          },
+        },
+        edition: { id: 'ed-1', format: 'ebook', pages: 300 },
+        _matchType: 'isbn',
+      };
+
+      const result = bookMatcher._enhanceMatchWithLengthData(
+        match,
+        'audiobook', // Source is audiobook
+        'isbn',
+      );
+
+      assert.strictEqual(result.edition.id, 'ed-2'); // Upgraded to audiobook
+      assert.strictEqual(result.edition.audio_seconds, 36000);
+      assert.strictEqual(result._editionUpgraded, true);
+    });
+
+    it('should keep current edition when it has length AND format matches', () => {
+      const match = {
+        userBook: {
+          book: {
+            id: 'book-1',
+            editions: [
+              {
+                id: 'ed-1',
+                format: 'audiobook',
+                audio_seconds: 36000,
+                users_count: 100,
+              }, // Matched, has length, right format
+              {
+                id: 'ed-2',
+                format: 'audiobook',
+                audio_seconds: 38000,
+                users_count: 5000,
+              }, // Also audiobook but more popular
+            ],
+          },
+        },
+        edition: {
+          id: 'ed-1',
+          format: 'audiobook',
+          audio_seconds: 36000,
+          users_count: 100,
+        },
+        _matchType: 'isbn',
+      };
+
+      const result = bookMatcher._enhanceMatchWithLengthData(
+        match,
+        'audiobook', // Source is audiobook
+        'isbn',
+      );
+
+      assert.strictEqual(result.edition.id, 'ed-1'); // Keeps original (optimization)
+      assert.strictEqual(result._editionUpgraded, undefined);
+    });
+
+    it('should handle the user reported scenario: Physical matched for Audiobook source', () => {
+      // Real-world scenario: ISBN matches Physical edition, but source is Audiobook
+      const match = {
+        userBook: {
+          book: {
+            id: 'book-iron-gold',
+            title: 'Iron Gold',
+            editions: [
+              {
+                id: 'ed-physical',
+                isbn_13: '9781501959790',
+                format: 'physical',
+                pages: 624,
+                users_count: 500,
+              }, // ISBN matched this
+              {
+                id: 'ed-audio',
+                asin: 'B074NGJ6NK',
+                format: 'audiobook',
+                audio_seconds: 62568, // ~17.4 hours
+                users_count: 2000,
+              }, // Should upgrade to this
+            ],
+          },
+        },
+        edition: {
+          id: 'ed-physical',
+          isbn_13: '9781501959790',
+          format: 'physical',
+          pages: 624,
+          users_count: 500,
+        },
+        _matchType: 'isbn',
+      };
+
+      // Format mapper converts 'physical' to 'text'
+      bookMatcher.formatMapper = edition => {
+        if (edition.format === 'physical') return 'text';
+        if (edition.format === 'audiobook') return 'audiobook';
+        return edition.format;
+      };
+
+      const result = bookMatcher._enhanceMatchWithLengthData(
+        match,
+        'audiobook', // Source from ABS is audiobook
+        'isbn',
+      );
+
+      assert.strictEqual(result.edition.id, 'ed-audio'); // Upgraded to audiobook
+      assert.strictEqual(result.edition.format, 'audiobook');
+      assert.strictEqual(result.edition.audio_seconds, 62568);
+      assert.strictEqual(result._editionUpgraded, true);
+      assert.strictEqual(result._matchType, 'isbn_cross_edition_enriched');
+    });
+
+    it('should still work when Physical edition has no length', () => {
+      // Original use case: no length data at all
+      const match = {
+        userBook: {
+          book: {
+            id: 'book-1',
+            editions: [
+              { id: 'ed-1', format: 'ebook' }, // Matched, no length
+              { id: 'ed-2', format: 'ebook', pages: 300 }, // Better option, same format
+            ],
+          },
+        },
+        edition: { id: 'ed-1', format: 'ebook' },
+        _matchType: 'isbn',
+      };
+
+      const result = bookMatcher._enhanceMatchWithLengthData(
+        match,
+        'ebook',
+        'isbn',
+      );
+
+      assert.strictEqual(result.edition.id, 'ed-2'); // Upgraded for length
+      assert.strictEqual(result.edition.pages, 300);
+    });
+
+    it('should handle no source format provided', () => {
+      const match = {
+        userBook: {
+          book: {
+            id: 'book-1',
+            editions: [
+              { id: 'ed-1', format: 'ebook', pages: 300 },
+              { id: 'ed-2', format: 'audiobook', audio_seconds: 36000 },
+            ],
+          },
+        },
+        edition: { id: 'ed-1', format: 'ebook', pages: 300 },
+        _matchType: 'isbn',
+      };
+
+      const result = bookMatcher._enhanceMatchWithLengthData(
+        match,
+        null, // No source format
+        'isbn',
+      );
+
+      // Without source format, can't determine if format matches
+      // Should keep original since it has length
+      assert.strictEqual(result.edition.id, 'ed-1');
+    });
+  });
+
   describe('_enhanceMatchWithLengthData() - Format Mapper Integration', () => {
     it('should apply format mapper when available', () => {
       // Create matcher with format mapper
