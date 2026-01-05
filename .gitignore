@@ -106,6 +106,9 @@ tools/
 # Documentation audit tools and reports (temporary analysis files)
 documentation-audit/
 
+# Documentation files (internal/temporary)
+docs/
+
 # Security and audit files
 npm-audit-report.json
 results.sarif
