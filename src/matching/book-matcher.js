@@ -166,6 +166,47 @@ export class BookMatcher {
       return { identifierLookup, editionLookup, bookLookup };
     }
 
+    /**
+     * Helper function to check if an edition has length data
+     * @param {Object} edition - Edition object
+     * @returns {boolean} - True if edition has audio_seconds or pages
+     */
+    const hasLengthData = edition => {
+      return !!(edition.audio_seconds || edition.pages);
+    };
+
+    /**
+     * Helper function to determine if we should store this edition in the identifier lookup
+     * Prioritizes editions with length data (audio_seconds or pages)
+     * @param {string} identifier - The normalized identifier (ISBN/ASIN)
+     * @param {Object} newEdition - The edition we're considering adding
+     * @returns {boolean} - True if we should store/overwrite with this edition
+     */
+    const shouldStoreEdition = (identifier, newEdition) => {
+      const existing = identifierLookup[identifier];
+
+      // No existing entry - always store
+      if (!existing) {
+        return true;
+      }
+
+      const newHasLength = hasLengthData(newEdition);
+      const existingHasLength = hasLengthData(existing.edition);
+
+      // Prioritize editions with length data
+      if (newHasLength && !existingHasLength) {
+        return true; // Replace existing with better edition
+      }
+
+      // Keep existing if it has length data and new one doesn't
+      if (!newHasLength && existingHasLength) {
+        return false;
+      }
+
+      // Both have length data or both don't - keep existing (first found)
+      return false;
+    };
+
     // Single pass through library data to build all tables
     for (const userBook of this.userLibraryData) {
       const book = userBook.book;
@@ -189,7 +230,10 @@ export class BookMatcher {
         // Add ISBN-10
         if (edition.isbn_10) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_10);
-          if (normalizedIsbn) {
+          if (
+            normalizedIsbn &&
+            shouldStoreEdition(normalizedIsbn, editionWithFormat)
+          ) {
             identifierLookup[normalizedIsbn] = {
               userBook,
               edition: editionWithFormat,
@@ -200,7 +244,10 @@ export class BookMatcher {
         // Add ISBN-13
         if (edition.isbn_13) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_13);
-          if (normalizedIsbn) {
+          if (
+            normalizedIsbn &&
+            shouldStoreEdition(normalizedIsbn, editionWithFormat)
+          ) {
             identifierLookup[normalizedIsbn] = {
               userBook,
               edition: editionWithFormat,
@@ -211,7 +258,10 @@ export class BookMatcher {
         // Add ASIN
         if (edition.asin) {
           const normalizedAsin = normalizeAsin(edition.asin);
-          if (normalizedAsin) {
+          if (
+            normalizedAsin &&
+            shouldStoreEdition(normalizedAsin, editionWithFormat)
+          ) {
             identifierLookup[normalizedAsin] = {
               userBook,
               edition: editionWithFormat,
