@@ -1748,10 +1748,12 @@ export class HardcoverClient {
         const book = result.books[0];
         if (book.editions && book.editions.length > 0) {
           // Use unified scorer for consistent edition selection
-          const { selectBestEdition, PROFILES } = await import('./matching/utils/unified-edition-scorer.js');
+          const { selectBestEdition, PROFILES } =
+            await import('./matching/utils/unified-edition-scorer.js');
 
           // Format mapper for reading_format field
-          const formatMapper = edition => edition.reading_format?.format || edition.physical_format;
+          const formatMapper = edition =>
+            edition.reading_format?.format || edition.physical_format;
 
           const context = {
             sourceFormat: preferredFormat,

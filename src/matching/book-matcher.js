@@ -537,7 +537,8 @@ export class BookMatcher {
 
     // Use unified scorer with STRICT profile for cross-edition enhancement
     // STRICT profile requires 5-point minimum improvement to avoid lateral moves
-    const { selectBestEdition, PROFILES } = await import('./utils/unified-edition-scorer.js');
+    const { selectBestEdition, PROFILES } =
+      await import('./utils/unified-edition-scorer.js');
 
     const context = {
       sourceFormat,
@@ -553,9 +554,7 @@ export class BookMatcher {
       logger.debug('No suitable edition upgrade found', {
         bookId: book.id,
         currentEditionId: currentEdition.id,
-        reason: result
-          ? 'insufficient_improvement'
-          : 'no_valid_candidates',
+        reason: result ? 'insufficient_improvement' : 'no_valid_candidates',
         totalEditions: book.editions.length,
       });
       return match;

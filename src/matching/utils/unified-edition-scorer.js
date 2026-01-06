@@ -536,7 +536,10 @@ function calculateDurationScore(edition, sourceDuration, sourceFormat) {
   }
 
   // Calculate similarity using existing utility
-  const similarity = calculateDurationSimilarity(sourceDuration, editionDuration);
+  const similarity = calculateDurationSimilarity(
+    sourceDuration,
+    editionDuration,
+  );
   return similarity; // Already 0-100 scale
 }
 

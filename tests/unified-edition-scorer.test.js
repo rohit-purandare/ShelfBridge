@@ -236,7 +236,11 @@ describe('Unified Edition Scorer - selectBestEdition() Basic', () => {
   it('should select edition with matching format', () => {
     const editions = [
       createTestEdition({ id: 'ed-1', format: 'ebook', pages: 300 }),
-      createTestEdition({ id: 'ed-2', format: 'audiobook', audio_seconds: 36000 }),
+      createTestEdition({
+        id: 'ed-2',
+        format: 'audiobook',
+        audio_seconds: 36000,
+      }),
     ];
     const context = createTestContext({ sourceFormat: 'audiobook' });
 
