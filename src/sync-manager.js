@@ -1310,6 +1310,7 @@ export class SyncManager {
         identifiers,
         title,
         author,
+        result,
       );
       syncResult.status = autoAddResult.status;
       syncResult.reason = autoAddResult.reason;
@@ -1646,6 +1647,7 @@ export class SyncManager {
       identifier,
       title,
       author,
+      result,
     );
 
     // Merge results
@@ -1681,7 +1683,7 @@ export class SyncManager {
     return syncResult;
   }
 
-  async _tryAutoAddBook(absBook, identifiers, title, author) {
+  async _tryAutoAddBook(absBook, identifiers, title, author, result = null) {
     logger.info(`Attempting to auto-add ${title} to Hardcover`, {
       identifiers: identifiers,
       title: title,
@@ -2027,9 +2029,8 @@ export class SyncManager {
         extractAudioDurationFromAudiobookshelf,
         extractNarrator,
       } = await import('./matching/utils/audiobookshelf-extractor.js');
-      const { selectBestEdition, PROFILES } = await import(
-        './matching/utils/unified-edition-scorer.js'
-      );
+      const { selectBestEdition, PROFILES } =
+        await import('./matching/utils/unified-edition-scorer.js');
 
       const sourceFormat = detectUserBookFormat(absBook);
       const sourceDuration = extractAudioDurationFromAudiobookshelf(absBook);
@@ -2280,6 +2281,7 @@ export class SyncManager {
     _identifier,
     title,
     author,
+    result = null,
   ) {
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
@@ -2298,7 +2300,13 @@ export class SyncManager {
         asin: edition?.asin,
       };
 
-      return await this._tryAutoAddBook(absBook, identifiers, title, author);
+      return await this._tryAutoAddBook(
+        absBook,
+        identifiers,
+        title,
+        author,
+        result,
+      );
     }
 
     logger.debug(`Syncing existing book: ${title}`, {
