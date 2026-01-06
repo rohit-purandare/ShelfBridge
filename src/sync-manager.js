@@ -111,6 +111,10 @@ export class SyncManager {
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
+      failed_books: [], // Track books that failed to match or auto-add
+      books_not_found: 0,
+      books_match_rejected: 0,
+      books_already_in_library: 0,
     };
 
     try {
@@ -245,6 +249,27 @@ export class SyncManager {
         },
         book_breakdown: this._generateBookBreakdown(result.book_details),
       });
+
+      // Write failed books report to separate log file
+      if (result.failed_books && result.failed_books.length > 0) {
+        const { FailedBooksReporter } =
+          await import('./failed-books-reporter.js');
+        const reportPath = FailedBooksReporter.writeReport(
+          result.failed_books,
+          {
+            books_not_found: result.books_not_found,
+            books_match_rejected: result.books_match_rejected,
+            books_already_in_library: result.books_already_in_library,
+          },
+        );
+
+        if (reportPath) {
+          console.log(
+            `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+          );
+        }
+      }
+
       console.log(
         `\n✅ Sync complete for user: ${this.userId} in ${duration.toFixed(1)}s`,
       );
@@ -256,6 +281,33 @@ export class SyncManager {
         user_id: this.userId,
       });
       result.errors.push(error.message);
+
+      // Write failed books report even if sync failed
+      if (result.failed_books && result.failed_books.length > 0) {
+        try {
+          const { FailedBooksReporter } =
+            await import('./failed-books-reporter.js');
+          const reportPath = FailedBooksReporter.writeReport(
+            result.failed_books,
+            {
+              books_not_found: result.books_not_found,
+              books_match_rejected: result.books_match_rejected,
+              books_already_in_library: result.books_already_in_library,
+            },
+          );
+
+          if (reportPath) {
+            console.log(
+              `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+            );
+          }
+        } catch (reportError) {
+          logger.warn('Failed to write failed books report', {
+            error: reportError.message,
+          });
+        }
+      }
+
       console.log(
         `\n❌ Sync failed for user: ${this.userId}: ${error.message}`,
       );
@@ -449,11 +501,64 @@ export class SyncManager {
     }
   }
 
+  /**
+   * Track a book that failed to match or auto-add
+   * @param {Object} result - The sync result object to update
+   * @param {Object} bookInfo - Information about the failed book
+   * @param {string} bookInfo.title - Book title
+   * @param {string} bookInfo.author - Book author
+   * @param {Object} bookInfo.identifiers - Book identifiers (isbn, isbn10, asin)
+   * @param {string} bookInfo.category - Failure category (NOT_FOUND, MATCH_REJECTED, ALREADY_IN_LIBRARY)
+   * @param {string} bookInfo.reason - Detailed reason for failure
+   * @param {Array<string>} bookInfo.suggestions - Actionable suggestions for the user
+   * @param {Object} bookInfo.details - Additional category-specific details
+   */
+  _trackFailedBook(result, bookInfo) {
+    const failedBook = {
+      title: bookInfo.title || 'Unknown Title',
+      author: bookInfo.author || 'Unknown Author',
+      identifiers: {
+        isbn:
+          bookInfo.identifiers?.isbn || bookInfo.identifiers?.isbn13 || null,
+        isbn10: bookInfo.identifiers?.isbn10 || null,
+        asin: bookInfo.identifiers?.asin || null,
+      },
+      category: bookInfo.category,
+      reason: bookInfo.reason,
+      suggestions: bookInfo.suggestions || [],
+      details: bookInfo.details || {},
+    };
+
+    result.failed_books.push(failedBook);
+
+    // Update category counters
+    switch (bookInfo.category) {
+      case 'NOT_FOUND':
+        result.books_not_found++;
+        break;
+      case 'MATCH_REJECTED':
+        result.books_match_rejected++;
+        break;
+      case 'ALREADY_IN_LIBRARY':
+        result.books_already_in_library++;
+        break;
+    }
+
+    logger.debug(`Tracked failed book: ${failedBook.title}`, {
+      category: bookInfo.category,
+      reason: bookInfo.reason,
+    });
+  }
+
   async _syncBooksParallel(booksToProcess, result, sessionData) {
     const promises = booksToProcess.map(book =>
       this.taskQueue.enqueue(
         async () => {
-          const syncResult = await this._syncSingleBook(book, sessionData);
+          const syncResult = await this._syncSingleBook(
+            book,
+            sessionData,
+            result,
+          );
           // Update shared result as soon as each book finishes
           this._updateResult(result, syncResult);
           return syncResult;
@@ -482,7 +587,7 @@ export class SyncManager {
         );
       }
 
-      const syncResult = await this._syncSingleBook(book, sessionData);
+      const syncResult = await this._syncSingleBook(book, sessionData, result);
       this._updateResult(result, syncResult);
     }
   }
@@ -495,7 +600,7 @@ export class SyncManager {
     return chunks;
   }
 
-  async _syncSingleBook(absBook, sessionData) {
+  async _syncSingleBook(absBook, sessionData, result = null) {
     const startTime = performance.now();
 
     // Extract basic metadata first (lightweight operation) to enable early progress checking
@@ -1793,6 +1898,10 @@ export class SyncManager {
                 ];
               }
             } else {
+              const failureReason = !titleAuthorMatch
+                ? 'No matches found in title/author search'
+                : 'Book already exists in your Hardcover library';
+
               logger.info(
                 `Auto-add title/author fallback failed for "${title}"`,
                 {
@@ -1801,11 +1910,35 @@ export class SyncManager {
                   matchFound: !!titleAuthorMatch,
                   isSearchResult: titleAuthorMatch?._isSearchResult || false,
                   matchType: titleAuthorMatch?._matchType || 'N/A',
-                  reason: !titleAuthorMatch
-                    ? 'No matches found in title/author search'
-                    : 'Match found but not suitable for auto-add (likely already in library)',
+                  reason: failureReason,
                 },
               );
+
+              // Track this failure for reporting
+              if (
+                result &&
+                titleAuthorMatch &&
+                !titleAuthorMatch._isSearchResult
+              ) {
+                this._trackFailedBook(result, {
+                  title,
+                  author,
+                  identifiers,
+                  category: 'ALREADY_IN_LIBRARY',
+                  reason:
+                    'Book exists in your Hardcover library but identifiers (ISBN/ASIN) do not match between Audiobookshelf and Hardcover',
+                  suggestions: [
+                    'Update the ISBN/ASIN in Hardcover to match your Audiobookshelf metadata',
+                    'Or update the metadata in Audiobookshelf to match the edition in Hardcover',
+                    'Check if you have the correct edition selected in Hardcover',
+                  ],
+                  details: {
+                    matchType: titleAuthorMatch._matchType,
+                    titleMatched: title,
+                    authorMatched: author,
+                  },
+                });
+              }
             }
           } catch (titleAuthorError) {
             logger.warn(
@@ -1819,6 +1952,40 @@ export class SyncManager {
 
         // If still no results after all attempts
         if (searchResults.length === 0) {
+          // Track this failure for reporting
+          if (result) {
+            const searchedIdentifiersList = [];
+            if (identifiers.isbn)
+              searchedIdentifiersList.push(`ISBN: ${identifiers.isbn}`);
+            if (identifiers.isbn10)
+              searchedIdentifiersList.push(`ISBN-10: ${identifiers.isbn10}`);
+            if (identifiers.asin)
+              searchedIdentifiersList.push(`ASIN: ${identifiers.asin}`);
+
+            this._trackFailedBook(result, {
+              title,
+              author,
+              identifiers,
+              category: 'NOT_FOUND',
+              reason:
+                'Book not found in Hardcover database after searching by identifiers and title/author',
+              suggestions: [
+                'Manually add this book to your Hardcover library first',
+                'Check if the ISBN/ASIN in Audiobookshelf metadata is correct',
+                'Try updating the book metadata in Audiobookshelf with corrected identifiers',
+                'Search for the book manually in Hardcover to see if it exists under a different title or edition',
+              ],
+              details: {
+                searchedIdentifiers:
+                  searchedIdentifiersList.join(', ') ||
+                  'No identifiers available',
+                titleSearched: title,
+                authorSearched: author,
+                dryRun: this.dryRun,
+              },
+            });
+          }
+
           if (this.globalConfig.force_sync) {
             logger.warn(
               `Force sync: Book ${title} not found in Hardcover database - attempted identifier and title/author searches`,
@@ -1854,8 +2021,81 @@ export class SyncManager {
         }
       }
 
-      // Add the first result to library
-      const edition = searchResults[0];
+      // Select best edition using unified scorer with sophisticated scoring
+      const {
+        detectUserBookFormat,
+        extractAudioDurationFromAudiobookshelf,
+        extractNarrator,
+      } = await import('./matching/utils/audiobookshelf-extractor.js');
+      const { selectBestEdition, PROFILES } = await import(
+        './matching/utils/unified-edition-scorer.js'
+      );
+
+      const sourceFormat = detectUserBookFormat(absBook);
+      const sourceDuration = extractAudioDurationFromAudiobookshelf(absBook);
+      const sourceNarrator = extractNarrator(absBook);
+
+      logger.debug(`Detected source metadata for auto-add`, {
+        title: title,
+        sourceFormat: sourceFormat,
+        sourceDuration: sourceDuration
+          ? Math.round(sourceDuration / 60) + 'm'
+          : 'N/A',
+        sourceNarrator: sourceNarrator || 'N/A',
+        totalEditions: searchResults.length,
+      });
+
+      // Use format-aware selection with TITLE_AUTHOR profile for consistency
+      // This ensures same book added via identifier or title/author uses same scoring
+      let edition;
+      if (searchResults.length > 1) {
+        const context = {
+          sourceFormat,
+          sourceDuration,
+          sourceNarrator,
+          profile: PROFILES.TITLE_AUTHOR, // Use sophisticated scoring
+        };
+
+        const result = selectBestEdition(searchResults, context);
+
+        if (result && result.edition) {
+          edition = result.edition;
+          logger.info(
+            `Selected best edition from ${searchResults.length} candidates`,
+            {
+              title: title,
+              selectedFormat: edition.format,
+              sourceFormat: sourceFormat,
+              editionId: edition.id,
+              score: result.score.toFixed(2),
+              scoreBreakdown: Object.entries(result.breakdown).reduce(
+                (acc, [key, value]) => {
+                  acc[key] =
+                    typeof value.score === 'number'
+                      ? value.score.toFixed(2)
+                      : value;
+                  return acc;
+                },
+                {},
+              ),
+            },
+          );
+        } else {
+          // No suitable edition found, fall back to first
+          edition = searchResults[0];
+          logger.warn(
+            `No suitable edition found via unified scorer, using first result`,
+            {
+              title: title,
+              editionId: edition.id,
+            },
+          );
+        }
+      } else {
+        // Only one result, use it
+        edition = searchResults[0];
+      }
+
       const bookId = edition.book.id;
       const editionId = edition.id;
 
@@ -1864,7 +2104,8 @@ export class SyncManager {
         hardcoverTitle: edition.book.title,
         bookId: bookId,
         editionId: editionId,
-        format: edition.format,
+        format: edition.format || edition.reading_format?.format,
+        sourceFormat: sourceFormat,
         dryRun: this.dryRun,
       });
 

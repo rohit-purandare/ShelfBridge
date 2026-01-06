@@ -1747,27 +1747,28 @@ export class HardcoverClient {
       if (result && result.books && result.books.length > 0) {
         const book = result.books[0];
         if (book.editions && book.editions.length > 0) {
-          // Sort editions by preference: preferred format first, then by user popularity
-          const sortedEditions = book.editions.sort((a, b) => {
-            // Prefer audiobook format if that's what we're looking for
-            const aIsPreferred = a.reading_format?.format === preferredFormat;
-            const bIsPreferred = b.reading_format?.format === preferredFormat;
+          // Use unified scorer for consistent edition selection
+          const { selectBestEdition, PROFILES } = await import('./matching/utils/unified-edition-scorer.js');
 
-            if (aIsPreferred && !bIsPreferred) return -1;
-            if (!aIsPreferred && bIsPreferred) return 1;
+          // Format mapper for reading_format field
+          const formatMapper = edition => edition.reading_format?.format || edition.physical_format;
 
-            // Then by user count (popularity)
-            return (b.users_count || 0) - (a.users_count || 0);
-          });
+          const context = {
+            sourceFormat: preferredFormat,
+            formatMapper,
+            profile: PROFILES.DEFAULT, // Simple selection for edition lookup
+          };
 
-          const bestEdition = sortedEditions[0];
+          const result = selectBestEdition(book.editions, context);
+
+          const bestEdition = result?.edition || book.editions[0];
 
           logger.debug(`Selected edition for book ${bookId}`, {
             bookTitle: book.title,
             editionId: bestEdition.id,
-            format:
-              bestEdition.reading_format?.format || bestEdition.physical_format,
+            format: formatMapper(bestEdition),
             usersCount: bestEdition.users_count,
+            score: result?.score?.toFixed(2) || 'N/A',
             totalEditions: book.editions.length,
           });
 
@@ -1784,6 +1785,7 @@ export class HardcoverClient {
               physical_format: bestEdition.physical_format,
               reading_format: bestEdition.reading_format,
               users_count: bestEdition.users_count,
+              format: formatMapper(bestEdition), // Add format field for consistency
             },
           };
         }

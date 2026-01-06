@@ -360,7 +360,7 @@ export class BookMatcher {
           if (strategy.getTier() <= 2 && match.userBook) {
             const sourceFormat = detectUserBookFormat(absBook);
             const matchType = match._matchType || 'identifier';
-            match = this._enhanceMatchWithLengthData(
+            match = await this._enhanceMatchWithLengthData(
               match,
               sourceFormat,
               matchType,
@@ -441,7 +441,7 @@ export class BookMatcher {
    * @returns {Object} - Enhanced match object or original if no better edition found
    * @private
    */
-  _enhanceMatchWithLengthData(
+  async _enhanceMatchWithLengthData(
     match,
     sourceFormat = null,
     matchType = 'identifier',
@@ -535,165 +535,55 @@ export class BookMatcher {
       hasLength,
     });
 
-    // Validate editions array (defensive programming)
-    if (!Array.isArray(book.editions)) {
-      logger.warn('Book editions is not an array, keeping original match', {
+    // Use unified scorer with STRICT profile for cross-edition enhancement
+    // STRICT profile requires 5-point minimum improvement to avoid lateral moves
+    const { selectBestEdition, PROFILES } = await import('./utils/unified-edition-scorer.js');
+
+    const context = {
+      sourceFormat,
+      profile: PROFILES.STRICT, // Requires 5-point minimum improvement
+      currentEdition,
+      formatMapper: this.formatMapper,
+    };
+
+    const result = selectBestEdition(book.editions, context);
+
+    // Check if we found a suitable upgrade
+    if (!result || !result.edition || !result.shouldUpgrade) {
+      logger.debug('No suitable edition upgrade found', {
         bookId: book.id,
-        editionsType: typeof book.editions,
+        currentEditionId: currentEdition.id,
+        reason: result
+          ? 'insufficient_improvement'
+          : 'no_valid_candidates',
+        totalEditions: book.editions.length,
       });
       return match;
     }
 
-    // Find all editions with length data (positive values only)
-    const editionsWithLength = book.editions.filter(edition => {
-      // Safety check: skip malformed editions
-      if (!edition || typeof edition !== 'object') {
-        return false;
-      }
-      return !!(
-        (edition.audio_seconds && edition.audio_seconds > 0) ||
-        (edition.pages && edition.pages > 0)
-      );
-    });
-
-    if (editionsWithLength.length === 0) {
-      logger.debug('No editions with length data found', {
-        bookId: book.id,
-        editionsChecked: book.editions.length,
-      });
-      return match;
-    }
-
-    // Score editions based on format match and data quality
-    const scoredEditions = editionsWithLength.map(edition => {
-      let score = 0;
-
-      // Apply format mapping if available
-      const editionWithFormat = this.formatMapper
-        ? { ...edition, format: this.formatMapper(edition) }
-        : edition;
-
-      const editionFormat = editionWithFormat.format;
-
-      // Prefer editions matching source format (40 points)
-      if (sourceFormat && editionFormat === sourceFormat) {
-        score += 40;
-      }
-
-      // Prefer editions with both audio_seconds AND pages (30 points)
-      if (edition.audio_seconds && edition.pages) {
-        score += 30;
-      } else if (edition.audio_seconds || edition.pages) {
-        score += 15; // Has at least one type of length data
-      }
-
-      // Prefer editions with more complete data (20 points max)
-      const completenessFields = [
-        'asin',
-        'isbn_10',
-        'isbn_13',
-        'format',
-        'users_count',
-      ];
-      const completeness = completenessFields.filter(
-        field => edition[field],
-      ).length;
-      score += (completeness / completenessFields.length) * 20;
-
-      // Prefer more popular editions (10 points max)
-      if (edition.users_count) {
-        score += Math.min(10, Math.log10(edition.users_count + 1));
-      }
-
-      return {
-        edition: editionWithFormat,
-        score,
-      };
-    });
-
-    // Sort by score descending
-    scoredEditions.sort((a, b) => b.score - a.score);
-
-    const bestEdition = scoredEditions[0];
-
-    // Safety check: ensure we have a valid scored edition
-    if (!bestEdition || !bestEdition.edition) {
-      logger.warn('Scoring returned invalid result, keeping original match', {
-        bookId: book.id,
-        scoredCount: scoredEditions.length,
-      });
-      return match;
-    }
-
-    // Calculate current edition's score for comparison (if it has length)
-    let currentEditionScore = 0;
-    if (hasLength) {
-      // Score current edition using same logic
-      if (formatMatches) currentEditionScore += 40;
-      if (currentEdition.audio_seconds && currentEdition.pages) {
-        currentEditionScore += 30;
-      } else if (currentEdition.audio_seconds || currentEdition.pages) {
-        currentEditionScore += 15;
-      }
-      const completenessFields = [
-        'asin',
-        'isbn_10',
-        'isbn_13',
-        'format',
-        'users_count',
-      ];
-      const completeness = completenessFields.filter(
-        field => currentEdition[field],
-      ).length;
-      currentEditionScore += (completeness / completenessFields.length) * 20;
-      if (currentEdition.users_count) {
-        currentEditionScore += Math.min(
-          10,
-          Math.log10(currentEdition.users_count + 1),
-        );
-      }
-    }
-
-    // Only upgrade if new edition is significantly better
-    // Require at least 5 point improvement to avoid lateral moves
-    const MIN_IMPROVEMENT = 5;
-    const improvement = bestEdition.score - currentEditionScore;
-
-    if (improvement < MIN_IMPROVEMENT) {
-      logger.debug('New edition not significantly better, keeping original', {
-        bookId: book.id,
-        currentScore: currentEditionScore.toFixed(2),
-        bestScore: bestEdition.score.toFixed(2),
-        improvement: improvement.toFixed(2),
-        minRequired: MIN_IMPROVEMENT,
-      });
-      return match;
-    }
-
-    logger.debug('Found better edition with length data', {
+    logger.debug('Found better edition via unified scorer', {
       bookId: book.id,
       originalEditionId: currentEdition.id,
-      newEditionId: bestEdition.edition.id,
-      currentScore: currentEditionScore.toFixed(2),
-      newScore: bestEdition.score.toFixed(2),
-      improvement: improvement.toFixed(2),
-      hasAudioSeconds: !!bestEdition.edition.audio_seconds,
-      hasPages: !!bestEdition.edition.pages,
-      formatMatch: bestEdition.edition.format === sourceFormat,
+      newEditionId: result.edition.id,
+      score: result.score.toFixed(2),
+      improvement: result.improvement.toFixed(2),
+      hasAudioSeconds: !!result.edition.audio_seconds,
+      hasPages: !!result.edition.pages,
+      formatMatch: result.edition.format === sourceFormat,
       matchType: `${matchType}_cross_edition_enriched`,
     });
 
     // Return enhanced match with better edition
     return {
       ...match,
-      edition: bestEdition.edition,
+      edition: result.edition,
       _originalEditionId: currentEdition.id,
       _matchType: `${matchType}_cross_edition_enriched`,
       _editionUpgraded: true,
       _upgradeReason: hasLength
         ? 'format_match_improvement'
         : 'length_data_enrichment',
-      _scoreImprovement: improvement,
+      _scoreImprovement: result.improvement,
     };
   }
 
