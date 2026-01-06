@@ -1728,6 +1728,37 @@ export class SyncManager {
         }
       }
 
+      // Check format compatibility after identifier search
+      if (searchResults.length > 0) {
+        const { detectUserBookFormat } =
+          await import('./matching/utils/audiobookshelf-extractor.js');
+        const sourceFormat = detectUserBookFormat(absBook);
+        const hasCompatibleFormat = this._checkFormatCompatibility(
+          searchResults,
+          sourceFormat,
+        );
+
+        if (!hasCompatibleFormat) {
+          logger.info(
+            `Format mismatch in identifier search for "${title}" - triggering title/author fallback`,
+            {
+              sourceFormat,
+              identifiersSearched: {
+                asin: identifiers.asin || 'N/A',
+                isbn: identifiers.isbn || 'N/A',
+              },
+              resultsCount: searchResults.length,
+              resultFormats: searchResults
+                .map(e => this._mapHardcoverFormatToInternal(e))
+                .join(', '),
+            },
+          );
+
+          // Clear search results to trigger title/author fallback
+          searchResults = [];
+        }
+      }
+
       if (searchResults.length === 0) {
         // Before trying title/author fallback, check if this book is already cached
         // This prevents duplicate title/author searches for previously matched books
@@ -3410,5 +3441,59 @@ export class SyncManager {
       );
       throw err;
     }
+  }
+
+  /**
+   * Check if two formats are compatible (not a major mismatch)
+   * @param {string} sourceFormat - Format from source ('audiobook' or 'ebook')
+   * @param {string} editionFormat - Format from edition ('audiobook', 'ebook', 'book')
+   * @returns {boolean} - True if formats are compatible
+   * @private
+   */
+  _areFormatsCompatible(sourceFormat, editionFormat) {
+    // Exact match
+    if (sourceFormat === editionFormat) {
+      return true;
+    }
+
+    // Audiobook and ebook are compatible (cross-digital)
+    if (
+      (sourceFormat === 'audiobook' && editionFormat === 'ebook') ||
+      (sourceFormat === 'ebook' && editionFormat === 'audiobook')
+    ) {
+      return true;
+    }
+
+    // Physical edition ('book') is NOT compatible with audiobook
+    if (sourceFormat === 'audiobook' && editionFormat === 'book') {
+      return false;
+    }
+
+    // Allow ebook → physical fallback (acceptable)
+    if (sourceFormat === 'ebook' && editionFormat === 'book') {
+      return true;
+    }
+
+    // Default to compatible for unknown formats
+    return true;
+  }
+
+  /**
+   * Check if any edition in search results has compatible format with source
+   * @param {Array} searchResults - Editions from identifier search
+   * @param {string} sourceFormat - Format from Audiobookshelf ('audiobook' or 'ebook')
+   * @returns {boolean} - True if at least one edition has compatible format
+   * @private
+   */
+  _checkFormatCompatibility(searchResults, sourceFormat) {
+    if (!sourceFormat || searchResults.length === 0) {
+      return true; // No format constraint or no results
+    }
+
+    // Check if ANY edition has compatible format
+    return searchResults.some(edition => {
+      const editionFormat = this._mapHardcoverFormatToInternal(edition);
+      return this._areFormatsCompatible(sourceFormat, editionFormat);
+    });
   }
 }
