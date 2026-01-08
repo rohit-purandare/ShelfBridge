@@ -375,6 +375,28 @@ export function selectBestEdition(editions, context = {}) {
     profile: profile.name,
   });
 
+  // Also log key selection info at INFO level
+  logger.info('Edition selected by unified scorer', {
+    editionId: bestScoredEdition.edition.id,
+    score: bestScoredEdition.score.toFixed(1),
+    formatMatch: `${context.sourceFormat || 'N/A'} → ${bestScoredEdition.edition.format || 'N/A'}`,
+    scoringProfile: profile.name,
+    totalEditions: editions.length,
+    breakdown: {
+      format: bestScoredEdition.breakdown.format?.score?.toFixed(1) || 'N/A',
+      popularity:
+        bestScoredEdition.breakdown.popularity?.score?.toFixed(1) || 'N/A',
+      duration:
+        bestScoredEdition.breakdown.duration?.score?.toFixed(1) || 'N/A',
+      narrator:
+        bestScoredEdition.breakdown.narrator?.score?.toFixed(1) || 'N/A',
+      completeness:
+        bestScoredEdition.breakdown.completeness?.score?.toFixed(1) || 'N/A',
+      lengthData:
+        bestScoredEdition.breakdown.lengthData?.score?.toFixed(1) || 'N/A',
+    },
+  });
+
   return {
     edition: bestScoredEdition.edition,
     score: bestScoredEdition.score,

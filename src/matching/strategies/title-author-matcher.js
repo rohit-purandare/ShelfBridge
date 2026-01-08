@@ -406,6 +406,9 @@ export class TitleAuthorMatcher {
           editionFormat:
             selectedEditionResult.edition.reading_format?.format ||
             selectedEditionResult.edition.physical_format,
+          editionScore: selectedEditionResult.score?.toFixed(1),
+          narratorMatch: selectedEditionResult.narratorName || 'N/A',
+          editionSelectionBreakdown: selectedEditionResult.selectionReason,
         });
 
         // Detailed breakdown for debugging
