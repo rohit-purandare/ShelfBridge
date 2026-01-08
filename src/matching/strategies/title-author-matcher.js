@@ -499,6 +499,7 @@ export class TitleAuthorMatcher {
             _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
             _editionSelectionResult: selectedEditionResult,
             _needsScoring: false, // Already scored in two stages
+            _isSearchResult: !existingUserBook, // true if needs auto-add, false if already in library
           };
         }
 
