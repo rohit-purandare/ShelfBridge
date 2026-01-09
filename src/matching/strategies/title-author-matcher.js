@@ -814,7 +814,7 @@ export class TitleAuthorMatcher {
    * @returns {string} - Strategy name
    */
   getName() {
-    return 'Title/Author Matcher';
+    return 'title_author';
   }
 
   /**

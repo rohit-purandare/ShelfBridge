@@ -637,6 +637,35 @@ export class BookMatcher {
   }
 
   /**
+   * Find book match using title/author strategy with user library context
+   * Useful for auto-add scenarios where we need library duplicate detection
+   *
+   * @param {Object} absBook - Audiobookshelf book object
+   * @param {string} userId - User ID for caching
+   * @returns {Promise<Object|null>} - Match object or null
+   */
+  async findMatchByTitleAuthor(absBook, userId) {
+    // Find the TitleAuthorMatcher strategy (Tier 3)
+    const titleAuthorStrategy = this.strategies.find(
+      s => s.getName && s.getName() === 'title_author',
+    );
+
+    if (!titleAuthorStrategy) {
+      logger.warn('TitleAuthorMatcher strategy not found in BookMatcher');
+      return null;
+    }
+
+    // Call findMatch WITH library lookup functions
+    // This enables duplicate detection during auto-add
+    return await titleAuthorStrategy.findMatch(
+      absBook,
+      userId,
+      this.findUserBookByEditionId.bind(this),
+      this.findUserBookByBookId.bind(this),
+    );
+  }
+
+  /**
    * Get matching statistics
    * @returns {Object} - Statistics about matching strategies
    */

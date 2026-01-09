@@ -1832,24 +1832,47 @@ export class SyncManager {
 
         if (!this.dryRun) {
           try {
-            // Use existing TitleAuthorMatcher instead of duplicating logic
-            const { TitleAuthorMatcher } =
-              await import('./matching/strategies/title-author-matcher.js');
-            const titleAuthorMatcher = new TitleAuthorMatcher(
-              this.hardcover,
-              this.cache,
-              this.globalConfig,
-            );
-
-            // Use the existing findMatch method for search results (not user library lookup)
-            const titleAuthorMatch = await titleAuthorMatcher.findMatch(
-              absBook,
-              this.userId,
-              null, // No user library lookup needed for auto-add
-              null,
-            );
+            // Use BookMatcher's title/author matching with library context
+            // This enables duplicate detection and "Want to Read" update logic
+            const titleAuthorMatch =
+              await this.bookMatcher.findMatchByTitleAuthor(
+                absBook,
+                this.userId,
+              );
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
+              // Final duplicate check: verify book isn't already in library
+              // This protects against race conditions or multiple match paths
+              const bookId = titleAuthorMatch.book?.id;
+
+              if (bookId && this.hardcoverBooks) {
+                const existingUserBook = this.hardcoverBooks.find(
+                  ub => ub.book?.id === bookId,
+                );
+
+                if (existingUserBook) {
+                  logger.info(
+                    `Auto-add skipped: User already has "${title}" in library`,
+                    {
+                      existingEditionId: existingUserBook.edition_id,
+                      selectedEditionId: titleAuthorMatch.edition?.id,
+                      existingStatus: existingUserBook.status_id,
+                      bookId: bookId,
+                    },
+                  );
+
+                  // Book already exists - return skip status
+                  // The book will be handled by normal sync flow instead
+                  return {
+                    status: 'skipped',
+                    reason: `Already in library (edition ${existingUserBook.edition_id})`,
+                    title,
+                    userBookId: existingUserBook.id,
+                    editionId: existingUserBook.edition_id,
+                  };
+                }
+              }
+
               // Determine the match type for logging
               const matchType =
                 titleAuthorMatch._matchType === 'asin_search_result'
