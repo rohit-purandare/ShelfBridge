@@ -1712,19 +1712,31 @@ export class SyncManager {
       } else {
         // Search for the book by ISBN or ASIN (only in non-dry-run mode)
         if (identifiers.asin) {
-          logger.debug(`Searching Hardcover by ASIN: ${identifiers.asin}`);
+          logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`);
           searchResults = await this.hardcover.searchBooksByAsin(
             identifiers.asin,
           );
-          logger.debug(`ASIN search returned ${searchResults.length} results`);
+          logger.info(`ASIN search returned ${searchResults.length} results`, {
+            results: searchResults.map(r => ({
+              id: r.id,
+              format: r.reading_format?.format || r.physical_format,
+              title: r.book?.title,
+            })),
+          });
         }
 
         if (searchResults.length === 0 && identifiers.isbn) {
-          logger.debug(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
+          logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
           searchResults = await this.hardcover.searchBooksByIsbn(
             identifiers.isbn,
           );
-          logger.debug(`ISBN search returned ${searchResults.length} results`);
+          logger.info(`ISBN search returned ${searchResults.length} results`, {
+            results: searchResults.map(r => ({
+              id: r.id,
+              format: r.reading_format?.format || r.physical_format,
+              title: r.book?.title,
+            })),
+          });
         }
       }
 
