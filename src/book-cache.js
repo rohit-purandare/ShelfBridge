@@ -1214,6 +1214,66 @@ export class BookCache {
     }
   }
 
+  /**
+   * Delete cached book(s) by title
+   * @param {string} title - The book title to delete
+   * @param {string|null} userId - Optional user ID to filter by
+   * @returns {Promise<number>} Number of books deleted
+   */
+  async deleteByTitle(title, userId = null) {
+    await this.init();
+
+    try {
+      let query = 'DELETE FROM books WHERE title = ?';
+      const params = [title];
+
+      if (userId) {
+        query += ' AND user_id = ?';
+        params.push(userId);
+      }
+
+      const stmt = this.db.prepare(query);
+      const result = stmt.run(...params);
+
+      logger.info(`Deleted ${result.changes} book(s) with title "${title}"`);
+      return result.changes;
+    } catch (err) {
+      logger.error(`Error deleting book by title: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Delete cached book(s) by edition ID
+   * @param {number} editionId - The edition ID to delete
+   * @param {string|null} userId - Optional user ID to filter by
+   * @returns {Promise<number>} Number of books deleted
+   */
+  async deleteByEdition(editionId, userId = null) {
+    await this.init();
+
+    try {
+      let query = 'DELETE FROM books WHERE edition_id = ?';
+      const params = [editionId];
+
+      if (userId) {
+        query += ' AND user_id = ?';
+        params.push(userId);
+      }
+
+      const stmt = this.db.prepare(query);
+      const result = stmt.run(...params);
+
+      logger.info(
+        `Deleted ${result.changes} book(s) with edition ID ${editionId}`,
+      );
+      return result.changes;
+    } catch (err) {
+      logger.error(`Error deleting book by edition ID: ${err.message}`);
+      throw err;
+    }
+  }
+
   async getCacheStats() {
     await this.init(); // Ensure database is initialized
 

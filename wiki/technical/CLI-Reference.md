@@ -211,10 +211,12 @@ shelfbridge cache [options]
 **Options:**
 | Option | Description | Example |
 |--------|-------------|---------|
-| `--clear` | Clear all cached data | `cache --clear` |
+| `--clear` | Clear entire cache | `cache --clear` |
 | `--stats` | Show cache statistics | `cache --stats` |
 | `--show` | Show detailed cache contents | `cache --show` |
 | `--export <filename>` | Export cache to JSON | `cache --export backup.json` |
+| `--delete-title <title>` | Delete cached book by exact title | `cache --delete-title "Iron Gold"` |
+| `--delete-edition <editionId>` | Delete cached book by edition ID | `cache --delete-edition 31660744` |
 
 **Examples:**
 
@@ -222,10 +224,19 @@ shelfbridge cache [options]
 # Show cache statistics
 shelfbridge cache --stats
 
+# View all cached books with their edition IDs
+shelfbridge cache --show
+
+# Delete a specific book by title
+shelfbridge cache --delete-title "Iron Gold"
+
+# Delete a specific book by edition ID
+shelfbridge cache --delete-edition 31660744
+
 # Export cache for backup
 shelfbridge cache --export backup-2024-01-15.json
 
-# Clear cache (will trigger full resync)
+# Clear entire cache (will trigger full resync)
 shelfbridge cache --clear
 ```
 
