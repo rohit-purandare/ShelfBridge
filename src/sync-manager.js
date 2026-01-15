@@ -1957,12 +1957,18 @@ export class SyncManager {
                 }
               } else {
                 // Convert the match to the expected searchResults format for auto-add
+                // Include all metadata fields for consistency with other search paths
                 searchResults = [
                   {
                     id: titleAuthorMatch.edition.id,
                     book:
                       titleAuthorMatch.book || titleAuthorMatch.edition.book,
                     format: titleAuthorMatch.edition.format,
+                    asin: titleAuthorMatch.edition.asin,
+                    isbn_10: titleAuthorMatch.edition.isbn_10,
+                    isbn_13: titleAuthorMatch.edition.isbn_13,
+                    pages: titleAuthorMatch.edition.pages,
+                    audio_seconds: titleAuthorMatch.edition.audio_seconds,
                   },
                 ];
               }
