@@ -1960,7 +1960,8 @@ export class SyncManager {
                 searchResults = [
                   {
                     id: titleAuthorMatch.edition.id,
-                    book: titleAuthorMatch.edition.book,
+                    book:
+                      titleAuthorMatch.book || titleAuthorMatch.edition.book,
                     format: titleAuthorMatch.edition.format,
                   },
                 ];
