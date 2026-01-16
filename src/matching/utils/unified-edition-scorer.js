@@ -685,15 +685,16 @@ function calculateDataScore(edition) {
     return 50; // Neutral score when unavailable
   }
 
-  // Normalize to 0-100 scale for our scoring system
-  // Higher Hardcover scores get mapped to higher normalized scores
-  // Using logarithmic scale to handle scores that can exceed 100
   const rawScore = Math.max(0, edition.score);
 
-  // Normalize: scores typically range 0-200+, map to 0-100
-  // Use a formula that gives good distribution:
-  // score 0 = 0, score 50 = 50, score 100 = 75, score 200+ = 100
-  const normalized = Math.min(100, (rawScore / (rawScore + 100)) * 150);
+  // Linear scaling: assume typical max score is ~2000
+  // Score 0 = 0, Score 1000 = 50, Score 2000 = 100
+  // This preserves the full range and differentiation
+  // Examples:
+  //   Score 1650: 82.5
+  //   Score 930: 46.5
+  //   Score 100: 5.0
+  const normalized = Math.min(100, (rawScore / 2000) * 100);
 
   return normalized;
 }
