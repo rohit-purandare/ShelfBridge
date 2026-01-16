@@ -429,6 +429,8 @@ export function selectBestEdition(editions, context = {}) {
         bestScoredEdition.breakdown.completeness?.score?.toFixed(1) || 'N/A',
       lengthData:
         bestScoredEdition.breakdown.lengthData?.score?.toFixed(1) || 'N/A',
+      dataScore:
+        bestScoredEdition.breakdown.dataScore?.score?.toFixed(1) || 'N/A',
     },
   });
 

@@ -1794,6 +1794,7 @@ export class HardcoverClient {
               users_count: bestEdition.users_count,
               format: formatMapper(bestEdition), // Add format field for consistency
             },
+            score: result?.score,
           };
         }
       }
