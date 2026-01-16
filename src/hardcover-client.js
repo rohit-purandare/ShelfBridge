@@ -140,7 +140,7 @@ export class HardcoverClient {
                                 audio_seconds
                                 physical_format
                                 reading_format { format }
-                                data_score
+                                score
                                 contributions {
                                     author {
                                         id
