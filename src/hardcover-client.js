@@ -140,6 +140,7 @@ export class HardcoverClient {
                                 audio_seconds
                                 physical_format
                                 reading_format { format }
+                                data_score
                                 contributions {
                                     author {
                                         id
@@ -888,6 +889,7 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    score
                     contributions {
                         author {
                             id
@@ -933,6 +935,7 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    score
                     contributions {
                         author {
                             id
@@ -1554,6 +1557,7 @@ export class HardcoverClient {
             reading_format { format }
             pages
             audio_seconds
+            score
             contributions {
               author {
                 id
@@ -1732,6 +1736,7 @@ export class HardcoverClient {
             audio_seconds
             physical_format
             reading_format { format }
+            score
             users_count
             users_read_count
           }

@@ -37,9 +37,10 @@ export const PROFILES = {
     name: 'DEFAULT',
     weights: {
       format: 0.4, // 40% - format match most important
-      lengthData: 0.3, // 30% - having duration/pages data
-      popularity: 0.2, // 20% - user count
+      lengthData: 0.25, // 25% - having duration/pages data
+      popularity: 0.15, // 15% - user count
       completeness: 0.1, // 10% - metadata completeness
+      dataScore: 0.1, // 10% - Hardcover data quality score
     },
     minImprovement: 0, // No minimum threshold
     requireLengthData: false, // Don't filter out editions without length
@@ -55,9 +56,10 @@ export const PROFILES = {
     name: 'TITLE_AUTHOR',
     weights: {
       format: 0.4, // 40% - format match
-      popularity: 0.23, // 23% - user count
-      duration: 0.19, // 19% - duration similarity (audiobooks)
-      completeness: 0.15, // 15% - metadata completeness
+      popularity: 0.2, // 20% - user count
+      duration: 0.17, // 17% - duration similarity (audiobooks)
+      completeness: 0.13, // 13% - metadata completeness
+      dataScore: 0.07, // 7% - Hardcover data quality score
       narrator: 0.03, // 3% - narrator match (audiobooks)
     },
     bonuses: {
@@ -77,9 +79,10 @@ export const PROFILES = {
     name: 'STRICT',
     weights: {
       format: 0.4,
-      lengthData: 0.3,
-      popularity: 0.2,
+      lengthData: 0.25,
+      popularity: 0.15,
       completeness: 0.1,
+      dataScore: 0.1,
     },
     minImprovement: 5, // Require 5-point improvement to upgrade
     requireLengthData: false,
@@ -210,6 +213,21 @@ export function scoreEdition(edition, context = {}) {
   };
 
   // ==========================================================================
+  // DATA SCORE (Hardcover data quality metric)
+  // ==========================================================================
+
+  if (profile.weights.dataScore) {
+    const dataScoreValue = calculateDataScore(edition);
+    const dataScoreWeight = profile.weights.dataScore;
+    score += dataScoreValue * dataScoreWeight;
+    breakdown.dataScore = {
+      score: dataScoreValue,
+      weight: dataScoreWeight,
+      value: edition.score || 'N/A',
+    };
+  }
+
+  // ==========================================================================
   // NARRATOR MATCHING (for TITLE_AUTHOR profile, audiobooks only)
   // ==========================================================================
 
@@ -331,8 +349,25 @@ export function selectBestEdition(editions, context = {}) {
     scoreEdition(edition, context),
   );
 
-  // Sort by score descending
-  scoredEditions.sort((a, b) => b.score - a.score);
+  // Sort by score descending, with Hardcover score as tie-breaker
+  scoredEditions.sort((a, b) => {
+    // Primary sort: by overall score
+    if (Math.abs(a.score - b.score) > 0.01) {
+      return b.score - a.score;
+    }
+
+    // Tie-breaker 1: Hardcover score (higher is better)
+    const aDataScore = a.edition.score || 0;
+    const bDataScore = b.edition.score || 0;
+    if (aDataScore !== bDataScore) {
+      return bDataScore - aDataScore;
+    }
+
+    // Tie-breaker 2: popularity (higher is better)
+    const aUsers = a.edition.users_count || 0;
+    const bUsers = b.edition.users_count || 0;
+    return bUsers - aUsers;
+  });
 
   const bestScoredEdition = scoredEditions[0];
 
@@ -630,6 +665,37 @@ function calculateCompletenessScore(edition) {
 
   // Average the scores, with a minimum baseline
   return Math.max(40, (score / factors) * (factors / 6)); // Normalize to 6 total factors
+}
+
+// ============================================================================
+// Helper Functions: Data Score
+// ============================================================================
+
+/**
+ * Calculate score based on Hardcover's score field
+ * score is Hardcover's internal quality metric (integer, can exceed 100)
+ * Higher scores indicate more complete and accurate metadata
+ *
+ * @param {Object} edition - Edition to score
+ * @returns {number} - Normalized score (0-100 for our scoring system)
+ */
+function calculateDataScore(edition) {
+  // If score is not available, return a neutral score
+  if (!edition.score && edition.score !== 0) {
+    return 50; // Neutral score when unavailable
+  }
+
+  // Normalize to 0-100 scale for our scoring system
+  // Higher Hardcover scores get mapped to higher normalized scores
+  // Using logarithmic scale to handle scores that can exceed 100
+  const rawScore = Math.max(0, edition.score);
+
+  // Normalize: scores typically range 0-200+, map to 0-100
+  // Use a formula that gives good distribution:
+  // score 0 = 0, score 50 = 50, score 100 = 75, score 200+ = 100
+  const normalized = Math.min(100, (rawScore / (rawScore + 100)) * 150);
+
+  return normalized;
 }
 
 // ============================================================================
