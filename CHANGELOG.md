@@ -5,6 +5,40 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.5...v1.23.0) (2026-01-19)
+
+
+### ## 🚀 Features
+
+* add cross-edition enhancement for identifier matches ([186843e](https://github.com/rohit-purandare/ShelfBridge/commit/186843e697b2383ac04de0f4a14876e0f9c90666))
+* add dataScore to logs and fix editionScore undefined issue ([3878fb4](https://github.com/rohit-purandare/ShelfBridge/commit/3878fb4e139fde2c4ae7434b7bf928b500e2320a))
+* add format-aware fallback triggering for auto-add ([2820a2c](https://github.com/rohit-purandare/ShelfBridge/commit/2820a2cd1caa0883c31945ac0948c2bc3b1848cb))
+* add Hardcover score field to edition scoring and tie-breaking ([a250691](https://github.com/rohit-purandare/ShelfBridge/commit/a250691f0944dbdfd1cd46033a0856a07f514aee))
+* add narrator and edition scoring details to INFO logs ([9e51e1b](https://github.com/rohit-purandare/ShelfBridge/commit/9e51e1bf68c870e78a47dc2c3bcfce9e7c766a27))
+* add selective cache deletion by title or edition ID ([c537dc0](https://github.com/rohit-purandare/ShelfBridge/commit/c537dc0ea1431d8eb05bd2d0b17cfb2f48aaadcd))
+* elevate ASIN/ISBN search logging to INFO level for diagnostics ([aa44b4b](https://github.com/rohit-purandare/ShelfBridge/commit/aa44b4b82c6725d0a23ef21895ff556e20d17a1f))
+* improve Audiobookshelf server error logging with troubleshooting hints ([e24a610](https://github.com/rohit-purandare/ShelfBridge/commit/e24a61067b2f7c265d0ec13bb72d0ebcaaf0dc98))
+
+
+### ## 🔧 Bug Fixes
+
+* correct field name in getUserBooks query (data_score → score) ([53e1d6b](https://github.com/rohit-purandare/ShelfBridge/commit/53e1d6b3aa4cdb7c02a9e4e82c0b8bc3258a16b3))
+* correct score normalization to differentiate high-quality editions ([653bea3](https://github.com/rohit-purandare/ShelfBridge/commit/653bea30cecdd39b96b48be9872cb0fc2d0adf88))
+* ensure consistent searchResults format across all auto-add paths ([12b1330](https://github.com/rohit-purandare/ShelfBridge/commit/12b1330177a7e7065ecf9d606106c67b203ff375))
+* ensure Want to Read status updates even when progress unchanged ([a898723](https://github.com/rohit-purandare/ShelfBridge/commit/a8987237fe36c3b9edb46b1ae3cd47b2231df01e))
+* format mismatch detection and robust fallback logic ([0597623](https://github.com/rohit-purandare/ShelfBridge/commit/05976231493ee715e80f01acbda452e768d7caa2))
+* handle missing book property in title/author match during auto-add ([791ff12](https://github.com/rohit-purandare/ShelfBridge/commit/791ff120fa1457c2725a9b7ef5159bfa87dd1b72))
+* pass result parameter through auto-add call chain for failed books tracking ([ef5805c](https://github.com/rohit-purandare/ShelfBridge/commit/ef5805c8b55d07e2aaecae58e1f1a47846b456ff))
+* prioritize editions with length data in ASIN/ISBN matching ([71c3112](https://github.com/rohit-purandare/ShelfBridge/commit/71c311207825dea3d9c63a3084368238eb4afa9c))
+* resolve ESLint error - declare result variable in proper scope ([1d31449](https://github.com/rohit-purandare/ShelfBridge/commit/1d31449f8900950b99738139eb566bfb1b38e392))
+* set _isSearchResult flag in title/author two-stage matching ([3895169](https://github.com/rohit-purandare/ShelfBridge/commit/38951693e92aed96e6e93428d5c53583189ca636))
+
+
+### ## ♻️ Code Refactoring
+
+* create unified edition scorer with comprehensive scoring ([6a090a2](https://github.com/rohit-purandare/ShelfBridge/commit/6a090a297a7ea74feb0d26214edf6236a5d00cc2))
+* eliminate duplicate TitleAuthorMatcher instantiation and add library-aware auto-add ([e01943a](https://github.com/rohit-purandare/ShelfBridge/commit/e01943a6315cfb7830dbdec9b6378c99d6d46d76))
+
 ## [1.22.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.4...v1.22.5) (2025-12-29)
 
 
