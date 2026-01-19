@@ -111,6 +111,10 @@ export class SyncManager {
       errors: [],
       timing: {},
       book_details: [], // Add detailed book results
+      failed_books: [], // Track books that failed to match or auto-add
+      books_not_found: 0,
+      books_match_rejected: 0,
+      books_already_in_library: 0,
     };
 
     try {
@@ -245,6 +249,27 @@ export class SyncManager {
         },
         book_breakdown: this._generateBookBreakdown(result.book_details),
       });
+
+      // Write failed books report to separate log file
+      if (result.failed_books && result.failed_books.length > 0) {
+        const { FailedBooksReporter } =
+          await import('./failed-books-reporter.js');
+        const reportPath = FailedBooksReporter.writeReport(
+          result.failed_books,
+          {
+            books_not_found: result.books_not_found,
+            books_match_rejected: result.books_match_rejected,
+            books_already_in_library: result.books_already_in_library,
+          },
+        );
+
+        if (reportPath) {
+          console.log(
+            `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+          );
+        }
+      }
+
       console.log(
         `\n✅ Sync complete for user: ${this.userId} in ${duration.toFixed(1)}s`,
       );
@@ -256,6 +281,33 @@ export class SyncManager {
         user_id: this.userId,
       });
       result.errors.push(error.message);
+
+      // Write failed books report even if sync failed
+      if (result.failed_books && result.failed_books.length > 0) {
+        try {
+          const { FailedBooksReporter } =
+            await import('./failed-books-reporter.js');
+          const reportPath = FailedBooksReporter.writeReport(
+            result.failed_books,
+            {
+              books_not_found: result.books_not_found,
+              books_match_rejected: result.books_match_rejected,
+              books_already_in_library: result.books_already_in_library,
+            },
+          );
+
+          if (reportPath) {
+            console.log(
+              `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+            );
+          }
+        } catch (reportError) {
+          logger.warn('Failed to write failed books report', {
+            error: reportError.message,
+          });
+        }
+      }
+
       console.log(
         `\n❌ Sync failed for user: ${this.userId}: ${error.message}`,
       );
@@ -449,11 +501,64 @@ export class SyncManager {
     }
   }
 
+  /**
+   * Track a book that failed to match or auto-add
+   * @param {Object} result - The sync result object to update
+   * @param {Object} bookInfo - Information about the failed book
+   * @param {string} bookInfo.title - Book title
+   * @param {string} bookInfo.author - Book author
+   * @param {Object} bookInfo.identifiers - Book identifiers (isbn, isbn10, asin)
+   * @param {string} bookInfo.category - Failure category (NOT_FOUND, MATCH_REJECTED, ALREADY_IN_LIBRARY)
+   * @param {string} bookInfo.reason - Detailed reason for failure
+   * @param {Array<string>} bookInfo.suggestions - Actionable suggestions for the user
+   * @param {Object} bookInfo.details - Additional category-specific details
+   */
+  _trackFailedBook(result, bookInfo) {
+    const failedBook = {
+      title: bookInfo.title || 'Unknown Title',
+      author: bookInfo.author || 'Unknown Author',
+      identifiers: {
+        isbn:
+          bookInfo.identifiers?.isbn || bookInfo.identifiers?.isbn13 || null,
+        isbn10: bookInfo.identifiers?.isbn10 || null,
+        asin: bookInfo.identifiers?.asin || null,
+      },
+      category: bookInfo.category,
+      reason: bookInfo.reason,
+      suggestions: bookInfo.suggestions || [],
+      details: bookInfo.details || {},
+    };
+
+    result.failed_books.push(failedBook);
+
+    // Update category counters
+    switch (bookInfo.category) {
+      case 'NOT_FOUND':
+        result.books_not_found++;
+        break;
+      case 'MATCH_REJECTED':
+        result.books_match_rejected++;
+        break;
+      case 'ALREADY_IN_LIBRARY':
+        result.books_already_in_library++;
+        break;
+    }
+
+    logger.debug(`Tracked failed book: ${failedBook.title}`, {
+      category: bookInfo.category,
+      reason: bookInfo.reason,
+    });
+  }
+
   async _syncBooksParallel(booksToProcess, result, sessionData) {
     const promises = booksToProcess.map(book =>
       this.taskQueue.enqueue(
         async () => {
-          const syncResult = await this._syncSingleBook(book, sessionData);
+          const syncResult = await this._syncSingleBook(
+            book,
+            sessionData,
+            result,
+          );
           // Update shared result as soon as each book finishes
           this._updateResult(result, syncResult);
           return syncResult;
@@ -482,7 +587,7 @@ export class SyncManager {
         );
       }
 
-      const syncResult = await this._syncSingleBook(book, sessionData);
+      const syncResult = await this._syncSingleBook(book, sessionData, result);
       this._updateResult(result, syncResult);
     }
   }
@@ -495,7 +600,7 @@ export class SyncManager {
     return chunks;
   }
 
-  async _syncSingleBook(absBook, sessionData) {
+  async _syncSingleBook(absBook, sessionData, result = null) {
     const startTime = performance.now();
 
     // Extract basic metadata first (lightweight operation) to enable early progress checking
@@ -1205,6 +1310,7 @@ export class SyncManager {
         identifiers,
         title,
         author,
+        result,
       );
       syncResult.status = autoAddResult.status;
       syncResult.reason = autoAddResult.reason;
@@ -1431,24 +1537,35 @@ export class SyncManager {
       };
     }
 
-    // Check if progress has changed (unless force sync is enabled)
+    // Check if book needs sync (status, progress, edition, or session changes)
     if (!this.globalConfig.force_sync) {
-      const hasChanged = await this.cache.hasProgressChanged(
+      const syncCheck = await this.cache.needsSyncCheck(
         this.userId,
         identifier,
         title,
         progressPercent,
         identifierType,
+        hardcoverMatch.edition?.id,
       );
 
-      if (!hasChanged) {
-        logger.debug(`Skipping ${title}: Progress unchanged`);
+      if (!syncCheck.needsSync) {
+        logger.debug(`Skipping ${title}: ${syncCheck.reason}`);
         syncResult.status = 'skipped';
-        syncResult.reason = 'Progress unchanged';
+        syncResult.reason = syncCheck.reason;
         syncResult.timing = performance.now() - startTime;
         return syncResult;
-      } else {
-        syncResult.progress_changed = true;
+      }
+
+      // Log what triggered the sync
+      if (syncCheck.changes.statusChanged) {
+        logger.info(
+          `${title}: Status check triggered sync (Want to Read → Currently Reading)`,
+        );
+      }
+      if (syncCheck.changes.editionChanged) {
+        logger.info(`${title}: Edition change detected, forcing sync`);
+      }
+      if (syncCheck.changes.progressChanged) {
         // Log progress change details for debugging
         const previousProgress = await this.cache.getLastProgress(
           this.userId,
@@ -1463,6 +1580,8 @@ export class SyncManager {
         );
         logger.debug(`Progress change detected for ${title}`, changeAnalysis);
       }
+
+      syncResult.progress_changed = syncCheck.changes.progressChanged;
     } else {
       syncResult.progress_changed = true;
     }
@@ -1528,6 +1647,7 @@ export class SyncManager {
       identifier,
       title,
       author,
+      result,
     );
 
     // Merge results
@@ -1563,7 +1683,7 @@ export class SyncManager {
     return syncResult;
   }
 
-  async _tryAutoAddBook(absBook, identifiers, title, author) {
+  async _tryAutoAddBook(absBook, identifiers, title, author, result = null) {
     logger.info(`Attempting to auto-add ${title} to Hardcover`, {
       identifiers: identifiers,
       title: title,
@@ -1592,19 +1712,62 @@ export class SyncManager {
       } else {
         // Search for the book by ISBN or ASIN (only in non-dry-run mode)
         if (identifiers.asin) {
-          logger.debug(`Searching Hardcover by ASIN: ${identifiers.asin}`);
+          logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`);
           searchResults = await this.hardcover.searchBooksByAsin(
             identifiers.asin,
           );
-          logger.debug(`ASIN search returned ${searchResults.length} results`);
+          logger.info(`ASIN search returned ${searchResults.length} results`, {
+            results: searchResults.map(r => ({
+              id: r.id,
+              format: r.reading_format?.format || r.physical_format,
+              title: r.book?.title,
+            })),
+          });
         }
 
         if (searchResults.length === 0 && identifiers.isbn) {
-          logger.debug(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
+          logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
           searchResults = await this.hardcover.searchBooksByIsbn(
             identifiers.isbn,
           );
-          logger.debug(`ISBN search returned ${searchResults.length} results`);
+          logger.info(`ISBN search returned ${searchResults.length} results`, {
+            results: searchResults.map(r => ({
+              id: r.id,
+              format: r.reading_format?.format || r.physical_format,
+              title: r.book?.title,
+            })),
+          });
+        }
+      }
+
+      // Check format compatibility after identifier search
+      if (searchResults.length > 0) {
+        const { detectUserBookFormat } =
+          await import('./matching/utils/audiobookshelf-extractor.js');
+        const sourceFormat = detectUserBookFormat(absBook);
+        const hasCompatibleFormat = this._checkFormatCompatibility(
+          searchResults,
+          sourceFormat,
+        );
+
+        if (!hasCompatibleFormat) {
+          logger.info(
+            `Format mismatch in identifier search for "${title}" - triggering title/author fallback`,
+            {
+              sourceFormat,
+              identifiersSearched: {
+                asin: identifiers.asin || 'N/A',
+                isbn: identifiers.isbn || 'N/A',
+              },
+              resultsCount: searchResults.length,
+              resultFormats: searchResults
+                .map(e => this._mapHardcoverFormatToInternal(e))
+                .join(', '),
+            },
+          );
+
+          // Clear search results to trigger title/author fallback
+          searchResults = [];
         }
       }
 
@@ -1669,24 +1832,47 @@ export class SyncManager {
 
         if (!this.dryRun) {
           try {
-            // Use existing TitleAuthorMatcher instead of duplicating logic
-            const { TitleAuthorMatcher } =
-              await import('./matching/strategies/title-author-matcher.js');
-            const titleAuthorMatcher = new TitleAuthorMatcher(
-              this.hardcover,
-              this.cache,
-              this.globalConfig,
-            );
-
-            // Use the existing findMatch method for search results (not user library lookup)
-            const titleAuthorMatch = await titleAuthorMatcher.findMatch(
-              absBook,
-              this.userId,
-              null, // No user library lookup needed for auto-add
-              null,
-            );
+            // Use BookMatcher's title/author matching with library context
+            // This enables duplicate detection and "Want to Read" update logic
+            const titleAuthorMatch =
+              await this.bookMatcher.findMatchByTitleAuthor(
+                absBook,
+                this.userId,
+              );
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
+              // Final duplicate check: verify book isn't already in library
+              // This protects against race conditions or multiple match paths
+              const bookId = titleAuthorMatch.book?.id;
+
+              if (bookId && this.hardcoverBooks) {
+                const existingUserBook = this.hardcoverBooks.find(
+                  ub => ub.book?.id === bookId,
+                );
+
+                if (existingUserBook) {
+                  logger.info(
+                    `Auto-add skipped: User already has "${title}" in library`,
+                    {
+                      existingEditionId: existingUserBook.edition_id,
+                      selectedEditionId: titleAuthorMatch.edition?.id,
+                      existingStatus: existingUserBook.status_id,
+                      bookId: bookId,
+                    },
+                  );
+
+                  // Book already exists - return skip status
+                  // The book will be handled by normal sync flow instead
+                  return {
+                    status: 'skipped',
+                    reason: `Already in library (edition ${existingUserBook.edition_id})`,
+                    title,
+                    userBookId: existingUserBook.id,
+                    editionId: existingUserBook.edition_id,
+                  };
+                }
+              }
+
               // Determine the match type for logging
               const matchType =
                 titleAuthorMatch._matchType === 'asin_search_result'
@@ -1771,15 +1957,26 @@ export class SyncManager {
                 }
               } else {
                 // Convert the match to the expected searchResults format for auto-add
+                // Include all metadata fields for consistency with other search paths
                 searchResults = [
                   {
                     id: titleAuthorMatch.edition.id,
-                    book: titleAuthorMatch.edition.book,
+                    book:
+                      titleAuthorMatch.book || titleAuthorMatch.edition.book,
                     format: titleAuthorMatch.edition.format,
+                    asin: titleAuthorMatch.edition.asin,
+                    isbn_10: titleAuthorMatch.edition.isbn_10,
+                    isbn_13: titleAuthorMatch.edition.isbn_13,
+                    pages: titleAuthorMatch.edition.pages,
+                    audio_seconds: titleAuthorMatch.edition.audio_seconds,
                   },
                 ];
               }
             } else {
+              const failureReason = !titleAuthorMatch
+                ? 'No matches found in title/author search'
+                : 'Book already exists in your Hardcover library';
+
               logger.info(
                 `Auto-add title/author fallback failed for "${title}"`,
                 {
@@ -1788,11 +1985,35 @@ export class SyncManager {
                   matchFound: !!titleAuthorMatch,
                   isSearchResult: titleAuthorMatch?._isSearchResult || false,
                   matchType: titleAuthorMatch?._matchType || 'N/A',
-                  reason: !titleAuthorMatch
-                    ? 'No matches found in title/author search'
-                    : 'Match found but not suitable for auto-add (likely already in library)',
+                  reason: failureReason,
                 },
               );
+
+              // Track this failure for reporting
+              if (
+                result &&
+                titleAuthorMatch &&
+                !titleAuthorMatch._isSearchResult
+              ) {
+                this._trackFailedBook(result, {
+                  title,
+                  author,
+                  identifiers,
+                  category: 'ALREADY_IN_LIBRARY',
+                  reason:
+                    'Book exists in your Hardcover library but identifiers (ISBN/ASIN) do not match between Audiobookshelf and Hardcover',
+                  suggestions: [
+                    'Update the ISBN/ASIN in Hardcover to match your Audiobookshelf metadata',
+                    'Or update the metadata in Audiobookshelf to match the edition in Hardcover',
+                    'Check if you have the correct edition selected in Hardcover',
+                  ],
+                  details: {
+                    matchType: titleAuthorMatch._matchType,
+                    titleMatched: title,
+                    authorMatched: author,
+                  },
+                });
+              }
             }
           } catch (titleAuthorError) {
             logger.warn(
@@ -1806,6 +2027,40 @@ export class SyncManager {
 
         // If still no results after all attempts
         if (searchResults.length === 0) {
+          // Track this failure for reporting
+          if (result) {
+            const searchedIdentifiersList = [];
+            if (identifiers.isbn)
+              searchedIdentifiersList.push(`ISBN: ${identifiers.isbn}`);
+            if (identifiers.isbn10)
+              searchedIdentifiersList.push(`ISBN-10: ${identifiers.isbn10}`);
+            if (identifiers.asin)
+              searchedIdentifiersList.push(`ASIN: ${identifiers.asin}`);
+
+            this._trackFailedBook(result, {
+              title,
+              author,
+              identifiers,
+              category: 'NOT_FOUND',
+              reason:
+                'Book not found in Hardcover database after searching by identifiers and title/author',
+              suggestions: [
+                'Manually add this book to your Hardcover library first',
+                'Check if the ISBN/ASIN in Audiobookshelf metadata is correct',
+                'Try updating the book metadata in Audiobookshelf with corrected identifiers',
+                'Search for the book manually in Hardcover to see if it exists under a different title or edition',
+              ],
+              details: {
+                searchedIdentifiers:
+                  searchedIdentifiersList.join(', ') ||
+                  'No identifiers available',
+                titleSearched: title,
+                authorSearched: author,
+                dryRun: this.dryRun,
+              },
+            });
+          }
+
           if (this.globalConfig.force_sync) {
             logger.warn(
               `Force sync: Book ${title} not found in Hardcover database - attempted identifier and title/author searches`,
@@ -1841,8 +2096,80 @@ export class SyncManager {
         }
       }
 
-      // Add the first result to library
-      const edition = searchResults[0];
+      // Select best edition using unified scorer with sophisticated scoring
+      const {
+        detectUserBookFormat,
+        extractAudioDurationFromAudiobookshelf,
+        extractNarrator,
+      } = await import('./matching/utils/audiobookshelf-extractor.js');
+      const { selectBestEdition, PROFILES } =
+        await import('./matching/utils/unified-edition-scorer.js');
+
+      const sourceFormat = detectUserBookFormat(absBook);
+      const sourceDuration = extractAudioDurationFromAudiobookshelf(absBook);
+      const sourceNarrator = extractNarrator(absBook);
+
+      logger.debug(`Detected source metadata for auto-add`, {
+        title: title,
+        sourceFormat: sourceFormat,
+        sourceDuration: sourceDuration
+          ? Math.round(sourceDuration / 60) + 'm'
+          : 'N/A',
+        sourceNarrator: sourceNarrator || 'N/A',
+        totalEditions: searchResults.length,
+      });
+
+      // Use format-aware selection with TITLE_AUTHOR profile for consistency
+      // This ensures same book added via identifier or title/author uses same scoring
+      let edition;
+      if (searchResults.length > 1) {
+        const context = {
+          sourceFormat,
+          sourceDuration,
+          sourceNarrator,
+          profile: PROFILES.TITLE_AUTHOR, // Use sophisticated scoring
+        };
+
+        const result = selectBestEdition(searchResults, context);
+
+        if (result && result.edition) {
+          edition = result.edition;
+          logger.info(
+            `Selected best edition from ${searchResults.length} candidates`,
+            {
+              title: title,
+              selectedFormat: edition.format,
+              sourceFormat: sourceFormat,
+              editionId: edition.id,
+              score: result.score.toFixed(2),
+              scoreBreakdown: Object.entries(result.breakdown).reduce(
+                (acc, [key, value]) => {
+                  acc[key] =
+                    typeof value.score === 'number'
+                      ? value.score.toFixed(2)
+                      : value;
+                  return acc;
+                },
+                {},
+              ),
+            },
+          );
+        } else {
+          // No suitable edition found, fall back to first
+          edition = searchResults[0];
+          logger.warn(
+            `No suitable edition found via unified scorer, using first result`,
+            {
+              title: title,
+              editionId: edition.id,
+            },
+          );
+        }
+      } else {
+        // Only one result, use it
+        edition = searchResults[0];
+      }
+
       const bookId = edition.book.id;
       const editionId = edition.id;
 
@@ -1851,7 +2178,8 @@ export class SyncManager {
         hardcoverTitle: edition.book.title,
         bookId: bookId,
         editionId: editionId,
-        format: edition.format,
+        format: edition.format || edition.reading_format?.format,
+        sourceFormat: sourceFormat,
         dryRun: this.dryRun,
       });
 
@@ -1920,6 +2248,8 @@ export class SyncManager {
             currentProgress, // Use actual current progress instead of 0
             absBook.last_listened_at,
             absBook.started_at,
+            2, // Auto-added books start with "Currently Reading" status
+            editionId, // Store edition_id for cache comparison
           );
 
           // If there's meaningful progress, immediately sync it to Hardcover
@@ -2024,6 +2354,7 @@ export class SyncManager {
     _identifier,
     title,
     author,
+    result = null,
   ) {
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
@@ -2042,7 +2373,13 @@ export class SyncManager {
         asin: edition?.asin,
       };
 
-      return await this._tryAutoAddBook(absBook, identifiers, title, author);
+      return await this._tryAutoAddBook(
+        absBook,
+        identifiers,
+        title,
+        author,
+        result,
+      );
     }
 
     logger.debug(`Syncing existing book: ${title}`, {
@@ -2522,6 +2859,8 @@ export class SyncManager {
             absBook.last_listened_at,
             absBook.started_at,
             absBook.finished_at,
+            3, // Completed books have status "Read"
+            edition.id, // Store edition_id for cache comparison
           );
 
           await transaction.commit();
@@ -2735,6 +3074,9 @@ export class SyncManager {
         });
 
         try {
+          // Extract status from result
+          const statusId = result._statusInfo?.currentStatusId || null;
+
           // Store progress data using helper method to avoid scoping issues
           await this._storeProgressData(
             identifierValue,
@@ -2744,6 +3086,8 @@ export class SyncManager {
             edition.id,
             progressPercent,
             absBook,
+            statusId,
+            edition.id, // Pass edition_id for cache comparison
           );
 
           await transaction.commit();
@@ -2959,6 +3303,8 @@ export class SyncManager {
     editionId,
     progressPercent,
     absBook,
+    statusId = null,
+    hardcoverEditionId = null,
   ) {
     logger.debug(`Caching progress data for ${title}`, {
       identifier: identifierValue,
@@ -2976,6 +3322,8 @@ export class SyncManager {
       progressPercent,
       absBook.last_listened_at,
       absBook.started_at,
+      statusId,
+      hardcoverEditionId,
     );
   }
 
@@ -3089,9 +3437,11 @@ export class SyncManager {
     identifierType,
   ) {
     try {
+      let result = null;
+
       if (!this.dryRun) {
         // Update reading progress on Hardcover
-        const result = await this.hardcover.updateReadingProgress(
+        result = await this.hardcover.updateReadingProgress(
           hardcoverMatch.userBookId,
           progressPercent,
           progressPercent,
@@ -3112,6 +3462,9 @@ export class SyncManager {
         );
       }
 
+      // Extract status from result if available
+      const statusId = result?._statusInfo?.currentStatusId || null;
+
       // Store the final progress in cache
       await this.cache.storeProgress(
         this.userId,
@@ -3121,6 +3474,8 @@ export class SyncManager {
         identifierType,
         mockBook.last_listened_at,
         mockBook.started_at,
+        statusId, // Status retrieved from updateReadingProgress result
+        hardcoverMatch.edition?.id, // Store edition_id for cache comparison
       );
     } catch (err) {
       logger.error(
@@ -3128,5 +3483,59 @@ export class SyncManager {
       );
       throw err;
     }
+  }
+
+  /**
+   * Check if two formats are compatible (not a major mismatch)
+   * @param {string} sourceFormat - Format from source ('audiobook' or 'ebook')
+   * @param {string} editionFormat - Format from edition ('audiobook', 'ebook', 'book')
+   * @returns {boolean} - True if formats are compatible
+   * @private
+   */
+  _areFormatsCompatible(sourceFormat, editionFormat) {
+    // Exact match
+    if (sourceFormat === editionFormat) {
+      return true;
+    }
+
+    // Audiobook and ebook are compatible (cross-digital)
+    if (
+      (sourceFormat === 'audiobook' && editionFormat === 'ebook') ||
+      (sourceFormat === 'ebook' && editionFormat === 'audiobook')
+    ) {
+      return true;
+    }
+
+    // Physical edition ('book') is NOT compatible with audiobook
+    if (sourceFormat === 'audiobook' && editionFormat === 'book') {
+      return false;
+    }
+
+    // Allow ebook → physical fallback (acceptable)
+    if (sourceFormat === 'ebook' && editionFormat === 'book') {
+      return true;
+    }
+
+    // Default to compatible for unknown formats
+    return true;
+  }
+
+  /**
+   * Check if any edition in search results has compatible format with source
+   * @param {Array} searchResults - Editions from identifier search
+   * @param {string} sourceFormat - Format from Audiobookshelf ('audiobook' or 'ebook')
+   * @returns {boolean} - True if at least one edition has compatible format
+   * @private
+   */
+  _checkFormatCompatibility(searchResults, sourceFormat) {
+    if (!sourceFormat || searchResults.length === 0) {
+      return true; // No format constraint or no results
+    }
+
+    // Check if ANY edition has compatible format
+    return searchResults.some(edition => {
+      const editionFormat = this._mapHardcoverFormatToInternal(edition);
+      return this._areFormatsCompatible(sourceFormat, editionFormat);
+    });
   }
 }

@@ -95,6 +95,87 @@ export class AudiobookshelfClient {
     }
   }
 
+  /**
+   * Format server error with user-friendly message and troubleshooting hints
+   * @param {Error} error - The error object
+   * @param {string} context - Context of what was being attempted
+   * @returns {object} Formatted error information
+   */
+  _formatServerError(error, context) {
+    const statusCode = error.response?.status;
+    const errorInfo = {
+      context,
+      error: error.message,
+      statusCode,
+    };
+
+    // Add user-friendly explanation based on status code
+    if (statusCode === 502) {
+      errorInfo.issue = 'Audiobookshelf server is unreachable (Bad Gateway)';
+      errorInfo.troubleshooting = [
+        'Check if Audiobookshelf server is running',
+        'Check if reverse proxy (nginx, Cloudflare Tunnel, etc.) is configured correctly',
+        'Verify network connectivity between ShelfBridge and Audiobookshelf',
+        'Check Audiobookshelf server logs for errors',
+      ];
+    } else if (statusCode === 503) {
+      errorInfo.issue =
+        'Audiobookshelf server is temporarily unavailable (Service Unavailable)';
+      errorInfo.troubleshooting = [
+        'Server may be starting up or restarting',
+        'Check if server is overloaded',
+        'Wait a few moments and try again',
+        'Check Audiobookshelf server logs',
+      ];
+    } else if (statusCode === 504) {
+      errorInfo.issue =
+        'Audiobookshelf server request timed out (Gateway Timeout)';
+      errorInfo.troubleshooting = [
+        'Server may be overloaded or unresponsive',
+        'Check Audiobookshelf server performance',
+        'Check if database is locked or slow',
+        'Increase timeout settings if needed',
+      ];
+    } else if (statusCode === 500) {
+      errorInfo.issue = 'Audiobookshelf server encountered an internal error';
+      errorInfo.troubleshooting = [
+        'Check Audiobookshelf server logs for error details',
+        'Server may have a bug or database issue',
+        'Try restarting Audiobookshelf server',
+      ];
+    } else if (statusCode >= 400 && statusCode < 500) {
+      errorInfo.issue = 'Request error (client-side issue)';
+      errorInfo.troubleshooting = [
+        'Check authentication token is valid',
+        'Check API endpoint URL is correct',
+        'Verify permissions and access rights',
+      ];
+    } else if (error.code === 'ECONNREFUSED') {
+      errorInfo.issue = 'Connection refused - server not accepting connections';
+      errorInfo.troubleshooting = [
+        'Check if Audiobookshelf server is running',
+        'Verify server URL and port are correct',
+        'Check firewall settings',
+      ];
+    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      errorInfo.issue = 'Connection timed out';
+      errorInfo.troubleshooting = [
+        'Check network connectivity',
+        'Server may be slow or overloaded',
+        'Increase timeout settings if needed',
+      ];
+    } else {
+      errorInfo.issue = 'Audiobookshelf server communication error';
+      errorInfo.troubleshooting = [
+        'Check server status and logs',
+        'Verify network connectivity',
+        'Check configuration',
+      ];
+    }
+
+    return errorInfo;
+  }
+
   async testConnection() {
     try {
       const response = await this._makeRequest('GET', '/ping');
@@ -318,10 +399,11 @@ export class AudiobookshelfClient {
 
       return booksToSync;
     } catch (error) {
-      logger.error('Error fetching reading progress', {
-        error: error.message,
-        stack: error.stack,
-      });
+      const errorInfo = this._formatServerError(
+        error,
+        'Failed to fetch reading progress from Audiobookshelf',
+      );
+      logger.error('AUDIOBOOKSHELF SERVER ERROR', errorInfo);
       return [];
     }
   }
@@ -332,10 +414,11 @@ export class AudiobookshelfClient {
       return response;
     } catch (error) {
       // User info failure is always critical - re-throw
-      logger.error('Critical error getting current user', {
-        error: error.message,
-        stack: error.stack,
-      });
+      const errorInfo = this._formatServerError(
+        error,
+        'Failed to get current user from Audiobookshelf',
+      );
+      logger.error('AUDIOBOOKSHELF SERVER ERROR', errorInfo);
       throw error;
     }
   }

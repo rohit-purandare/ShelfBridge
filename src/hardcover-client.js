@@ -140,6 +140,7 @@ export class HardcoverClient {
                                 audio_seconds
                                 physical_format
                                 reading_format { format }
+                                score
                                 contributions {
                                     author {
                                         id
@@ -244,9 +245,13 @@ export class HardcoverClient {
     // Check for existing progress (still used for re-read detection and regression checks)
     const progressInfo = await this.getBookCurrentProgress(userBookId);
 
+    // Track status for return value
+    let currentStatusId = progressInfo?.user_book?.status_id || null;
+    let statusWasUpdated = false;
+
     // If book is in "Want to Read" status, update to "Currently Reading"
     // Status IDs: 1 = Want to Read, 2 = Currently Reading, 3 = Read (Completed)
-    if (progressInfo?.user_book?.status_id === 1) {
+    if (currentStatusId === 1) {
       logger.info(
         'Book status is "Want to Read", updating to "Currently Reading" (status_id: 2)',
         {
@@ -256,6 +261,8 @@ export class HardcoverClient {
         },
       );
       await this.updateBookStatus(userBookId, 2);
+      currentStatusId = 2;
+      statusWasUpdated = true;
     }
 
     // Enhanced re-reading detection
@@ -276,13 +283,21 @@ export class HardcoverClient {
       const startDate = startedAt
         ? startedAt.slice(0, 10)
         : new Date().toISOString().slice(0, 10);
-      return await this.insertUserBookRead(
+      const result = await this.insertUserBookRead(
         userBookId,
         currentProgress,
         editionId,
         startDate,
         useSeconds,
       );
+      // Include status information in the response
+      return {
+        ...result,
+        _statusInfo: {
+          currentStatusId,
+          statusWasUpdated,
+        },
+      };
     }
 
     // Check for potentially dangerous progress regression
@@ -368,7 +383,14 @@ export class HardcoverClient {
           logger.debug(
             `Updated progress - start date now: ${updatedRecord.started_at}`,
           );
-          return updatedRecord;
+          // Include status information in the response
+          return {
+            ...updatedRecord,
+            _statusInfo: {
+              currentStatusId,
+              statusWasUpdated,
+            },
+          };
         }
         // Check for reading_format related errors in the response
         if (
@@ -401,13 +423,21 @@ export class HardcoverClient {
       const startDate = startedAt
         ? startedAt.slice(0, 10)
         : new Date().toISOString().slice(0, 10);
-      return await this.insertUserBookRead(
+      const result = await this.insertUserBookRead(
         userBookId,
         currentProgress,
         editionId,
         startDate,
         useSeconds,
       );
+      // Include status information in the response
+      return {
+        ...result,
+        _statusInfo: {
+          currentStatusId,
+          statusWasUpdated,
+        },
+      };
     }
   }
 
@@ -859,6 +889,7 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    score
                     contributions {
                         author {
                             id
@@ -904,6 +935,7 @@ export class HardcoverClient {
                     audio_seconds
                     physical_format
                     reading_format { format }
+                    score
                     contributions {
                         author {
                             id
@@ -1525,6 +1557,7 @@ export class HardcoverClient {
             reading_format { format }
             pages
             audio_seconds
+            score
             contributions {
               author {
                 id
@@ -1703,6 +1736,7 @@ export class HardcoverClient {
             audio_seconds
             physical_format
             reading_format { format }
+            score
             users_count
             users_read_count
           }
@@ -1718,27 +1752,30 @@ export class HardcoverClient {
       if (result && result.books && result.books.length > 0) {
         const book = result.books[0];
         if (book.editions && book.editions.length > 0) {
-          // Sort editions by preference: preferred format first, then by user popularity
-          const sortedEditions = book.editions.sort((a, b) => {
-            // Prefer audiobook format if that's what we're looking for
-            const aIsPreferred = a.reading_format?.format === preferredFormat;
-            const bIsPreferred = b.reading_format?.format === preferredFormat;
+          // Use unified scorer for consistent edition selection
+          const { selectBestEdition, PROFILES } =
+            await import('./matching/utils/unified-edition-scorer.js');
 
-            if (aIsPreferred && !bIsPreferred) return -1;
-            if (!aIsPreferred && bIsPreferred) return 1;
+          // Format mapper for reading_format field
+          const formatMapper = edition =>
+            edition.reading_format?.format || edition.physical_format;
 
-            // Then by user count (popularity)
-            return (b.users_count || 0) - (a.users_count || 0);
-          });
+          const context = {
+            sourceFormat: preferredFormat,
+            formatMapper,
+            profile: PROFILES.DEFAULT, // Simple selection for edition lookup
+          };
 
-          const bestEdition = sortedEditions[0];
+          const result = selectBestEdition(book.editions, context);
+
+          const bestEdition = result?.edition || book.editions[0];
 
           logger.debug(`Selected edition for book ${bookId}`, {
             bookTitle: book.title,
             editionId: bestEdition.id,
-            format:
-              bestEdition.reading_format?.format || bestEdition.physical_format,
+            format: formatMapper(bestEdition),
             usersCount: bestEdition.users_count,
+            score: result?.score?.toFixed(2) || 'N/A',
             totalEditions: book.editions.length,
           });
 
@@ -1755,7 +1792,9 @@ export class HardcoverClient {
               physical_format: bestEdition.physical_format,
               reading_format: bestEdition.reading_format,
               users_count: bestEdition.users_count,
+              format: formatMapper(bestEdition), // Add format field for consistency
             },
+            score: result?.score,
           };
         }
       }

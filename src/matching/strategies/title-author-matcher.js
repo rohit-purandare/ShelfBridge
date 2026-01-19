@@ -406,6 +406,9 @@ export class TitleAuthorMatcher {
           editionFormat:
             selectedEditionResult.edition.reading_format?.format ||
             selectedEditionResult.edition.physical_format,
+          editionScore: selectedEditionResult.score?.toFixed(1),
+          narratorMatch: selectedEditionResult.narratorName || 'N/A',
+          editionSelectionBreakdown: selectedEditionResult.selectionReason,
         });
 
         // Detailed breakdown for debugging
@@ -499,6 +502,7 @@ export class TitleAuthorMatcher {
             _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
             _editionSelectionResult: selectedEditionResult,
             _needsScoring: false, // Already scored in two stages
+            _isSearchResult: !existingUserBook, // true if needs auto-add, false if already in library
           };
         }
 
@@ -810,7 +814,7 @@ export class TitleAuthorMatcher {
    * @returns {string} - Strategy name
    */
   getName() {
-    return 'Title/Author Matcher';
+    return 'title_author';
   }
 
   /**

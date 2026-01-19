@@ -15,6 +15,7 @@ import { TitleAuthorMatcher } from './strategies/title-author-matcher.js';
 import {
   extractTitle,
   extractAuthor,
+  detectUserBookFormat,
 } from './utils/audiobookshelf-extractor.js';
 import { normalizeIsbn, normalizeAsin } from './utils/text-matching.js';
 
@@ -166,6 +167,50 @@ export class BookMatcher {
       return { identifierLookup, editionLookup, bookLookup };
     }
 
+    /**
+     * Helper function to check if an edition has length data
+     * @param {Object} edition - Edition object
+     * @returns {boolean} - True if edition has audio_seconds or pages
+     */
+    const hasLengthData = edition => {
+      return !!(
+        (edition.audio_seconds && edition.audio_seconds > 0) ||
+        (edition.pages && edition.pages > 0)
+      );
+    };
+
+    /**
+     * Helper function to determine if we should store this edition in the identifier lookup
+     * Prioritizes editions with length data (audio_seconds or pages)
+     * @param {string} identifier - The normalized identifier (ISBN/ASIN)
+     * @param {Object} newEdition - The edition we're considering adding
+     * @returns {boolean} - True if we should store/overwrite with this edition
+     */
+    const shouldStoreEdition = (identifier, newEdition) => {
+      const existing = identifierLookup[identifier];
+
+      // No existing entry - always store
+      if (!existing) {
+        return true;
+      }
+
+      const newHasLength = hasLengthData(newEdition);
+      const existingHasLength = hasLengthData(existing.edition);
+
+      // Prioritize editions with length data
+      if (newHasLength && !existingHasLength) {
+        return true; // Replace existing with better edition
+      }
+
+      // Keep existing if it has length data and new one doesn't
+      if (!newHasLength && existingHasLength) {
+        return false;
+      }
+
+      // Both have length data or both don't - keep existing (first found)
+      return false;
+    };
+
     // Single pass through library data to build all tables
     for (const userBook of this.userLibraryData) {
       const book = userBook.book;
@@ -189,7 +234,10 @@ export class BookMatcher {
         // Add ISBN-10
         if (edition.isbn_10) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_10);
-          if (normalizedIsbn) {
+          if (
+            normalizedIsbn &&
+            shouldStoreEdition(normalizedIsbn, editionWithFormat)
+          ) {
             identifierLookup[normalizedIsbn] = {
               userBook,
               edition: editionWithFormat,
@@ -200,7 +248,10 @@ export class BookMatcher {
         // Add ISBN-13
         if (edition.isbn_13) {
           const normalizedIsbn = normalizeIsbn(edition.isbn_13);
-          if (normalizedIsbn) {
+          if (
+            normalizedIsbn &&
+            shouldStoreEdition(normalizedIsbn, editionWithFormat)
+          ) {
             identifierLookup[normalizedIsbn] = {
               userBook,
               edition: editionWithFormat,
@@ -211,7 +262,10 @@ export class BookMatcher {
         // Add ASIN
         if (edition.asin) {
           const normalizedAsin = normalizeAsin(edition.asin);
-          if (normalizedAsin) {
+          if (
+            normalizedAsin &&
+            shouldStoreEdition(normalizedAsin, editionWithFormat)
+          ) {
             identifierLookup[normalizedAsin] = {
               userBook,
               edition: editionWithFormat,
@@ -302,6 +356,17 @@ export class BookMatcher {
         }
 
         if (match) {
+          // Enhance identifier matches with cross-edition search for length data
+          if (strategy.getTier() <= 2 && match.userBook) {
+            const sourceFormat = detectUserBookFormat(absBook);
+            const matchType = match._matchType || 'identifier';
+            match = await this._enhanceMatchWithLengthData(
+              match,
+              sourceFormat,
+              matchType,
+            );
+          }
+
           logger.debug(
             `✅ Match found using ${strategy.getName()} for "${extractedMetadata.title}"`,
             {
@@ -311,6 +376,7 @@ export class BookMatcher {
               userBookId: match.userBook?.id,
               editionId: match.edition?.id,
               confidence: match._matchingScore?.totalScore || 'N/A',
+              editionUpgraded: match._editionUpgraded || false,
             },
           );
 
@@ -368,6 +434,159 @@ export class BookMatcher {
   }
 
   /**
+   * Enhance identifier match by finding a better edition with length data if needed
+   * @param {Object} match - The initial match object
+   * @param {string} sourceFormat - The format from the source book (audiobook/ebook)
+   * @param {string} matchType - Type of match (asin/isbn)
+   * @returns {Object} - Enhanced match object or original if no better edition found
+   * @private
+   */
+  async _enhanceMatchWithLengthData(
+    match,
+    sourceFormat = null,
+    matchType = 'identifier',
+  ) {
+    // If no match or no userBook, return as-is
+    if (!match || !match.userBook) {
+      return match;
+    }
+
+    const currentEdition = match.edition;
+
+    // Check if current edition has length data (positive values only)
+    const hasLength = !!(
+      (currentEdition?.audio_seconds && currentEdition.audio_seconds > 0) ||
+      (currentEdition?.pages && currentEdition.pages > 0)
+    );
+
+    // Apply format mapping if available (with error handling)
+    let currentEditionFormat;
+    try {
+      currentEditionFormat = this.formatMapper
+        ? this.formatMapper(currentEdition)
+        : currentEdition?.format;
+    } catch (error) {
+      logger.warn('Format mapper error, falling back to direct format', {
+        error: error.message,
+        editionId: currentEdition?.id,
+      });
+      currentEditionFormat = currentEdition?.format;
+    }
+
+    // Check if format matches source (handle undefined formats gracefully)
+    const formatMatches =
+      sourceFormat &&
+      currentEditionFormat &&
+      currentEditionFormat === sourceFormat;
+
+    if (hasLength && formatMatches) {
+      // Current edition has length data AND format matches - optimal match
+      logger.debug(
+        'Current edition already has length data and format matches',
+        {
+          editionId: currentEdition.id,
+          format: currentEditionFormat,
+          sourceFormat: sourceFormat,
+          hasAudioSeconds: !!currentEdition.audio_seconds,
+          hasPages: !!currentEdition.pages,
+        },
+      );
+      return match;
+    }
+
+    // If we get here, either:
+    // 1. No length data (need to find edition with length), OR
+    // 2. Has length but wrong format (need to find better format match)
+    if (hasLength && !formatMatches) {
+      logger.debug('Current edition has length but format mismatch', {
+        editionId: currentEdition.id,
+        currentFormat: currentEditionFormat,
+        sourceFormat: sourceFormat,
+        reason: 'searching_for_better_format_match',
+      });
+    }
+
+    // Search for better edition (either with length data or better format match)
+    const book = match.userBook.book;
+
+    if (!book || !book.editions || book.editions.length <= 1) {
+      // No other editions to check
+      logger.debug(
+        'No alternative editions available for cross-edition search',
+        {
+          bookId: book?.id,
+          editionCount: book?.editions?.length || 0,
+        },
+      );
+      return match;
+    }
+
+    const searchReason = hasLength ? 'format_mismatch' : 'missing_length_data';
+
+    logger.debug('Searching for better edition', {
+      bookId: book.id,
+      bookTitle: book.title,
+      currentEditionId: currentEdition.id,
+      currentFormat: currentEditionFormat,
+      totalEditions: book.editions.length,
+      sourceFormat,
+      matchType,
+      searchReason,
+      hasLength,
+    });
+
+    // Use unified scorer with STRICT profile for cross-edition enhancement
+    // STRICT profile requires 5-point minimum improvement to avoid lateral moves
+    const { selectBestEdition, PROFILES } =
+      await import('./utils/unified-edition-scorer.js');
+
+    const context = {
+      sourceFormat,
+      profile: PROFILES.STRICT, // Requires 5-point minimum improvement
+      currentEdition,
+      formatMapper: this.formatMapper,
+    };
+
+    const result = selectBestEdition(book.editions, context);
+
+    // Check if we found a suitable upgrade
+    if (!result || !result.edition || !result.shouldUpgrade) {
+      logger.debug('No suitable edition upgrade found', {
+        bookId: book.id,
+        currentEditionId: currentEdition.id,
+        reason: result ? 'insufficient_improvement' : 'no_valid_candidates',
+        totalEditions: book.editions.length,
+      });
+      return match;
+    }
+
+    logger.debug('Found better edition via unified scorer', {
+      bookId: book.id,
+      originalEditionId: currentEdition.id,
+      newEditionId: result.edition.id,
+      score: result.score.toFixed(2),
+      improvement: result.improvement.toFixed(2),
+      hasAudioSeconds: !!result.edition.audio_seconds,
+      hasPages: !!result.edition.pages,
+      formatMatch: result.edition.format === sourceFormat,
+      matchType: `${matchType}_cross_edition_enriched`,
+    });
+
+    // Return enhanced match with better edition
+    return {
+      ...match,
+      edition: result.edition,
+      _originalEditionId: currentEdition.id,
+      _matchType: `${matchType}_cross_edition_enriched`,
+      _editionUpgraded: true,
+      _upgradeReason: hasLength
+        ? 'format_match_improvement'
+        : 'length_data_enrichment',
+      _scoreImprovement: result.improvement,
+    };
+  }
+
+  /**
    * Set the user library data for book matching
    * @param {Array} userLibraryData - User's Hardcover library data
    * @param {Function} formatMapper - Function to map edition formats (optional)
@@ -415,6 +634,35 @@ export class BookMatcher {
   findUserBookByBookId(bookId) {
     const { bookLookup } = this._getLookupTables();
     return bookLookup[bookId] || null;
+  }
+
+  /**
+   * Find book match using title/author strategy with user library context
+   * Useful for auto-add scenarios where we need library duplicate detection
+   *
+   * @param {Object} absBook - Audiobookshelf book object
+   * @param {string} userId - User ID for caching
+   * @returns {Promise<Object|null>} - Match object or null
+   */
+  async findMatchByTitleAuthor(absBook, userId) {
+    // Find the TitleAuthorMatcher strategy (Tier 3)
+    const titleAuthorStrategy = this.strategies.find(
+      s => s.getName && s.getName() === 'title_author',
+    );
+
+    if (!titleAuthorStrategy) {
+      logger.warn('TitleAuthorMatcher strategy not found in BookMatcher');
+      return null;
+    }
+
+    // Call findMatch WITH library lookup functions
+    // This enables duplicate detection during auto-add
+    return await titleAuthorStrategy.findMatch(
+      absBook,
+      userId,
+      this.findUserBookByEditionId.bind(this),
+      this.findUserBookByBookId.bind(this),
+    );
   }
 
   /**

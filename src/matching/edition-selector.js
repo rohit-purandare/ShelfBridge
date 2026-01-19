@@ -78,7 +78,11 @@ export function selectBestEdition(
 
   const bestEdition = sortedEditions[0];
 
-  logger.debug(`Selected edition for "${bookResult.title}"`, {
+  // Extract narrator from the selected edition
+  const selectedNarrator = extractNarratorFromSearchResult(bestEdition);
+
+  // Log edition selection at INFO level with narrator details
+  logger.info(`Selected edition for "${bookResult.title}"`, {
     editionId: bestEdition.id,
     format:
       bestEdition.reading_format?.format ||
@@ -86,12 +90,45 @@ export function selectBestEdition(
       'unknown',
     usersCount: bestEdition.users_count,
     score: bestEdition._editionScore.totalScore.toFixed(1),
-    scoreBreakdown: bestEdition._editionScore.breakdown,
+    narratorMatch: selectedNarrator || 'N/A',
     totalEditions: editions.length,
+    scoreBreakdown: {
+      format: {
+        score: bestEdition._editionScore.breakdown.format?.score?.toFixed(1),
+        match: `${bestEdition._editionScore.breakdown.format?.userFormat} → ${bestEdition._editionScore.breakdown.format?.editionFormat}`,
+      },
+      popularity: {
+        score:
+          bestEdition._editionScore.breakdown.popularity?.score?.toFixed(1),
+        users: bestEdition._editionScore.breakdown.popularity?.usersCount,
+      },
+      duration: {
+        score: bestEdition._editionScore.breakdown.duration?.score?.toFixed(1),
+        match: `${bestEdition._editionScore.breakdown.duration?.targetDuration} → ${bestEdition._editionScore.breakdown.duration?.editionDuration}`,
+      },
+      narrator: {
+        score: bestEdition._editionScore.breakdown.narrator?.score?.toFixed(1),
+        match: `${bestEdition._editionScore.breakdown.narrator?.targetNarrator} → ${bestEdition._editionScore.breakdown.narrator?.editionNarrator}`,
+      },
+      completeness: {
+        score:
+          bestEdition._editionScore.breakdown.completeness?.score?.toFixed(1),
+        reason: bestEdition._editionScore.breakdown.completeness?.reason,
+      },
+    },
   });
 
-  // Extract narrator from the selected edition
-  const selectedNarrator = extractNarratorFromSearchResult(bestEdition);
+  logger.debug(`Full edition selection details for "${bookResult.title}"`, {
+    editionId: bestEdition.id,
+    format:
+      bestEdition.reading_format?.format ||
+      bestEdition.physical_format ||
+      'unknown',
+    usersCount: bestEdition.users_count,
+    score: bestEdition._editionScore.totalScore.toFixed(1),
+    fullBreakdown: bestEdition._editionScore.breakdown,
+    totalEditions: editions.length,
+  });
 
   return {
     bookId: bookResult.id,

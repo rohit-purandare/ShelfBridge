@@ -13,10 +13,15 @@ export class CacheCommand extends BaseCommand {
 
   addOptions(command) {
     command
-      .option('--clear', 'Clear cache')
+      .option('--clear', 'Clear entire cache')
       .option('--stats', 'Show cache statistics')
       .option('--show', 'Show detailed cache contents')
-      .option('--export <filename>', 'Export cache to JSON file');
+      .option('--export <filename>', 'Export cache to JSON file')
+      .option('--delete-title <title>', 'Delete cached book by title')
+      .option(
+        '--delete-edition <editionId>',
+        'Delete cached book by edition ID',
+      );
   }
 
   async execute(options) {
@@ -31,6 +36,29 @@ export class CacheCommand extends BaseCommand {
       if (options.clear) {
         await cache.clearCache();
         logger.info('Cache cleared successfully');
+      } else if (options.deleteTitle) {
+        const deleted = await cache.deleteByTitle(options.deleteTitle);
+        if (deleted > 0) {
+          console.log(
+            `Successfully deleted ${deleted} book(s) with title "${options.deleteTitle}"`,
+          );
+        } else {
+          console.log(`No books found with title "${options.deleteTitle}"`);
+        }
+      } else if (options.deleteEdition) {
+        const editionId = parseInt(options.deleteEdition, 10);
+        if (isNaN(editionId)) {
+          console.log('Error: Edition ID must be a number');
+          return;
+        }
+        const deleted = await cache.deleteByEdition(editionId);
+        if (deleted > 0) {
+          console.log(
+            `Successfully deleted ${deleted} book(s) with edition ID ${editionId}`,
+          );
+        } else {
+          console.log(`No books found with edition ID ${editionId}`);
+        }
       } else if (options.stats) {
         await this.showCacheStats(cache);
       } else if (options.show) {
@@ -39,7 +67,7 @@ export class CacheCommand extends BaseCommand {
         await cache.exportToJson(options.export);
       } else {
         console.log(
-          'Use --clear, --stats, --show, or --export to manage cache',
+          'Use --clear, --stats, --show, --delete-title, --delete-edition, or --export to manage cache',
         );
       }
     } catch (error) {
