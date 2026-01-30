@@ -575,7 +575,10 @@ export class SyncResultFormatter {
       displayLogger.info(`${index + 1}. ${error}`);
     });
 
-    displayLogger.line({ char: LINE_CHARS.primary, width: LINE_WIDTHS.section });
+    displayLogger.line({
+      char: LINE_CHARS.primary,
+      width: LINE_WIDTHS.section,
+    });
 
     // Dump failed sync books to file if enabled
     if (globalConfig.dump_failed_books !== false) {

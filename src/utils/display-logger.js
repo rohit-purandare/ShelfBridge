@@ -59,7 +59,9 @@ export class DisplayLogger {
    * Display footer
    */
   footer() {
-    this.info(formatLine({ char: LINE_CHARS.heavy, width: LINE_WIDTHS.header }));
+    this.info(
+      formatLine({ char: LINE_CHARS.heavy, width: LINE_WIDTHS.header }),
+    );
     this.info('');
   }
 
