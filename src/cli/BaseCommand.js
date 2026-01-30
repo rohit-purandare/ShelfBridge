@@ -2,6 +2,7 @@ import { Config } from '../config.js';
 import { ConfigValidator } from '../config-validator.js';
 import logger from '../logger.js';
 import fs from 'fs';
+import { LINE_WIDTHS } from '../utils/display-constants.js';
 import { formatLine } from '../utils/display-format.js';
 
 /**
@@ -77,9 +78,9 @@ export class BaseCommand {
         console.error(validator.formatErrors(validationResult));
 
         // Show help for fixing configuration
-        console.log(formatLine({ width: 50, newline: true }));
+        console.log(formatLine({ width: LINE_WIDTHS.header, newline: true }));
         console.log('Configuration Help:');
-        console.log(formatLine({ width: 50 }));
+        console.log(formatLine({ width: LINE_WIDTHS.header }));
         console.log(validator.generateHelpText());
 
         this.exitError();

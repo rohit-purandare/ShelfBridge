@@ -1,5 +1,6 @@
 import logger from '../logger.js';
 import displayLogger from '../utils/display-logger.js';
+import { LINE_CHARS, LINE_WIDTHS } from '../utils/display-constants.js';
 import { dumpFailedSyncBooks } from '../utils/debug.js';
 
 /**
@@ -560,7 +561,7 @@ export class SyncResultFormatter {
       );
     }
 
-    displayLogger.line({ char: '═', width: 50 });
+    displayLogger.line({ char: LINE_CHARS.heavy, width: LINE_WIDTHS.header });
   }
 
   /**
@@ -574,7 +575,7 @@ export class SyncResultFormatter {
       displayLogger.info(`${index + 1}. ${error}`);
     });
 
-    displayLogger.line({ char: '=', width: 30 });
+    displayLogger.line({ char: LINE_CHARS.primary, width: LINE_WIDTHS.section });
 
     // Dump failed sync books to file if enabled
     if (globalConfig.dump_failed_books !== false) {

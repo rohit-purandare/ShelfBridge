@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
+import { LINE_WIDTHS } from './utils/display-constants.js';
 
 /**
  * Utility class for writing failed books reports to separate log files
@@ -61,9 +62,9 @@ export class FailedBooksReporter {
     const lines = [];
 
     // Header
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push('SHELFBRIDGE - FAILED BOOKS REPORT');
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push('');
     lines.push(
       `Generated: ${DateTime.now().toFormat('yyyy-MM-dd HH:mm:ss ZZZZ')}`,
@@ -73,7 +74,7 @@ export class FailedBooksReporter {
 
     // Summary by category
     lines.push('SUMMARY BY CATEGORY');
-    lines.push('-'.repeat(80));
+    lines.push('-'.repeat(LINE_WIDTHS.report));
     lines.push(
       `  Not Found in Hardcover:           ${stats.books_not_found || 0}`,
     );
@@ -117,9 +118,9 @@ export class FailedBooksReporter {
     );
 
     // Footer
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push('END OF REPORT');
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push('');
 
     return lines.join('\n');
@@ -134,9 +135,9 @@ export class FailedBooksReporter {
       return;
     }
 
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push(`${categoryTitle} (${books.length})`);
-    lines.push('='.repeat(80));
+    lines.push('='.repeat(LINE_WIDTHS.report));
     lines.push('');
     lines.push(description);
     lines.push('');

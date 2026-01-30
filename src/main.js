@@ -8,6 +8,7 @@ import { AudiobookshelfClient } from './audiobookshelf-client.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import { testApiConnections } from './utils/api-testing.js';
+import { LINE_CHARS, LINE_WIDTHS } from './utils/display-constants.js';
 import { formatLine } from './utils/display-format.js';
 import { currentVersion } from './version.js';
 
@@ -215,12 +216,12 @@ async function testUser(user) {
 }
 
 async function debugUser(user) {
-  console.log(formatLine({ width: 60, newline: true }));
+  console.log(formatLine({ width: LINE_WIDTHS.banner, newline: true }));
   console.log('🐛 DEBUG INFORMATION FOR USER');
-  console.log(formatLine({ width: 60 }));
+  console.log(formatLine({ width: LINE_WIDTHS.banner }));
   console.log(`User ID: ${user.id}`);
   console.log(`Timestamp: ${new Date().toISOString()}`);
-  console.log(formatLine({ width: 60 }));
+  console.log(formatLine({ width: LINE_WIDTHS.banner }));
 
   const userLogger = logger.forUser(user.id);
   userLogger.info('Starting debug session');
@@ -228,7 +229,9 @@ async function debugUser(user) {
   try {
     // 1. User Configuration
     console.log('\n📋 USER CONFIGURATION');
-    console.log(formatLine({ char: '-', width: 30 }));
+    console.log(
+      formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+    );
     console.log(`User ID: ${user.id}`);
     console.log(`Audiobookshelf URL: ${user.abs_url}`);
     console.log(
@@ -250,7 +253,9 @@ async function debugUser(user) {
 
     // 2. Connection Testing
     console.log('\n🔌 CONNECTION TESTING');
-    console.log(formatLine({ char: '-', width: 30 }));
+    console.log(
+      formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+    );
 
     // Use shared utility for basic connection testing
     const connectionResults = await testApiConnections(user);
@@ -343,7 +348,9 @@ async function debugUser(user) {
 
     // 3. Cache Information
     console.log('\n💾 CACHE INFORMATION');
-    console.log(formatLine({ char: '-', width: 30 }));
+    console.log(
+      formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+    );
 
     const cache = new BookCache();
     const unregisterCache = registerCleanup(() => cache.close());
@@ -386,7 +393,9 @@ async function debugUser(user) {
     // 4. Sample API Calls (if connections are working)
     if (connectionResults.abs && connectionResults.hardcover) {
       console.log('\n🔍 SAMPLE API CALLS');
-      console.log(formatLine({ char: '-', width: 30 }));
+      console.log(
+        formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+      );
 
       try {
         console.log('Fetching sample books from Audiobookshelf...');
@@ -436,7 +445,9 @@ async function debugUser(user) {
 
     // 5. System Information
     console.log('\n🖥️  SYSTEM INFORMATION');
-    console.log(formatLine({ char: '-', width: 30 }));
+    console.log(
+      formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+    );
     console.log(`Node.js version: ${process.version}`);
     console.log(`Platform: ${process.platform}`);
     console.log(`Architecture: ${process.arch}`);
@@ -447,7 +458,9 @@ async function debugUser(user) {
 
     // 6. Configuration Check
     console.log('\n⚙️  CONFIGURATION CHECK');
-    console.log(formatLine({ char: '-', width: 30 }));
+    console.log(
+      formatLine({ char: LINE_CHARS.section, width: LINE_WIDTHS.section }),
+    );
 
     const config = new Config();
     const globalConfig = config.getGlobal();
@@ -468,9 +481,9 @@ async function debugUser(user) {
       console.log(`Cron timezone: ${globalConfig.cron.timezone}`);
     }
 
-    console.log(formatLine({ width: 60, newline: true }));
+    console.log(formatLine({ width: LINE_WIDTHS.banner, newline: true }));
     console.log('🐛 DEBUG COMPLETED');
-    console.log(formatLine({ width: 60 }));
+    console.log(formatLine({ width: LINE_WIDTHS.banner }));
 
     userLogger.info('Debug session completed successfully');
   } catch (error) {

@@ -5,6 +5,7 @@
  * for troubleshooting and development purposes.
  */
 import logger from '../logger.js';
+import { LINE_WIDTHS } from './display-constants.js';
 
 /**
  * Dump failed sync books to a file for debugging
@@ -38,7 +39,7 @@ export async function dumpFailedSyncBooks(
   output.push(`Failed Sync Books for User: ${userId}`);
   output.push(`Timestamp: ${new Date().toISOString()}`);
   output.push(`Count: ${failedBooks.length}`);
-  output.push('='.repeat(80));
+  output.push('='.repeat(LINE_WIDTHS.report));
   output.push('');
 
   for (const [index, book] of failedBooks.entries()) {

@@ -3,6 +3,7 @@
  * Separates user display from debug/system logging
  */
 import logger from '../logger.js';
+import { LINE_CHARS, LINE_WIDTHS } from './display-constants.js';
 import { formatHeader, formatLine, formatSection } from './display-format.js';
 
 /**
@@ -58,7 +59,7 @@ export class DisplayLogger {
    * Display footer
    */
   footer() {
-    this.info(formatLine({ char: '═', width: 50 }));
+    this.info(formatLine({ char: LINE_CHARS.heavy, width: LINE_WIDTHS.header }));
     this.info('');
   }
 
@@ -74,7 +75,11 @@ export class DisplayLogger {
   /**
    * Display separator line
    */
-  line({ char = '=', width = 50, newline = false } = {}) {
+  line({
+    char = LINE_CHARS.primary,
+    width = LINE_WIDTHS.header,
+    newline = false,
+  } = {}) {
     this.info(formatLine({ char, width, newline }));
   }
 

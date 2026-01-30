@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { currentVersion } from './version.js';
 import { formatErrorWithIssueLink } from './utils/github-helper.js';
+import { LINE_WIDTHS } from './utils/display-constants.js';
 import { formatLine } from './utils/display-format.js';
 
 // Get the version from shared utility
@@ -321,20 +322,20 @@ logger.logErrorWithIssueLink = async (message, error, context = {}) => {
     );
 
     // Use console directly to avoid winston formatting for this user-facing message
-    console.error(formatLine({ width: 60, newline: true }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner, newline: true }));
     console.error('❌ ERROR');
-    console.error(formatLine({ width: 60 }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner }));
     console.error(userFriendlyMessage);
-    console.error(formatLine({ width: 60 }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner }));
   } catch (formatError) {
     // If there's an error formatting the GitHub link, show a simpler message
-    console.error(formatLine({ width: 60, newline: true }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner, newline: true }));
     console.error('❌ ERROR');
-    console.error(formatLine({ width: 60 }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner }));
     console.error(
       `${message}\n\n🐛 Report this issue: https://github.com/rohit-purandare/shelfbridge/issues/new`,
     );
-    console.error(formatLine({ width: 60 }));
+    console.error(formatLine({ width: LINE_WIDTHS.banner }));
     logger.debug('Error formatting GitHub issue link', {
       error: formatError.message,
     });
