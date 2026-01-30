@@ -3,6 +3,7 @@
  * Separates user display from debug/system logging
  */
 import logger from '../logger.js';
+import { formatHeader, formatLine, formatSection } from './display-format.js';
 
 /**
  * Display logger that handles user-facing output
@@ -47,19 +48,17 @@ export class DisplayLogger {
    * Display header with decorative formatting
    */
   header(title, duration = null) {
-    const line = '═'.repeat(50);
-    const titleText = duration ? `${title} (${duration})` : title;
-
-    this.info(line);
-    this.info(titleText);
-    this.info(line);
+    const [top, body, bottom] = formatHeader(title, { duration });
+    this.info(top);
+    this.info(body);
+    this.info(bottom);
   }
 
   /**
    * Display footer
    */
   footer() {
-    this.info('═'.repeat(50));
+    this.info(formatLine({ char: '═', width: 50 }));
     this.info('');
   }
 
@@ -67,8 +66,16 @@ export class DisplayLogger {
    * Display section header
    */
   section(title) {
-    this.info(`\n${title}`);
-    this.info('-'.repeat(title.length));
+    const [titleLine, underline] = formatSection(title);
+    this.info(`\n${titleLine}`);
+    this.info(underline);
+  }
+
+  /**
+   * Display separator line
+   */
+  line({ char = '=', width = 50, newline = false } = {}) {
+    this.info(formatLine({ char, width, newline }));
   }
 
   /**

@@ -2,6 +2,7 @@ import { Config } from '../config.js';
 import { ConfigValidator } from '../config-validator.js';
 import logger from '../logger.js';
 import fs from 'fs';
+import { formatLine } from '../utils/display-format.js';
 
 /**
  * Abstract base class for CLI commands
@@ -76,9 +77,9 @@ export class BaseCommand {
         console.error(validator.formatErrors(validationResult));
 
         // Show help for fixing configuration
-        console.log('\n' + '='.repeat(50));
+        console.log(formatLine({ width: 50, newline: true }));
         console.log('Configuration Help:');
-        console.log('='.repeat(50));
+        console.log(formatLine({ width: 50 }));
         console.log(validator.generateHelpText());
 
         this.exitError();

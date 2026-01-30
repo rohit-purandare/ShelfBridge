@@ -560,7 +560,7 @@ export class SyncResultFormatter {
       );
     }
 
-    displayLogger.info('═'.repeat(50));
+    displayLogger.line({ char: '═', width: 50 });
   }
 
   /**
@@ -574,7 +574,7 @@ export class SyncResultFormatter {
       displayLogger.info(`${index + 1}. ${error}`);
     });
 
-    displayLogger.info('='.repeat(30));
+    displayLogger.line({ char: '=', width: 30 });
 
     // Dump failed sync books to file if enabled
     if (globalConfig.dump_failed_books !== false) {
