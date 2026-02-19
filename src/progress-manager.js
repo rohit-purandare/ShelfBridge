@@ -37,8 +37,9 @@ export class ProgressManager {
   static SIGNIFICANT_CHANGE_THRESHOLD = 0.1;
 
   // Precise completion thresholds
-  static COMPLETION_TIME_REMAINING_SECONDS = 120; // 2 minutes remaining for audiobooks
+  static COMPLETION_TIME_REMAINING_SECONDS = 60; // 1 minute remaining for audiobooks
   static COMPLETION_PAGES_REMAINING = 3; // 3 pages remaining for books
+  static COMPLETION_PERCENTAGE_THRESHOLD = 98; // Consider complete if >= 98% (more aggressive)
 
   /**
    * Extract page count from Audiobookshelf book data
@@ -444,10 +445,23 @@ export class ProgressManager {
           }
         }
 
-        // Fall back to percentage-based
+        // Fall back to percentage-based with aggressive threshold check
         if (!preciseDetectionUsed) {
+          // First check aggressive threshold (98%) for better completion detection
+          if (progress >= this.COMPLETION_PERCENTAGE_THRESHOLD) {
+            logger.debug(
+              `Audiobook detected as complete by aggressive percentage threshold in ${context}`,
+              {
+                progress,
+                aggressiveThreshold: this.COMPLETION_PERCENTAGE_THRESHOLD,
+                detectionMethod: 'aggressive-percentage',
+              },
+            );
+            return true;
+          }
+
           logger.debug(
-            `Using percentage-based completion for audiobook in ${context}`,
+            `Using standard percentage-based completion for audiobook in ${context}`,
             {
               progress,
               threshold,
@@ -487,10 +501,24 @@ export class ProgressManager {
           }
         }
 
-        // Fall back to percentage-based
+        // Fall back to percentage-based with aggressive threshold check
         if (!preciseDetectionUsed) {
+          // First check aggressive threshold (98%) for better completion detection
+          if (progress >= this.COMPLETION_PERCENTAGE_THRESHOLD) {
+            logger.debug(
+              `Book detected as complete by aggressive percentage threshold in ${context}`,
+              {
+                progress,
+                format,
+                aggressiveThreshold: this.COMPLETION_PERCENTAGE_THRESHOLD,
+                detectionMethod: 'aggressive-percentage',
+              },
+            );
+            return true;
+          }
+
           logger.debug(
-            `Using percentage-based completion for ${format} in ${context}`,
+            `Using standard percentage-based completion for ${format} in ${context}`,
             {
               progress,
               threshold,
@@ -502,7 +530,20 @@ export class ProgressManager {
 
       case 'unknown':
       default:
-        // Unknown format: Use conservative percentage-based threshold
+        // Unknown format: Use percentage-based threshold with aggressive check first
+        if (progress >= this.COMPLETION_PERCENTAGE_THRESHOLD) {
+          logger.debug(
+            `Unknown format detected as complete by aggressive percentage threshold in ${context}`,
+            {
+              format,
+              progress,
+              aggressiveThreshold: this.COMPLETION_PERCENTAGE_THRESHOLD,
+              detectionMethod: 'aggressive-percentage',
+            },
+          );
+          return true;
+        }
+
         logger.debug(
           `Using standard completion criteria for unknown format in ${context}`,
           {
@@ -891,11 +932,25 @@ export class ProgressManager {
   /**
    * Centralized method to extract and normalize the isFinished flag from book data
    * @param {Object} bookData - Audiobookshelf book data
-   * @returns {boolean} - Normalized finished status
+   * @returns {boolean|null} - Normalized finished status (true = finished, false/null = not confirmed finished)
    */
   static extractFinishedFlag(bookData) {
-    if (!bookData) return false;
-    return bookData.is_finished === true || bookData.is_finished === 1;
+    if (!bookData) return null;
+
+    // Check explicit isFinished flag
+    if (bookData.is_finished === true || bookData.is_finished === 1) {
+      return true;
+    }
+
+    // Check for finished_at timestamp - this is set when user finishes a book naturally
+    // even if isFinished flag is not set (e.g., when book moves to "Listen Again")
+    if (bookData.finished_at !== null && bookData.finished_at !== undefined) {
+      return true;
+    }
+
+    // Return null (not false) to indicate "not confirmed" rather than "explicitly not finished"
+    // This allows position-based and percentage-based completion detection to proceed
+    return null;
   }
 
   /**
@@ -1004,7 +1059,7 @@ export class ProgressManager {
       isFinished,
       context,
       format: bookFormat,
-      bookData,
+      _bookData: bookData,
     });
   }
 }
