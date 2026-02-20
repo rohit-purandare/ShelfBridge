@@ -34,7 +34,7 @@ fi
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 if echo "$STAGED_FILES" | grep -q "package.json\|package-lock.json"; then
     echo "Running npm audit..."
-    npm audit --audit-level=moderate || {
+    npm audit --audit-level=moderate --omit=dev || {
         echo "⚠️  npm audit found vulnerabilities. Consider updating dependencies."
         echo "💡 Run 'npm audit fix' to automatically fix some issues"
         # Don't fail the commit for audit issues, just warn
