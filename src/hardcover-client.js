@@ -290,6 +290,22 @@ export class HardcoverClient {
         startDate,
         useSeconds,
       );
+      // If book was previously "Read" (status 3), update back to "Currently Reading" (status 2)
+      // The Want to Read (1) → Currently Reading (2) transition is handled above, but re-reads
+      // start from status 3 (Read) and also need to transition to Currently Reading.
+      if (currentStatusId === 3) {
+        logger.info(
+          'Book status is "Read", updating to "Currently Reading" (status_id: 2) for re-read',
+          {
+            userBookId,
+            currentStatus: 3,
+            newStatus: 2,
+          },
+        );
+        await this.updateBookStatus(userBookId, 2);
+        currentStatusId = 2;
+        statusWasUpdated = true;
+      }
       // Include status information in the response
       return {
         ...result,

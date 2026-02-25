@@ -215,21 +215,23 @@ global:
 
 ### How New Sessions Work
 
-When re-reading is detected, ShelfBridge creates a new reading session:
+When re-reading is detected, ShelfBridge creates a new reading session and automatically transitions the book's Hardcover status back to **Currently Reading** (status 2):
 
 ```
 Original Session:
   Book: "The Hobbit"
   Progress: 100%
   Completed: 2024-01-15
-  Status: ✅ Completed
+  Status: ✅ Read
 
 New Session:
   Book: "The Hobbit"
   Progress: 25%
   Started: 2024-03-01
-  Status: 📖 In Progress
+  Status: 📖 Currently Reading  ← automatically updated
 ```
+
+> **Note:** Without this status update, Hardcover would show the new session's start date but still display the book as "Read", not "Currently Reading". ShelfBridge handles this transition automatically whenever a re-read session is created.
 
 ### Session Management
 
