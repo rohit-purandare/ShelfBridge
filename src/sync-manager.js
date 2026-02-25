@@ -1364,7 +1364,9 @@ export class SyncManager {
       );
 
       // For search results, userBook might be null (ASIN/ISBN matches) or populated (title/author matches)
-      let bookId = hardcoverMatch.userBook?.book?.id;
+      // For title/author two-stage matches where the book isn't in the user's library yet,
+      // userBook is null and the bookId lives on hardcoverMatch.book.id instead.
+      let bookId = hardcoverMatch.userBook?.book?.id || hardcoverMatch.book?.id;
       const editionId = hardcoverMatch.edition.id;
 
       // If book ID is missing, look it up from the edition ID
