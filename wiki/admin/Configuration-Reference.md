@@ -68,8 +68,8 @@ global:
 - **Default**: `true`
 - **YAML**: `parallel: true`
 - **Environment**: `SHELFBRIDGE_PARALLEL=true`
-- **Description**: Enable parallel processing of books
-- **Impact**: When false, processes books sequentially for easier debugging
+- **Description**: Enable parallel processing of users and books
+- **Impact**: When false, processes users sequentially for easier debugging. When true, each user sync runs independently — a failure for one user does not affect others.
 
 ```yaml
 global:

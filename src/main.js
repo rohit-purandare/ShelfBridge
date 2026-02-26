@@ -538,7 +538,7 @@ async function runScheduledSync(config) {
       logger.debug('Running user syncs in parallel mode', { workers });
       const semaphore = new Semaphore(workers);
 
-      await Promise.all(
+      const results = await Promise.allSettled(
         users.map(async user => {
           await semaphore.acquire();
           try {
@@ -551,6 +551,14 @@ async function runScheduledSync(config) {
           }
         }),
       );
+
+      const failed = results.filter(r => r.status === 'rejected');
+      if (failed.length > 0) {
+        logger.warn('Some user syncs failed in parallel mode', {
+          failed: failed.length,
+          total: users.length,
+        });
+      }
     } else {
       for (const user of users) {
         logger.info('Starting scheduled sync for user', { user_id: user.id });
