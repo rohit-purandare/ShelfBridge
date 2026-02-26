@@ -619,7 +619,8 @@ export class AudiobookshelfClient {
 
       // Combine item data with progress
       if (progressData) {
-        itemData.progress_percentage = progressData.progress * 100;
+        itemData.progress_percentage =
+          (progressData.ebookProgress ?? progressData.progress) * 100;
         itemData.current_time = progressData.currentTime;
         itemData.is_finished = progressData.isFinished;
 
