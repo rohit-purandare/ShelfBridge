@@ -9,6 +9,12 @@ import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Transaction } from './utils/transaction.js';
+import { resolveBookIdentifier } from './utils/identifier-resolver.js';
+import { formatDateForHardcover } from './utils/date-formatter.js';
+import {
+  mapHardcoverFormatToInternal,
+  checkFormatCompatibility,
+} from './utils/format-compatibility.js';
 import SessionManager from './session-manager.js';
 import { currentVersion } from './version.js';
 
@@ -209,7 +215,7 @@ export class SyncManager {
       // Update book matcher with user library data
       this.bookMatcher.setUserLibrary(
         hardcoverBooks,
-        this._mapHardcoverFormatToInternal.bind(this),
+        mapHardcoverFormatToInternal,
       );
 
       logger.debug(
@@ -332,169 +338,6 @@ export class SyncManager {
     }
 
     return null;
-  }
-
-  /**
-   * Map Hardcover's reading_format.format to our internal format system
-   * @param {Object} edition - Edition object with reading_format and audio_seconds
-   * @returns {string} - Internal format: "audiobook", "ebook", "book", or "mixed"
-   */
-  _mapHardcoverFormatToInternal(edition) {
-    // Use Hardcover's format classification as source of truth
-    const hardcoverFormat = edition.reading_format?.format;
-
-    // Map Hardcover formats to our internal system
-    switch (hardcoverFormat) {
-      case 'Listened':
-        return 'audiobook';
-      case 'Ebook':
-        return 'ebook';
-      case 'Read':
-        return 'book';
-      case 'Both':
-        return 'mixed';
-      default:
-        // Fallback to edition capabilities if no explicit format
-        if (edition.audio_seconds && edition.audio_seconds > 0) {
-          return 'audiobook';
-        }
-        return 'book'; // Default for text-based books
-    }
-  }
-
-  /**
-   * Format timestamp for display using configured timezone
-   * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
-   * @returns {string} - Formatted date string for display
-   */
-  _formatTimestampForDisplay(timestamp) {
-    if (!timestamp) return 'N/A';
-
-    try {
-      let dateTime;
-
-      if (typeof timestamp === 'string') {
-        // Handle ISO string or timestamp as string
-        if (timestamp.includes('T') || timestamp.includes('-')) {
-          // ISO string format - these are typically in UTC or have timezone info
-          dateTime = DateTime.fromISO(timestamp);
-          if (!dateTime.isValid) {
-            // Try parsing as SQL format or other common formats
-            dateTime = DateTime.fromSQL(timestamp);
-            if (!dateTime.isValid) {
-              dateTime = DateTime.fromFormat(timestamp, 'yyyy-LL-dd HH:mm:ss');
-            }
-          }
-        } else {
-          // Timestamp as string - assume UTC milliseconds
-          const tsNumber = parseInt(timestamp);
-          if (!isNaN(tsNumber)) {
-            dateTime = DateTime.fromMillis(tsNumber, { zone: 'utc' });
-          } else {
-            return 'Invalid timestamp';
-          }
-        }
-      } else if (typeof timestamp === 'number') {
-        // Timestamp in milliseconds - assume UTC
-        dateTime = DateTime.fromMillis(timestamp, { zone: 'utc' });
-      } else {
-        return 'Invalid timestamp';
-      }
-
-      if (!dateTime.isValid) {
-        return 'Invalid timestamp';
-      }
-
-      // Convert to configured timezone and format
-      const configuredTimezone = this.timezone || 'UTC';
-      const localTime = dateTime.setZone(configuredTimezone);
-      return localTime.toFormat('yyyy-LL-dd HH:mm:ss ZZZZ');
-    } catch (error) {
-      logger.error('Error formatting timestamp for display', {
-        timestamp: timestamp,
-        error: error.message,
-      });
-      return 'Error formatting timestamp';
-    }
-  }
-
-  /**
-   * Format date for Hardcover API (YYYY-MM-DD format)
-   * @param {string|number} dateValue - Date value (ISO string or timestamp)
-   * @returns {string|null} - Formatted date string or null if invalid
-   */
-  _formatDateForHardcover(dateValue) {
-    if (!dateValue) return null;
-
-    try {
-      // If we already have an ISO string with timezone, return the local day directly
-      if (typeof dateValue === 'string') {
-        // Common case: we previously set `absBook.started_at = startedAtLocal.toISO()`
-        if (dateValue.includes('T')) {
-          const isoDate = DateTime.fromISO(dateValue);
-          if (isoDate.isValid) {
-            const local = isoDate.setZone(this.timezone || 'UTC');
-            const output = local.toISODate();
-            logger.debug('Formatted date for Hardcover (ISO string)', {
-              input: dateValue,
-              output,
-              timezone: this.timezone,
-            });
-            return output;
-          }
-        }
-
-        // Try parsing as SQL or generic date
-        const sql = DateTime.fromSQL(dateValue, {
-          zone: this.timezone || 'UTC',
-        });
-        if (sql.isValid) {
-          return sql.toISODate();
-        }
-
-        const parsed = DateTime.fromJSDate(new Date(dateValue), {
-          zone: this.timezone || 'UTC',
-        });
-        if (parsed.isValid) {
-          return parsed.toISODate();
-        }
-      }
-
-      // If value is milliseconds (number or numeric string)
-      const millis =
-        typeof dateValue === 'number'
-          ? dateValue
-          : typeof dateValue === 'string' && /^\d+$/.test(dateValue)
-            ? parseInt(dateValue, 10)
-            : null;
-
-      if (millis !== null && !isNaN(millis)) {
-        const local = DateTime.fromMillis(millis, {
-          zone: this.timezone || 'UTC',
-        });
-        if (local.isValid) {
-          const output = local.toISODate();
-          logger.debug('Formatted date for Hardcover (millis)', {
-            input: dateValue,
-            output,
-            timezone: this.timezone,
-          });
-          return output;
-        }
-      }
-
-      logger.warn('Unable to format date for Hardcover', {
-        value: dateValue,
-        type: typeof dateValue,
-      });
-      return null;
-    } catch (error) {
-      logger.error('Error formatting date for Hardcover', {
-        dateValue: dateValue,
-        error: error.message,
-      });
-      return null;
-    }
   }
 
   /**
@@ -1175,48 +1018,34 @@ export class SyncManager {
     }
 
     // Set cache storage preferences - preserve original matching method when possible
-    let identifier, identifierType;
+    const titleAuthorId = this.cache.generateTitleAuthorIdentifier(
+      title,
+      author,
+    );
+    const { identifierType, identifierValue: identifier } =
+      resolveBookIdentifier(identifiers, {
+        titleAuthorId,
+        matchType: hardcoverMatch?._matchType,
+      });
 
-    // If book was matched by title/author, preserve that cache method to maintain consistency
     if (
-      hardcoverMatch &&
-      (hardcoverMatch._matchType === 'title_author' ||
-        hardcoverMatch._matchType === 'title_author_two_stage')
+      identifierType === 'title_author' &&
+      hardcoverMatch?._matchType?.startsWith('title_author')
     ) {
-      identifier = this.cache.generateTitleAuthorIdentifier(title, author);
-      identifierType = 'title_author';
       logger.debug(
         `Preserving title/author cache method for ${title} (originally matched by title/author)`,
-        {
-          matchType: hardcoverMatch._matchType,
-          titleAuthorId: identifier,
-        },
+        { matchType: hardcoverMatch._matchType, titleAuthorId: identifier },
+      );
+    } else if (identifierType === 'title_author') {
+      logger.debug(
+        `Generated title/author identifier for book without identifiers: ${identifier}`,
+        { title, author },
       );
     } else {
-      // Use identifier priority for books matched by ASIN/ISBN: ASIN > ISBN > title_author
-      identifier = identifiers.asin || identifiers.isbn;
-      identifierType = identifiers.asin ? 'asin' : 'isbn';
-
-      if (!identifier) {
-        // Generate title/author identifier for books without identifiers
-        identifier = this.cache.generateTitleAuthorIdentifier(title, author);
-        identifierType = 'title_author';
-        logger.debug(
-          `Generated title/author identifier for book without identifiers: ${identifier}`,
-          {
-            title: title,
-            author: author,
-          },
-        );
-      } else {
-        logger.debug(
-          `Using ${identifierType} identifier for caching: ${identifier}`,
-          {
-            title: title,
-            matchMethod: 'identifier-based',
-          },
-        );
-      }
+      logger.debug(
+        `Using ${identifierType} identifier for caching: ${identifier}`,
+        { title, matchMethod: 'identifier-based' },
+      );
     }
 
     // Determine how the match was found using BookMatcher's metadata
@@ -1388,7 +1217,7 @@ export class SyncManager {
               Object.assign(hardcoverMatch.edition, bookInfo.edition);
 
               // Determine correct format using Hardcover as source of truth
-              const detectedFormat = this._mapHardcoverFormatToInternal(
+              const detectedFormat = mapHardcoverFormatToInternal(
                 bookInfo.edition,
               );
 
@@ -1743,7 +1572,7 @@ export class SyncManager {
         const { detectUserBookFormat } =
           await import('./matching/utils/audiobookshelf-extractor.js');
         const sourceFormat = detectUserBookFormat(absBook);
-        const hasCompatibleFormat = this._checkFormatCompatibility(
+        const hasCompatibleFormat = checkFormatCompatibility(
           searchResults,
           sourceFormat,
         );
@@ -1759,7 +1588,7 @@ export class SyncManager {
               },
               resultsCount: searchResults.length,
               resultFormats: searchResults
-                .map(e => this._mapHardcoverFormatToInternal(e))
+                .map(e => mapHardcoverFormatToInternal(e))
                 .join(', '),
             },
           );
@@ -2210,8 +2039,8 @@ export class SyncManager {
         });
 
         // Store cache data in transaction
-        const identifier = identifiers.asin || identifiers.isbn;
-        const identifierType = identifiers.asin ? 'asin' : 'isbn';
+        const { identifierType, identifierValue: identifier } =
+          resolveBookIdentifier(identifiers);
         // Use author from metadata (already extracted)
 
         // Add API rollback callback
@@ -2533,9 +2362,9 @@ export class SyncManager {
         });
 
         // Check if book was already marked as completed in cache to avoid re-processing
-        const identifier = extractBookIdentifiers(absBook);
-        const identifierType = identifier.asin ? 'asin' : 'isbn';
-        const identifierValue = identifier.asin || identifier.isbn;
+        const completionCheckIds = extractBookIdentifiers(absBook);
+        const { identifierType, identifierValue } =
+          resolveBookIdentifier(completionCheckIds);
 
         const cachedInfo = await this.cache.getCachedBookInfo(
           this.userId,
@@ -2613,28 +2442,20 @@ export class SyncManager {
     const author = bookAuthor; // Ensure author is available in function scope
 
     // Check cache first - handle missing identifiers properly for title/author matches
-    const identifier = extractBookIdentifiers(absBook);
-    let identifierType, identifierValue;
+    const editionIds = extractBookIdentifiers(absBook);
+    const editionTitleAuthorId = this.cache.generateTitleAuthorIdentifier(
+      title,
+      author,
+    );
+    const { identifierType, identifierValue } = resolveBookIdentifier(
+      editionIds,
+      { titleAuthorId: editionTitleAuthorId },
+    );
 
-    if (identifier.asin) {
-      identifierType = 'asin';
-      identifierValue = identifier.asin;
-    } else if (identifier.isbn) {
-      identifierType = 'isbn';
-      identifierValue = identifier.isbn;
-    } else {
-      // Title/author match without identifiers - use consistent pattern
-      // This prevents the "NOT NULL constraint failed" error and ensures cache consistency
-      identifierType = 'title_author';
-      identifierValue = this.cache.generateTitleAuthorIdentifier(title, author);
+    if (identifierType === 'title_author') {
       logger.debug(
         `Generated consistent title/author identifier for edition cache: ${identifierValue}`,
-        {
-          title: title,
-          author: author,
-          userBookId: userBook.id,
-          editionId: edition.id,
-        },
+        { title, author, userBookId: userBook.id, editionId: edition.id },
       );
     }
 
@@ -2658,7 +2479,7 @@ export class SyncManager {
           // Apply format extraction consistently
           return {
             ...cachedEdition,
-            format: this._mapHardcoverFormatToInternal(cachedEdition),
+            format: mapHardcoverFormatToInternal(cachedEdition),
           };
         }
       }
@@ -2761,10 +2582,10 @@ export class SyncManager {
 
       // Pass finished_at and started_at to Hardcover client if present
       const finishedAt = absBook.finished_at
-        ? this._formatDateForHardcover(absBook.finished_at)
+        ? formatDateForHardcover(absBook.finished_at, this.timezone)
         : null;
       const startedAt = absBook.started_at
-        ? this._formatDateForHardcover(absBook.started_at)
+        ? formatDateForHardcover(absBook.started_at, this.timezone)
         : null;
 
       logger.debug(`Completion dates for ${title}`, {
@@ -2809,37 +2630,28 @@ export class SyncManager {
         });
 
         // Store completion data in transaction
-        const identifier = extractBookIdentifiers(absBook);
-        let identifierType = identifier.asin ? 'asin' : 'isbn';
-        let identifierValue = identifier.asin || identifier.isbn;
+        const completionIds = extractBookIdentifiers(absBook);
+        const completionAuthor =
+          absBook.media?.metadata?.authors?.[0]?.name || 'Unknown Author';
+        const completionTitleAuthorId =
+          this.cache.generateTitleAuthorIdentifier(title, completionAuthor);
+        const { identifierType, identifierValue } = resolveBookIdentifier(
+          completionIds,
+          { titleAuthorId: completionTitleAuthorId },
+        );
 
-        // If no ISBN/ASIN available, use consistent title/author identifier pattern
-        if (
-          !identifierValue ||
-          typeof identifierValue !== 'string' ||
-          identifierValue.trim() === ''
-        ) {
-          const author =
-            absBook.media?.metadata?.authors?.[0]?.name || 'Unknown Author';
-          const consistentIdentifier = this.cache.generateTitleAuthorIdentifier(
-            title,
-            author,
-          );
-
+        if (identifierType === 'title_author') {
           logger.warn(
             `No ISBN/ASIN found for "${title}" - using consistent title/author identifier`,
             {
               userId: this.userId,
               userBookId,
-              extractedIdentifiers: identifier,
+              extractedIdentifiers: completionIds,
               title,
-              author,
-              consistentIdentifier,
+              author: completionAuthor,
+              consistentIdentifier: identifierValue,
             },
           );
-
-          identifierValue = consistentIdentifier;
-          identifierType = 'title_author';
         }
 
         try {
@@ -2956,28 +2768,20 @@ export class SyncManager {
       let previousProgress = null;
 
       // Get previous progress for rollback - handle title/author books consistently
-      const identifier = extractBookIdentifiers(absBook);
-      let identifierType, identifierValue;
+      const progressIds = extractBookIdentifiers(absBook);
+      const progressTitleAuthorId = this.cache.generateTitleAuthorIdentifier(
+        title,
+        author,
+      );
+      const { identifierType, identifierValue } = resolveBookIdentifier(
+        progressIds,
+        { titleAuthorId: progressTitleAuthorId },
+      );
 
-      if (identifier.asin) {
-        identifierType = 'asin';
-        identifierValue = identifier.asin;
-      } else if (identifier.isbn) {
-        identifierType = 'isbn';
-        identifierValue = identifier.isbn;
-      } else {
-        // Title/author book without identifiers - use consistent pattern
-        identifierType = 'title_author';
-        identifierValue = this.cache.generateTitleAuthorIdentifier(
-          title,
-          author,
-        );
+      if (identifierType === 'title_author') {
         logger.debug(
           `Using title/author identifier for progress rollback: ${identifierValue}`,
-          {
-            title: title,
-            author: author,
-          },
+          { title, author },
         );
       }
 
@@ -3005,7 +2809,7 @@ export class SyncManager {
         progressPercent,
         edition.id,
         useSeconds,
-        this._formatDateForHardcover(absBook.started_at), // Use formatted date instead of raw value
+        formatDateForHardcover(absBook.started_at, this.timezone), // Use formatted date instead of raw value
         this.globalConfig.reread_detection, // Pass reread configuration
       );
 
@@ -3060,7 +2864,7 @@ export class SyncManager {
                 previousProgress,
                 edition.id,
                 useSeconds,
-                this._formatDateForHardcover(absBook.started_at),
+                formatDateForHardcover(absBook.started_at, this.timezone),
                 this.globalConfig.reread_detection,
               );
             } catch (rollbackError) {
@@ -3478,59 +3282,5 @@ export class SyncManager {
       );
       throw err;
     }
-  }
-
-  /**
-   * Check if two formats are compatible (not a major mismatch)
-   * @param {string} sourceFormat - Format from source ('audiobook' or 'ebook')
-   * @param {string} editionFormat - Format from edition ('audiobook', 'ebook', 'book')
-   * @returns {boolean} - True if formats are compatible
-   * @private
-   */
-  _areFormatsCompatible(sourceFormat, editionFormat) {
-    // Exact match
-    if (sourceFormat === editionFormat) {
-      return true;
-    }
-
-    // Audiobook and ebook are compatible (cross-digital)
-    if (
-      (sourceFormat === 'audiobook' && editionFormat === 'ebook') ||
-      (sourceFormat === 'ebook' && editionFormat === 'audiobook')
-    ) {
-      return true;
-    }
-
-    // Physical edition ('book') is NOT compatible with audiobook
-    if (sourceFormat === 'audiobook' && editionFormat === 'book') {
-      return false;
-    }
-
-    // Allow ebook → physical fallback (acceptable)
-    if (sourceFormat === 'ebook' && editionFormat === 'book') {
-      return true;
-    }
-
-    // Default to compatible for unknown formats
-    return true;
-  }
-
-  /**
-   * Check if any edition in search results has compatible format with source
-   * @param {Array} searchResults - Editions from identifier search
-   * @param {string} sourceFormat - Format from Audiobookshelf ('audiobook' or 'ebook')
-   * @returns {boolean} - True if at least one edition has compatible format
-   * @private
-   */
-  _checkFormatCompatibility(searchResults, sourceFormat) {
-    if (!sourceFormat || searchResults.length === 0) {
-      return true; // No format constraint or no results
-    }
-
-    // Check if ANY edition has compatible format
-    return searchResults.some(edition => {
-      const editionFormat = this._mapHardcoverFormatToInternal(edition);
-      return this._areFormatsCompatible(sourceFormat, editionFormat);
-    });
   }
 }

@@ -186,6 +186,9 @@ flowchart TD
 - **Architecture**: Domain-specific modules with dependency injection pattern
 - **Modules**:
   - **time.js**: Duration formatting, parsing, and timing utilities
+  - **date-formatter.js**: Timezone-aware date formatting for display and Hardcover API
+  - **identifier-resolver.js**: Book identifier resolution with priority rules (ASIN > ISBN > title/author)
+  - **format-compatibility.js**: Hardcover format mapping and source/edition compatibility checking
   - **network.js**: HTTP agents, token normalization, retry logic with exponential backoff
   - **concurrency.js**: Semaphore and RateLimiter classes for rate limiting and resource control
   - **data.js**: Safe parsing functions for integers, floats, and booleans with error handling

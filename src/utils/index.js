@@ -42,3 +42,19 @@ export { testApiConnections } from './api-testing.js';
 
 // Data parsing utilities
 export { safeParseInt, safeParseFloat, safeParseBoolean } from './data.js';
+
+// Identifier resolution utilities
+export { resolveBookIdentifier } from './identifier-resolver.js';
+
+// Date formatting utilities
+export {
+  formatTimestampForDisplay,
+  formatDateForHardcover,
+} from './date-formatter.js';
+
+// Format compatibility utilities
+export {
+  mapHardcoverFormatToInternal,
+  areFormatsCompatible,
+  checkFormatCompatibility,
+} from './format-compatibility.js';
