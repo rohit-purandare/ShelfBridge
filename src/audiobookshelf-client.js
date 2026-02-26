@@ -206,26 +206,23 @@ export class AudiobookshelfClient {
 
       // Log library filtering results
       if (libraryFilter.stats.unmatched.length > 0) {
-        console.log(
-          `⚠️  Warning: Some library filters didn't match any libraries: ${libraryFilter.stats.unmatched.join(', ')}`,
-        );
-        console.log(
-          `📚 Available libraries: ${allLibraries.map(lib => lib.name).join(', ')}`,
+        logger.warn(
+          `Some library filters didn't match any libraries: ${libraryFilter.stats.unmatched.join(', ')}`,
+          {
+            unmatched: libraryFilter.stats.unmatched,
+            available: allLibraries.map(lib => lib.name),
+          },
         );
       }
 
       if (libraryFilter.stats.excluded > 0) {
-        console.log(
-          `📚 Processing ${libraryFilter.stats.included} of ${libraryFilter.stats.total} libraries (${libraryFilter.stats.excluded} excluded by filter)`,
+        logger.info(
+          `Processing ${libraryFilter.stats.included} of ${libraryFilter.stats.total} libraries (${libraryFilter.stats.excluded} excluded by filter)`,
         );
       }
 
       // Check if no libraries match the filter
       if (librariesToProcess.length === 0) {
-        console.log(`❌ No libraries match your filter configuration!`);
-        console.log(
-          `📚 Available libraries: ${allLibraries.map(lib => lib.name).join(', ')}`,
-        );
         logger.warn('No libraries match filter configuration', {
           libraryConfig: this.libraryConfig,
           availableLibraries: allLibraries.map(lib => ({

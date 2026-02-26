@@ -123,8 +123,7 @@ export class SyncManager {
       const absBooks = await this.audiobookshelf.getReadingProgress();
 
       if (!absBooks || absBooks.length === 0) {
-        logger.debug('No books found in Audiobookshelf');
-        console.log('No books found in Audiobookshelf.');
+        logger.info('No books found in Audiobookshelf');
         return result;
       }
 
@@ -174,8 +173,7 @@ export class SyncManager {
       // Filter out metadata-only entries for actual processing
       const realBooks = absBooks.filter(book => !book._isMetadataOnly);
       if (realBooks.length === 0 && !filteringStats) {
-        logger.debug('No books found that need syncing');
-        console.log('No books found that need syncing.');
+        logger.info('No books found that need syncing');
         return result;
       }
 
@@ -265,14 +263,14 @@ export class SyncManager {
         );
 
         if (reportPath) {
-          console.log(
-            `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+          logger.info(
+            `Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
           );
         }
       }
 
-      console.log(
-        `\n✅ Sync complete for user: ${this.userId} in ${duration.toFixed(1)}s`,
+      logger.info(
+        `Sync complete for user: ${this.userId} in ${duration.toFixed(1)}s`,
       );
       return result;
     } catch (error) {
@@ -298,8 +296,8 @@ export class SyncManager {
           );
 
           if (reportPath) {
-            console.log(
-              `\n📋 Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
+            logger.info(
+              `Failed books report written to: ${reportPath} (${result.failed_books.length} books)`,
             );
           }
         } catch (reportError) {
@@ -309,9 +307,6 @@ export class SyncManager {
         }
       }
 
-      console.log(
-        `\n❌ Sync failed for user: ${this.userId}: ${error.message}`,
-      );
       return result;
     }
   }
@@ -3414,9 +3409,6 @@ export class SyncManager {
       );
 
       if (processingResult.processed > 0) {
-        console.log(
-          `📋 Processed ${processingResult.processed} expired sessions`,
-        );
         logger.info(`Processed expired sessions`, processingResult);
       }
 

@@ -595,6 +595,8 @@ While configuration is primarily done via YAML files, these environment variable
 | `LOG_LEVEL` | Logging level (error, warn, info, debug) | `info`       |
 | `NODE_ENV`  | Node.js environment                      | `production` |
 
+All diagnostic output — including library filter warnings, sync status, and author extraction issues — flows through Winston and is written to both the console and the log file. There is no separate console-only error channel.
+
 ## Performance Considerations
 
 ### Command Performance

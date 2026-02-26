@@ -6,6 +6,7 @@
  */
 
 import { normalizeIsbn, normalizeAsin } from './text-matching.js';
+import logger from '../../logger.js';
 
 /**
  * Extract ISBN from various formats in book data
@@ -174,9 +175,9 @@ export function extractAuthor(bookData) {
           return authorValue.displayName.toString().trim();
         }
         // Log warning and skip this field
-        console.warn(
-          `Author field '${field}' is an object without name/displayName:`,
-          authorValue,
+        logger.warn(
+          `Author field '${field}' is an object without name/displayName`,
+          { field, value: authorValue },
         );
         continue;
       }
@@ -215,9 +216,9 @@ export function extractAuthor(bookData) {
           if (authorValue.displayName) {
             return authorValue.displayName.toString().trim();
           }
-          console.warn(
-            `Metadata author field '${field}' is an object without name/displayName:`,
-            authorValue,
+          logger.warn(
+            `Metadata author field '${field}' is an object without name/displayName`,
+            { field, value: authorValue },
           );
           continue;
         }
@@ -255,9 +256,9 @@ export function extractAuthor(bookData) {
           if (authorValue.displayName) {
             return authorValue.displayName.toString().trim();
           }
-          console.warn(
-            `Media metadata author field '${field}' is an object without name/displayName:`,
-            authorValue,
+          logger.warn(
+            `Media metadata author field '${field}' is an object without name/displayName`,
+            { field, value: authorValue },
           );
           continue;
         }
