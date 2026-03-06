@@ -2999,7 +2999,7 @@ export class SyncManager {
 
       // Log edition format for monitoring
       logger.info(
-        `Updating progress for edition ${edition.id} with format: ${edition.reading_format?.format}`,
+        `Updating progress for edition ${edition.id} with format: ${edition.reading_format?.format || edition.format}`,
       );
 
       const result = await this.hardcover.updateReadingProgress(
