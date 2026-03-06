@@ -622,8 +622,15 @@ export class AudiobookshelfClient {
 
       // Combine item data with progress
       if (progressData) {
-        itemData.progress_percentage =
-          (progressData.ebookProgress || progressData.progress) * 100;
+        // Determine progress based on item type:
+        // - Ebooks use ebookProgress field (page/position-based)
+        // - Audiobooks use progress field (time-based)
+        const isEbook =
+          itemData.media?.ebookFile && !itemData.media?.audioFiles?.length;
+        const rawProgress = isEbook
+          ? (progressData.ebookProgress ?? progressData.progress)
+          : (progressData.progress ?? progressData.ebookProgress);
+        itemData.progress_percentage = (rawProgress || 0) * 100;
         itemData.current_time = progressData.currentTime;
         itemData.is_finished = progressData.isFinished;
 

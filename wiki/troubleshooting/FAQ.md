@@ -104,8 +104,9 @@ Yes! ShelfBridge detects re-reading and creates new reading sessions for:
 
 ### How is progress calculated?
 
-- **Audiobooks**: Based on time (minutes listened / total minutes)
-- **Ebooks**: Based on the `ebookProgress` field from the Audiobookshelf API (falls back to `progress` field)
+- **Audiobooks**: Based on the `progress` field (time-based) from the Audiobookshelf API
+- **Ebooks**: Based on the `ebookProgress` field (position-based) from the Audiobookshelf API
+- **Format detection**: Determined by checking `media.ebookFile` and `media.audioFiles` on the library item
 - **Completion**: ≥95% progress or Audiobookshelf completion flag
 
 ### Will my completion status be overwritten?
