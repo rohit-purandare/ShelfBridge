@@ -622,17 +622,27 @@ export class AudiobookshelfClient {
 
       // Combine item data with progress
       if (progressData) {
-        // Determine progress based on item type:
-        // - Ebooks use ebookProgress field (page/position-based)
-        // - Audiobooks use progress field (time-based)
-        const isEbook =
-          itemData.media?.ebookFile && !itemData.media?.audioFiles?.length;
-        const rawProgress = isEbook
-          ? (progressData.ebookProgress ?? progressData.progress)
-          : (progressData.progress ?? progressData.ebookProgress);
-        itemData.progress_percentage = (rawProgress || 0) * 100;
+        // Choose progress field using the same logic as ABS's own client:
+        // - For ebooks, `progress` is always 0 while `ebookProgress` holds the real value
+        // - For audiobooks, `progress` holds the real value and `ebookProgress` is 0/absent
+        // Use ebookProgress when progress is falsy (0) and ebookProgress > 0.
+        // This avoids relying on media type detection which can be fragile.
+        const rawProgress =
+          !progressData.progress && progressData.ebookProgress > 0
+            ? progressData.ebookProgress
+            : progressData.progress || 0;
+        itemData.progress_percentage = rawProgress * 100;
         itemData.current_time = progressData.currentTime;
         itemData.is_finished = progressData.isFinished;
+
+        // Store ebook progress metadata for downstream format detection
+        if (progressData.ebookProgress > 0) {
+          itemData.has_ebook_progress = true;
+          itemData.ebook_progress_raw = progressData.ebookProgress;
+        }
+        if (progressData.ebookLocation) {
+          itemData.ebook_location = progressData.ebookLocation;
+        }
 
         // Use media progress startedAt if available
         if (progressData.startedAt) {
