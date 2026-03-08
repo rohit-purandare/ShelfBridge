@@ -652,17 +652,19 @@ export class TitleAuthorMatcher {
    */
   async _cacheSuccessfulMatch(userId, titleAuthorId, title, bestMatch, author) {
     try {
+      // Two-stage matches have edition ID at bestMatch.edition.id, search results have it at bestMatch.id
+      const editionId = bestMatch.edition?.id || bestMatch.id;
       await this.cache.storeEditionMapping(
         userId,
         titleAuthorId,
         title,
-        bestMatch.id,
+        editionId,
         'title_author',
         extractAuthorFromSearchResult(bestMatch) || author || '',
       );
       logger.debug(`Cached title/author match for "${title}"`, {
         identifier: titleAuthorId,
-        editionId: bestMatch.id,
+        editionId: editionId,
       });
     } catch (cacheError) {
       logger.warn(

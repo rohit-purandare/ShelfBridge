@@ -525,14 +525,39 @@ export function extractAudioDurationFromAudiobookshelf(bookData) {
 export function detectUserBookFormat(targetMetadata) {
   if (!targetMetadata) return 'ebook'; // Default fallback
 
+  // Strongest signal: if the progress API returned ebookProgress > 0,
+  // this is definitively an ebook regardless of media structure
+  if (targetMetadata.has_ebook_progress) {
+    return 'ebook';
+  }
+
   // Trust Audiobookshelf's explicit media type first
   if (targetMetadata.mediaType) {
     const mediaType = targetMetadata.mediaType.toLowerCase();
-    if (mediaType.includes('audio') || mediaType === 'book') {
+    if (mediaType.includes('audio')) {
       return 'audiobook';
     }
     if (mediaType.includes('ebook')) {
       return 'ebook';
+    }
+    // Audiobookshelf uses mediaType 'book' for both audiobooks and ebooks,
+    // so check for ebook indicators before defaulting to audiobook
+    if (mediaType === 'book') {
+      const hasEbookFile = !!targetMetadata.media?.ebookFile;
+      const hasAudioFiles = targetMetadata.media?.audioFiles?.length > 0;
+      if (hasEbookFile && !hasAudioFiles) {
+        return 'ebook';
+      }
+      // If item has both ebook and audio files, check which has actual progress
+      if (hasEbookFile && hasAudioFiles) {
+        // Item has both formats; if no audio progress (currentTime == 0),
+        // user is reading the ebook version
+        if (!targetMetadata.current_time || targetMetadata.current_time === 0) {
+          return 'ebook';
+        }
+        return 'audiobook';
+      }
+      return 'audiobook';
     }
   }
 
@@ -556,7 +581,7 @@ export function detectUserBookFormat(targetMetadata) {
 
   // Check for obvious ebook indicators
   if (
-    targetMetadata.media?.ebookFiles?.length > 0 ||
+    targetMetadata.media?.ebookFile ||
     targetMetadata.format?.toLowerCase().includes('epub') ||
     targetMetadata.format?.toLowerCase().includes('pdf') ||
     targetMetadata.format?.toLowerCase().includes('mobi')
