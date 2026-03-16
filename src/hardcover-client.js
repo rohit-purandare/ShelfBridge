@@ -879,44 +879,63 @@ export class HardcoverClient {
   }
 
   async searchBooksByIsbn(isbn) {
+    if (!isbn || typeof isbn !== 'string') {
+      logger.warn('Invalid ISBN provided for search:', isbn);
+      return [];
+    }
+
     const query = `
-            query searchBooksByIsbn($isbn: String!) {
-                editions(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
-                    id
-                    isbn_10
-                    isbn_13
-                    pages
-                    audio_seconds
-                    physical_format
-                    reading_format { format }
-                    score
-                    contributions {
-                        author {
-                            id
-                            name
-                        }
-                        contribution
-                    }
-                    book {
-                        id
-                        title
-                        contributions(where: {contributable_type: {_eq: "Book"}}) {
-                            author {
-                                id
-                                name
-                            }
-                            contribution
-                        }
-                    }
+            query searchBooksByIsbn($query: String!, $limit: Int!) {
+                search(
+                    query: $query,
+                    query_type: "Book",
+                    per_page: $limit,
+                    page: 1,
+                    fields: "isbns",
+                    weights: "1"
+                ) {
+                    results
                 }
             }
         `;
 
-    const variables = { isbn };
+    const variables = { query: isbn.trim(), limit: 5 };
 
     try {
       const result = await this._executeQuery(query, variables);
-      return result && result.editions ? result.editions : [];
+      const searchResults = this._parseSearchResults(result, `ISBN ${isbn}`);
+
+      logger.debug(
+        `ISBN search for "${isbn}" returned ${searchResults.length} results`,
+      );
+
+      // Transform book-level search results into edition-compatible shape
+      // so existing consumers (isbn-matcher, sync-manager) can process them
+      return searchResults.map(book => ({
+        id: null, // No edition ID from search endpoint
+        isbn_10: null,
+        isbn_13: null,
+        pages: book.pages || null,
+        audio_seconds: book.audio_seconds || null,
+        physical_format: null,
+        reading_format: null,
+        score: null,
+        contributions: (book.contributions || []).map(c => ({
+          author: { id: null, name: c.author?.name || c.name || 'Unknown' },
+          contribution: c.contribution || 'Author',
+        })),
+        book: {
+          id: book.id,
+          title: book.title,
+          contributions: (book.contributions || []).map(c => ({
+            author: {
+              id: null,
+              name: c.author?.name || c.name || 'Unknown',
+            },
+            contribution: c.contribution || 'Author',
+          })),
+        },
+      }));
     } catch (error) {
       logger.error('Error searching books by ISBN:', error.message);
       return [];
@@ -1002,70 +1021,10 @@ export class HardcoverClient {
 
     try {
       const result = await this._executeQuery(query, variables);
-
-      if (!result || !result.search) {
-        logger.debug('No search results returned from API for title:', title);
-        return [];
-      }
-
-      if (!result.search.results) {
-        logger.debug(
-          'Search API returned null/empty results for title:',
-          title,
-        );
-        return [];
-      }
-
-      // Validate and parse the results
-      let searchResults;
-      try {
-        if (typeof result.search.results === 'string') {
-          searchResults = JSON.parse(result.search.results);
-        } else if (Array.isArray(result.search.results)) {
-          // Sometimes the API might return an array directly
-          searchResults = result.search.results;
-        } else if (
-          typeof result.search.results === 'object' &&
-          result.search.results.hits
-        ) {
-          // NEW: Handle the actual API format where results are in hits[].document
-          const hits = result.search.results.hits;
-          if (Array.isArray(hits)) {
-            searchResults = hits.map(hit => hit.document).filter(doc => doc);
-            logger.debug(
-              `Extracted ${searchResults.length} results from hits array`,
-            );
-          } else {
-            logger.warn('Unexpected hits format - not an array:', typeof hits);
-            return [];
-          }
-        } else {
-          logger.warn(
-            'Unexpected search results format for title:',
-            title,
-            'Type:',
-            typeof result.search.results,
-          );
-          return [];
-        }
-      } catch (jsonError) {
-        logger.error('Failed to parse search results JSON for title:', title, {
-          error: jsonError.message,
-          rawResults: result.search.results,
-          resultsType: typeof result.search.results,
-        });
-        return [];
-      }
-
-      if (!Array.isArray(searchResults)) {
-        logger.warn(
-          'Parsed search results is not an array for title:',
-          title,
-          'Type:',
-          typeof searchResults,
-        );
-        return [];
-      }
+      const searchResults = this._parseSearchResults(
+        result,
+        `title "${title}"`,
+      );
 
       logger.debug(
         `Title search for "${title}" returned ${searchResults.length} results`,
@@ -1120,77 +1079,10 @@ export class HardcoverClient {
 
     try {
       const result = await this._executeQuery(query, variables);
-
-      if (!result || !result.search) {
-        logger.debug(
-          'No search results returned from API for title+author:',
-          searchQuery,
-        );
-        return [];
-      }
-
-      if (!result.search.results) {
-        logger.debug(
-          'Search API returned null/empty results for title+author:',
-          searchQuery,
-        );
-        return [];
-      }
-
-      // Validate and parse the results
-      let searchResults;
-      try {
-        if (typeof result.search.results === 'string') {
-          searchResults = JSON.parse(result.search.results);
-        } else if (Array.isArray(result.search.results)) {
-          // Sometimes the API might return an array directly
-          searchResults = result.search.results;
-        } else if (
-          typeof result.search.results === 'object' &&
-          result.search.results.hits
-        ) {
-          // NEW: Handle the actual API format where results are in hits[].document
-          const hits = result.search.results.hits;
-          if (Array.isArray(hits)) {
-            searchResults = hits.map(hit => hit.document).filter(doc => doc);
-            logger.debug(
-              `Extracted ${searchResults.length} results from hits array for title+author search`,
-            );
-          } else {
-            logger.warn('Unexpected hits format - not an array:', typeof hits);
-            return [];
-          }
-        } else {
-          logger.warn(
-            'Unexpected search results format for title+author:',
-            searchQuery,
-            'Type:',
-            typeof result.search.results,
-          );
-          return [];
-        }
-      } catch (jsonError) {
-        logger.error(
-          'Failed to parse search results JSON for title+author:',
-          searchQuery,
-          {
-            error: jsonError.message,
-            rawResults: result.search.results,
-            resultsType: typeof result.search.results,
-          },
-        );
-        return [];
-      }
-
-      if (!Array.isArray(searchResults)) {
-        logger.warn(
-          'Parsed search results is not an array for title+author:',
-          searchQuery,
-          'Type:',
-          typeof searchResults,
-        );
-        return [];
-      }
+      const searchResults = this._parseSearchResults(
+        result,
+        `title+author "${searchQuery}"`,
+      );
 
       logger.debug(
         `Title+author search for "${searchQuery}" returned ${searchResults.length} results`,
@@ -1505,6 +1397,72 @@ export class HardcoverClient {
     } finally {
       this.semaphore.release();
     }
+  }
+
+  /**
+   * Parse search API results from various possible formats
+   * @param {Object} result - Raw GraphQL result containing search.results
+   * @param {string} contextLabel - Label for logging (e.g., "ISBN 9780593135211" or "title search")
+   * @returns {Array} - Parsed array of search result documents
+   */
+  _parseSearchResults(result, contextLabel) {
+    if (!result || !result.search) {
+      logger.debug(`No search results returned from API for ${contextLabel}`);
+      return [];
+    }
+
+    if (!result.search.results) {
+      logger.debug(
+        `Search API returned null/empty results for ${contextLabel}`,
+      );
+      return [];
+    }
+
+    let searchResults;
+    try {
+      if (typeof result.search.results === 'string') {
+        searchResults = JSON.parse(result.search.results);
+      } else if (Array.isArray(result.search.results)) {
+        searchResults = result.search.results;
+      } else if (
+        typeof result.search.results === 'object' &&
+        result.search.results.hits
+      ) {
+        const hits = result.search.results.hits;
+        if (Array.isArray(hits)) {
+          searchResults = hits.map(hit => hit.document).filter(doc => doc);
+          logger.debug(
+            `Extracted ${searchResults.length} results from hits array`,
+          );
+        } else {
+          logger.warn('Unexpected hits format - not an array:', typeof hits);
+          return [];
+        }
+      } else {
+        logger.warn(
+          `Unexpected search results format for ${contextLabel}:`,
+          typeof result.search.results,
+        );
+        return [];
+      }
+    } catch (jsonError) {
+      logger.error(`Failed to parse search results JSON for ${contextLabel}:`, {
+        error: jsonError.message,
+        rawResults: result.search.results,
+        resultsType: typeof result.search.results,
+      });
+      return [];
+    }
+
+    if (!Array.isArray(searchResults)) {
+      logger.warn(
+        `Parsed search results is not an array for ${contextLabel}:`,
+        typeof searchResults,
+      );
+      return [];
+    }
+
+    return searchResults;
   }
 
   async getCurrentUser() {

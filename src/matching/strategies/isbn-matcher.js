@@ -109,10 +109,15 @@ export class IsbnMatcher {
             return {
               userBook: null,
               edition: firstResult,
+              book: {
+                id: firstResult.book?.id,
+                title: firstResult.book?.title,
+              },
               _matchType: 'isbn_search_result',
               _tier: 2,
               _needsScoring: false,
-              _needsBookIdLookup: true, // Book ID needs to be looked up from edition
+              _needsBookIdLookup: false, // Book ID available from search endpoint
+              _needsEditionIdLookup: true, // Edition ID needs to be resolved from book ID
               _isSearchResult: true, // Flag for sync manager to handle auto-add with progress threshold
             };
           }
