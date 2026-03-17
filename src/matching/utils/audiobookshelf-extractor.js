@@ -528,11 +528,21 @@ export function detectUserBookFormat(targetMetadata) {
   // Trust Audiobookshelf's explicit media type first
   if (targetMetadata.mediaType) {
     const mediaType = targetMetadata.mediaType.toLowerCase();
-    if (mediaType.includes('audio') || mediaType === 'book') {
+    if (mediaType.includes('audio')) {
       return 'audiobook';
     }
     if (mediaType.includes('ebook')) {
       return 'ebook';
+    }
+    // Audiobookshelf uses mediaType 'book' for both audiobooks and ebooks,
+    // so check for ebook indicators before defaulting to audiobook
+    if (mediaType === 'book') {
+      const hasEbookFile = !!targetMetadata.media?.ebookFile;
+      const hasAudioFiles = targetMetadata.media?.audioFiles?.length > 0;
+      if (hasEbookFile && !hasAudioFiles) {
+        return 'ebook';
+      }
+      return 'audiobook';
     }
   }
 
@@ -556,7 +566,7 @@ export function detectUserBookFormat(targetMetadata) {
 
   // Check for obvious ebook indicators
   if (
-    targetMetadata.media?.ebookFiles?.length > 0 ||
+    targetMetadata.media?.ebookFile ||
     targetMetadata.format?.toLowerCase().includes('epub') ||
     targetMetadata.format?.toLowerCase().includes('pdf') ||
     targetMetadata.format?.toLowerCase().includes('mobi')

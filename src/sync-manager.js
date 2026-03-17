@@ -1363,11 +1363,14 @@ export class SyncManager {
       );
 
       // For search results, userBook might be null (ASIN/ISBN matches) or populated (title/author matches)
-      let bookId = hardcoverMatch.userBook?.book?.id;
-      const editionId = hardcoverMatch.edition.id;
+      // Two-stage title/author matches store book ID at hardcoverMatch.book.id when userBook is null
+      let bookId = hardcoverMatch.userBook?.book?.id || hardcoverMatch.book?.id;
+      let editionId = hardcoverMatch.edition.id;
 
       // If book ID is missing, look it up from the edition ID
-      if (!bookId && hardcoverMatch._needsBookIdLookup) {
+      // Always attempt lookup when bookId is missing and we have an editionId,
+      // regardless of _needsBookIdLookup flag (which isn't set for two-stage matches)
+      if (!bookId && editionId) {
         logger.debug(`Looking up book ID from edition ID: ${editionId}`);
 
         try {
@@ -1375,7 +1378,6 @@ export class SyncManager {
           if (bookInfo && bookInfo.bookId) {
             bookId = bookInfo.bookId;
             // Update the match object with the resolved book info
-            // Only update userBook if it exists (title/author matches have userBook, ASIN/ISBN matches don't)
             if (hardcoverMatch.userBook?.book) {
               hardcoverMatch.userBook.book.id = bookId;
               hardcoverMatch.userBook.book.title =
@@ -1383,6 +1385,17 @@ export class SyncManager {
               hardcoverMatch.userBook.book.contributions =
                 bookInfo.contributions ||
                 hardcoverMatch.userBook.book.contributions;
+            }
+            // Also update hardcoverMatch.book for two-stage matches where userBook is null
+            if (hardcoverMatch.book) {
+              hardcoverMatch.book.id = bookId;
+              hardcoverMatch.book.title =
+                bookInfo.title || hardcoverMatch.book.title;
+            } else {
+              hardcoverMatch.book = {
+                id: bookId,
+                title: bookInfo.title,
+              };
             }
 
             // Update edition metadata if available
@@ -1435,6 +1448,68 @@ export class SyncManager {
           );
           syncResult.status = 'error';
           syncResult.reason = `Failed to lookup book ID: ${error.message}`;
+          syncResult.timing = performance.now() - startTime;
+          return syncResult;
+        }
+      }
+
+      // If we have book ID but need edition ID (e.g., ISBN search via search endpoint)
+      if (bookId && !editionId && hardcoverMatch._needsEditionIdLookup) {
+        logger.debug(
+          `Looking up preferred edition for book ID: ${bookId} (${title})`,
+        );
+
+        try {
+          const { detectUserBookFormat } =
+            await import('./matching/utils/audiobookshelf-extractor.js');
+          const sourceFormat = detectUserBookFormat(absBook);
+          const preferredFormat =
+            sourceFormat === 'audiobook' ? 'audiobook' : 'ebook';
+
+          const editionInfo =
+            await this.hardcover.getPreferredEditionFromBookId(
+              bookId,
+              preferredFormat,
+            );
+
+          if (editionInfo && editionInfo.edition) {
+            editionId = editionInfo.edition.id;
+
+            // Update the match edition with full data
+            Object.assign(hardcoverMatch.edition, editionInfo.edition);
+
+            // Determine correct format using Hardcover as source of truth
+            const detectedFormat = this._mapHardcoverFormatToInternal(
+              editionInfo.edition,
+            );
+            hardcoverMatch.edition.format = detectedFormat;
+
+            hardcoverMatch._needsEditionIdLookup = false;
+
+            logger.debug(
+              `Successfully resolved edition ID: ${editionId} for book: ${bookId}`,
+              {
+                format: detectedFormat,
+                pages: editionInfo.edition.pages,
+                audioSeconds: editionInfo.edition.audio_seconds,
+              },
+            );
+          } else {
+            logger.error(
+              `Failed to find edition for book ID: ${bookId} (${title})`,
+            );
+            syncResult.status = 'error';
+            syncResult.reason = `Failed to resolve edition for book ${bookId}`;
+            syncResult.timing = performance.now() - startTime;
+            return syncResult;
+          }
+        } catch (error) {
+          logger.error(
+            `Error during edition lookup for book: ${bookId} (${title})`,
+            { error: error.message },
+          );
+          syncResult.status = 'error';
+          syncResult.reason = `Edition lookup failed: ${error.message}`;
           syncResult.timing = performance.now() - startTime;
           return syncResult;
         }
@@ -1737,6 +1812,52 @@ export class SyncManager {
               title: r.book?.title,
             })),
           });
+
+          // ISBN search via search endpoint returns book-level data without edition IDs.
+          // Resolve the preferred edition so downstream code has a real edition ID.
+          if (
+            searchResults.length > 0 &&
+            !searchResults[0].id &&
+            searchResults[0].book?.id
+          ) {
+            const resolvedBookId = searchResults[0].book.id;
+            const { detectUserBookFormat } =
+              await import('./matching/utils/audiobookshelf-extractor.js');
+            const sourceFormat = detectUserBookFormat(absBook);
+            const editionInfo =
+              await this.hardcover.getPreferredEditionFromBookId(
+                resolvedBookId,
+                sourceFormat === 'audiobook' ? 'audiobook' : 'ebook',
+              );
+            if (editionInfo && editionInfo.edition) {
+              searchResults = [
+                {
+                  id: editionInfo.edition.id,
+                  book: {
+                    id: editionInfo.bookId,
+                    title: editionInfo.title,
+                  },
+                  format:
+                    editionInfo.edition.reading_format?.format || undefined,
+                  reading_format: editionInfo.edition.reading_format,
+                  physical_format: editionInfo.edition.physical_format,
+                  asin: editionInfo.edition.asin,
+                  isbn_10: editionInfo.edition.isbn_10,
+                  isbn_13: editionInfo.edition.isbn_13,
+                  pages: editionInfo.edition.pages,
+                  audio_seconds: editionInfo.edition.audio_seconds,
+                },
+              ];
+              logger.debug(
+                `Resolved edition for ISBN search result: edition ${editionInfo.edition.id} for book ${resolvedBookId}`,
+              );
+            } else {
+              logger.warn(
+                `Could not resolve edition for book ${resolvedBookId} from ISBN search`,
+              );
+              searchResults = [];
+            }
+          }
         }
       }
 
@@ -2998,7 +3119,7 @@ export class SyncManager {
 
       // Log edition format for monitoring
       logger.info(
-        `Updating progress for edition ${edition.id} with format: ${edition.reading_format?.format}`,
+        `Updating progress for edition ${edition.id} with format: ${edition.reading_format?.format || edition.format}`,
       );
 
       const result = await this.hardcover.updateReadingProgress(

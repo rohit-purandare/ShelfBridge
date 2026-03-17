@@ -502,6 +502,7 @@ export class TitleAuthorMatcher {
             _bookIdentificationScore: bestBookMatch._bookIdentificationScore,
             _editionSelectionResult: selectedEditionResult,
             _needsScoring: false, // Already scored in two stages
+            _needsBookIdLookup: !selectedEditionResult.bookId, // Fallback if book ID wasn't resolved
             _isSearchResult: !existingUserBook, // true if needs auto-add, false if already in library
           };
         }
@@ -652,17 +653,19 @@ export class TitleAuthorMatcher {
    */
   async _cacheSuccessfulMatch(userId, titleAuthorId, title, bestMatch, author) {
     try {
+      // Two-stage matches have edition ID at bestMatch.edition.id, search results have it at bestMatch.id
+      const editionId = bestMatch.edition?.id || bestMatch.id;
       await this.cache.storeEditionMapping(
         userId,
         titleAuthorId,
         title,
-        bestMatch.id,
+        editionId,
         'title_author',
         extractAuthorFromSearchResult(bestMatch) || author || '',
       );
       logger.debug(`Cached title/author match for "${title}"`, {
         identifier: titleAuthorId,
-        editionId: bestMatch.id,
+        editionId: editionId,
       });
     } catch (cacheError) {
       logger.warn(
