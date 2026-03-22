@@ -104,7 +104,12 @@ export function extractTitle(bookData) {
 
   for (const field of titleFields) {
     if (bookData[field] && typeof bookData[field] === 'string') {
-      return bookData[field].trim();
+      const title = bookData[field].trim();
+      const sub = bookData.subtitle;
+      if (sub && typeof sub === 'string' && sub.trim()) {
+        return `${title}: ${sub.trim()}`;
+      }
+      return title;
     }
   }
 
@@ -115,7 +120,12 @@ export function extractTitle(bookData) {
         bookData.metadata[field] &&
         typeof bookData.metadata[field] === 'string'
       ) {
-        return bookData.metadata[field].trim();
+        const title = bookData.metadata[field].trim();
+        const sub = bookData.metadata.subtitle;
+        if (sub && typeof sub === 'string' && sub.trim()) {
+          return `${title}: ${sub.trim()}`;
+        }
+        return title;
       }
     }
   }
@@ -127,7 +137,12 @@ export function extractTitle(bookData) {
         bookData.media.metadata[field] &&
         typeof bookData.media.metadata[field] === 'string'
       ) {
-        return bookData.media.metadata[field].trim();
+        const title = bookData.media.metadata[field].trim();
+        const sub = bookData.media.metadata.subtitle;
+        if (sub && typeof sub === 'string' && sub.trim()) {
+          return `${title}: ${sub.trim()}`;
+        }
+        return title;
       }
     }
   }
