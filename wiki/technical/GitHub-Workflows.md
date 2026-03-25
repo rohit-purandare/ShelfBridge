@@ -28,6 +28,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 ### Triggers
 
 - Pull requests to `main` (primary validation)
+- Manual dispatch via `workflow_dispatch` (useful for release-please PRs where bot-created PRs don't automatically trigger workflows)
 
 ### Jobs
 
@@ -60,7 +61,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 ### Performance Optimizations
 
-- **Pull request focused**: Only runs on PRs for branch protection (no redundant push triggers)
+- **Pull request focused**: Primarily runs on PRs, with manual dispatch available for bot-created PRs
 - Full Git history (`fetch-depth: 0`) for reliable Git operations
 - Matrix strategy for parallel testing
 - Conditional job execution
