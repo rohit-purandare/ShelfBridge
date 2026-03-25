@@ -5,6 +5,15 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.1](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.0...v1.23.1) (2026-03-25)
+
+
+### ## 🔧 Bug Fixes
+
+* include subtitle in title/author matching for extractTitle ([74221fe](https://github.com/rohit-purandare/ShelfBridge/commit/74221feefe6f0dbf2f6c7236e24669615654e753))
+* include subtitle in title/author matching for extractTitle ([b50e6a7](https://github.com/rohit-purandare/ShelfBridge/commit/b50e6a7943ff9a4a17d5522e5b90831404cea4d3))
+* resolve security vulnerabilities via npm audit fix ([d12d11a](https://github.com/rohit-purandare/ShelfBridge/commit/d12d11a946ae90bb4896a6ee6d1dda1461b5774f))
+
 ## [1.23.0](https://github.com/rohit-purandare/ShelfBridge/compare/v1.22.5...v1.23.0) (2026-01-19)
 
 
