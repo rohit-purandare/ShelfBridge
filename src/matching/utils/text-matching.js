@@ -657,12 +657,95 @@ export {
 
 // Export normalization functions for existing ISBN/ASIN processing
 export function normalizeIsbn(isbn) {
-  if (!isbn) return null;
-  const normalized = isbn.replace(/[-\s]/g, '').toUpperCase();
+  if (isbn === null || isbn === undefined || isbn === '') return null;
+  const normalized = String(isbn).replace(/[-\s]/g, '').toUpperCase();
   if (normalized.length === 10 || normalized.length === 13) {
     return normalized;
   }
   return null;
+}
+
+export function convertIsbn13To10(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (
+    !normalized ||
+    normalized.length !== 13 ||
+    !normalized.startsWith('978') ||
+    !/^\d{13}$/.test(normalized)
+  ) {
+    return null;
+  }
+
+  let isbn13Sum = 0;
+  for (let index = 0; index < 12; index++) {
+    const multiplier = index % 2 === 0 ? 1 : 3;
+    isbn13Sum += Number(normalized[index]) * multiplier;
+  }
+
+  const expectedIsbn13Check = (10 - (isbn13Sum % 10)) % 10;
+  if (expectedIsbn13Check !== Number(normalized[12])) {
+    return null;
+  }
+
+  const core = normalized.slice(3, 12);
+  if (!/^\d{9}$/.test(core)) {
+    return null;
+  }
+
+  let sum = 0;
+  for (let index = 0; index < core.length; index++) {
+    sum += Number(core[index]) * (10 - index);
+  }
+
+  const checkValue = (11 - (sum % 11)) % 11;
+  const checkDigit = checkValue === 10 ? 'X' : String(checkValue);
+  return `${core}${checkDigit}`;
+}
+
+export function convertIsbn10To13(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (!normalized || normalized.length !== 10) {
+    return null;
+  }
+
+  const core = normalized.slice(0, 9);
+  if (!/^\d{9}$/.test(core) || !/^[\dX]$/.test(normalized[9])) {
+    return null;
+  }
+
+  let isbn10Sum = 0;
+  for (let index = 0; index < normalized.length; index++) {
+    const digit = normalized[index] === 'X' ? 10 : Number(normalized[index]);
+    isbn10Sum += digit * (10 - index);
+  }
+
+  if (isbn10Sum % 11 !== 0) {
+    return null;
+  }
+
+  const isbn13WithoutCheck = `978${core}`;
+  let sum = 0;
+  for (let index = 0; index < isbn13WithoutCheck.length; index++) {
+    const multiplier = index % 2 === 0 ? 1 : 3;
+    sum += Number(isbn13WithoutCheck[index]) * multiplier;
+  }
+
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return `${isbn13WithoutCheck}${checkDigit}`;
+}
+
+export function getIsbnVariants(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (!normalized) return [];
+
+  const variants = [normalized];
+  if (normalized.length === 13) {
+    variants.push(convertIsbn13To10(normalized));
+  } else if (normalized.length === 10) {
+    variants.push(convertIsbn10To13(normalized));
+  }
+
+  return [...new Set(variants.filter(Boolean))];
 }
 
 export function normalizeAsin(asin) {
