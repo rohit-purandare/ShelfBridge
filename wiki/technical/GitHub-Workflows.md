@@ -164,6 +164,8 @@ npm run format:check
 npm audit --audit-level=high
 ```
 
+Dependency security fixes should update both `package.json` and `package-lock.json` so CI audits run against the same resolved versions that ship with the app.
+
 #### 4. **Configuration Validation**
 
 - Validates `config/config.yaml.example` is valid YAML
