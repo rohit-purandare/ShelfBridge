@@ -35,6 +35,10 @@ This project uses a simplified, industry-standard workflow architecture with thr
 - 🔒 Generates build attestations for security
 - ✅ Verifies published images work correctly
 
+### Required Secret:
+
+- `RELEASE_PLEASE_TOKEN`: GitHub App token or PAT used by Release Please. This must not be the default `GITHUB_TOKEN`; release PRs created with `GITHUB_TOKEN` require manual workflow approval and can leave required checks pending.
+
 ### Version Tags Created:
 
 - `latest` - Always points to newest release

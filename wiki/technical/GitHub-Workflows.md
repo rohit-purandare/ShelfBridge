@@ -28,7 +28,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 ### Triggers
 
 - Pull requests to `main` (primary validation)
-- Manual dispatch via `workflow_dispatch` (useful for release-please PRs where bot-created PRs don't automatically trigger workflows)
+- Manual dispatch via `workflow_dispatch` (useful for retrying CI manually during release troubleshooting)
 
 ### Jobs
 
@@ -87,6 +87,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 - Generates structured changelogs
 - Creates GitHub releases with release notes
 - **Full git history** (`fetch-depth: 0`) for accurate versioning
+- Uses the `RELEASE_PLEASE_TOKEN` repository secret so release PRs can trigger required CI checks
 
 #### 2. **Docker Publish**
 
@@ -111,7 +112,7 @@ ghcr.io/rohit-purandare/shelfbridge:v1
 ghcr.io/rohit-purandare/shelfbridge:1
 ```
 
-**Technical Implementation:** Due to GitHub's security limitation preventing GITHUB_TOKEN from triggering workflows on tags it creates, the workflow uses the `value` parameter in semver tag patterns to explicitly provide the version from release-please outputs (`needs.release-please.outputs.tag_name`). This ensures proper semver tags are generated when release-please creates releases, even though the git tag doesn't exist in the workflow's git context.
+**Technical Implementation:** The workflow uses `RELEASE_PLEASE_TOKEN` instead of the default `GITHUB_TOKEN` because resources created with `GITHUB_TOKEN` do not trigger follow-on workflow runs. This allows required CI checks to run on release PRs. The Docker metadata step also uses the `value` parameter in semver tag patterns to explicitly provide the version from release-please outputs (`needs.release-please.outputs.tag_name`).
 
 #### 4. **Image Verification**
 
@@ -195,7 +196,7 @@ All workflows follow **principle of least privilege**:
 
 ### Release Workflow
 
-- `release-please` job: `contents: write`, `pull-requests: write`
+- `release-please` job: `contents: write`, `issues: write`, `pull-requests: write`
 - `docker-publish` job: `contents: read`, `packages: write`, `id-token: write`, `attestations: write`
 
 ### Code Quality Workflow
