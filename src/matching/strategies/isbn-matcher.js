@@ -7,6 +7,7 @@
 
 import logger from '../../logger.js';
 import { extractTitle } from '../utils/audiobookshelf-extractor.js';
+import { getIsbnVariants } from '../utils/text-matching.js';
 
 /**
  * ISBN Matching Strategy - Tier 2
@@ -38,9 +39,13 @@ export class IsbnMatcher {
       return null;
     }
 
-    if (!identifierLookup[identifiers.isbn]) {
+    const isbnVariants = getIsbnVariants(identifiers.isbn);
+    const lookupIsbn = isbnVariants.find(isbn => identifierLookup[isbn]);
+
+    if (!lookupIsbn) {
       logger.debug(
         `❌ ISBN ${identifiers.isbn} not found in user's Hardcover library for ${title}`,
+        { isbnVariants },
       );
 
       // Try book-level matching if we have the necessary functions
@@ -130,10 +135,12 @@ export class IsbnMatcher {
       return null;
     }
 
-    const match = identifierLookup[identifiers.isbn];
+    const match = identifierLookup[lookupIsbn];
 
     logger.debug(`Found ISBN match for ${title}`, {
       isbn: identifiers.isbn,
+      matchedIsbn: lookupIsbn,
+      isbnVariants,
       hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
       userBookId: match.userBook?.id || 'No User Book ID',
       editionId: match.edition.id,

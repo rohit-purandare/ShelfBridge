@@ -4,6 +4,7 @@ import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
 import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
+import { getIsbnVariants } from './matching/utils/text-matching.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
@@ -636,7 +637,9 @@ export class SyncManager {
           possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
         }
         if (identifiers.isbn) {
-          possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+          for (const isbnVariant of getIsbnVariants(identifiers.isbn)) {
+            possibleCacheKeys.push({ key: isbnVariant, type: 'isbn' });
+          }
         }
 
         // For title/author matching, add the standardized title/author cache identifier
@@ -1112,7 +1115,9 @@ export class SyncManager {
       possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
     }
     if (identifiers.isbn) {
-      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+      for (const isbnVariant of getIsbnVariants(identifiers.isbn)) {
+        possibleCacheKeys.push({ key: isbnVariant, type: 'isbn' });
+      }
     }
 
     // Add title/author key using consistent pattern (same as TitleAuthorMatcher)

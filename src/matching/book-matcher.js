@@ -17,7 +17,7 @@ import {
   extractAuthor,
   detectUserBookFormat,
 } from './utils/audiobookshelf-extractor.js';
-import { normalizeIsbn, normalizeAsin } from './utils/text-matching.js';
+import { getIsbnVariants, normalizeAsin } from './utils/text-matching.js';
 
 /**
  * Book Matcher - Orchestrates the multi-tier book matching process
@@ -233,12 +233,12 @@ export class BookMatcher {
         // Build identifier lookup table (ISBN, ASIN)
         // Add ISBN-10
         if (edition.isbn_10) {
-          const normalizedIsbn = normalizeIsbn(edition.isbn_10);
-          if (
-            normalizedIsbn &&
-            shouldStoreEdition(normalizedIsbn, editionWithFormat)
-          ) {
-            identifierLookup[normalizedIsbn] = {
+          for (const isbnVariant of getIsbnVariants(edition.isbn_10)) {
+            if (!shouldStoreEdition(isbnVariant, editionWithFormat)) {
+              continue;
+            }
+
+            identifierLookup[isbnVariant] = {
               userBook,
               edition: editionWithFormat,
             };
@@ -247,12 +247,12 @@ export class BookMatcher {
 
         // Add ISBN-13
         if (edition.isbn_13) {
-          const normalizedIsbn = normalizeIsbn(edition.isbn_13);
-          if (
-            normalizedIsbn &&
-            shouldStoreEdition(normalizedIsbn, editionWithFormat)
-          ) {
-            identifierLookup[normalizedIsbn] = {
+          for (const isbnVariant of getIsbnVariants(edition.isbn_13)) {
+            if (!shouldStoreEdition(isbnVariant, editionWithFormat)) {
+              continue;
+            }
+
+            identifierLookup[isbnVariant] = {
               userBook,
               edition: editionWithFormat,
             };

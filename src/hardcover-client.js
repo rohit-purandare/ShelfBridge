@@ -3,6 +3,7 @@ import { RateLimiter, Semaphore } from './utils/concurrency.js';
 import { normalizeApiToken, createHttpAgent } from './utils/network.js';
 import { safeParseInt } from './utils/data.js';
 import { HardcoverRetryManager } from './utils/retry-manager.js';
+import { getIsbnVariants } from './matching/utils/text-matching.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
@@ -879,12 +880,19 @@ export class HardcoverClient {
   }
 
   async searchBooksByIsbn(isbn) {
+    const isbnCandidates = getIsbnVariants(isbn);
+    if (isbnCandidates.length === 0) {
+      logger.warn('Invalid ISBN provided for search:', isbn);
+      return [];
+    }
+
     const query = `
-            query searchBooksByIsbn($isbn: String!) {
-                editions(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
+            query searchBooksByIsbn($isbnCandidates: [String!]!) {
+                editions(where: { _or: [{ isbn_10: { _in: $isbnCandidates } }, { isbn_13: { _in: $isbnCandidates } }] }) {
                     id
                     isbn_10
                     isbn_13
+                    asin
                     pages
                     audio_seconds
                     physical_format
@@ -912,15 +920,75 @@ export class HardcoverClient {
             }
         `;
 
-    const variables = { isbn };
+    const variables = { isbnCandidates };
 
     try {
       const result = await this._executeQuery(query, variables);
-      return result && result.editions ? result.editions : [];
+      const exactMatches = result && result.editions ? result.editions : [];
+      if (exactMatches.length > 0) {
+        return exactMatches;
+      }
+
+      return await this._searchBooksByIsbnSearchApi(isbnCandidates);
     } catch (error) {
       logger.error('Error searching books by ISBN:', error.message);
       return [];
     }
+  }
+
+  async _searchBooksByIsbnSearchApi(isbnCandidates) {
+    for (const isbnCandidate of isbnCandidates) {
+      const searchResults = await this.searchBooksByTitle(isbnCandidate, 10);
+      const editionMatches = this._extractIsbnMatchesFromSearchResults(
+        searchResults,
+        isbnCandidates,
+      );
+
+      if (editionMatches.length > 0) {
+        logger.info('Found ISBN match via Hardcover search API fallback', {
+          isbnCandidate,
+          isbnCandidates,
+          resultCount: editionMatches.length,
+        });
+        return editionMatches;
+      }
+    }
+
+    return [];
+  }
+
+  _extractIsbnMatchesFromSearchResults(searchResults, isbnCandidates) {
+    const candidateSet = new Set(isbnCandidates);
+    const matches = [];
+    const seenEditionIds = new Set();
+
+    for (const book of searchResults || []) {
+      for (const edition of book.editions || []) {
+        const editionIsbnVariants = [
+          ...getIsbnVariants(edition.isbn_10),
+          ...getIsbnVariants(edition.isbn_13),
+        ];
+        const isMatch = editionIsbnVariants.some(isbn =>
+          candidateSet.has(isbn),
+        );
+
+        if (!isMatch || seenEditionIds.has(edition.id)) {
+          continue;
+        }
+
+        seenEditionIds.add(edition.id);
+        matches.push({
+          ...edition,
+          book: {
+            id: book.id,
+            title: book.title,
+            contributions: book.contributions,
+          },
+        });
+      }
+    }
+
+    return matches;
   }
 
   async searchBooksByAsin(asin) {
