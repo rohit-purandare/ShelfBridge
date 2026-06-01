@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
       pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -25,11 +26,20 @@ jobs:
         with:
           fetch-depth: 0 # Full history for semantic versioning
 
+      - name: Validate Release Please token
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_PLEASE_TOKEN" ]; then
+            echo "::error::Set RELEASE_PLEASE_TOKEN to a PAT or GitHub App token so Release Please PRs can trigger required checks."
+            exit 1
+          fi
+
       - name: Run Release Please
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
