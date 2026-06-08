@@ -89,6 +89,11 @@ export class AudiobookshelfClient {
    * Clean up HTTP connections and resources
    */
   cleanup() {
+    if (this.rateLimiter) {
+      this.rateLimiter.destroy();
+      logger.debug('AudiobookshelfClient rate limiter cleaned up');
+    }
+
     if (this._httpAgent) {
       this._httpAgent.destroy();
       logger.debug('AudiobookshelfClient HTTP agent cleaned up');
@@ -254,54 +259,72 @@ export class AudiobookshelfClient {
         librariesSkipped: libraryFilter.stats.excluded,
       });
 
-      // Get library items in progress (these have some progress) - filtered by allowed libraries
-      const progressItems = await this._getItemsInProgress(librariesToProcess);
-      logger.debug('Found items in progress', { count: progressItems.length });
+      let progressResults;
 
-      // Always check for completed books to ensure completion detection on every sync
-      logger.debug('Checking for completed books across filtered libraries');
-      const completedBooksList =
-        await this._getCompletedBooksFromLibraries(librariesToProcess);
-      logger.debug('Found books with completion status', {
-        count: completedBooksList.length,
-      });
+      if (Array.isArray(userData.mediaProgress)) {
+        logger.debug('Using mediaProgress from /api/me as progress source', {
+          count: userData.mediaProgress.length,
+        });
+        progressResults = await this._getProgressBooksFromMediaProgress(
+          userData.mediaProgress,
+          librariesToProcess,
+        );
+      } else {
+        // Get library items in progress (these have some progress) - filtered by allowed libraries
+        const progressItems =
+          await this._getItemsInProgress(librariesToProcess);
+        logger.debug('Found items in progress', {
+          count: progressItems.length,
+        });
 
-      // Combine progress items with completed books (avoiding duplicates)
-      const allBooksWithAnyProgress = this._combineProgressAndCompletedBooks(
-        progressItems,
-        completedBooksList,
-      );
-      logger.debug('Total books with any progress (in-progress + completed)', {
-        count: allBooksWithAnyProgress.length,
-      });
+        // Always check for completed books to ensure completion detection on every sync
+        logger.debug('Checking for completed books across filtered libraries');
+        const completedBooksList =
+          await this._getCompletedBooksFromLibraries(librariesToProcess);
+        logger.debug('Found books with completion status', {
+          count: completedBooksList.length,
+        });
+
+        // Combine progress items with completed books (avoiding duplicates)
+        const allBooksWithAnyProgress = this._combineProgressAndCompletedBooks(
+          progressItems,
+          completedBooksList,
+        );
+        logger.debug(
+          'Total books with any progress (in-progress + completed)',
+          {
+            count: allBooksWithAnyProgress.length,
+          },
+        );
+
+        // Fetch details for ALL books with any progress (in-progress + completed) in parallel
+        const allProgressPromises = allBooksWithAnyProgress.map(item =>
+          this._getLibraryItemDetails(item.id).catch(error => {
+            // Only catch recoverable errors, let critical ones propagate
+            if (this._isRecoverableError(error)) {
+              logger.debug('Recoverable error fetching details for item', {
+                itemId: item.id,
+                error: error.message,
+              });
+              return null;
+            } else {
+              logger.error('Critical error fetching details for item', {
+                itemId: item.id,
+                error: error.message,
+              });
+              throw error; // Re-throw critical errors
+            }
+          }),
+        );
+
+        progressResults = await Promise.all(allProgressPromises);
+      }
 
       // Only process books that actually have reading progress
       const booksToSync = [];
 
-      // Fetch details for ALL books with any progress (in-progress + completed) in parallel
-      const allProgressPromises = allBooksWithAnyProgress.map(item =>
-        this._getLibraryItemDetails(item.id).catch(error => {
-          // Only catch recoverable errors, let critical ones propagate
-          if (this._isRecoverableError(error)) {
-            logger.debug('Recoverable error fetching details for item', {
-              itemId: item.id,
-              error: error.message,
-            });
-            return null;
-          } else {
-            logger.error('Critical error fetching details for item', {
-              itemId: item.id,
-              error: error.message,
-            });
-            throw error; // Re-throw critical errors
-          }
-        }),
-      );
-
-      const progressResults = await Promise.all(allProgressPromises);
-
-      // Debug: Show all books found in progress
-      logger.debug('Books found in items-in-progress API:', {
+      // Debug: Show all books found with progress
+      logger.debug('Books found with media progress:', {
         books: progressResults.filter(Boolean).map(book => {
           const title =
             (book &&
@@ -362,7 +385,10 @@ export class AudiobookshelfClient {
         return !isFinished; // Books that are currently being read
       });
 
-      const booksNeverStarted = totalBooksInLibrary - validBooks.length;
+      const booksNeverStarted = Math.max(
+        0,
+        totalBooksInLibrary - validBooks.length,
+      );
 
       // Store filtering stats for sync summary (attach to first book or create metadata)
       const filteringStats = {
@@ -613,52 +639,109 @@ export class AudiobookshelfClient {
     return [...progressItems, ...uniqueCompletedBooks];
   }
 
-  async _getLibraryItemDetails(itemId) {
+  async _getProgressBooksFromMediaProgress(mediaProgress, allowedLibraries) {
+    const allowedLibraryIds =
+      allowedLibraries && allowedLibraries.length > 0
+        ? new Set(allowedLibraries.map(lib => lib.id))
+        : null;
+
+    const progressByItemId = new Map();
+    for (const progress of mediaProgress) {
+      const itemId = this._getLibraryItemIdFromMediaProgress(progress);
+      if (!itemId) continue;
+
+      const existingProgress = progressByItemId.get(itemId);
+      progressByItemId.set(
+        itemId,
+        this._chooseMostRelevantMediaProgress(existingProgress, progress),
+      );
+    }
+
+    logger.debug('Prepared mediaProgress records for item lookup', {
+      mediaProgressCount: mediaProgress.length,
+      uniqueLibraryItems: progressByItemId.size,
+    });
+
+    const detailPromises = Array.from(progressByItemId.entries()).map(
+      ([itemId, progress]) =>
+        this._getLibraryItemDetails(itemId, progress).catch(error => {
+          if (this._isRecoverableError(error)) {
+            logger.debug(
+              'Recoverable error fetching mediaProgress item details',
+              {
+                itemId,
+                error: error.message,
+              },
+            );
+            return null;
+          }
+
+          logger.error('Critical error fetching mediaProgress item details', {
+            itemId,
+            error: error.message,
+          });
+          throw error;
+        }),
+    );
+
+    const itemDetails = (await Promise.all(detailPromises)).filter(Boolean);
+    const filteredItemDetails = allowedLibraryIds
+      ? itemDetails.filter(item => allowedLibraryIds.has(item.libraryId))
+      : itemDetails;
+
+    const excludedByLibraryFilter =
+      itemDetails.length - filteredItemDetails.length;
+    if (excludedByLibraryFilter > 0) {
+      logger.debug('Filtered mediaProgress items by library', {
+        totalFound: itemDetails.length,
+        afterFiltering: filteredItemDetails.length,
+        excludedByLibraryFilter,
+        allowedLibraries: allowedLibraries.map(lib => lib.name),
+      });
+    }
+
+    return filteredItemDetails;
+  }
+
+  _getLibraryItemIdFromMediaProgress(progress) {
+    if (!progress || typeof progress !== 'object') {
+      return null;
+    }
+
+    // Podcast episode progress uses the same model but is outside ShelfBridge's scope.
+    if (progress.episodeId) {
+      return null;
+    }
+
+    return progress.libraryItemId || progress.id || null;
+  }
+
+  _chooseMostRelevantMediaProgress(existingProgress, candidateProgress) {
+    if (!existingProgress) {
+      return candidateProgress;
+    }
+
+    if (candidateProgress.isFinished && !existingProgress.isFinished) {
+      return candidateProgress;
+    }
+
+    const existingLastUpdate = existingProgress.lastUpdate || 0;
+    const candidateLastUpdate = candidateProgress.lastUpdate || 0;
+    return candidateLastUpdate >= existingLastUpdate
+      ? candidateProgress
+      : existingProgress;
+  }
+
+  async _getLibraryItemDetails(itemId, knownProgress = null) {
     try {
       const itemData = await this._makeRequest('GET', `/api/items/${itemId}`);
 
       // Get user's progress for this item
-      const progressData = await this._getUserProgress(itemId);
+      const progressData =
+        knownProgress || (await this._getUserProgress(itemId));
 
       // Combine item data with progress
-      if (progressData) {
-        itemData.progress_percentage = progressData.progress * 100;
-        itemData.current_time = progressData.currentTime;
-        itemData.is_finished = progressData.isFinished;
-
-        // Use media progress startedAt if available
-        if (progressData.startedAt) {
-          itemData.started_at = progressData.startedAt;
-          logger.debug('Raw startedAt for book', {
-            title: itemData.media?.metadata?.title,
-            startedAt: progressData.startedAt,
-            startedAtISO: new Date(progressData.startedAt).toISOString(),
-          });
-        }
-        // Use media progress finishedAt if available
-        if (progressData.finishedAt) {
-          itemData.finished_at = progressData.finishedAt;
-          logger.debug('Raw finishedAt for book', {
-            title: itemData.media?.metadata?.title,
-            finishedAt: progressData.finishedAt,
-            finishedAtISO: new Date(progressData.finishedAt).toISOString(),
-          });
-        }
-        // Use media progress lastUpdate for last listened
-        if (progressData.lastUpdate) {
-          itemData.last_listened_at = progressData.lastUpdate;
-          logger.debug('Raw lastUpdate for book', {
-            title: itemData.media?.metadata?.title,
-            lastUpdate: progressData.lastUpdate,
-            lastUpdateISO: new Date(progressData.lastUpdate).toISOString(),
-          });
-        } else {
-          itemData.last_listened_at = null;
-          logger.debug('No lastUpdate for book', {
-            title: itemData.media?.metadata?.title,
-          });
-        }
-      }
+      this._applyProgressDataToItem(itemData, progressData);
 
       return itemData;
     } catch (error) {
@@ -679,6 +762,55 @@ export class AudiobookshelfClient {
       }
     }
   }
+
+  _applyProgressDataToItem(itemData, progressData) {
+    if (!itemData || !progressData) {
+      return;
+    }
+
+    if (progressData.progress !== null && progressData.progress !== undefined) {
+      itemData.progress_percentage = progressData.progress * 100;
+    } else if (progressData.isFinished === true) {
+      itemData.progress_percentage = 100;
+    }
+
+    itemData.current_time = progressData.currentTime;
+    itemData.is_finished = progressData.isFinished;
+
+    // Use media progress startedAt if available
+    if (progressData.startedAt) {
+      itemData.started_at = progressData.startedAt;
+      logger.debug('Raw startedAt for book', {
+        title: itemData.media?.metadata?.title,
+        startedAt: progressData.startedAt,
+        startedAtISO: new Date(progressData.startedAt).toISOString(),
+      });
+    }
+    // Use media progress finishedAt if available
+    if (progressData.finishedAt) {
+      itemData.finished_at = progressData.finishedAt;
+      logger.debug('Raw finishedAt for book', {
+        title: itemData.media?.metadata?.title,
+        finishedAt: progressData.finishedAt,
+        finishedAtISO: new Date(progressData.finishedAt).toISOString(),
+      });
+    }
+    // Use media progress lastUpdate for last listened
+    if (progressData.lastUpdate) {
+      itemData.last_listened_at = progressData.lastUpdate;
+      logger.debug('Raw lastUpdate for book', {
+        title: itemData.media?.metadata?.title,
+        lastUpdate: progressData.lastUpdate,
+        lastUpdateISO: new Date(progressData.lastUpdate).toISOString(),
+      });
+    } else {
+      itemData.last_listened_at = null;
+      logger.debug('No lastUpdate for book', {
+        title: itemData.media?.metadata?.title,
+      });
+    }
+  }
+
   async _getUserProgress(itemId) {
     try {
       // This endpoint can return 404 if there's no progress, which is normal
@@ -880,13 +1012,13 @@ export class AudiobookshelfClient {
     return { libraries: filteredLibraries, stats };
   }
 
-  async getLibraryItems(libraryId, limit = null) {
+  async getLibraryItems(libraryId, limit = undefined) {
     try {
       const allItems = [];
       let page = 0;
       let total = 0;
-      // Use the instance's maxBooksToFetch if no limit is provided
-      const effectiveLimit = limit !== null ? limit : this.maxBooksToFetch;
+      // Undefined uses the configured cap. Explicit null means no limit.
+      const effectiveLimit = limit === undefined ? this.maxBooksToFetch : limit;
       const itemsPerPage = this.pageSize; // Use configurable page size
 
       while (true) {
