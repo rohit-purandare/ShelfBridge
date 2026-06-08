@@ -25,7 +25,7 @@ export class SyncManager {
 
     // Increase max listeners for AbortSignal to handle parallel processing
     // This prevents MaxListenersExceededWarning when processing many books
-    const maxBooks = this.globalConfig.max_books_to_fetch || 500;
+    const maxBooks = this.globalConfig.max_books_to_fetch ?? 500;
     const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
     setMaxListeners(requiredListeners, this.abortController.signal);
 
@@ -39,7 +39,7 @@ export class SyncManager {
       user.abs_url,
       user.abs_token,
       globalConfig.audiobookshelf_semaphore || 5,
-      globalConfig.max_books_to_fetch || 500,
+      globalConfig.max_books_to_fetch ?? null,
       globalConfig.page_size || 100,
       globalConfig.audiobookshelf_rate_limit || 600,
       {}, // rereadConfig - keep empty for now
