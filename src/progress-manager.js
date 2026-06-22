@@ -340,8 +340,10 @@ export class ProgressManager {
       isFinished = null,
       context = '',
       format = 'unknown',
-      _bookData = {}, // Book metadata for precise completion detection
+      bookData = null,
+      _bookData = null, // Backward-compatible alias for existing callers
     } = options;
+    const completionBookData = bookData ?? _bookData ?? {};
 
     // Explicit finished flag takes precedence for ALL formats
     if (isFinished === true || isFinished === 1) {
@@ -365,7 +367,7 @@ export class ProgressManager {
 
     // Validate progress percentage, passing isFinished flag to respect explicit completion
     const validatedProgress = this.validateProgress(progress, context, {
-      bookData: _bookData,
+      bookData: completionBookData,
       format: format,
       isFinished: isFinished,
     });
@@ -383,7 +385,7 @@ export class ProgressManager {
       threshold,
       format,
       context,
-      _bookData,
+      completionBookData,
     );
 
     if (isCompleteByProgress) {
@@ -995,7 +997,14 @@ export class ProgressManager {
    * @returns {boolean} - Whether the book is considered complete
    */
   static isBookComplete(bookData, context = '', options = {}, edition = null) {
-    const isFinished = this.extractFinishedFlag(bookData);
+    const hasFinishedFlag =
+      bookData &&
+      Object.prototype.hasOwnProperty.call(bookData, 'is_finished') &&
+      bookData.is_finished !== null &&
+      bookData.is_finished !== undefined;
+    const isFinished = hasFinishedFlag
+      ? this.extractFinishedFlag(bookData)
+      : null;
     const rawProgress = this.extractProgressPercentage(bookData);
     const bookFormat = this.getBookFormat(bookData, edition);
 

@@ -278,6 +278,22 @@ describe('ProgressManager.isComplete()', () => {
     assert.equal(result, true);
   });
 
+  it('accepts documented bookData option for precise audiobook completion', () => {
+    const bookData = {
+      current_time: 1683, // 28m 3s listened
+      media: { duration: 1800 }, // 30m total, under 2 minutes remaining
+    };
+
+    const result = ProgressManager.isComplete(93.5, {
+      threshold: 95,
+      context: 'test',
+      bookData,
+      format: 'audiobook',
+    });
+
+    assert.equal(result, true);
+  });
+
   it('detects completion based on precise pages remaining for books', () => {
     const bookData = {
       current_page: 298, // On page 298
@@ -298,6 +314,41 @@ describe('ProgressManager.isComplete()', () => {
       context: 'test',
       threshold: 95,
     });
+    assert.equal(result, false);
+  });
+});
+
+describe('ProgressManager.isBookComplete()', () => {
+  it('passes book data through for precise audiobook completion', () => {
+    const bookData = {
+      progress_percentage: 93.5,
+      current_time: 1683,
+      media: { duration: 1800 },
+    };
+
+    const result = ProgressManager.isBookComplete(
+      bookData,
+      'wrapper-precise-completion',
+      { threshold: 95 },
+    );
+
+    assert.equal(result, true);
+  });
+
+  it('respects an explicit unfinished flag over precise completion hints', () => {
+    const bookData = {
+      is_finished: false,
+      progress_percentage: 93.5,
+      current_time: 1683,
+      media: { duration: 1800 },
+    };
+
+    const result = ProgressManager.isBookComplete(
+      bookData,
+      'wrapper-explicit-unfinished',
+      { threshold: 95 },
+    );
+
     assert.equal(result, false);
   });
 });
