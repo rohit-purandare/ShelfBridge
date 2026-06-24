@@ -30,6 +30,10 @@ users:
 2. **Environment Variables** (fallback) - `SHELFBRIDGE_*`
 3. **Default Values** (lowest) - Built-in application defaults
 
+### YAML Parser Compatibility
+
+ShelfBridge parses `config/config.yaml` with `js-yaml`. Boolean-like words such as `yes`, `no`, `on`, and `off` are treated as strings; use explicit `true` or `false` for boolean settings.
+
 ## Global Configuration
 
 ### Core Sync Settings

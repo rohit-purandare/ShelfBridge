@@ -20,6 +20,17 @@ export const RetryStrategy = {
   CONSERVATIVE: 'conservative',
 };
 
+const RETRYABLE_NETWORK_ERROR_CODES = new Set([
+  'ECONNABORTED',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+]);
+
 /**
  * Configuration for retry behavior per error type
  */
@@ -31,10 +42,7 @@ const DEFAULT_RETRY_CONFIG = {
     shouldRetry: error => {
       return (
         !error.response &&
-        (error.code === 'ECONNABORTED' ||
-          error.code === 'ENOTFOUND' ||
-          error.code === 'ECONNRESET' ||
-          error.code === 'ETIMEDOUT' ||
+        (RETRYABLE_NETWORK_ERROR_CODES.has(error.code) ||
           (error.message && error.message.toLowerCase().includes('timeout')))
       );
     },
@@ -122,7 +130,7 @@ function getErrorType(error, category) {
   } else if (category === 'clientError') {
     return `Client error (${error.response?.status})`;
   } else if (category === 'network') {
-    return 'Network timeout';
+    return `Network error (${error.code || 'timeout'})`;
   } else {
     return `Unknown error (${error.response?.status || error.code})`;
   }

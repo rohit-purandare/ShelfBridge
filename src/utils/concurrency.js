@@ -61,6 +61,7 @@ export class RateLimiter {
     this.cleanupInterval = setInterval(() => {
       this._cleanupOldCounts();
     }, 60000);
+    this.cleanupInterval.unref?.();
 
     logger.debug('RateLimiter initialized', {
       maxRequests: this.maxRequests,
