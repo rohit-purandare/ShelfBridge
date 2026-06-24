@@ -2420,18 +2420,11 @@ export class SyncManager {
       // Determine if protection should be applied
       let shouldProtectAgainstRegression =
         this.globalConfig.prevent_progress_regression !== false;
+      let progressInfo = null;
 
-      // Disable protection for first sync or force sync
-      if (shouldProtectAgainstRegression && isFirstSync) {
-        shouldProtectAgainstRegression = false;
-        logger.debug(
-          `Disabling progress regression protection for ${title}: first sync detected`,
-          {
-            userBookId: userBook.id,
-            totalSyncs: syncTracking.total_syncs,
-          },
-        );
-      } else if (shouldProtectAgainstRegression && isForceSync) {
+      // Disable protection for force sync, or for first sync only when
+      // Hardcover has no existing progress to protect.
+      if (shouldProtectAgainstRegression && isForceSync) {
         shouldProtectAgainstRegression = false;
         logger.debug(
           `Disabling progress regression protection for ${title}: force sync enabled`,
@@ -2440,13 +2433,22 @@ export class SyncManager {
             forceSync: isForceSync,
           },
         );
+      } else if (shouldProtectAgainstRegression) {
+        progressInfo = await this.hardcover.getBookCurrentProgress(userBook.id);
+
+        if (isFirstSync && !progressInfo?.has_progress) {
+          shouldProtectAgainstRegression = false;
+          logger.debug(
+            `Disabling progress regression protection for ${title}: first sync with no existing Hardcover progress`,
+            {
+              userBookId: userBook.id,
+              totalSyncs: syncTracking.total_syncs,
+            },
+          );
+        }
       }
 
       if (shouldProtectAgainstRegression) {
-        // Get current progress from Hardcover for regression analysis
-        const progressInfo = await this.hardcover.getBookCurrentProgress(
-          userBook.id,
-        );
         let previousProgress = null;
 
         if (
