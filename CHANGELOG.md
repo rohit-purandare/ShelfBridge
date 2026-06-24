@@ -5,6 +5,17 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.2...v1.23.3) (2026-06-24)
+
+
+### ## 🔧 Bug Fixes
+
+* count completed ABS media progress ([4de85bb](https://github.com/rohit-purandare/ShelfBridge/commit/4de85bb508d37640cf62e2fcda36104bfcb9e58b))
+* count completed ABS media progress ([e555202](https://github.com/rohit-purandare/ShelfBridge/commit/e55520278d50ddca870748be490795c26f9a447b))
+* honor bookData in completion checks ([46500a6](https://github.com/rohit-purandare/ShelfBridge/commit/46500a6ea099f556ee17a50963f6dadae3158518))
+* import js-yaml namespace ([508cdd6](https://github.com/rohit-purandare/ShelfBridge/commit/508cdd6ef1fd1de220e619751627afa4bb47e135))
+* retry refused network connections ([b51ef0a](https://github.com/rohit-purandare/ShelfBridge/commit/b51ef0a7b7e511e163d80c9bb9f7dcf8fcdeb1eb))
+
 ## [1.23.2](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.1...v1.23.2) (2026-06-01)
 
 
