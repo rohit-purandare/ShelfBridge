@@ -1691,53 +1691,42 @@ export class SyncManager {
     });
 
     try {
-      // In dry run mode, simulate search results instead of making API calls
       let searchResults = [];
 
-      if (this.dryRun) {
-        logger.debug(
-          `[DRY RUN] Simulating search for ${title} instead of making API calls`,
+      // Search for the book by ISBN or ASIN. These are read-only API calls, so
+      // dry-run should still execute them to preview accurate auto-add results.
+      if (identifiers.asin) {
+        logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`, {
+          dryRun: this.dryRun,
+        });
+        searchResults = await this.hardcover.searchBooksByAsin(
+          identifiers.asin,
         );
-        // Simulate a successful search result for dry run
-        searchResults = [
-          {
-            id: 'dry-run-edition-id',
-            book: {
-              id: 'dry-run-book-id',
-              title: title,
-            },
-            format: 'audiobook',
-          },
-        ];
-      } else {
-        // Search for the book by ISBN or ASIN (only in non-dry-run mode)
-        if (identifiers.asin) {
-          logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`);
-          searchResults = await this.hardcover.searchBooksByAsin(
-            identifiers.asin,
-          );
-          logger.info(`ASIN search returned ${searchResults.length} results`, {
-            results: searchResults.map(r => ({
-              id: r.id,
-              format: r.reading_format?.format || r.physical_format,
-              title: r.book?.title,
-            })),
-          });
-        }
+        logger.info(`ASIN search returned ${searchResults.length} results`, {
+          dryRun: this.dryRun,
+          results: searchResults.map(r => ({
+            id: r.id,
+            format: r.reading_format?.format || r.physical_format,
+            title: r.book?.title,
+          })),
+        });
+      }
 
-        if (searchResults.length === 0 && identifiers.isbn) {
-          logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
-          searchResults = await this.hardcover.searchBooksByIsbn(
-            identifiers.isbn,
-          );
-          logger.info(`ISBN search returned ${searchResults.length} results`, {
-            results: searchResults.map(r => ({
-              id: r.id,
-              format: r.reading_format?.format || r.physical_format,
-              title: r.book?.title,
-            })),
-          });
-        }
+      if (searchResults.length === 0 && identifiers.isbn) {
+        logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`, {
+          dryRun: this.dryRun,
+        });
+        searchResults = await this.hardcover.searchBooksByIsbn(
+          identifiers.isbn,
+        );
+        logger.info(`ISBN search returned ${searchResults.length} results`, {
+          dryRun: this.dryRun,
+          results: searchResults.map(r => ({
+            id: r.id,
+            format: r.reading_format?.format || r.physical_format,
+            title: r.book?.title,
+          })),
+        });
       }
 
       // Check format compatibility after identifier search
