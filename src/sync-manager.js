@@ -332,17 +332,69 @@ export class SyncManager {
       return null;
     }
 
+    const targetEditionId = String(editionId);
+
     for (const userBook of this.hardcoverBooks) {
+      if (
+        userBook.edition_id !== undefined &&
+        userBook.edition_id !== null &&
+        String(userBook.edition_id) === targetEditionId
+      ) {
+        return userBook;
+      }
+
       if (!userBook.book || !userBook.book.editions) continue;
 
       for (const edition of userBook.book.editions) {
-        if (edition.id === editionId) {
+        if (String(edition.id) === targetEditionId) {
           return userBook;
         }
       }
     }
 
     return null;
+  }
+
+  _findEditionInUserBook(userBook, editionId) {
+    const targetEditionId = String(editionId);
+    return (
+      userBook?.book?.editions?.find(
+        edition => String(edition.id) === targetEditionId,
+      ) || null
+    );
+  }
+
+  async _invalidateStaleCachedMatch(title, cachedMatchInfo) {
+    if (
+      !cachedMatchInfo?.identifier ||
+      !cachedMatchInfo?.identifierType ||
+      !cachedMatchInfo?.editionId
+    ) {
+      return;
+    }
+
+    try {
+      const result = await this.cache.clearCachedBookInfo(
+        this.userId,
+        cachedMatchInfo.identifier,
+        title,
+        cachedMatchInfo.identifierType,
+      );
+      logger.warn(`Invalidated stale cached match for ${title}`, {
+        cachedIdentifier: cachedMatchInfo.identifier,
+        cachedType: cachedMatchInfo.identifierType,
+        editionId: cachedMatchInfo.editionId,
+        removedRows: result?.changes ?? 0,
+        reason: 'Cached edition is not present in current Hardcover library',
+      });
+    } catch (error) {
+      logger.warn(`Unable to invalidate stale cached match for ${title}`, {
+        cachedIdentifier: cachedMatchInfo.identifier,
+        cachedType: cachedMatchInfo.identifierType,
+        editionId: cachedMatchInfo.editionId,
+        error: error.message,
+      });
+    }
   }
 
   _getBookLastListenedAt(absBook) {
@@ -900,7 +952,6 @@ export class SyncManager {
 
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
-    let earlyValidatedProgress = null;
 
     // Declare variables that might be set during optimization
     let matchResult, hardcoverMatch, extractedMetadata;
@@ -912,9 +963,28 @@ export class SyncManager {
         `book "${title}" early progress check`,
         { allowNull: false },
       );
-      earlyValidatedProgress = validatedProgress;
 
       if (validatedProgress !== null) {
+        const skipEntry = await this._getFreshNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          validatedProgress,
+        );
+
+        if (skipEntry) {
+          return this._createNegativeSkipResult(
+            absBook,
+            title,
+            author,
+            identifiers,
+            validatedProgress,
+            skipEntry,
+            startTime,
+          );
+        }
+
         // Multi-key cache lookup - check all possible identifiers for this book
         const possibleCacheKeys = [];
 
@@ -1177,12 +1247,15 @@ export class SyncManager {
             );
 
             if (userBookFromLibrary) {
+              const cachedEdition = this._findEditionInUserBook(
+                userBookFromLibrary,
+                cachedMatchInfo.editionId,
+              ) || { id: cachedMatchInfo.editionId };
+
               // Create complete match object using real library data
               hardcoverMatch = {
                 userBook: userBookFromLibrary,
-                edition: userBookFromLibrary.book.editions.find(
-                  e => e.id === cachedMatchInfo.editionId,
-                ),
+                edition: cachedEdition,
                 _matchType: cachedMatchInfo.identifierType,
                 _fromCache: true,
               };
@@ -1203,7 +1276,10 @@ export class SyncManager {
                   editionId: cachedMatchInfo.editionId,
                 },
               );
-              // Fall back to standard matching if we can't resolve the userBook
+              await this._invalidateStaleCachedMatch(title, cachedMatchInfo);
+              cachedMatchInfo = null;
+              shouldPerformExpensiveMatching = true;
+              hardcoverMatch = null;
             }
           } else {
             logger.debug(
@@ -1211,32 +1287,6 @@ export class SyncManager {
             );
           }
         }
-      }
-    }
-
-    if (
-      shouldPerformExpensiveMatching &&
-      earlyValidatedProgress !== null &&
-      !this.globalConfig.force_sync
-    ) {
-      const skipEntry = await this._getFreshNegativeSyncSkip(
-        absBook,
-        title,
-        author,
-        identifiers,
-        earlyValidatedProgress,
-      );
-
-      if (skipEntry) {
-        return this._createNegativeSkipResult(
-          absBook,
-          title,
-          author,
-          identifiers,
-          earlyValidatedProgress,
-          skipEntry,
-          startTime,
-        );
       }
     }
 

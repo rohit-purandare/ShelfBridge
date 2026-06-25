@@ -1319,6 +1319,53 @@ export class BookCache {
     }
   }
 
+  async clearCachedBookInfo(
+    userId,
+    identifier,
+    title,
+    identifierType = 'isbn',
+  ) {
+    await this.init();
+
+    const validationErrors = this._validateBookData(
+      userId,
+      identifier,
+      title,
+      identifierType,
+    );
+    if (validationErrors.length > 0) {
+      throw new Error(
+        `Invalid cached book clear data: ${validationErrors.join(', ')}`,
+      );
+    }
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const stmt = this.db.prepare(`
+        DELETE FROM books
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+      const result = stmt.run(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+
+      logger.debug(`Cleared cached book info for ${title}`, {
+        identifier,
+        identifierType,
+        changes: result.changes,
+      });
+      return result;
+    } catch (err) {
+      logger.error(
+        `Error clearing cached book info for ${title}: ${err.message}`,
+      );
+      throw err;
+    }
+  }
+
   /**
    * Check if a book needs to be synced based on multiple conditions:
    * - Progress changed
