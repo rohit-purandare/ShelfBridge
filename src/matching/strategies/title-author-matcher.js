@@ -115,7 +115,7 @@ export class TitleAuthorMatcher {
       // Normalize title for Hardcover API search to fix issues like "(Unabridged)" suffix breaking search
       const normalizedSearchTitle = normalizeTitle(title);
 
-      logger.info(`Title/author search initiated for "${title}"`, {
+      logger.debug(`Title/author search initiated for "${title}"`, {
         searchTitle: title,
         normalizedSearchTitle: normalizedSearchTitle, // Log both for debugging
         searchAuthor: author || 'N/A',
@@ -138,7 +138,7 @@ export class TitleAuthorMatcher {
         maxResults,
       );
 
-      logger.info(`Title/author search results for "${title}"`, {
+      logger.debug(`Title/author search results for "${title}"`, {
         resultCount: searchResults.length,
         searchMetadata: {
           searchTitle: title,
@@ -183,7 +183,7 @@ export class TitleAuthorMatcher {
       });
 
       if (searchResults.length === 0) {
-        logger.info(
+        logger.debug(
           `No search results found for "${title}" in Hardcover database`,
           {
             searchedTitle: title,
@@ -264,7 +264,7 @@ export class TitleAuthorMatcher {
       );
 
       // Log detailed scoring results for troubleshooting
-      logger.info(`Title/author scoring results for "${title}"`, {
+      logger.debug(`Title/author scoring results for "${title}"`, {
         targetTitle: title,
         targetAuthor: author || 'N/A',
         threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,
@@ -522,7 +522,7 @@ export class TitleAuthorMatcher {
           : 0;
 
         // Log the rejection decision clearly - no match was made
-        logger.info(`No suitable match found for "${title}"`, {
+        logger.debug(`No suitable match found for "${title}"`, {
           searchedTitle: title,
           searchedAuthor: author || 'N/A',
           threshold: `${(confidenceThreshold * 100).toFixed(1)}%`,

@@ -465,6 +465,40 @@ export class BookCache {
       }
     }
 
+    // Migration 7: Add negative skip cache for repeated no-op match attempts
+    try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS sync_skips (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id TEXT NOT NULL,
+          identifier TEXT NOT NULL,
+          identifier_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          author TEXT,
+          progress_percent REAL,
+          last_listened_at TEXT,
+          reason TEXT NOT NULL,
+          context_hash TEXT,
+          expires_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, identifier, identifier_type, title)
+        )
+      `);
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_sync_skips_lookup
+        ON sync_skips(user_id, identifier, identifier_type, title)
+      `);
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_sync_skips_expiry
+        ON sync_skips(expires_at)
+      `);
+      logger.debug('Migration 7: sync_skips table ready');
+    } catch (err) {
+      logger.error(`Migration 7 failed: ${err.message}`);
+      throw err;
+    }
+
     logger.debug('Database migrations completed successfully');
   }
 
@@ -1091,6 +1125,247 @@ export class BookCache {
     }
   }
 
+  async storeSyncSkip({
+    userId,
+    identifier,
+    identifierType = 'isbn',
+    title,
+    author = null,
+    progressPercent = null,
+    lastListenedAt = null,
+    reason,
+    contextHash = null,
+    expiresAt = null,
+  }) {
+    await this.init();
+
+    const validationErrors = this._validateBookData(
+      userId,
+      identifier,
+      title,
+      identifierType,
+      progressPercent,
+    );
+    if (!reason || typeof reason !== 'string') {
+      validationErrors.push('reason must be a non-empty string');
+    }
+    if (validationErrors.length > 0) {
+      throw new Error(`Invalid sync skip data: ${validationErrors.join(', ')}`);
+    }
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const currentTime = new Date().toISOString();
+      const normalizedLastListenedAt =
+        lastListenedAt === null || lastListenedAt === undefined
+          ? null
+          : String(lastListenedAt);
+
+      const upsertStmt = this.db.prepare(`
+        INSERT INTO sync_skips (
+          user_id,
+          identifier,
+          identifier_type,
+          title,
+          author,
+          progress_percent,
+          last_listened_at,
+          reason,
+          context_hash,
+          expires_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, identifier, identifier_type, title)
+        DO UPDATE SET
+          author = excluded.author,
+          progress_percent = excluded.progress_percent,
+          last_listened_at = excluded.last_listened_at,
+          reason = excluded.reason,
+          context_hash = excluded.context_hash,
+          expires_at = excluded.expires_at,
+          updated_at = excluded.updated_at
+      `);
+
+      const result = upsertStmt.run(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+        author,
+        progressPercent,
+        normalizedLastListenedAt,
+        reason,
+        contextHash,
+        expiresAt,
+        currentTime,
+        currentTime,
+      );
+
+      logger.debug(`Stored sync skip for ${title}: ${reason}`, {
+        identifier,
+        identifierType,
+        progressPercent,
+        expiresAt,
+      });
+      return result;
+    } catch (err) {
+      logger.error(`Error storing sync skip for ${title}: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async getFreshSyncSkip({
+    userId,
+    identifier,
+    identifierType = 'isbn',
+    title,
+    progressPercent = null,
+    lastListenedAt = null,
+    contextHash = null,
+  }) {
+    await this.init();
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const now = new Date().toISOString();
+      const stmt = this.db.prepare(`
+        SELECT *
+        FROM sync_skips
+        WHERE user_id = ?
+          AND identifier = ?
+          AND identifier_type = ?
+          AND title = ?
+          AND (expires_at IS NULL OR expires_at > ?)
+      `);
+      const cached = stmt.get(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+        now,
+      );
+
+      if (!cached) {
+        return null;
+      }
+
+      if (contextHash && cached.context_hash !== contextHash) {
+        logger.debug(`Ignoring sync skip for ${title}: context changed`, {
+          reason: cached.reason,
+        });
+        return null;
+      }
+
+      if (
+        progressPercent !== null &&
+        progressPercent !== undefined &&
+        cached.progress_percent !== null
+      ) {
+        const progressChange = ProgressManager.detectProgressChange(
+          cached.progress_percent,
+          progressPercent,
+          {
+            threshold: 0.01,
+            context: `${title} sync skip cache check`,
+          },
+        );
+        if (progressChange.hasChange) {
+          logger.debug(`Ignoring sync skip for ${title}: progress changed`, {
+            cachedProgress: cached.progress_percent,
+            currentProgress: progressPercent,
+          });
+          return null;
+        }
+      }
+
+      const normalizedLastListenedAt =
+        lastListenedAt === null || lastListenedAt === undefined
+          ? null
+          : String(lastListenedAt);
+      if (cached.last_listened_at !== normalizedLastListenedAt) {
+        logger.debug(`Ignoring sync skip for ${title}: last listened changed`, {
+          cachedLastListenedAt: cached.last_listened_at,
+          currentLastListenedAt: normalizedLastListenedAt,
+        });
+        return null;
+      }
+
+      logger.debug(`Fresh sync skip cache hit for ${title}`, {
+        reason: cached.reason,
+        expiresAt: cached.expires_at,
+      });
+      return cached;
+    } catch (err) {
+      logger.error(`Error reading sync skip for ${title}: ${err.message}`);
+      return null;
+    }
+  }
+
+  async clearSyncSkip(userId, identifier, title, identifierType = 'isbn') {
+    await this.init();
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const stmt = this.db.prepare(`
+        DELETE FROM sync_skips
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+      return stmt.run(userId, identifier, identifierType, normalizedTitle);
+    } catch (err) {
+      logger.error(`Error clearing sync skip for ${title}: ${err.message}`);
+      return null;
+    }
+  }
+
+  async clearCachedBookInfo(
+    userId,
+    identifier,
+    title,
+    identifierType = 'isbn',
+  ) {
+    await this.init();
+
+    const validationErrors = this._validateBookData(
+      userId,
+      identifier,
+      title,
+      identifierType,
+    );
+    if (validationErrors.length > 0) {
+      throw new Error(
+        `Invalid cached book clear data: ${validationErrors.join(', ')}`,
+      );
+    }
+
+    try {
+      const normalizedTitle = title.toLowerCase().trim();
+      const stmt = this.db.prepare(`
+        DELETE FROM books
+        WHERE user_id = ? AND identifier = ? AND identifier_type = ? AND title = ?
+      `);
+      const result = stmt.run(
+        userId,
+        identifier,
+        identifierType,
+        normalizedTitle,
+      );
+
+      logger.debug(`Cleared cached book info for ${title}`, {
+        identifier,
+        identifierType,
+        changes: result.changes,
+      });
+      return result;
+    } catch (err) {
+      logger.error(
+        `Error clearing cached book info for ${title}: ${err.message}`,
+      );
+      throw err;
+    }
+  }
+
   /**
    * Check if a book needs to be synced based on multiple conditions:
    * - Progress changed
@@ -1208,6 +1483,7 @@ export class BookCache {
 
     try {
       this.db.exec('DELETE FROM books');
+      this.db.exec('DELETE FROM sync_skips');
       logger.info('Cache cleared successfully');
     } catch (err) {
       logger.error(`Error clearing cache: ${err.message}`);

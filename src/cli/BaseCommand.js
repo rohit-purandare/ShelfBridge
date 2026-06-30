@@ -13,6 +13,7 @@ export class BaseCommand {
     this.name = name;
     this.description = description;
     this.program = null;
+    this._config = null;
   }
 
   /**
@@ -65,7 +66,7 @@ export class BaseCommand {
     try {
       logger.debug('Validating configuration...');
 
-      const config = new Config();
+      const config = this.loadConfiguration();
       const validator = new ConfigValidator();
 
       // Validate configuration structure
@@ -106,12 +107,23 @@ export class BaseCommand {
    * Get configuration instances
    */
   getConfiguration() {
-    const config = new Config();
+    const config = this.loadConfiguration();
     return {
       config,
       globalConfig: config.getGlobal(),
       users: config.getUsers(),
     };
+  }
+
+  /**
+   * Load configuration once per command execution path.
+   */
+  loadConfiguration() {
+    if (!this._config) {
+      this._config = new Config();
+    }
+
+    return this._config;
   }
 
   /**

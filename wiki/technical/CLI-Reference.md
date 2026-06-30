@@ -21,6 +21,10 @@ These options can be used with any command:
 | `--skip-validation` | Skip configuration validation on startup | `false` |
 | `--verbose`         | Show detailed logging output             | `false` |
 
+Commands that validate configuration reuse the same validated configuration for
+execution. This keeps startup logging concise and ensures the command runs
+against the exact settings that passed validation.
+
 ## Commands Overview
 
 | Command         | Purpose                                | Use Case                |

@@ -3,7 +3,12 @@ import { TaskQueue } from './utils/task-queue.js';
 import { HardcoverClient } from './hardcover-client.js';
 import { BookCache } from './book-cache.js';
 import ProgressManager from './progress-manager.js';
-import { BookMatcher, extractBookIdentifiers } from './matching/index.js';
+import {
+  BookMatcher,
+  extractAuthor,
+  extractBookIdentifiers,
+  extractTitle,
+} from './matching/index.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
@@ -213,6 +218,8 @@ export class SyncManager {
         this._mapHardcoverFormatToInternal.bind(this),
       );
 
+      booksToProcess = await this._prioritizeBooksForSync(booksToProcess);
+
       logger.debug(
         `Processing ${booksToProcess.length} books from Audiobookshelf`,
       );
@@ -325,17 +332,351 @@ export class SyncManager {
       return null;
     }
 
+    const targetEditionId = String(editionId);
+
     for (const userBook of this.hardcoverBooks) {
+      if (
+        userBook.edition_id !== undefined &&
+        userBook.edition_id !== null &&
+        String(userBook.edition_id) === targetEditionId
+      ) {
+        return userBook;
+      }
+
       if (!userBook.book || !userBook.book.editions) continue;
 
       for (const edition of userBook.book.editions) {
-        if (edition.id === editionId) {
+        if (String(edition.id) === targetEditionId) {
           return userBook;
         }
       }
     }
 
     return null;
+  }
+
+  _findEditionInUserBook(userBook, editionId) {
+    const targetEditionId = String(editionId);
+    return (
+      userBook?.book?.editions?.find(
+        edition => String(edition.id) === targetEditionId,
+      ) || null
+    );
+  }
+
+  async _invalidateStaleCachedMatch(title, cachedMatchInfo) {
+    if (
+      !cachedMatchInfo?.identifier ||
+      !cachedMatchInfo?.identifierType ||
+      !cachedMatchInfo?.editionId
+    ) {
+      return;
+    }
+
+    try {
+      const result = await this.cache.clearCachedBookInfo(
+        this.userId,
+        cachedMatchInfo.identifier,
+        title,
+        cachedMatchInfo.identifierType,
+      );
+      logger.warn(`Invalidated stale cached match for ${title}`, {
+        cachedIdentifier: cachedMatchInfo.identifier,
+        cachedType: cachedMatchInfo.identifierType,
+        editionId: cachedMatchInfo.editionId,
+        removedRows: result?.changes ?? 0,
+        reason: 'Cached edition is not present in current Hardcover library',
+      });
+    } catch (error) {
+      logger.warn(`Unable to invalidate stale cached match for ${title}`, {
+        cachedIdentifier: cachedMatchInfo.identifier,
+        cachedType: cachedMatchInfo.identifierType,
+        editionId: cachedMatchInfo.editionId,
+        error: error.message,
+      });
+    }
+  }
+
+  _getBookLastListenedAt(absBook) {
+    if (
+      absBook &&
+      Object.prototype.hasOwnProperty.call(absBook, '_syncSkipLastListenedAt')
+    ) {
+      return absBook._syncSkipLastListenedAt;
+    }
+
+    return absBook?.last_listened_at ?? absBook?.lastUpdate ?? null;
+  }
+
+  _getSkipCacheKey(title, author, identifiers = {}) {
+    if (identifiers.asin) {
+      return { identifier: identifiers.asin, identifierType: 'asin' };
+    }
+
+    if (identifiers.isbn) {
+      return { identifier: identifiers.isbn, identifierType: 'isbn' };
+    }
+
+    return {
+      identifier: this.cache.generateTitleAuthorIdentifier(title, author),
+      identifierType: 'title_author',
+    };
+  }
+
+  _simpleHash(value) {
+    const input = String(value || '');
+    let hash = 0;
+
+    for (let i = 0; i < input.length; i++) {
+      hash = (hash << 5) - hash + input.charCodeAt(i);
+      hash |= 0;
+    }
+
+    return Math.abs(hash).toString(36);
+  }
+
+  _getHardcoverLibraryFingerprint() {
+    if (!Array.isArray(this.hardcoverBooks)) {
+      return 'no-library';
+    }
+
+    const ids = this.hardcoverBooks
+      .map(userBook => userBook.id || userBook.book?.id)
+      .filter(Boolean)
+      .map(String)
+      .sort()
+      .join('|');
+
+    return `${this.hardcoverBooks.length}:${this._simpleHash(ids)}`;
+  }
+
+  _getSkipCacheContextHash() {
+    return JSON.stringify({
+      auto_add_books: !!this.globalConfig.auto_add_books,
+      min_progress_threshold: this.globalConfig.min_progress_threshold || 5.0,
+      title_author_matching: this.globalConfig.title_author_matching || null,
+      hardcover_library: this._getHardcoverLibraryFingerprint(),
+    });
+  }
+
+  _getNegativeSkipCacheTtlDays() {
+    const configured = Number(this.globalConfig.negative_skip_cache_ttl_days);
+    return Number.isFinite(configured) && configured > 0 ? configured : 7;
+  }
+
+  _getNegativeSkipCacheExpiry() {
+    const expiresAt = new Date();
+    expiresAt.setDate(
+      expiresAt.getDate() + this._getNegativeSkipCacheTtlDays(),
+    );
+    return expiresAt.toISOString();
+  }
+
+  async _getFreshNegativeSyncSkip(
+    absBook,
+    title,
+    author,
+    identifiers,
+    progressPercent,
+  ) {
+    const { identifier, identifierType } = this._getSkipCacheKey(
+      title,
+      author,
+      identifiers,
+    );
+
+    return await this.cache.getFreshSyncSkip({
+      userId: this.userId,
+      identifier,
+      identifierType,
+      title,
+      progressPercent,
+      lastListenedAt: this._getBookLastListenedAt(absBook),
+      contextHash: this._getSkipCacheContextHash(),
+    });
+  }
+
+  async _storeNegativeSyncSkip(
+    absBook,
+    title,
+    author,
+    identifiers,
+    progressPercent,
+    reason,
+  ) {
+    if (this.dryRun || this.globalConfig.force_sync) {
+      return;
+    }
+
+    try {
+      const { identifier, identifierType } = this._getSkipCacheKey(
+        title,
+        author,
+        identifiers,
+      );
+      await this.cache.storeSyncSkip({
+        userId: this.userId,
+        identifier,
+        identifierType,
+        title,
+        author,
+        progressPercent,
+        lastListenedAt: this._getBookLastListenedAt(absBook),
+        reason,
+        contextHash: this._getSkipCacheContextHash(),
+        expiresAt: this._getNegativeSkipCacheExpiry(),
+      });
+    } catch (error) {
+      logger.debug(`Unable to store sync skip for ${title}: ${error.message}`);
+    }
+  }
+
+  async _clearNegativeSyncSkip(title, author, identifiers) {
+    try {
+      const { identifier, identifierType } = this._getSkipCacheKey(
+        title,
+        author,
+        identifiers,
+      );
+      await this.cache.clearSyncSkip(
+        this.userId,
+        identifier,
+        title,
+        identifierType,
+      );
+    } catch (error) {
+      logger.debug(`Unable to clear sync skip for ${title}: ${error.message}`);
+    }
+  }
+
+  _createNegativeSkipResult(
+    absBook,
+    title,
+    author,
+    identifiers,
+    progressPercent,
+    skipEntry,
+    startTime,
+  ) {
+    return {
+      title,
+      author,
+      status: 'skipped',
+      reason: `Previously skipped with unchanged progress (${skipEntry.reason})`,
+      progress_before: progressPercent,
+      progress_after: progressPercent,
+      progress_changed: false,
+      identifiers,
+      cache_found: true,
+      cache_last_sync: skipEntry.updated_at,
+      hardcover_status: 'skip-cache',
+      abs_id: absBook.id,
+      last_listened_at: this._getBookLastListenedAt(absBook),
+      timing: performance.now() - startTime,
+      actions: [`Negative skip cache - ${skipEntry.reason}`],
+      errors: [],
+    };
+  }
+
+  async _getDirectCachedSyncPriority(absBook) {
+    const title = extractTitle(absBook) || 'Unknown Title';
+    const author = extractAuthor(absBook) || 'Unknown Author';
+    const identifiers = extractBookIdentifiers(absBook);
+    const progressPercent = ProgressManager.getValidatedProgress(
+      absBook,
+      `book "${title}" priority preflight`,
+      { allowNull: false },
+    );
+
+    if (progressPercent === null) {
+      return 3;
+    }
+
+    const possibleCacheKeys = [];
+    if (identifiers.asin) {
+      possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
+    }
+    if (identifiers.isbn) {
+      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+    }
+    possibleCacheKeys.push({
+      key: this.cache.generateTitleAuthorIdentifier(title, author),
+      type: 'title_author',
+    });
+
+    for (const { key, type } of possibleCacheKeys) {
+      const cachedInfo = await this.cache.getCachedBookInfo(
+        this.userId,
+        key,
+        title,
+        type,
+      );
+      if (!cachedInfo?.exists || !cachedInfo.edition_id) {
+        continue;
+      }
+
+      const progressChanged = await this.cache.hasProgressChanged(
+        this.userId,
+        key,
+        title,
+        progressPercent,
+        type,
+      );
+      if (!progressChanged) {
+        return 1;
+      }
+
+      if (this._findUserBookByEditionId(cachedInfo.edition_id)) {
+        return 0;
+      }
+
+      return 2;
+    }
+
+    return 3;
+  }
+
+  async _prioritizeBooksForSync(booksToProcess) {
+    const scoredBooks = await Promise.all(
+      booksToProcess.map(async (book, index) => {
+        let priority = 3;
+        try {
+          priority = await this._getDirectCachedSyncPriority(book);
+        } catch (error) {
+          logger.debug('Sync priority preflight failed for book', {
+            title: extractTitle(book) || book.title || 'Unknown Title',
+            error: error.message,
+          });
+        }
+
+        return {
+          book,
+          index,
+          priority,
+          lastListenedAt: Number(this._getBookLastListenedAt(book) || 0),
+        };
+      }),
+    );
+
+    scoredBooks.sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority - b.priority;
+      }
+      if (a.lastListenedAt !== b.lastListenedAt) {
+        return b.lastListenedAt - a.lastListenedAt;
+      }
+      return a.index - b.index;
+    });
+
+    logger.debug('Prioritized sync queue', {
+      directCachedChanged: scoredBooks.filter(book => book.priority === 0)
+        .length,
+      unchangedCached: scoredBooks.filter(book => book.priority === 1).length,
+      staleCached: scoredBooks.filter(book => book.priority === 2).length,
+      unresolved: scoredBooks.filter(book => book.priority === 3).length,
+    });
+
+    return scoredBooks.map(item => item.book);
   }
 
   /**
@@ -604,14 +945,10 @@ export class SyncManager {
     const startTime = performance.now();
 
     // Extract basic metadata first (lightweight operation) to enable early progress checking
-    const { extractTitle, extractAuthor } =
-      await import('./matching/utils/audiobookshelf-extractor.js');
-    const { extractBookIdentifiers } =
-      await import('./matching/utils/identifier-extractor.js');
-
     const title = extractTitle(absBook) || 'Unknown Title';
     const author = extractAuthor(absBook) || 'Unknown Author';
     const identifiers = extractBookIdentifiers(absBook);
+    absBook._syncSkipLastListenedAt = this._getBookLastListenedAt(absBook);
 
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
@@ -628,6 +965,26 @@ export class SyncManager {
       );
 
       if (validatedProgress !== null) {
+        const skipEntry = await this._getFreshNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          validatedProgress,
+        );
+
+        if (skipEntry) {
+          return this._createNegativeSkipResult(
+            absBook,
+            title,
+            author,
+            identifiers,
+            validatedProgress,
+            skipEntry,
+            startTime,
+          );
+        }
+
         // Multi-key cache lookup - check all possible identifiers for this book
         const possibleCacheKeys = [];
 
@@ -890,12 +1247,15 @@ export class SyncManager {
             );
 
             if (userBookFromLibrary) {
+              const cachedEdition = this._findEditionInUserBook(
+                userBookFromLibrary,
+                cachedMatchInfo.editionId,
+              ) || { id: cachedMatchInfo.editionId };
+
               // Create complete match object using real library data
               hardcoverMatch = {
                 userBook: userBookFromLibrary,
-                edition: userBookFromLibrary.book.editions.find(
-                  e => e.id === cachedMatchInfo.editionId,
-                ),
+                edition: cachedEdition,
                 _matchType: cachedMatchInfo.identifierType,
                 _fromCache: true,
               };
@@ -916,7 +1276,10 @@ export class SyncManager {
                   editionId: cachedMatchInfo.editionId,
                 },
               );
-              // Fall back to standard matching if we can't resolve the userBook
+              await this._invalidateStaleCachedMatch(title, cachedMatchInfo);
+              cachedMatchInfo = null;
+              shouldPerformExpensiveMatching = true;
+              hardcoverMatch = null;
             }
           } else {
             logger.debug(
@@ -1082,12 +1445,20 @@ export class SyncManager {
 
     // Check if we have identifiers OR a successful match (e.g., title/author)
     if (!identifiers.isbn && !identifiers.asin && !hardcoverMatch) {
-      logger.info(
+      logger.debug(
         `Skipping ${title}: No ISBN, ASIN, or title/author match found`,
       );
       syncResult.status = 'skipped';
       syncResult.reason = 'No identifiers or successful match';
       syncResult.timing = performance.now() - startTime;
+      await this._storeNegativeSyncSkip(
+        absBook,
+        title,
+        author,
+        identifiers,
+        progressPercent,
+        'no_identifiers_or_match',
+      );
       return syncResult;
     }
 
@@ -1270,12 +1641,20 @@ export class SyncManager {
         syncResult.reason =
           'Book not in Hardcover library and auto_add_books disabled';
         syncResult.timing = performance.now() - startTime;
+        await this._storeNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          progressPercent,
+          'not_found_auto_add_disabled',
+        );
         return syncResult;
       }
 
       // Check if book meets minimum progress threshold before auto-adding
       if (this._isZeroProgress(progressPercent)) {
-        logger.info(
+        logger.debug(
           `Skipping auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
           {
             title: title,
@@ -1290,6 +1669,14 @@ export class SyncManager {
         syncResult.status = 'skipped';
         syncResult.reason = `Progress below auto-add threshold (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
         syncResult.timing = performance.now() - startTime;
+        await this._storeNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          progressPercent,
+          'below_auto_add_threshold',
+        );
         return syncResult;
       }
 
@@ -1315,6 +1702,9 @@ export class SyncManager {
       syncResult.status = autoAddResult.status;
       syncResult.reason = autoAddResult.reason;
       syncResult.timing = performance.now() - startTime;
+      if (['auto_added', 'synced', 'completed'].includes(syncResult.status)) {
+        await this._clearNegativeSyncSkip(title, author, identifiers);
+      }
       return syncResult;
     }
 
@@ -1339,7 +1729,7 @@ export class SyncManager {
 
       // Check if book meets minimum progress threshold before auto-adding
       if (this._isZeroProgress(progressPercent)) {
-        logger.info(
+        logger.debug(
           `Skipping ${matchDescription} auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
           {
             title: title,
@@ -1355,6 +1745,14 @@ export class SyncManager {
         syncResult.status = 'skipped';
         syncResult.reason = `Progress below auto-add threshold for ${matchDescription} (${progressPercent.toFixed(1)}% < ${this.globalConfig.min_progress_threshold}%)`;
         syncResult.timing = performance.now() - startTime;
+        await this._storeNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          progressPercent,
+          'below_auto_add_threshold',
+        );
         return syncResult;
       }
 
@@ -1680,6 +2078,9 @@ export class SyncManager {
     }
 
     syncResult.timing = performance.now() - startTime;
+    if (['synced', 'completed', 'auto_added'].includes(syncResult.status)) {
+      await this._clearNegativeSyncSkip(title, author, identifiers);
+    }
     return syncResult;
   }
 
@@ -1691,53 +2092,42 @@ export class SyncManager {
     });
 
     try {
-      // In dry run mode, simulate search results instead of making API calls
       let searchResults = [];
 
-      if (this.dryRun) {
-        logger.debug(
-          `[DRY RUN] Simulating search for ${title} instead of making API calls`,
+      // Search for the book by ISBN or ASIN. These are read-only API calls, so
+      // dry-run should still execute them to preview accurate auto-add results.
+      if (identifiers.asin) {
+        logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`, {
+          dryRun: this.dryRun,
+        });
+        searchResults = await this.hardcover.searchBooksByAsin(
+          identifiers.asin,
         );
-        // Simulate a successful search result for dry run
-        searchResults = [
-          {
-            id: 'dry-run-edition-id',
-            book: {
-              id: 'dry-run-book-id',
-              title: title,
-            },
-            format: 'audiobook',
-          },
-        ];
-      } else {
-        // Search for the book by ISBN or ASIN (only in non-dry-run mode)
-        if (identifiers.asin) {
-          logger.info(`Searching Hardcover by ASIN: ${identifiers.asin}`);
-          searchResults = await this.hardcover.searchBooksByAsin(
-            identifiers.asin,
-          );
-          logger.info(`ASIN search returned ${searchResults.length} results`, {
-            results: searchResults.map(r => ({
-              id: r.id,
-              format: r.reading_format?.format || r.physical_format,
-              title: r.book?.title,
-            })),
-          });
-        }
+        logger.info(`ASIN search returned ${searchResults.length} results`, {
+          dryRun: this.dryRun,
+          results: searchResults.map(r => ({
+            id: r.id,
+            format: r.reading_format?.format || r.physical_format,
+            title: r.book?.title,
+          })),
+        });
+      }
 
-        if (searchResults.length === 0 && identifiers.isbn) {
-          logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`);
-          searchResults = await this.hardcover.searchBooksByIsbn(
-            identifiers.isbn,
-          );
-          logger.info(`ISBN search returned ${searchResults.length} results`, {
-            results: searchResults.map(r => ({
-              id: r.id,
-              format: r.reading_format?.format || r.physical_format,
-              title: r.book?.title,
-            })),
-          });
-        }
+      if (searchResults.length === 0 && identifiers.isbn) {
+        logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`, {
+          dryRun: this.dryRun,
+        });
+        searchResults = await this.hardcover.searchBooksByIsbn(
+          identifiers.isbn,
+        );
+        logger.info(`ISBN search returned ${searchResults.length} results`, {
+          dryRun: this.dryRun,
+          results: searchResults.map(r => ({
+            id: r.id,
+            format: r.reading_format?.format || r.physical_format,
+            title: r.book?.title,
+          })),
+        });
       }
 
       // Check format compatibility after identifier search
@@ -2420,18 +2810,11 @@ export class SyncManager {
       // Determine if protection should be applied
       let shouldProtectAgainstRegression =
         this.globalConfig.prevent_progress_regression !== false;
+      let progressInfo = null;
 
-      // Disable protection for first sync or force sync
-      if (shouldProtectAgainstRegression && isFirstSync) {
-        shouldProtectAgainstRegression = false;
-        logger.debug(
-          `Disabling progress regression protection for ${title}: first sync detected`,
-          {
-            userBookId: userBook.id,
-            totalSyncs: syncTracking.total_syncs,
-          },
-        );
-      } else if (shouldProtectAgainstRegression && isForceSync) {
+      // Disable protection for force sync, or for first sync only when
+      // Hardcover has no existing progress to protect.
+      if (shouldProtectAgainstRegression && isForceSync) {
         shouldProtectAgainstRegression = false;
         logger.debug(
           `Disabling progress regression protection for ${title}: force sync enabled`,
@@ -2440,13 +2823,22 @@ export class SyncManager {
             forceSync: isForceSync,
           },
         );
+      } else if (shouldProtectAgainstRegression) {
+        progressInfo = await this.hardcover.getBookCurrentProgress(userBook.id);
+
+        if (isFirstSync && !progressInfo?.has_progress) {
+          shouldProtectAgainstRegression = false;
+          logger.debug(
+            `Disabling progress regression protection for ${title}: first sync with no existing Hardcover progress`,
+            {
+              userBookId: userBook.id,
+              totalSyncs: syncTracking.total_syncs,
+            },
+          );
+        }
       }
 
       if (shouldProtectAgainstRegression) {
-        // Get current progress from Hardcover for regression analysis
-        const progressInfo = await this.hardcover.getBookCurrentProgress(
-          userBook.id,
-        );
         let previousProgress = null;
 
         if (
