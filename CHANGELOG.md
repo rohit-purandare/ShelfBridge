@@ -5,6 +5,17 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.3...v1.23.4) (2026-06-30)
+
+
+### ## 🔧 Bug Fixes
+
+* invalidate stale sync cache entries ([fdb25f9](https://github.com/rohit-purandare/ShelfBridge/commit/fdb25f9e67de27895a0c993d9a3ab74d8fea4f52))
+* make dry run use real identifier searches ([12d0a5b](https://github.com/rohit-purandare/ShelfBridge/commit/12d0a5b8eb180e38b4a18ec9c5373f35db924038)), closes [#167](https://github.com/rohit-purandare/ShelfBridge/issues/167)
+* protect first sync from progress regression ([55ff90b](https://github.com/rohit-purandare/ShelfBridge/commit/55ff90bda781c54fc254f18f39212e22675b49a0))
+* reuse validated cli config ([0ebbf4a](https://github.com/rohit-purandare/ShelfBridge/commit/0ebbf4a0db09a3e62584edc171f428ec033661d9))
+* skip unchanged scheduled sync misses ([3e319d9](https://github.com/rohit-purandare/ShelfBridge/commit/3e319d9e906f0fe396a12e269820ffc8979fae4f))
+
 ## [1.23.3](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.2...v1.23.3) (2026-06-24)
 
 
