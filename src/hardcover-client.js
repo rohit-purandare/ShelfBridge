@@ -3,6 +3,7 @@ import { RateLimiter, Semaphore } from './utils/concurrency.js';
 import { normalizeApiToken, createHttpAgent } from './utils/network.js';
 import { safeParseInt } from './utils/data.js';
 import { HardcoverRetryManager } from './utils/retry-manager.js';
+import { getIsbnVariants } from './matching/utils/text-matching.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
 
@@ -879,9 +880,15 @@ export class HardcoverClient {
   }
 
   async searchBooksByIsbn(isbn) {
+    const isbnCandidates = getIsbnVariants(isbn);
+    if (isbnCandidates.length === 0) {
+      logger.warn('Invalid ISBN provided for search:', isbn);
+      return [];
+    }
+
     const query = `
-            query searchBooksByIsbn($isbn: String!) {
-                editions(where: { _or: [{ isbn_10: { _eq: $isbn } }, { isbn_13: { _eq: $isbn } }] }) {
+            query searchBooksByIsbn($isbnCandidates: [String!]!) {
+                editions(where: { _or: [{ isbn_10: { _in: $isbnCandidates } }, { isbn_13: { _in: $isbnCandidates } }] }) {
                     id
                     isbn_10
                     isbn_13
@@ -912,7 +919,7 @@ export class HardcoverClient {
             }
         `;
 
-    const variables = { isbn };
+    const variables = { isbnCandidates };
 
     try {
       const result = await this._executeQuery(query, variables);

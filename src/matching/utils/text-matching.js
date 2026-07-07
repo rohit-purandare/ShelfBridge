@@ -657,12 +657,81 @@ export {
 
 // Export normalization functions for existing ISBN/ASIN processing
 export function normalizeIsbn(isbn) {
-  if (!isbn) return null;
-  const normalized = isbn.replace(/[-\s]/g, '').toUpperCase();
+  if (isbn === null || isbn === undefined || isbn === '') return null;
+  const normalized = String(isbn).replace(/[-\s]/g, '').toUpperCase();
   if (normalized.length === 10 || normalized.length === 13) {
     return normalized;
   }
   return null;
+}
+
+export function convertIsbn13To10(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (
+    !normalized ||
+    normalized.length !== 13 ||
+    !normalized.startsWith('978') ||
+    !/^\d{13}$/.test(normalized)
+  ) {
+    return null;
+  }
+
+  let isbn13Sum = 0;
+  for (let index = 0; index < 12; index++) {
+    isbn13Sum += Number(normalized[index]) * (index % 2 === 0 ? 1 : 3);
+  }
+  if ((10 - (isbn13Sum % 10)) % 10 !== Number(normalized[12])) {
+    return null;
+  }
+
+  const core = normalized.slice(3, 12);
+  let isbn10Sum = 0;
+  for (let index = 0; index < core.length; index++) {
+    isbn10Sum += Number(core[index]) * (10 - index);
+  }
+
+  const checkValue = (11 - (isbn10Sum % 11)) % 11;
+  return `${core}${checkValue === 10 ? 'X' : checkValue}`;
+}
+
+export function convertIsbn10To13(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (
+    !normalized ||
+    normalized.length !== 10 ||
+    !/^\d{9}[\dX]$/.test(normalized)
+  ) {
+    return null;
+  }
+
+  let isbn10Sum = 0;
+  for (let index = 0; index < normalized.length; index++) {
+    const digit = normalized[index] === 'X' ? 10 : Number(normalized[index]);
+    isbn10Sum += digit * (10 - index);
+  }
+  if (isbn10Sum % 11 !== 0) {
+    return null;
+  }
+
+  const isbn13WithoutCheck = `978${normalized.slice(0, 9)}`;
+  let isbn13Sum = 0;
+  for (let index = 0; index < isbn13WithoutCheck.length; index++) {
+    isbn13Sum += Number(isbn13WithoutCheck[index]) * (index % 2 === 0 ? 1 : 3);
+  }
+
+  return `${isbn13WithoutCheck}${(10 - (isbn13Sum % 10)) % 10}`;
+}
+
+export function getIsbnVariants(isbn) {
+  const normalized = normalizeIsbn(isbn);
+  if (!normalized) return [];
+
+  const equivalent =
+    normalized.length === 10
+      ? convertIsbn10To13(normalized)
+      : convertIsbn13To10(normalized);
+
+  return [...new Set([normalized, equivalent].filter(Boolean))];
 }
 
 export function normalizeAsin(asin) {

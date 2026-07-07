@@ -19,6 +19,9 @@ export { TitleAuthorMatcher } from './strategies/title-author-matcher.js';
 // Export utility functions
 export {
   normalizeIsbn,
+  convertIsbn10To13,
+  convertIsbn13To10,
+  getIsbnVariants,
   normalizeAsin,
   normalizeTitle,
   normalizeAuthor,

@@ -5,7 +5,7 @@
  * based on identifiers (ISBN, ASIN) from user library data.
  */
 
-import { normalizeIsbn, normalizeAsin } from './text-matching.js';
+import { getIsbnVariants, normalizeAsin } from './text-matching.js';
 
 /**
  * Create identifier lookup table from Hardcover user library
@@ -31,17 +31,15 @@ export function createIdentifierLookup(hardcoverBooks, formatMapper = null) {
 
       // Add ISBN-10
       if (edition.isbn_10) {
-        const normalizedIsbn = normalizeIsbn(edition.isbn_10);
-        if (normalizedIsbn) {
-          lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
+        for (const isbnVariant of getIsbnVariants(edition.isbn_10)) {
+          lookup[isbnVariant] = { userBook, edition: editionWithFormat };
         }
       }
 
       // Add ISBN-13
       if (edition.isbn_13) {
-        const normalizedIsbn = normalizeIsbn(edition.isbn_13);
-        if (normalizedIsbn) {
-          lookup[normalizedIsbn] = { userBook, edition: editionWithFormat };
+        for (const isbnVariant of getIsbnVariants(edition.isbn_13)) {
+          lookup[isbnVariant] = { userBook, edition: editionWithFormat };
         }
       }
 
