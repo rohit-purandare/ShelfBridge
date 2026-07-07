@@ -652,17 +652,26 @@ export class TitleAuthorMatcher {
    */
   async _cacheSuccessfulMatch(userId, titleAuthorId, title, bestMatch, author) {
     try {
+      const editionId = bestMatch?.edition?.id || bestMatch?.id;
+      if (!editionId) {
+        logger.warn(`Skipping title/author cache write for "${title}"`, {
+          identifier: titleAuthorId,
+          reason: 'Match did not contain an edition ID',
+        });
+        return;
+      }
+
       await this.cache.storeEditionMapping(
         userId,
         titleAuthorId,
         title,
-        bestMatch.id,
+        editionId,
         'title_author',
         extractAuthorFromSearchResult(bestMatch) || author || '',
       );
       logger.debug(`Cached title/author match for "${title}"`, {
         identifier: titleAuthorId,
-        editionId: bestMatch.id,
+        editionId,
       });
     } catch (cacheError) {
       logger.warn(

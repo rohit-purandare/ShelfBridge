@@ -409,6 +409,15 @@ export class SyncManager {
     return absBook?.last_listened_at ?? absBook?.lastUpdate ?? null;
   }
 
+  _getSearchResultBookId(hardcoverMatch) {
+    return (
+      hardcoverMatch?.userBook?.book?.id ||
+      hardcoverMatch?.book?.id ||
+      hardcoverMatch?.edition?.book?.id ||
+      null
+    );
+  }
+
   _getSkipCacheKey(title, author, identifiers = {}) {
     if (identifiers.asin) {
       return { identifier: identifiers.asin, identifierType: 'asin' };
@@ -1736,6 +1745,25 @@ export class SyncManager {
             ? 'ISBN match'
             : 'title/author match';
 
+      if (!this.globalConfig.auto_add_books) {
+        syncResult.actions.push(
+          `${matchDescription} found, but auto-add is disabled`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason =
+          'Book not in Hardcover library and auto_add_books disabled';
+        syncResult.timing = performance.now() - startTime;
+        await this._storeNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          progressPercent,
+          'not_found_auto_add_disabled',
+        );
+        return syncResult;
+      }
+
       // Check if book meets minimum progress threshold before auto-adding
       if (this._isZeroProgress(progressPercent)) {
         logger.debug(
@@ -1770,8 +1798,8 @@ export class SyncManager {
       );
 
       // For search results, userBook might be null (ASIN/ISBN matches) or populated (title/author matches)
-      let bookId = hardcoverMatch.userBook?.book?.id;
-      const editionId = hardcoverMatch.edition.id;
+      let bookId = this._getSearchResultBookId(hardcoverMatch);
+      const editionId = hardcoverMatch.edition?.id;
 
       // If book ID is missing, look it up from the edition ID
       if (!bookId && hardcoverMatch._needsBookIdLookup) {
