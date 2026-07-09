@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { DateTime } from 'luxon';
 import logger from './logger.js';
+import { getIsbnVariants } from './matching/utils/text-matching.js';
 
 /**
  * Utility class for writing failed books reports to separate log files
@@ -147,8 +148,12 @@ export class FailedBooksReporter {
 
       // Identifiers
       const identifiers = [];
-      if (book.identifiers.isbn)
-        identifiers.push(`ISBN: ${book.identifiers.isbn}`);
+      if (book.identifiers.isbn) {
+        const isbnVariants = getIsbnVariants(book.identifiers.isbn);
+        identifiers.push(
+          ...isbnVariants.map(isbn => `ISBN-${isbn.length}: ${isbn}`),
+        );
+      }
       if (book.identifiers.isbn10)
         identifiers.push(`ISBN-10: ${book.identifiers.isbn10}`);
       if (book.identifiers.asin)

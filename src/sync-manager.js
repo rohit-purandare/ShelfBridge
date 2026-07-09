@@ -8,6 +8,7 @@ import {
   extractAuthor,
   extractBookIdentifiers,
   extractTitle,
+  getIsbnVariants,
 } from './matching/index.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
@@ -408,6 +409,15 @@ export class SyncManager {
     return absBook?.last_listened_at ?? absBook?.lastUpdate ?? null;
   }
 
+  _getSearchResultBookId(hardcoverMatch) {
+    return (
+      hardcoverMatch?.userBook?.book?.id ||
+      hardcoverMatch?.book?.id ||
+      hardcoverMatch?.edition?.book?.id ||
+      null
+    );
+  }
+
   _getSkipCacheKey(title, author, identifiers = {}) {
     if (identifiers.asin) {
       return { identifier: identifiers.asin, identifierType: 'asin' };
@@ -597,7 +607,9 @@ export class SyncManager {
       possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
     }
     if (identifiers.isbn) {
-      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+      for (const isbnVariant of getIsbnVariants(identifiers.isbn)) {
+        possibleCacheKeys.push({ key: isbnVariant, type: 'isbn' });
+      }
     }
     possibleCacheKeys.push({
       key: this.cache.generateTitleAuthorIdentifier(title, author),
@@ -993,7 +1005,9 @@ export class SyncManager {
           possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
         }
         if (identifiers.isbn) {
-          possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+          for (const isbnVariant of getIsbnVariants(identifiers.isbn)) {
+            possibleCacheKeys.push({ key: isbnVariant, type: 'isbn' });
+          }
         }
 
         // For title/author matching, add the standardized title/author cache identifier
@@ -1483,7 +1497,9 @@ export class SyncManager {
       possibleCacheKeys.push({ key: identifiers.asin, type: 'asin' });
     }
     if (identifiers.isbn) {
-      possibleCacheKeys.push({ key: identifiers.isbn, type: 'isbn' });
+      for (const isbnVariant of getIsbnVariants(identifiers.isbn)) {
+        possibleCacheKeys.push({ key: isbnVariant, type: 'isbn' });
+      }
     }
 
     // Add title/author key using consistent pattern (same as TitleAuthorMatcher)
@@ -1504,6 +1520,7 @@ export class SyncManager {
 
     let cachedInfo = { exists: false };
     let cacheSource = null;
+    let cachedIdentifier = null;
 
     try {
       // Try each possible cache key until we find a match
@@ -1523,6 +1540,7 @@ export class SyncManager {
         if (cacheResult.exists) {
           cachedInfo = cacheResult;
           cacheSource = type;
+          cachedIdentifier = key;
           logger.debug(`Cache hit with ${type} key for "${title}"`, {
             key: key,
             lastSync: cachedInfo.last_sync,
@@ -1569,7 +1587,7 @@ export class SyncManager {
       );
     } else {
       // Use identifier priority for books matched by ASIN/ISBN: ASIN > ISBN > title_author
-      identifier = identifiers.asin || identifiers.isbn;
+      identifier = cachedIdentifier || identifiers.asin || identifiers.isbn;
       identifierType = identifiers.asin ? 'asin' : 'isbn';
 
       if (!identifier) {
@@ -1727,6 +1745,25 @@ export class SyncManager {
             ? 'ISBN match'
             : 'title/author match';
 
+      if (!this.globalConfig.auto_add_books) {
+        syncResult.actions.push(
+          `${matchDescription} found, but auto-add is disabled`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason =
+          'Book not in Hardcover library and auto_add_books disabled';
+        syncResult.timing = performance.now() - startTime;
+        await this._storeNegativeSyncSkip(
+          absBook,
+          title,
+          author,
+          identifiers,
+          progressPercent,
+          'not_found_auto_add_disabled',
+        );
+        return syncResult;
+      }
+
       // Check if book meets minimum progress threshold before auto-adding
       if (this._isZeroProgress(progressPercent)) {
         logger.debug(
@@ -1761,8 +1798,8 @@ export class SyncManager {
       );
 
       // For search results, userBook might be null (ASIN/ISBN matches) or populated (title/author matches)
-      let bookId = hardcoverMatch.userBook?.book?.id;
-      const editionId = hardcoverMatch.edition.id;
+      let bookId = this._getSearchResultBookId(hardcoverMatch);
+      const editionId = hardcoverMatch.edition?.id;
 
       // If book ID is missing, look it up from the edition ID
       if (!bookId && hardcoverMatch._needsBookIdLookup) {
@@ -2420,8 +2457,12 @@ export class SyncManager {
           // Track this failure for reporting
           if (result) {
             const searchedIdentifiersList = [];
-            if (identifiers.isbn)
-              searchedIdentifiersList.push(`ISBN: ${identifiers.isbn}`);
+            if (identifiers.isbn) {
+              const isbnVariants = getIsbnVariants(identifiers.isbn);
+              searchedIdentifiersList.push(
+                ...isbnVariants.map(isbn => `ISBN-${isbn.length}: ${isbn}`),
+              );
+            }
             if (identifiers.isbn10)
               searchedIdentifiersList.push(`ISBN-10: ${identifiers.isbn10}`);
             if (identifiers.asin)
