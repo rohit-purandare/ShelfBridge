@@ -40,6 +40,8 @@ docker-compose restart
 
 ### Node.js
 
+ShelfBridge supports Node.js 22 and 24. Node.js 24 LTS is recommended.
+
 ```bash
 # Clone and install
 git clone https://github.com/rohit-purandare/ShelfBridge.git

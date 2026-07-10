@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # ===== BUILD STAGE =====
-FROM node:20-alpine as builder
+FROM node:24-alpine AS builder
 
 # Install build dependencies for native modules
 RUN apk add --no-cache \
@@ -54,7 +54,7 @@ RUN --mount=type=cache,target=/root/.npm \
     echo "🎯 ALPINE MUSL COMPATIBILITY VERIFIED!"
 
 # ===== RUNTIME STAGE =====
-FROM node:20-alpine as runtime
+FROM node:24-alpine AS runtime
 
 # Install runtime dependencies (dumb-init for proper signal handling, and su-exec for user switching)
 RUN apk add --no-cache \
@@ -113,4 +113,4 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
 # Container configuration
 EXPOSE 3000
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["npm", "start"] 
+CMD ["npm", "start"]

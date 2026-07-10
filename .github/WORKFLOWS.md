@@ -4,22 +4,29 @@ This project uses a simplified, industry-standard workflow architecture with thr
 
 ## 🔄 CI Workflow (`ci.yml`)
 
-**Triggers:** PRs and feature branch pushes  
+**Triggers:** PRs targeting `main`, pushes to `main`, and manual runs
 **Purpose:** Tests and validates changes before merging
 
 ### What it does:
 
-- ✅ Runs tests on Node.js 20.x and 22.x
+- ✅ Runs tests on Node.js 22.x and 24.x
 - ✅ Runs linting and format checks
-- ✅ Builds Docker image for testing (non-main branches only)
+- ✅ Builds and publishes Docker test images for pull requests
 - ✅ Performs basic security checks
 - ✅ Validates Docker image functionality
 
 ### Branch Testing:
 
-- Feature branches get full CI validation including Docker builds
-- Docker images are built locally and tested (not pushed to registry)
+- Pull requests get full CI validation including Docker builds
+- Docker test images are published as `test`, `pr-<number>`, and commit SHA tags
 - Only AMD64 architecture for speed during development
+
+### Test Suites:
+
+- `npm test` runs every non-quarantined `tests/*.test.js` file sequentially
+- New test files enter the CI suite automatically
+- `npm run test:all` runs the complete suite, including known-failing historical tests
+- `npm run test:quarantined` runs only the explicitly quarantined test debt
 
 ## 🚀 Release Workflow (`release.yml`)
 
@@ -92,8 +99,8 @@ This project uses a simplified, industry-standard workflow architecture with thr
 
 1. Create feature branch: `git checkout -b feature/my-feature`
 2. Make changes and commit with conventional commit messages
-3. Push branch - CI workflow validates your changes
-4. Create PR - All workflows run for validation
+3. Push the branch and create a PR
+4. CI and Code Quality validate the pull request
 
 ### For Releases:
 
