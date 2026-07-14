@@ -9,12 +9,12 @@
     "group:recommended",
     "workarounds:all"
   ],
-  "timezone": "UTC",
+  "timezone": "America/New_York",
   "schedule": ["before 10am on monday"],
   "labels": ["dependencies"],
   "assignees": ["rohit-purandare"],
   "reviewers": ["rohit-purandare"],
-  "rangeStrategy": "bump",
+  "rangeStrategy": "auto",
   "semanticCommits": "enabled",
   "commitMessagePrefix": "build(deps):",
   "commitMessageAction": "update",
@@ -22,90 +22,81 @@
   "commitMessageExtra": "to {{newVersion}}",
   "packageRules": [
     {
-      "description": "HIGH CONFIDENCE: Mature, stable updates - proceed immediately",
+      "description": "Automerge stable npm patch updates after required checks pass",
       "matchManagers": ["npm"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "matchPackageNames": [
-        "@eslint/js",
-        "eslint",
-        "globals",
-        "prettier",
-        "cron",
-        "nodemon",
-        "winston",
-        "js-yaml",
-        "luxon",
-        "commander",
-        "husky",
-        "lint-staged"
-      ],
-      "groupName": "high confidence npm dependencies",
-      "labels": ["dependencies", "high-confidence"],
-      "commitMessageTopic": "high confidence dependencies"
-    },
-    {
-      "description": "LOW CONFIDENCE: New releases requiring review - manual approval needed",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "matchPackageNames": [
-        "cronstrue",
-        "axios",
-        "inquirer",
-        "rate-limiter-flexible"
-      ],
-      "dependencyDashboardApproval": true,
-      "groupName": "review required npm dependencies",
-      "labels": ["dependencies", "review-required"],
-      "commitMessageTopic": "dependencies requiring review"
-    },
-    {
-      "description": "DEFAULT: All other npm dependencies require dashboard approval",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "dependencyDashboardApproval": true,
-      "groupName": "other npm dependencies",
-      "labels": ["dependencies", "review-required"],
-      "commitMessageTopic": "other dependencies"
-    },
-    {
-      "description": "Group all GitHub Actions updates",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "GitHub Actions",
-      "labels": ["dependencies", "github-actions"]
-    },
-    {
-      "description": "Separate major updates for careful review",
-      "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true,
-      "labels": ["dependencies", "major"],
-      "commitMessageAction": "update major version of",
-      "commitMessageExtra": "to {{newVersion}}"
-    },
-    {
-      "description": "Auto-merge patch updates for development tools only",
-      "matchPackageNames": ["eslint", "prettier", "@eslint/js", "globals"],
       "matchUpdateTypes": ["patch"],
+      "matchCurrentVersion": "!/^0/",
+      "dependencyDashboardApproval": false,
       "automerge": true,
       "automergeType": "pr",
-      "automergeStrategy": "merge",
-      "labels": ["dependencies", "automerge"]
+      "automergeStrategy": "squash",
+      "addLabels": ["automerge"]
     },
     {
-      "description": "Pin better-sqlite3 to exact version due to native module constraints",
+      "description": "Automerge stable development dependency minor updates after required checks pass",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor"],
+      "matchCurrentVersion": "!/^0/",
+      "dependencyDashboardApproval": false,
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "addLabels": ["automerge"]
+    },
+    {
+      "description": "Create production dependency minor updates for manual review",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["minor"],
+      "dependencyDashboardApproval": false,
+      "automerge": false,
+      "addLabels": ["review-required"]
+    },
+    {
+      "description": "Automerge non-major GitHub Actions updates after required checks pass",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "groupName": "GitHub Actions",
+      "dependencyDashboardApproval": false,
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "addLabels": ["github-actions", "automerge"]
+    },
+    {
+      "description": "Create Docker image updates for manual review",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "dependencyDashboardApproval": false,
+      "automerge": false,
+      "addLabels": ["docker", "review-required"]
+    },
+    {
+      "description": "Require approval for Node.js runtime updates",
+      "matchPackageNames": ["node"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "addLabels": ["runtime", "review-required"]
+    },
+    {
+      "description": "Pin better-sqlite3 and require approval due to native module constraints",
       "matchPackageNames": ["better-sqlite3"],
       "rangeStrategy": "pin",
-      "labels": ["dependencies", "native-module"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "addLabels": ["native-module", "review-required"],
       "commitMessageAction": "pin",
       "commitMessageExtra": "to {{newVersion}}"
     },
     {
-      "description": "High-priority security updates (bypasses schedule and confidence)",
-      "matchDatasources": ["npm"],
-      "groupName": "security updates",
-      "labels": ["dependencies", "security"],
-      "prPriority": 10,
-      "schedule": ["at any time"]
+      "description": "Require dashboard approval for major updates",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "addLabels": ["major", "review-required"],
+      "commitMessageAction": "update major version of",
+      "commitMessageExtra": "to {{newVersion}}"
     }
   ],
   "vulnerabilityAlerts": {
@@ -118,10 +109,11 @@
   "dependencyDashboardTitle": "Dependency Dashboard",
   "dependencyDashboardHeader": "This issue lists Renovate updates and detected dependencies. Read the [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) docs to learn more.",
   "dependencyDashboardLabels": ["dependencies", "renovate"],
-  "rebaseWhen": "conflicted",
-  "prConcurrentLimit": 10,
+  "platformAutomerge": true,
+  "rebaseWhen": "auto",
+  "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "14 days",
   "branchPrefix": "renovate/",
   "ignorePaths": [
     "**/node_modules/**",
