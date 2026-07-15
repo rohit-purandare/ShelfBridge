@@ -132,44 +132,28 @@ jobs:
         run: |
           run_native_test() {
             local platform="$1"
-            local attempt
-            local status
+            local platform_digest="$2"
 
-            for attempt in 1 2 3; do
-              echo "🧪 Testing native module on $platform (attempt $attempt/3)..."
-
-              set +e
-              docker run --rm --pull=always --platform "$platform" --entrypoint="" \
-                "$IMAGE@$DIGEST" npm run test:native
-              status=$?
-              set -e
-
-              if [ "$status" -eq 0 ]; then
-                return 0
-              fi
-
-              # Exit 125 means Docker could not start the container. This can
-              # happen briefly while a newly pushed manifest propagates through
-              # GHCR. Application test failures must still fail immediately.
-              if [ "$status" -ne 125 ] || [ "$attempt" -eq 3 ]; then
-                echo "::error::Native module verification failed for $platform with exit code $status"
-                return "$status"
-              fi
-
-              echo "::warning::Docker could not start the $platform image; retrying after registry propagation delay"
-              sleep "$((attempt * 10))"
-            done
+            echo "🧪 Testing native module on $platform..."
+            docker run --rm --pull=always --platform "$platform" --entrypoint="" \
+              "$IMAGE@$platform_digest" npm run test:native
           }
 
           echo "🔍 Verifying multi-architecture manifest..."
-          platforms=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" |
-            jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"')
+          manifest=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST")
+          platforms=$(jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"' <<< "$manifest")
           echo "$platforms"
           grep -qx 'linux/amd64' <<< "$platforms"
           grep -qx 'linux/arm64' <<< "$platforms"
 
-          run_native_test linux/amd64
-          run_native_test linux/arm64
+          amd64_digest=$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64")][0].digest' <<< "$manifest")
+          arm64_digest=$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64")][0].digest' <<< "$manifest")
+
+          # Each architecture must use its child-manifest digest. Reusing the
+          # multi-arch index digest makes Docker reject the second platform with
+          # "cannot overwrite digest" after the first platform is pulled.
+          run_native_test linux/amd64 "$amd64_digest"
+          run_native_test linux/arm64 "$arm64_digest"
 
           echo "✅ Multi-architecture image verified"
 
