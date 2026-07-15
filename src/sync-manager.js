@@ -16,6 +16,7 @@ import { setMaxListeners } from 'events';
 import logger from './logger.js';
 import { Transaction } from './utils/transaction.js';
 import SessionManager from './session-manager.js';
+import { currentVersion } from './version.js';
 
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
@@ -96,7 +97,7 @@ export class SyncManager {
     const startTime = Date.now();
     logger.info('Starting sync for user', {
       service: 'shelfbridge',
-      version: '1.22.3',
+      version: currentVersion,
       user_id: this.userId,
     });
 
