@@ -130,18 +130,30 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository_owner }}/shelfbridge
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          run_native_test() {
+            local platform="$1"
+            local platform_digest="$2"
+
+            echo "🧪 Testing native module on $platform..."
+            docker run --rm --pull=always --platform "$platform" --entrypoint="" \
+              "$IMAGE@$platform_digest" npm run test:native
+          }
+
           echo "🔍 Verifying multi-architecture manifest..."
-          platforms=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" |
-            jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"')
+          manifest=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST")
+          platforms=$(jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"' <<< "$manifest")
           echo "$platforms"
           grep -qx 'linux/amd64' <<< "$platforms"
           grep -qx 'linux/arm64' <<< "$platforms"
 
-          echo "🧪 Testing native module on AMD64..."
-          docker run --rm --platform linux/amd64 --entrypoint="" "$IMAGE@$DIGEST" npm run test:native
+          amd64_digest=$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64")][0].digest' <<< "$manifest")
+          arm64_digest=$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "arm64")][0].digest' <<< "$manifest")
 
-          echo "🧪 Testing native module on ARM64..."
-          docker run --rm --platform linux/arm64 --entrypoint="" "$IMAGE@$DIGEST" npm run test:native
+          # Each architecture must use its child-manifest digest. Reusing the
+          # multi-arch index digest makes Docker reject the second platform with
+          # "cannot overwrite digest" after the first platform is pulled.
+          run_native_test linux/amd64 "$amd64_digest"
+          run_native_test linux/arm64 "$arm64_digest"
 
           echo "✅ Multi-architecture image verified"
 
