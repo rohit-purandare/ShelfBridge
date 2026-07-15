@@ -315,6 +315,8 @@ export function normalizeTitle(title) {
         /^(a|an|the|la|le|les|el|los|las|der|die|das|de|het|il|lo|gli|le)\s+/i,
         '',
       )
+      // Remove generic publishing subtitles that do not identify the work
+      .replace(/\s*[:\-–—]\s*a\s+novel\s*$/i, '')
       // Remove standalone audiobook format indicators first (critical fix for Hardcover search compatibility)
       .replace(
         /\s*\(?\s*(unabridged|abridged|complete|full|extended|directors?\s*cut|special\s*edition|remastered|enhanced|dramatized?|multi-?voice|full\s*cast)\s*\)?$/i,
