@@ -1,12 +1,15 @@
 # Gitleaks configuration for ShelfBridge
 # This file configures what secrets to look for and what to ignore
 
-[allowlist]
+[extend]
+useDefault = true
+
+[[allowlists]]
 # Allowlist patterns for false positives
 description = "Allowlist for ShelfBridge project"
 paths = [
     # Ignore test files and documentation
-    "test/",
+    "tests/",
     "node_modules/",
     ".*\\.example$",
     "config\\.yaml\\.example",
@@ -51,7 +54,3 @@ regexes = [
     "test.*api.*key",
     "mock.*token",
 ]
-
-# Use default gitleaks rules (much smarter than custom rules)
-# These rules look for actual secret patterns, not just variable names
-include_default = true 

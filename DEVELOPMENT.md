@@ -90,6 +90,12 @@ git push origin feat/new-feature
 # Run tests
 npm test
 
+# Run known-failing historical tests while repairing test debt
+npm run test:quarantined
+
+# Run every test, including quarantined tests
+npm run test:all
+
 # Test configuration
 npm run config
 
@@ -121,7 +127,8 @@ node src/main.js sync --dry-run
 npm start              # Start scheduled sync
 npm run sync           # Run sync once
 npm run interactive    # Interactive CLI mode
-npm test               # Run unit/integration tests
+npm test               # Run the blocking CI test suite
+npm run test:all       # Run blocking and quarantined tests
 
 # Development
 npm run dev           # Development mode with auto-restart

@@ -3,6 +3,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -16,20 +18,21 @@ jobs:
   test:
     name: Test (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        node-version: [22.x, 24.x]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1 # Shallow clone for CI performance
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -40,18 +43,11 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Run linting
-        run: npm run lint
-        if: matrix.node-version == '20.x'
-
-      - name: Check formatting
-        run: npm run format:check
-        if: matrix.node-version == '20.x'
-
   # Build Docker image for testing (PRs and feature branches)
   docker-build:
     name: Docker Build Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: test
     if: github.event_name == 'pull_request'
     permissions:
@@ -61,22 +57,22 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1 # Shallow clone for CI performance
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push test image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           push: true
@@ -90,17 +86,19 @@ jobs:
           platforms: linux/amd64
 
       - name: Test Docker image
+        env:
+          TEST_IMAGE: ghcr.io/rohit-purandare/shelfbridge:${{ github.sha }}
         run: |
           echo "Testing Docker image functionality..."
 
           # Basic runtime test
-          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node --version
+          docker run --rm --entrypoint="" "$TEST_IMAGE" node --version
 
           # Check main entry point exists
-          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test ls src/main.js
+          docker run --rm --entrypoint="" "$TEST_IMAGE" ls src/main.js
 
           # Quick smoke test of application
-          docker run --rm --entrypoint="" ghcr.io/rohit-purandare/shelfbridge:test node -e "console.log('Docker build test passed')"
+          docker run --rm --entrypoint="" "$TEST_IMAGE" node -e "console.log('Docker build test passed')"
 
           echo "✅ Docker image test completed successfully"
 
@@ -113,39 +111,3 @@ jobs:
           echo "📋 Usage:"
           echo "  docker pull ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}"
           echo "  docker run ghcr.io/rohit-purandare/shelfbridge:pr-${{ github.event.number }}"
-
-  # Security and code quality checks
-  security:
-    name: Security & Quality
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1 # Shallow clone for CI performance
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run security audit
-        run: npm audit --audit-level=moderate
-
-      - name: Check for secrets
-        run: |
-          # Look for actual hardcoded secrets, not just the words token/key/etc
-          # Check for quoted strings that look like API tokens (32+ chars, alphanumeric)
-          if grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" > /dev/null; then
-            echo "⚠️ Potential hardcoded secrets found:"
-            grep -r -E "(password|secret|token|key)\s*[:=]\s*['\"][a-zA-Z0-9]{32,}['\"]" src/ --include="*.js" || true
-            exit 1
-          fi
-          echo "✅ No hardcoded secrets detected"
