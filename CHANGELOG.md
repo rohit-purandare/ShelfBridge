@@ -5,6 +5,18 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.5](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.4...v1.23.5) (2026-07-15)
+
+
+### ## 🔧 Bug Fixes
+
+* guard search-result auto-adds ([503122a](https://github.com/rohit-purandare/ShelfBridge/commit/503122aa7f779c3f59b34211b09550be45a64045)), closes [#171](https://github.com/rohit-purandare/ShelfBridge/issues/171)
+* ignore generic subtitles when matching books ([#187](https://github.com/rohit-purandare/ShelfBridge/issues/187)) ([6fb3a5a](https://github.com/rohit-purandare/ShelfBridge/commit/6fb3a5ae652414c2d5fbe81b3dc9fd06e13220a0))
+* match equivalent ISBN variants ([1324e93](https://github.com/rohit-purandare/ShelfBridge/commit/1324e93f96722467f5e2712149f8968c38645aeb))
+* match equivalent ISBN variants ([1666ff3](https://github.com/rohit-purandare/ShelfBridge/commit/1666ff3771bc866b4d084cbaf658f95221eb74f5)), closes [#181](https://github.com/rohit-purandare/ShelfBridge/issues/181)
+* use current version in sync logs ([aef334b](https://github.com/rohit-purandare/ShelfBridge/commit/aef334bc1b9f8629e186ab8813828ac74c9f9691))
+* use current version in sync logs ([e6affb2](https://github.com/rohit-purandare/ShelfBridge/commit/e6affb2f0937ee050247d07df2f6880af3919b87))
+
 ## [1.23.4](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.3...v1.23.4) (2026-06-30)
 
 
