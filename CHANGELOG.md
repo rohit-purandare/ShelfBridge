@@ -5,6 +5,14 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.7](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.6...v1.23.7) (2026-07-16)
+
+
+### ## 🔧 Bug Fixes
+
+* clarify Hardcover authentication errors ([#194](https://github.com/rohit-purandare/ShelfBridge/issues/194)) ([768de84](https://github.com/rohit-purandare/ShelfBridge/commit/768de84e5120fcb2f09356155936d7801b13bc75))
+* validate Docker placeholders from YAML values ([#192](https://github.com/rohit-purandare/ShelfBridge/issues/192)) ([d02b68c](https://github.com/rohit-purandare/ShelfBridge/commit/d02b68c9ff600f0ea89485f9b971be2462b1874a))
+
 ## [1.23.6](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.5...v1.23.6) (2026-07-15)
 
 
