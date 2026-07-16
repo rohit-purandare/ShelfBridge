@@ -1,47 +1,15 @@
 import cron from 'node-cron';
 import { DateTime } from 'luxon';
 import { testApiConnections } from './utils/api-testing.js';
+import {
+  isPlaceholderValue,
+  PLACEHOLDER_PATTERNS,
+} from './config-placeholders.js';
 
 export class ConfigValidator {
   constructor() {
     // Common placeholder patterns to detect
-    this.placeholderPatterns = {
-      urls: [
-        'your-audiobookshelf-server.com',
-        'your-abs-server.com',
-        'your-server.com',
-        'localhost.example.com',
-        'example.com',
-        'your-domain.com',
-        'audiobookshelf.example.com',
-      ],
-      tokens: [
-        'your_audiobookshelf_api_token',
-        'your_audiobookshelf_token',
-        'your_abs_token',
-        'your_hardcover_api_token',
-        'your_hardcover_token',
-        'your_token_here',
-        'abc123',
-        'xyz789',
-        'token123',
-        'api_token_here',
-        'your_api_key',
-        'your_api_token',
-        'bearer your_audiobookshelf_api_token',
-        'bearer your_hardcover_api_token',
-        'bearer your_token_here',
-        'Bearer your_audiobookshelf_api_token',
-        'Bearer your_hardcover_api_token',
-        'Bearer your_token_here',
-      ],
-      userIds: [
-        'your_username',
-        'your_user_id',
-        'user_id_here',
-        'username_here',
-      ],
-    };
+    this.placeholderPatterns = PLACEHOLDER_PATTERNS;
 
     this.schema = {
       global: {
@@ -1030,17 +998,7 @@ export class ConfigValidator {
    * Check if a value matches a placeholder pattern
    */
   isPlaceholderValue(value, category) {
-    if (!value || typeof value !== 'string') {
-      return false;
-    }
-
-    const patterns = this.placeholderPatterns[category] || [];
-    const lowerValue = value.toLowerCase();
-
-    return patterns.some(
-      pattern =>
-        lowerValue.includes(pattern.toLowerCase()) || value === pattern,
-    );
+    return isPlaceholderValue(value, category);
   }
 
   /**

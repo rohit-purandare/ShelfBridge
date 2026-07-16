@@ -169,8 +169,11 @@ echo ""
 if [ -f "/app/config/config.yaml" ]; then
     echo "🔍 Checking configuration for placeholder values..."
 
-    # Check for common placeholder patterns
-    if grep -q "your-audiobookshelf-server.com\|your_audiobookshelf_api_token\|your_hardcover_api_token\|your_username" /app/config/config.yaml; then
+    # Parse YAML and inspect only configured user fields, ignoring comments.
+    placeholder_status=0
+    node /app/scripts/check-config-placeholders.js /app/config/config.yaml || placeholder_status=$?
+
+    if [ "$placeholder_status" -eq 1 ]; then
         echo ""
         echo "❌ CONFIGURATION ERROR: Placeholder values detected in config.yaml"
         echo ""
@@ -196,9 +199,11 @@ if [ -f "/app/config/config.yaml" ]; then
         echo ""
         echo "🚫 Exiting until configuration is updated..."
         exit 0
+    elif [ "$placeholder_status" -gt 1 ]; then
+        echo "⚠️  Placeholder pre-check could not parse config.yaml; application validation will report details"
+    else
+        echo "✅ Configuration validation passed - no placeholder values found"
     fi
-
-    echo "✅ Configuration validation passed - no placeholder values found"
 fi
 
 # Drop privileges when running as root, otherwise run as current user in order to support a custom specified docker user
