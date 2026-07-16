@@ -1483,6 +1483,16 @@ export class HardcoverClient {
         }
 
         if (response.status < 200 || response.status >= 300) {
+          if (response.status === 401) {
+            const error = new Error(
+              'Hardcover authentication failed (HTTP 401 Unauthorized). Check that your Hardcover API token is valid and current, then update hardcover_token or SHELFBRIDGE_USER_<N>_HARDCOVER_TOKEN. Generate a new token at https://hardcover.app/account/developer if needed.',
+            );
+            error.name = 'HardcoverAuthenticationError';
+            error.code = 'HARDCOVER_AUTHENTICATION_FAILED';
+            error.statusCode = response.status;
+            throw error;
+          }
+
           throw new Error(
             `GraphQL API request failed with status ${response.status}: ${response.statusText}`,
           );
