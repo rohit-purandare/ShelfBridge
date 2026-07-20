@@ -1,6 +1,6 @@
 {
   "name": "shelfbridge",
-  "version": "1.23.6",
+  "version": "1.23.7",
   "description": "Sync your audiobook listening progress from Audiobookshelf to Hardcover automatically",
   "main": "src/main.js",
   "type": "module",
@@ -47,7 +47,7 @@
     "js-yaml": "5.0.0",
     "luxon": "^3.7.1",
     "node-cron": "^4.2.1",
-    "p-queue": "^8.1.0",
+    "p-queue": "^9.3.1",
     "rate-limiter-flexible": "^7.2.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^4.7.1"
@@ -79,13 +79,13 @@
   "overrides": {
     "ansi-regex": "6.2.2",
     "color-name": "2.0.0",
-    "is-arrayish": "0.3.2",
+    "is-arrayish": "0.3.4",
     "supports-color": "10.2.2",
     "strip-ansi": "7.1.0",
     "string-width": "7.2.0",
     "wrap-ansi": "9.0.0",
     "color-convert": "2.0.1",
-    "simple-swizzle": "0.2.2",
+    "simple-swizzle": "0.2.4",
     "form-data": "4.0.6",
     "js-yaml": "5.0.0"
   }

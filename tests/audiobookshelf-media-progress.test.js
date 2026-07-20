@@ -257,4 +257,117 @@ describe('Audiobookshelf mediaProgress handling', () => {
       client.cleanup();
     }
   });
+
+  it('limits mediaProgress item detail fetches', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      5,
+      100,
+    );
+    const mediaProgress = Array.from({ length: 21 }, (_, index) =>
+      createMediaProgress(`book-${index}`),
+    );
+    let detailFetches = 0;
+
+    client._getCurrentUser = async () => ({ mediaProgress });
+    client.getLibraries = async () => [{ id: 'library', name: 'Library' }];
+    client._makeRequest = async (_method, endpoint) => {
+      if (endpoint === '/api/libraries/library/items?limit=1&page=0') {
+        return { total: 21 };
+      }
+
+      if (endpoint.startsWith('/api/items/')) {
+        detailFetches++;
+        return {
+          id: endpoint.replace('/api/items/', ''),
+          libraryId: 'library',
+          media: { metadata: { title: endpoint } },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    };
+
+    try {
+      const books = await client.getReadingProgress();
+
+      assert.equal(detailFetches, 5);
+      assert.equal(books.filter(book => !book._isMetadataOnly).length, 5);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('does not let a page exceed maxBooksToFetch', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      5,
+      100,
+    );
+    let requestedEndpoint;
+
+    client._makeRequest = async (_method, endpoint) => {
+      requestedEndpoint = endpoint;
+      return {
+        total: 21,
+        results: Array.from({ length: 21 }, (_, index) => ({
+          id: `book-${index}`,
+        })),
+      };
+    };
+
+    try {
+      const books = await client.getLibraryItems('library');
+
+      assert.equal(
+        requestedEndpoint,
+        '/api/libraries/library/items?limit=5&page=0',
+      );
+      assert.equal(books.length, 5);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('uses a stable page size while enforcing maxBooksToFetch', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      3,
+      2,
+    );
+    const requestedEndpoints = [];
+    const pages = [
+      [{ id: 'book-1' }, { id: 'book-2' }],
+      [{ id: 'book-3' }, { id: 'book-4' }],
+    ];
+
+    client._makeRequest = async (_method, endpoint) => {
+      requestedEndpoints.push(endpoint);
+      const page = Number(
+        new URL(`https://test.example${endpoint}`).searchParams.get('page'),
+      );
+      return { total: 4, results: pages[page] || [] };
+    };
+
+    try {
+      const books = await client.getLibraryItems('library');
+
+      assert.deepEqual(requestedEndpoints, [
+        '/api/libraries/library/items?limit=2&page=0',
+        '/api/libraries/library/items?limit=2&page=1',
+      ]);
+      assert.deepEqual(
+        books.map(book => book.id),
+        ['book-1', 'book-2', 'book-3'],
+      );
+    } finally {
+      client.cleanup();
+    }
+  });
 });

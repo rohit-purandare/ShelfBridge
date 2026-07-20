@@ -663,26 +663,38 @@ export class AudiobookshelfClient {
       uniqueLibraryItems: progressByItemId.size,
     });
 
-    const detailPromises = Array.from(progressByItemId.entries()).map(
-      ([itemId, progress]) =>
-        this._getLibraryItemDetails(itemId, progress).catch(error => {
-          if (this._isRecoverableError(error)) {
-            logger.debug(
-              'Recoverable error fetching mediaProgress item details',
-              {
-                itemId,
-                error: error.message,
-              },
-            );
-            return null;
-          }
+    const progressEntries = Array.from(progressByItemId.entries());
+    const cappedProgressEntries =
+      this.maxBooksToFetch === null
+        ? progressEntries
+        : progressEntries.slice(0, this.maxBooksToFetch);
 
-          logger.error('Critical error fetching mediaProgress item details', {
-            itemId,
-            error: error.message,
-          });
-          throw error;
-        }),
+    if (cappedProgressEntries.length < progressEntries.length) {
+      logger.debug('Limited mediaProgress item detail fetches', {
+        totalFound: progressEntries.length,
+        maxBooksToFetch: this.maxBooksToFetch,
+      });
+    }
+
+    const detailPromises = cappedProgressEntries.map(([itemId, progress]) =>
+      this._getLibraryItemDetails(itemId, progress).catch(error => {
+        if (this._isRecoverableError(error)) {
+          logger.debug(
+            'Recoverable error fetching mediaProgress item details',
+            {
+              itemId,
+              error: error.message,
+            },
+          );
+          return null;
+        }
+
+        logger.error('Critical error fetching mediaProgress item details', {
+          itemId,
+          error: error.message,
+        });
+        throw error;
+      }),
     );
 
     const itemDetails = (await Promise.all(detailPromises)).filter(Boolean);
@@ -1053,11 +1065,15 @@ export class AudiobookshelfClient {
       // Undefined uses the configured cap. Explicit null means no limit.
       const effectiveLimit = limit === undefined ? this.maxBooksToFetch : limit;
       const itemsPerPage = this.pageSize; // Use configurable page size
+      const requestPageSize =
+        effectiveLimit === null
+          ? itemsPerPage
+          : Math.min(itemsPerPage, effectiveLimit);
 
       while (true) {
         const response = await this._makeRequest(
           'GET',
-          `/api/libraries/${libraryId}/items?limit=${itemsPerPage}&page=${page}`,
+          `/api/libraries/${libraryId}/items?limit=${requestPageSize}&page=${page}`,
         );
 
         if (!response) {
@@ -1087,7 +1103,11 @@ export class AudiobookshelfClient {
           });
         }
 
-        allItems.push(...items);
+        const itemsToAdd =
+          effectiveLimit === null
+            ? items
+            : items.slice(0, effectiveLimit - allItems.length);
+        allItems.push(...itemsToAdd);
         logger.debug('Fetched library items page', {
           libraryId,
           page,
@@ -1098,7 +1118,7 @@ export class AudiobookshelfClient {
         // Check if we've reached the limit or end of data
         if (
           (effectiveLimit !== null && allItems.length >= effectiveLimit) ||
-          items.length < itemsPerPage
+          items.length < requestPageSize
         ) {
           break;
         }

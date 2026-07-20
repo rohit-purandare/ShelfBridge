@@ -373,6 +373,9 @@ global:
 - **Environment**: `SHELFBRIDGE_MAX_BOOKS_TO_FETCH=1000`
 - **Description**: Maximum number of books to fetch from Audiobookshelf
 - **Use Case**: Prevents memory issues on resource-constrained devices
+- **Behavior**: The limit is enforced for both paginated library results and
+  `/api/me` media-progress item detail lookups; a response page cannot cause
+  ShelfBridge to exceed the configured maximum
 
 #### `page_size`
 
