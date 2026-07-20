@@ -4,6 +4,7 @@ import { normalizeApiToken, createHttpAgent } from './utils/network.js';
 import { AudiobookshelfRetryManager } from './utils/retry-manager.js';
 import ProgressManager from './progress-manager.js';
 import logger from './logger.js';
+import { detectUserBookFormat } from './matching/utils/audiobookshelf-extractor.js';
 
 // Remove the global semaphore, make it per-instance
 
@@ -780,8 +781,9 @@ export class AudiobookshelfClient {
       return;
     }
 
-    if (progressData.progress !== null && progressData.progress !== undefined) {
-      itemData.progress_percentage = progressData.progress * 100;
+    const resolvedProgress = this._resolveProgress(itemData, progressData);
+    if (resolvedProgress.ratio !== null) {
+      itemData.progress_percentage = resolvedProgress.ratio * 100;
     } else if (progressData.isFinished === true) {
       itemData.progress_percentage = 100;
     }
@@ -821,6 +823,37 @@ export class AudiobookshelfClient {
         title: itemData.media?.metadata?.title,
       });
     }
+  }
+
+  _resolveProgress(itemData, progressData) {
+    const format = detectUserBookFormat(itemData);
+    const audiobookProgress = this._normalizeProgressRatio(
+      progressData.progress,
+    );
+    const ebookProgress = this._normalizeProgressRatio(
+      progressData.ebookProgress,
+    );
+
+    return {
+      ratio:
+        format === 'ebook'
+          ? (ebookProgress ?? audiobookProgress)
+          : (audiobookProgress ?? ebookProgress),
+      format,
+    };
+  }
+
+  _normalizeProgressRatio(value) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return null;
+    }
+
+    return Math.min(1, Math.max(0, numericValue));
   }
 
   async _getUserProgress(itemId) {

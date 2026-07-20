@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { AudiobookshelfClient } from '../src/audiobookshelf-client.js';
+import { detectUserBookFormat } from '../src/matching/utils/audiobookshelf-extractor.js';
 
 function createMediaProgress(id, overrides = {}) {
   return {
@@ -20,6 +21,102 @@ function createMediaProgress(id, overrides = {}) {
 }
 
 describe('Audiobookshelf mediaProgress handling', () => {
+  it('uses ebookProgress when audiobook progress is zero', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0,
+        ebookProgress: 0.3230769230769231,
+        currentTime: 0,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 32.30769230769231);
+      assert.strictEqual(detectUserBookFormat(item), 'ebook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('keeps audiobook progress when ebookProgress is zero', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [{ path: 'audio.mp3' }],
+        ebookFile: null,
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0.625,
+        ebookProgress: 0,
+        currentTime: 625,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 62.5);
+      assert.strictEqual(detectUserBookFormat(item), 'audiobook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('uses the progress field for hybrid items classified as audiobooks', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [{ path: 'audio.mp3' }],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0.25,
+        ebookProgress: 0.4,
+        currentTime: 250,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 25);
+      assert.strictEqual(detectUserBookFormat(item), 'audiobook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('detects an ebook-only Audiobookshelf book from its singular ebookFile', () => {
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    assert.strictEqual(detectUserBookFormat(item), 'ebook');
+  });
+
   it('uses /api/me mediaProgress as the authoritative source for completed counts', async () => {
     const client = new AudiobookshelfClient(
       'https://test.example',
