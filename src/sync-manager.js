@@ -85,11 +85,18 @@ export class SyncManager {
     });
   }
 
+  _getMinimumProgressThreshold() {
+    const configuredThreshold = Number(
+      this.globalConfig.min_progress_threshold ?? 5.0,
+    );
+
+    return Number.isFinite(configuredThreshold) ? configuredThreshold : 5.0;
+  }
+
   _isZeroProgress(progressValue) {
-    // Use centralized ProgressManager for consistent zero progress detection
     return ProgressManager.isZeroProgress(progressValue, {
-      threshold: this.globalConfig.min_progress_threshold || 5.0,
-      context: `user ${this.userId} zero progress check`,
+      threshold: this._getMinimumProgressThreshold(),
+      context: `user ${this.userId} minimum progress check`,
     });
   }
 
@@ -464,7 +471,7 @@ export class SyncManager {
   _getSkipCacheContextHash() {
     return JSON.stringify({
       auto_add_books: !!this.globalConfig.auto_add_books,
-      min_progress_threshold: this.globalConfig.min_progress_threshold || 5.0,
+      min_progress_threshold: this._getMinimumProgressThreshold(),
       title_author_matching: this.globalConfig.title_author_matching || null,
       hardcover_library: this._getHardcoverLibraryFingerprint(),
     });
@@ -963,6 +970,50 @@ export class SyncManager {
     const identifiers = extractBookIdentifiers(absBook);
     absBook._syncSkipLastListenedAt = this._getBookLastListenedAt(absBook);
 
+    // Enforce the minimum progress threshold before cache lookups, matching,
+    // auto-add, session handling, or any Hardcover writes. Explicitly finished
+    // books bypass this check so inconsistent source percentages do not prevent
+    // completion from syncing.
+    const thresholdProgress = ProgressManager.getValidatedProgress(
+      absBook,
+      `book "${title}" progress threshold check`,
+      { allowNull: false },
+    );
+
+    const minimumProgressThreshold = this._getMinimumProgressThreshold();
+    if (
+      thresholdProgress !== null &&
+      !ProgressManager.extractFinishedFlag(absBook) &&
+      this._isZeroProgress(thresholdProgress)
+    ) {
+      logger.debug(
+        `Skipping ${title}: Progress ${thresholdProgress.toFixed(1)}% does not exceed minimum threshold ${minimumProgressThreshold}%`,
+        {
+          title,
+          progress: thresholdProgress,
+          threshold: minimumProgressThreshold,
+          reason: 'below_progress_threshold',
+        },
+      );
+      return {
+        title,
+        author,
+        status: 'skipped',
+        reason: `Progress does not exceed minimum threshold (${thresholdProgress.toFixed(1)}% <= ${minimumProgressThreshold}%)`,
+        progress_before: thresholdProgress,
+        progress_after: thresholdProgress,
+        progress_changed: false,
+        identifiers,
+        cache_found: false,
+        hardcover_status: 'not-checked',
+        abs_id: absBook.id,
+        last_listened_at: absBook._syncSkipLastListenedAt,
+        timing: performance.now() - startTime,
+        actions: ['Skipped before matching - progress threshold not met'],
+        errors: [],
+      };
+    }
+
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
 
@@ -1326,8 +1377,8 @@ export class SyncManager {
       }
     }
 
-    // Validate progress with explicit error handling and position-based accuracy
-    // (Re-validate even if we did early check, in case validation failed earlier)
+    // Validate progress again after matching so the existing sync path keeps
+    // its explicit error handling and position-based accuracy guarantees.
     const validatedProgress = ProgressManager.getValidatedProgress(
       absBook,
       `book "${title}" sync`,
@@ -1671,8 +1722,12 @@ export class SyncManager {
         return syncResult;
       }
 
-      // Check if book meets minimum progress threshold before auto-adding
-      if (this._isZeroProgress(progressPercent)) {
+      // Keep this defensive guard for callers that may reach auto-add without
+      // going through the normal per-book preflight.
+      if (
+        !ProgressManager.extractFinishedFlag(absBook) &&
+        this._isZeroProgress(progressPercent)
+      ) {
         logger.debug(
           `Skipping auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
           {
@@ -1765,8 +1820,12 @@ export class SyncManager {
         return syncResult;
       }
 
-      // Check if book meets minimum progress threshold before auto-adding
-      if (this._isZeroProgress(progressPercent)) {
+      // Keep this defensive guard for callers that may reach auto-add without
+      // going through the normal per-book preflight.
+      if (
+        !ProgressManager.extractFinishedFlag(absBook) &&
+        this._isZeroProgress(progressPercent)
+      ) {
         logger.debug(
           `Skipping ${matchDescription} auto-add for ${title}: Progress ${progressPercent.toFixed(1)}% below threshold ${this.globalConfig.min_progress_threshold}%`,
           {
@@ -2668,6 +2727,7 @@ export class SyncManager {
 
           const currentProgress =
             ProgressManager.extractProgressPercentage(absBook);
+          const isFinished = ProgressManager.extractFinishedFlag(absBook);
 
           // Store initial cache data
           await this.cache.storeBookSyncData(
@@ -2685,7 +2745,10 @@ export class SyncManager {
           );
 
           // If there's meaningful progress, immediately sync it to Hardcover
-          if (currentProgress > 0 && !this._isZeroProgress(currentProgress)) {
+          if (
+            isFinished ||
+            (currentProgress > 0 && !this._isZeroProgress(currentProgress))
+          ) {
             logger.info(
               `Auto-added book has ${currentProgress}% progress, syncing immediately`,
               {
@@ -2710,7 +2773,6 @@ export class SyncManager {
               );
 
               if (isComplete) {
-                const isFinished = ProgressManager.extractFinishedFlag(absBook);
                 await this._handleCompletionStatus(
                   addResult.id,
                   edition,
