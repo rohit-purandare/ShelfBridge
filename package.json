@@ -79,7 +79,7 @@
   "overrides": {
     "ansi-regex": "6.2.2",
     "color-name": "2.0.0",
-    "is-arrayish": "0.3.2",
+    "is-arrayish": "0.3.4",
     "supports-color": "10.2.2",
     "strip-ansi": "7.1.0",
     "string-width": "7.2.0",
