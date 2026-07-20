@@ -5,6 +5,14 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.8](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.7...v1.23.8) (2026-07-20)
+
+
+### ## 🔧 Bug Fixes
+
+* resolve abort listener accumulation ([#200](https://github.com/rohit-purandare/ShelfBridge/issues/200)) ([286109b](https://github.com/rohit-purandare/ShelfBridge/commit/286109b4637829f57e9ff1f46c4e08cd12bebd0a))
+* sync Audiobookshelf ebook progress ([#190](https://github.com/rohit-purandare/ShelfBridge/issues/190)) ([5c83826](https://github.com/rohit-purandare/ShelfBridge/commit/5c838260ae4025df04eee7b7fb6027295a87d823))
+
 ## [1.23.7](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.6...v1.23.7) (2026-07-16)
 
 

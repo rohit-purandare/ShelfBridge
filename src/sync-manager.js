@@ -30,12 +30,6 @@ export class SyncManager {
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
 
-    // Increase max listeners for AbortSignal to handle parallel processing
-    // This prevents MaxListenersExceededWarning when processing many books
-    const maxBooks = this.globalConfig.max_books_to_fetch ?? 500;
-    const requiredListeners = Math.max(20, maxBooks + 10); // Buffer for safety
-    setMaxListeners(requiredListeners, this.abortController.signal);
-
     this.timezone = globalConfig.timezone || 'UTC';
 
     // Resolve library configuration (user-specific overrides global)
@@ -912,6 +906,14 @@ export class SyncManager {
   }
 
   async _syncBooksParallel(booksToProcess, result, sessionData) {
+    // p-queue attaches a temporary abort listener for each queued task. Size
+    // the signal for the actual batch rather than a configured fetch limit,
+    // which may differ from the number of books ultimately processed.
+    setMaxListeners(
+      Math.max(20, booksToProcess.length + 10),
+      this.abortController.signal,
+    );
+
     const promises = booksToProcess.map(book =>
       this.taskQueue.enqueue(
         async () => {

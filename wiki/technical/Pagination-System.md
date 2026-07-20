@@ -59,6 +59,10 @@ global:
    - No more items returned from API
    - Page returns fewer items than requested
 
+The same maximum is applied before ShelfBridge fetches item details for records
+returned by Audiobookshelf's `/api/me` media-progress data. This keeps the limit
+effective regardless of which Audiobookshelf progress endpoint is available.
+
 ## 📊 Performance Characteristics
 
 ### Memory Usage

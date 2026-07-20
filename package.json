@@ -1,6 +1,6 @@
 {
   "name": "shelfbridge",
-  "version": "1.23.7",
+  "version": "1.23.8",
   "description": "Sync your audiobook listening progress from Audiobookshelf to Hardcover automatically",
   "main": "src/main.js",
   "type": "module",
@@ -47,7 +47,7 @@
     "js-yaml": "5.0.0",
     "luxon": "^3.7.1",
     "node-cron": "^4.2.1",
-    "p-queue": "^8.1.0",
+    "p-queue": "^9.3.1",
     "rate-limiter-flexible": "^7.2.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^4.7.1"

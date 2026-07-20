@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { getEventListeners, setMaxListeners } from 'node:events';
 import { describe, it } from 'node:test';
 
 import { TaskQueue } from '../src/utils/task-queue.js';
@@ -175,6 +176,22 @@ describe('TaskQueue (Basic)', () => {
       await assert.rejects(
         async () => await queue.enqueue(task, { signal: controller.signal }),
       );
+    });
+
+    it('removes abort listeners after tasks complete', async () => {
+      const queue = new TaskQueue({ concurrency: 3 });
+      const controller = new AbortController();
+      setMaxListeners(100, controller.signal);
+
+      await Promise.all(
+        Array.from({ length: 25 }, () =>
+          queue.enqueue(async () => 'result', {
+            signal: controller.signal,
+          }),
+        ),
+      );
+
+      assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
     });
   });
 });

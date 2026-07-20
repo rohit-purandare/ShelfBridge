@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { AudiobookshelfClient } from '../src/audiobookshelf-client.js';
+import { detectUserBookFormat } from '../src/matching/utils/audiobookshelf-extractor.js';
 
 function createMediaProgress(id, overrides = {}) {
   return {
@@ -20,6 +21,102 @@ function createMediaProgress(id, overrides = {}) {
 }
 
 describe('Audiobookshelf mediaProgress handling', () => {
+  it('uses ebookProgress when audiobook progress is zero', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0,
+        ebookProgress: 0.3230769230769231,
+        currentTime: 0,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 32.30769230769231);
+      assert.strictEqual(detectUserBookFormat(item), 'ebook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('keeps audiobook progress when ebookProgress is zero', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [{ path: 'audio.mp3' }],
+        ebookFile: null,
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0.625,
+        ebookProgress: 0,
+        currentTime: 625,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 62.5);
+      assert.strictEqual(detectUserBookFormat(item), 'audiobook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('uses the progress field for hybrid items classified as audiobooks', () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [{ path: 'audio.mp3' }],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    try {
+      client._applyProgressDataToItem(item, {
+        progress: 0.25,
+        ebookProgress: 0.4,
+        currentTime: 250,
+        isFinished: false,
+      });
+
+      assert.strictEqual(item.progress_percentage, 25);
+      assert.strictEqual(detectUserBookFormat(item), 'audiobook');
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('detects an ebook-only Audiobookshelf book from its singular ebookFile', () => {
+    const item = {
+      mediaType: 'book',
+      media: {
+        audioFiles: [],
+        ebookFile: { path: 'book.epub' },
+      },
+    };
+
+    assert.strictEqual(detectUserBookFormat(item), 'ebook');
+  });
+
   it('uses /api/me mediaProgress as the authoritative source for completed counts', async () => {
     const client = new AudiobookshelfClient(
       'https://test.example',
@@ -156,6 +253,119 @@ describe('Audiobookshelf mediaProgress handling', () => {
 
       assert.strictEqual(cappedItems.length, 2);
       assert.strictEqual(uncappedItems.length, 5);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('limits mediaProgress item detail fetches', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      5,
+      100,
+    );
+    const mediaProgress = Array.from({ length: 21 }, (_, index) =>
+      createMediaProgress(`book-${index}`),
+    );
+    let detailFetches = 0;
+
+    client._getCurrentUser = async () => ({ mediaProgress });
+    client.getLibraries = async () => [{ id: 'library', name: 'Library' }];
+    client._makeRequest = async (_method, endpoint) => {
+      if (endpoint === '/api/libraries/library/items?limit=1&page=0') {
+        return { total: 21 };
+      }
+
+      if (endpoint.startsWith('/api/items/')) {
+        detailFetches++;
+        return {
+          id: endpoint.replace('/api/items/', ''),
+          libraryId: 'library',
+          media: { metadata: { title: endpoint } },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    };
+
+    try {
+      const books = await client.getReadingProgress();
+
+      assert.equal(detailFetches, 5);
+      assert.equal(books.filter(book => !book._isMetadataOnly).length, 5);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('does not let a page exceed maxBooksToFetch', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      5,
+      100,
+    );
+    let requestedEndpoint;
+
+    client._makeRequest = async (_method, endpoint) => {
+      requestedEndpoint = endpoint;
+      return {
+        total: 21,
+        results: Array.from({ length: 21 }, (_, index) => ({
+          id: `book-${index}`,
+        })),
+      };
+    };
+
+    try {
+      const books = await client.getLibraryItems('library');
+
+      assert.equal(
+        requestedEndpoint,
+        '/api/libraries/library/items?limit=5&page=0',
+      );
+      assert.equal(books.length, 5);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('uses a stable page size while enforcing maxBooksToFetch', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      3,
+      2,
+    );
+    const requestedEndpoints = [];
+    const pages = [
+      [{ id: 'book-1' }, { id: 'book-2' }],
+      [{ id: 'book-3' }, { id: 'book-4' }],
+    ];
+
+    client._makeRequest = async (_method, endpoint) => {
+      requestedEndpoints.push(endpoint);
+      const page = Number(
+        new URL(`https://test.example${endpoint}`).searchParams.get('page'),
+      );
+      return { total: 4, results: pages[page] || [] };
+    };
+
+    try {
+      const books = await client.getLibraryItems('library');
+
+      assert.deepEqual(requestedEndpoints, [
+        '/api/libraries/library/items?limit=2&page=0',
+        '/api/libraries/library/items?limit=2&page=1',
+      ]);
+      assert.deepEqual(
+        books.map(book => book.id),
+        ['book-1', 'book-2', 'book-3'],
+      );
     } finally {
       client.cleanup();
     }
