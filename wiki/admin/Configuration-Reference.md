@@ -375,7 +375,8 @@ global:
 - **Use Case**: Prevents memory issues on resource-constrained devices
 - **Behavior**: The limit is enforced for both paginated library results and
   `/api/me` media-progress item detail lookups; a response page cannot cause
-  ShelfBridge to exceed the configured maximum
+  ShelfBridge to exceed the configured maximum. When media-progress details
+  are limited, the most recently updated records are fetched first.
 
 #### `page_size`
 
