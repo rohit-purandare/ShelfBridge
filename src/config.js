@@ -27,7 +27,7 @@ export class Config {
 
     try {
       const configFile = fs.readFileSync(this.configPath, 'utf8');
-      const config = yaml.load(configFile) || {}; // Handle empty YAML files
+      const config = configFile.trim() ? yaml.load(configFile) || {} : {};
 
       this.globalConfig = config.global || {};
       this.users = config.users || [];

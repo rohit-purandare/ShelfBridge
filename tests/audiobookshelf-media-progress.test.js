@@ -300,6 +300,96 @@ describe('Audiobookshelf mediaProgress handling', () => {
     }
   });
 
+  it('prioritizes recently updated mediaProgress when detail fetches are limited', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+      1,
+      2,
+      100,
+    );
+    const mediaProgress = [
+      createMediaProgress('older-book', { lastUpdate: 1000 }),
+      createMediaProgress('oldest-book', { lastUpdate: 500 }),
+      createMediaProgress('newest-book', { lastUpdate: 3000 }),
+      createMediaProgress('newer-book', { lastUpdate: 2000 }),
+    ];
+    const fetchedItemIds = [];
+
+    client._getCurrentUser = async () => ({ mediaProgress });
+    client.getLibraries = async () => [{ id: 'library', name: 'Library' }];
+    client._makeRequest = async (_method, endpoint) => {
+      if (endpoint === '/api/libraries/library/items?limit=1&page=0') {
+        return { total: mediaProgress.length };
+      }
+
+      if (endpoint.startsWith('/api/items/')) {
+        const itemId = endpoint.replace('/api/items/', '');
+        fetchedItemIds.push(itemId);
+        return {
+          id: itemId,
+          libraryId: 'library',
+          media: { metadata: { title: itemId } },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    };
+
+    try {
+      await client.getReadingProgress();
+
+      assert.deepEqual(fetchedItemIds, ['newest-book', 'newer-book']);
+    } finally {
+      client.cleanup();
+    }
+  });
+
+  it('prioritizes recently updated mediaProgress without a detail fetch limit', async () => {
+    const client = new AudiobookshelfClient(
+      'https://test.example',
+      'test-token',
+    );
+    const mediaProgress = [
+      createMediaProgress('older-book', { lastUpdate: 1000 }),
+      createMediaProgress('newest-book', { lastUpdate: 3000 }),
+      createMediaProgress('newer-book', { lastUpdate: 2000 }),
+    ];
+    const fetchedItemIds = [];
+
+    client._getCurrentUser = async () => ({ mediaProgress });
+    client.getLibraries = async () => [{ id: 'library', name: 'Library' }];
+    client._makeRequest = async (_method, endpoint) => {
+      if (endpoint === '/api/libraries/library/items?limit=1&page=0') {
+        return { total: mediaProgress.length };
+      }
+
+      if (endpoint.startsWith('/api/items/')) {
+        const itemId = endpoint.replace('/api/items/', '');
+        fetchedItemIds.push(itemId);
+        return {
+          id: itemId,
+          libraryId: 'library',
+          media: { metadata: { title: itemId } },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint: ${endpoint}`);
+    };
+
+    try {
+      await client.getReadingProgress();
+
+      assert.deepEqual(fetchedItemIds, [
+        'newest-book',
+        'newer-book',
+        'older-book',
+      ]);
+    } finally {
+      client.cleanup();
+    }
+  });
+
   it('does not let a page exceed maxBooksToFetch', async () => {
     const client = new AudiobookshelfClient(
       'https://test.example',

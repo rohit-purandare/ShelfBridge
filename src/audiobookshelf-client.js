@@ -664,6 +664,11 @@ export class AudiobookshelfClient {
     });
 
     const progressEntries = Array.from(progressByItemId.entries());
+    progressEntries.sort(
+      ([, firstProgress], [, secondProgress]) =>
+        (secondProgress.lastUpdate || 0) - (firstProgress.lastUpdate || 0),
+    );
+
     const cappedProgressEntries =
       this.maxBooksToFetch === null
         ? progressEntries
