@@ -664,16 +664,15 @@ export class AudiobookshelfClient {
     });
 
     const progressEntries = Array.from(progressByItemId.entries());
+    progressEntries.sort(
+      ([, firstProgress], [, secondProgress]) =>
+        (secondProgress.lastUpdate || 0) - (firstProgress.lastUpdate || 0),
+    );
+
     const cappedProgressEntries =
       this.maxBooksToFetch === null
         ? progressEntries
-        : progressEntries
-            .toSorted(
-              ([, firstProgress], [, secondProgress]) =>
-                (secondProgress.lastUpdate || 0) -
-                (firstProgress.lastUpdate || 0),
-            )
-            .slice(0, this.maxBooksToFetch);
+        : progressEntries.slice(0, this.maxBooksToFetch);
 
     if (cappedProgressEntries.length < progressEntries.length) {
       logger.debug('Limited mediaProgress item detail fetches', {
