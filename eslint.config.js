@@ -41,6 +41,8 @@ export default [
       // Async/await best practices
       'no-async-promise-executor': 'error',
       'require-atomic-updates': 'off', // Can be noisy with legitimate async patterns
+      'no-useless-assignment': 'off', // Preserve the ESLint 9 lint baseline
+      'preserve-caught-error': 'off', // Preserve the ESLint 9 lint baseline
 
       // Security-related rules
       'no-eval': 'error',
