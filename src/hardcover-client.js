@@ -329,6 +329,8 @@ export class HardcoverClient {
                         error
                         user_book_read {
                             id
+                            progress
+                            progress_pages
                             progress_seconds
                             edition_id
                             started_at
@@ -347,7 +349,9 @@ export class HardcoverClient {
                         error
                         user_book_read {
                             id
+                            progress
                             progress_pages
+                            progress_seconds
                             edition_id
                             started_at
 
@@ -375,12 +379,26 @@ export class HardcoverClient {
       );
       try {
         const result = await this._executeQuery(mutation, variables);
-        if (
-          result &&
-          result.update_user_book_read &&
-          result.update_user_book_read.user_book_read
-        ) {
-          const updatedRecord = result.update_user_book_read.user_book_read;
+        const updateResult = result?.update_user_book_read;
+        if (updateResult?.error) {
+          logger.error(
+            `Hardcover rejected progress update: ${updateResult.error}`,
+          );
+          return false;
+        }
+
+        if (updateResult?.user_book_read) {
+          const updatedRecord = updateResult.user_book_read;
+          if (
+            !this._isProgressWriteVerified(
+              updatedRecord,
+              currentProgress,
+              useSeconds,
+              progressPercentage,
+            )
+          ) {
+            return false;
+          }
           logger.debug(
             `Updated progress - start date now: ${updatedRecord.started_at}`,
           );
@@ -392,20 +410,6 @@ export class HardcoverClient {
               statusWasUpdated,
             },
           };
-        }
-        // Check for reading_format related errors in the response
-        if (
-          result &&
-          result.update_user_book_read &&
-          result.update_user_book_read.error
-        ) {
-          const errorMsg = result.update_user_book_read.error;
-          if (
-            errorMsg.toLowerCase().includes('reading_format') ||
-            errorMsg.toLowerCase().includes('format')
-          ) {
-            logger.error(`Reading format related error: ${errorMsg}`);
-          }
         }
         return false;
       } catch (error) {
@@ -440,6 +444,55 @@ export class HardcoverClient {
         },
       };
     }
+  }
+
+  _isProgressWriteVerified(
+    record,
+    expectedPosition,
+    useSeconds,
+    expectedPercentage = null,
+  ) {
+    const progressField = useSeconds ? 'progress_seconds' : 'progress_pages';
+    const returnedPosition = record?.[progressField];
+    const numericPosition = Number(returnedPosition);
+    const numericExpected = Number(expectedPosition);
+
+    if (
+      returnedPosition === null ||
+      returnedPosition === undefined ||
+      !Number.isFinite(numericPosition) ||
+      !Number.isFinite(numericExpected) ||
+      Math.abs(numericPosition - numericExpected) > 1
+    ) {
+      logger.error('Hardcover returned an unverified progress update', {
+        recordId: record?.id,
+        progressField,
+        expectedPosition,
+        returnedPosition,
+      });
+      return false;
+    }
+
+    if (
+      expectedPercentage !== null &&
+      Number(expectedPercentage) > 0 &&
+      Object.prototype.hasOwnProperty.call(record, 'progress')
+    ) {
+      const calculatedProgress = Number(record.progress);
+      if (!Number.isFinite(calculatedProgress) || calculatedProgress <= 0) {
+        logger.error(
+          'Hardcover did not calculate progress for the updated read',
+          {
+            recordId: record.id,
+            expectedPercentage,
+            returnedProgress: record.progress,
+          },
+        );
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -800,6 +853,8 @@ export class HardcoverClient {
                         started_at
                         finished_at
                         edition_id
+                        progress
+                        progress_pages
                         progress_seconds
 
                     }
@@ -820,6 +875,8 @@ export class HardcoverClient {
                         finished_at
                         edition_id
                         progress_pages
+                        progress_seconds
+                        progress
 
                     }
                 }
@@ -846,6 +903,11 @@ export class HardcoverClient {
         result.insert_user_book_read.user_book_read
       ) {
         const newRecord = result.insert_user_book_read.user_book_read;
+        if (
+          !this._isProgressWriteVerified(newRecord, currentProgress, useSeconds)
+        ) {
+          return null;
+        }
         logger.debug(
           `Created new progress record with start date: ${newRecord.started_at}`,
         );
