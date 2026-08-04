@@ -53,8 +53,8 @@
     "winston-daily-rotate-file": "^4.7.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.33.0",
-    "eslint": "^9.35.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
     "globals": "^16.3.0",
     "husky": "^8.0.3",
     "lint-staged": "^16.1.6",
@@ -78,7 +78,7 @@
   },
   "overrides": {
     "ansi-regex": "6.2.2",
-    "color-name": "2.0.0",
+    "color-name": "2.1.0",
     "is-arrayish": "0.3.4",
     "supports-color": "10.2.2",
     "strip-ansi": "7.1.0",
@@ -87,6 +87,7 @@
     "color-convert": "2.0.1",
     "simple-swizzle": "0.2.4",
     "form-data": "4.0.6",
-    "js-yaml": "5.2.3"
+    "js-yaml": "5.2.3",
+    "brace-expansion": "5.0.9"
   }
 }

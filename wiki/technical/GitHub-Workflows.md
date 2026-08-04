@@ -161,10 +161,13 @@ npm run format:check
 #### 3. **Security Audit**
 
 ```bash
-npm audit --audit-level=high
+npm audit --audit-level=moderate
 ```
 
 Dependency security fixes should update both `package.json` and `package-lock.json` so CI audits run against the same resolved versions that ship with the app.
+GitHub Dependabot vulnerability alerts must remain enabled because Renovate reads
+those alerts to create immediate security updates outside its normal schedule and
+release-age delay.
 
 #### 4. **Configuration Validation**
 
