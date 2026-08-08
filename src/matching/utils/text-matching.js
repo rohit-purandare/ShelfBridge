@@ -745,3 +745,10 @@ export function normalizeAsin(asin) {
   const normalized = String(asin).replace(/\s/g, '').toUpperCase();
   return /^[A-Z0-9]{10}$/.test(normalized) ? normalized : null;
 }
+
+export function getIsbn10FromNumericAsin(asin) {
+  const normalized = normalizeAsin(asin);
+  if (!normalized || !/^\d{10}$/.test(normalized)) return null;
+
+  return convertIsbn10To13(normalized) ? normalized : null;
+}

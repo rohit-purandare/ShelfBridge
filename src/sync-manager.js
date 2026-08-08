@@ -9,6 +9,7 @@ import {
   extractAudioDurationFromAudiobookshelf,
   extractBookIdentifiers,
   extractTitle,
+  getIsbn10FromNumericAsin,
   getIsbnVariants,
 } from './matching/index.js';
 import { isIdentifierTitlePlausible } from './matching/utils/identifier-title-validator.js';
@@ -2390,7 +2391,32 @@ export class SyncManager {
         });
       }
 
-      if (searchResults.length === 0 && identifiers.isbn) {
+      const numericAsinIsbn = getIsbn10FromNumericAsin(identifiers.asin);
+      if (searchResults.length === 0 && numericAsinIsbn) {
+        logger.info(
+          `Searching Hardcover by ISBN-10 from numeric ASIN: ${numericAsinIsbn}`,
+          { dryRun: this.dryRun },
+        );
+        searchResults =
+          await this.hardcover.searchBooksByIsbn(numericAsinIsbn);
+        logger.info(
+          `Numeric ASIN ISBN-10 search returned ${searchResults.length} results`,
+          {
+            dryRun: this.dryRun,
+            results: searchResults.map(r => ({
+              id: r.id,
+              format: r.reading_format?.format || r.physical_format,
+              title: r.book?.title,
+            })),
+          },
+        );
+      }
+
+      if (
+        searchResults.length === 0 &&
+        identifiers.isbn &&
+        identifiers.isbn !== numericAsinIsbn
+      ) {
         logger.info(`Searching Hardcover by ISBN: ${identifiers.isbn}`, {
           dryRun: this.dryRun,
         });

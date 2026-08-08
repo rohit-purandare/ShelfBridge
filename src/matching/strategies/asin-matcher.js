@@ -8,6 +8,7 @@
 import logger from '../../logger.js';
 import { extractTitle } from '../utils/audiobookshelf-extractor.js';
 import { isIdentifierTitlePlausible } from '../utils/identifier-title-validator.js';
+import { getIsbn10FromNumericAsin } from '../utils/text-matching.js';
 
 /**
  * ASIN Matching Strategy - Tier 1
@@ -50,12 +51,30 @@ export class AsinMatcher {
 
         try {
           // Search Hardcover's global database for this ASIN
-          const searchResults = await this.hardcoverClient.searchBooksByAsin(
+          let searchMethod = 'asin';
+          let searchResults = await this.hardcoverClient.searchBooksByAsin(
             identifiers.asin,
           );
           logger.debug(
             `ASIN search returned ${searchResults.length} results for ${identifiers.asin}`,
           );
+
+          const numericAsinIsbn = getIsbn10FromNumericAsin(
+            identifiers.asin,
+          );
+          if (
+            searchResults.length === 0 &&
+            numericAsinIsbn &&
+            this.hardcoverClient.searchBooksByIsbn
+          ) {
+            logger.debug(
+              `Retrying numeric ASIN ${identifiers.asin} as ISBN-10`,
+            );
+            searchResults = await this.hardcoverClient.searchBooksByIsbn(
+              numericAsinIsbn,
+            );
+            searchMethod = 'isbn';
+          }
 
           const plausibleResults = searchResults.filter(result => {
             const hardcoverTitle = result.book?.title;
@@ -115,7 +134,7 @@ export class AsinMatcher {
                   return {
                     userBook: existingUserBook,
                     edition: userEdition,
-                    _matchType: 'asin_cross_edition',
+                    _matchType: `${searchMethod}_cross_edition`,
                     _tier: 1,
                     _needsScoring: false,
                   };
@@ -138,7 +157,7 @@ export class AsinMatcher {
             return {
               userBook: null,
               edition: firstResult,
-              _matchType: 'asin_search_result',
+              _matchType: `${searchMethod}_search_result`,
               _tier: 1,
               _needsScoring: false,
               _needsBookIdLookup: true, // Book ID needs to be looked up from edition
