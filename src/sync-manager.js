@@ -2432,7 +2432,7 @@ export class SyncManager {
 
         if (!hasCompatibleFormat) {
           logger.info(
-            `Format mismatch in identifier search for "${title}" - triggering title/author fallback`,
+            `Format mismatch in identifier search for "${title}" - checking other editions of the matched book`,
             {
               sourceFormat,
               identifiersSearched: {
@@ -2446,8 +2446,51 @@ export class SyncManager {
             },
           );
 
-          // Clear search results to trigger title/author fallback
-          searchResults = [];
+          const matchedBookIds = [
+            ...new Set(
+              searchResults.map(result => result.book?.id).filter(Boolean),
+            ),
+          ];
+          const compatibleEditions = [];
+
+          for (const bookId of matchedBookIds) {
+            const bookDetails =
+              await this.hardcover.getBookDetailsWithEditions(bookId);
+            if (!bookDetails?.editions) continue;
+
+            for (const edition of bookDetails.editions) {
+              const editionFormat = this._mapHardcoverFormatToInternal(edition);
+              if (this._areFormatsCompatible(sourceFormat, editionFormat)) {
+                compatibleEditions.push({
+                  ...edition,
+                  book: {
+                    id: bookDetails.id,
+                    title: bookDetails.title,
+                    contributions: bookDetails.contributions,
+                  },
+                });
+              }
+            }
+          }
+
+          if (compatibleEditions.length > 0) {
+            logger.info(
+              `Found compatible editions on identifier-matched book`,
+              {
+                title,
+                sourceFormat,
+                matchedBookIds,
+                compatibleEditionCount: compatibleEditions.length,
+              },
+            );
+            searchResults = compatibleEditions;
+          } else {
+            logger.info(
+              `No compatible edition found on identifier-matched book - triggering title/author fallback`,
+              { title, sourceFormat, matchedBookIds },
+            );
+            searchResults = [];
+          }
         }
       }
 
@@ -4193,17 +4236,15 @@ export class SyncManager {
       return true;
     }
 
-    // Audiobook and ebook are compatible (cross-digital)
-    if (
-      (sourceFormat === 'audiobook' && editionFormat === 'ebook') ||
-      (sourceFormat === 'ebook' && editionFormat === 'audiobook')
-    ) {
-      return true;
+    // An audiobook must use a listened edition so progress is recorded in
+    // seconds against the correct medium.
+    if (sourceFormat === 'audiobook') {
+      return false;
     }
 
-    // Physical edition ('book') is NOT compatible with audiobook
-    if (sourceFormat === 'audiobook' && editionFormat === 'book') {
-      return false;
+    // Ebook sources may still use an audiobook edition as a digital fallback.
+    if (sourceFormat === 'ebook' && editionFormat === 'audiobook') {
+      return true;
     }
 
     // Allow ebook → physical fallback (acceptable)
