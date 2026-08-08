@@ -30,6 +30,7 @@ export class SyncManager {
     const workers = this.globalConfig.workers || 3;
     this.taskQueue = new TaskQueue({ concurrency: workers });
     this.abortController = new AbortController();
+    this.autoAddReservations = new Map();
 
     this.timezone = globalConfig.timezone || 'UTC';
 
@@ -97,6 +98,7 @@ export class SyncManager {
 
   async syncProgress() {
     const startTime = Date.now();
+    this.autoAddReservations.clear();
     logger.info('Starting sync for user', {
       service: 'shelfbridge',
       version: currentVersion,
@@ -2955,6 +2957,33 @@ export class SyncManager {
       };
       const bookId = editionResolution.book.id;
       const editionId = edition.id;
+      const reservationKey = String(bookId);
+      this.autoAddReservations ||= new Map();
+      const existingReservation =
+        this.autoAddReservations.get(reservationKey);
+
+      if (existingReservation) {
+        logger.info(`Skipping duplicate auto-add within current sync`, {
+          title,
+          bookId,
+          editionId,
+          reservedByTitle: existingReservation.title,
+          reservedEditionId: existingReservation.editionId,
+        });
+        return {
+          status: 'skipped',
+          reason: `Book ${bookId} already reserved for auto-add in this sync`,
+          title,
+          bookId,
+          editionId,
+          duplicate: true,
+        };
+      }
+
+      this.autoAddReservations.set(reservationKey, {
+        title,
+        editionId,
+      });
 
       logger.debug(`Found match in Hardcover`, {
         title: title,
