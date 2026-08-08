@@ -2574,12 +2574,12 @@ export class SyncManager {
             },
             targetTitle: title,
             targetAuthor: author || 'N/A',
-            fallbackEnabled: !this.dryRun,
+            fallbackEnabled: true,
             titleAuthorId: titleAuthorId,
           },
         );
 
-        if (!this.dryRun) {
+        if (searchResults.length === 0) {
           try {
             // Use BookMatcher's title/author matching with library context
             // This enables duplicate detection and "Want to Read" update logic
@@ -2835,7 +2835,7 @@ export class SyncManager {
               `Could not find ${title} in Hardcover database after all search attempts`,
               {
                 searchedIdentifiers: identifiers,
-                titleAuthorAttempted: !this.dryRun,
+                titleAuthorAttempted: true,
                 dryRun: this.dryRun,
               },
             );
