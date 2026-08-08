@@ -511,6 +511,21 @@ export function extractAudioDurationFromAudiobookshelf(bookData) {
         return bookData.media[field];
       }
     }
+
+    // Standard (non-expanded) Audiobookshelf item responses omit
+    // media.duration but retain duration on each audio file.
+    if (Array.isArray(bookData.media.audioFiles)) {
+      const audioFileDuration = bookData.media.audioFiles.reduce(
+        (total, audioFile) => {
+          const duration = Number(audioFile?.duration);
+          return Number.isFinite(duration) && duration > 0
+            ? total + duration
+            : total;
+        },
+        0,
+      );
+      if (audioFileDuration > 0) return audioFileDuration;
+    }
   }
 
   // Check metadata object
