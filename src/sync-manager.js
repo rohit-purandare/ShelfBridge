@@ -11,6 +11,7 @@ import {
   extractTitle,
   getIsbnVariants,
 } from './matching/index.js';
+import { isIdentifierTitlePlausible } from './matching/utils/identifier-title-validator.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
@@ -2487,6 +2488,21 @@ export class SyncManager {
             title: r.book?.title,
           })),
         });
+      }
+
+      if (searchResults.length > 0) {
+        const unvalidatedCount = searchResults.length;
+        searchResults = searchResults.filter(searchResult =>
+          isIdentifierTitlePlausible(title, searchResult.book?.title),
+        );
+
+        if (searchResults.length < unvalidatedCount) {
+          logger.warn(`Rejected identifier results with conflicting titles`, {
+            sourceTitle: title,
+            rejectedCount: unvalidatedCount - searchResults.length,
+            remainingCount: searchResults.length,
+          });
+        }
       }
 
       // Check format compatibility after identifier search
