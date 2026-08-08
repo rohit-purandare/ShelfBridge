@@ -301,9 +301,11 @@ function tokenSetSimilarity(str1, str2) {
 /**
  * Normalize title for matching
  * @param {string} title - Title to normalize
+ * @param {Object} options - Normalization options
+ * @param {boolean} options.normalizeNumbers - Convert written and Roman numbers to digits
  * @returns {string} - Normalized title
  */
-export function normalizeTitle(title) {
+export function normalizeTitle(title, { normalizeNumbers = true } = {}) {
   if (!title) return '';
 
   return (
@@ -337,8 +339,10 @@ export function normalizeTitle(title) {
       // Apply number normalization
       .split(' ')
       .map(word => {
-        word = normalizeRomanNumerals(word);
-        word = normalizeWrittenNumbers(word);
+        if (normalizeNumbers) {
+          word = normalizeRomanNumerals(word);
+          word = normalizeWrittenNumbers(word);
+        }
         return word;
       })
       .join(' ')
@@ -738,13 +742,6 @@ export function getIsbnVariants(isbn) {
 
 export function normalizeAsin(asin) {
   if (!asin) return null;
-  const normalized = asin.replace(/\s/g, '').toUpperCase();
-  if (
-    normalized.length === 10 &&
-    /^[A-Z]/.test(normalized) &&
-    !/^\d+$/.test(normalized)
-  ) {
-    return normalized;
-  }
-  return null;
+  const normalized = String(asin).replace(/\s/g, '').toUpperCase();
+  return /^[A-Z0-9]{10}$/.test(normalized) ? normalized : null;
 }

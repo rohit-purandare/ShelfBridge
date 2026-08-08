@@ -107,13 +107,16 @@ export class TitleAuthorMatcher {
       );
 
       // Extract source book metadata for logging
-      const { extractSeries, extractPublicationYear } =
-        await import('../utils/audiobookshelf-extractor.js');
+      const { extractSeries, extractPublicationYear } = await import(
+        '../utils/audiobookshelf-extractor.js'
+      );
       const sourceSeries = extractSeries(absBook);
       const sourceYear = extractPublicationYear(absBook);
 
       // Normalize title for Hardcover API search to fix issues like "(Unabridged)" suffix breaking search
-      const normalizedSearchTitle = normalizeTitle(title);
+      const normalizedSearchTitle = normalizeTitle(title, {
+        normalizeNumbers: false,
+      });
 
       logger.debug(`Title/author search initiated for "${title}"`, {
         searchTitle: title,
