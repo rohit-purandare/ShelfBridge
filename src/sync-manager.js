@@ -2499,11 +2499,13 @@ export class SyncManager {
           sourceFormat,
         );
 
-        if (!hasCompatibleFormat) {
+        if (!hasCompatibleFormat || sourceFormat === 'audiobook') {
           logger.info(
-            `Format mismatch in identifier search for "${title}" - checking other editions of the matched book`,
+            `Checking other editions of the identifier-matched book`,
             {
+              title,
               sourceFormat,
+              identifierResultCompatible: hasCompatibleFormat,
               identifiersSearched: {
                 asin: identifiers.asin || 'N/A',
                 isbn: identifiers.isbn || 'N/A',
@@ -2522,22 +2524,25 @@ export class SyncManager {
           ];
           const compatibleEditions = [];
 
-          for (const bookId of matchedBookIds) {
-            const bookDetails =
-              await this.hardcover.getBookDetailsWithEditions(bookId);
-            if (!bookDetails?.editions) continue;
+          if (this.hardcover.getBookDetailsWithEditions) {
+            for (const bookId of matchedBookIds) {
+              const bookDetails =
+                await this.hardcover.getBookDetailsWithEditions(bookId);
+              if (!bookDetails?.editions) continue;
 
-            for (const edition of bookDetails.editions) {
-              const editionFormat = this._mapHardcoverFormatToInternal(edition);
-              if (this._areFormatsCompatible(sourceFormat, editionFormat)) {
-                compatibleEditions.push({
-                  ...edition,
-                  book: {
-                    id: bookDetails.id,
-                    title: bookDetails.title,
-                    contributions: bookDetails.contributions,
-                  },
-                });
+              for (const edition of bookDetails.editions) {
+                const editionFormat =
+                  this._mapHardcoverFormatToInternal(edition);
+                if (this._areFormatsCompatible(sourceFormat, editionFormat)) {
+                  compatibleEditions.push({
+                    ...edition,
+                    book: {
+                      id: bookDetails.id,
+                      title: bookDetails.title,
+                      contributions: bookDetails.contributions,
+                    },
+                  });
+                }
               }
             }
           }
@@ -2553,6 +2558,11 @@ export class SyncManager {
               },
             );
             searchResults = compatibleEditions;
+          } else if (hasCompatibleFormat) {
+            logger.info(
+              `Could not load other editions; keeping compatible identifier result`,
+              { title, sourceFormat, matchedBookIds },
+            );
           } else {
             logger.info(
               `No compatible edition found on identifier-matched book - triggering title/author fallback`,
