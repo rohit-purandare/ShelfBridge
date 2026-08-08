@@ -161,4 +161,58 @@ describe('Audiobook auto-add edition selection', () => {
     assert.equal(result.bookId, 'rhythm-book');
     assert.equal(result.editionId, 'close-duration-audiobook');
   });
+
+  it('checks same-book editions when the identifier audiobook has the wrong duration', async () => {
+    const manager = createManager({
+      id: 'rhythm-book',
+      title: 'Rhythm of War',
+      editions: [
+        {
+          id: 'identifier-audiobook',
+          asin: 'B082FARAWAY',
+          reading_format: { format: 'Listened' },
+          audio_seconds: 40000,
+          users_count: 10,
+        },
+        {
+          id: 'different-identifier-close-audiobook',
+          asin: 'B082CLOSER1',
+          reading_format: { format: 'Listened' },
+          audio_seconds: 20500,
+          users_count: 10,
+        },
+      ],
+    });
+    manager.hardcover.searchBooksByIsbn = mock.fn(async () => [
+      {
+        id: 'identifier-audiobook',
+        reading_format: { format: 'Listened' },
+        audio_seconds: 40000,
+        book: { id: 'rhythm-book', title: 'Rhythm of War' },
+      },
+    ]);
+
+    const result = await SyncManager.prototype._tryAutoAddBook.call(
+      manager,
+      {
+        media: {
+          audioFiles: [{ duration: 10000 }, { duration: 10000 }],
+          metadata: {
+            title: 'Rhythm of War: Book Four of the Stormlight Archive',
+            author: 'Brandon Sanderson',
+          },
+        },
+      },
+      { asin: null, isbn: '9781429952040' },
+      'Rhythm of War: Book Four of the Stormlight Archive',
+      'Brandon Sanderson',
+    );
+
+    assert.equal(result.status, 'auto_added');
+    assert.equal(result.bookId, 'rhythm-book');
+    assert.equal(
+      result.editionId,
+      'different-identifier-close-audiobook',
+    );
+  });
 });
