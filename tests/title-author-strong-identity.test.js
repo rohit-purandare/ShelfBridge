@@ -147,14 +147,16 @@ describe('Strong title/author identity evidence', () => {
 
     const hardcoverClient = {
       searchBooksForMatching: mock.fn(async () => [result]),
-      getPreferredEditionFromBookId: mock.fn(async bookId => ({
-        bookId,
+      getBookDetailsWithEditions: mock.fn(async bookId => ({
+        id: bookId,
         title: result.title,
-        edition: {
-          id: 'defiance-2-audio',
-          audio_seconds: 80400,
-          reading_format: { format: 'Listened' },
-        },
+        editions: [
+          {
+            id: 'defiance-2-audio',
+            audio_seconds: 80400,
+            reading_format: { format: 'Listened' },
+          },
+        ],
       })),
     };
     const cache = {
@@ -227,13 +229,15 @@ describe('Strong title/author identity evidence', () => {
 
     const hardcoverClient = {
       searchBooksForMatching: mock.fn(async () => [unsafe, correct]),
-      getPreferredEditionFromBookId: mock.fn(async bookId => ({
-        bookId,
+      getBookDetailsWithEditions: mock.fn(async bookId => ({
+        id: bookId,
         title: correct.title,
-        edition: {
-          id: 'fourth-wing-audio',
-          reading_format: { format: 'Listened' },
-        },
+        editions: [
+          {
+            id: 'fourth-wing-audio',
+            reading_format: { format: 'Listened' },
+          },
+        ],
       })),
     };
     const cache = {

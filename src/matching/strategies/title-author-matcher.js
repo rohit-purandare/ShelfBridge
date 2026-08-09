@@ -14,12 +14,36 @@ import {
   extractTitle,
   extractAuthor,
   extractNarrator,
+  extractAudioDurationFromAudiobookshelf,
   detectUserBookFormat,
 } from '../utils/audiobookshelf-extractor.js';
-import { extractAuthorFromSearchResult } from '../utils/hardcover-extractor.js';
+import {
+  extractAuthorFromSearchResult,
+  extractNarratorFromSearchResult,
+} from '../utils/hardcover-extractor.js';
 import { calculateBookIdentificationScore } from '../scoring/book-identification-scorer.js';
-import { selectBestEdition } from '../edition-selector.js';
+import {
+  PROFILES,
+  selectBestEdition,
+} from '../utils/unified-edition-scorer.js';
 import { normalizeTitle } from '../utils/text-matching.js';
+
+function getEditionFormat(edition) {
+  return edition?.reading_format?.format || edition?.physical_format || null;
+}
+
+function getPreferredFormatCandidates(editions, userFormat) {
+  if (userFormat !== 'audiobook') {
+    return editions;
+  }
+
+  const listenedEditions = editions.filter(edition => {
+    const format = getEditionFormat(edition)?.toLowerCase();
+    return format === 'listened' || format === 'audiobook';
+  });
+
+  return listenedEditions.length > 0 ? listenedEditions : editions;
+}
 
 /**
  * Title/Author Matching Strategy - Tier 3
@@ -392,41 +416,69 @@ export class TitleAuthorMatcher {
 
         let selectedEditionResult = null;
         let finalMatch = null;
+        let bookWithEditions = bestBookMatch;
 
-        // Check if we already have editions data in the search result
-        if (bestBookMatch.editions && bestBookMatch.editions.length > 0) {
-          // Use the edition selector to pick the best edition
-          selectedEditionResult = selectBestEdition(
-            bestBookMatch,
-            absBook,
-            userFormat,
-          );
-        } else {
-          // Need to fetch editions from the book ID
+        if (!bookWithEditions.editions?.length) {
           logger.debug(`Fetching editions for book ID ${bestBookMatch.id}`);
           try {
-            const editionData =
-              await this.hardcoverClient.getPreferredEditionFromBookId(
+            bookWithEditions =
+              await this.hardcoverClient.getBookDetailsWithEditions(
                 bestBookMatch.id,
-                userFormat,
               );
-
-            if (editionData) {
-              selectedEditionResult = {
-                bookId: editionData.bookId,
-                title: editionData.title,
-                edition: editionData.edition,
-                selectionReason: {
-                  automatic: `Preferred ${userFormat} edition from book ID`,
-                },
-                alternativeEditions: [],
-              };
-            }
           } catch (error) {
             logger.warn(
               `Failed to fetch editions for book ID ${bestBookMatch.id}:`,
               error.message,
             );
+          }
+        }
+
+        if (bookWithEditions?.editions?.length) {
+          const editionCandidates = getPreferredFormatCandidates(
+            bookWithEditions.editions,
+            userFormat,
+          );
+
+          if (
+            userFormat === 'audiobook' &&
+            editionCandidates.length === bookWithEditions.editions.length &&
+            !editionCandidates.some(edition => {
+              const format = getEditionFormat(edition)?.toLowerCase();
+              return format === 'listened' || format === 'audiobook';
+            })
+          ) {
+            logger.warn(
+              `No Listened edition available for "${title}"; using the best edition on the identified book`,
+              {
+                bookId: bestBookMatch.id,
+                availableFormats: bookWithEditions.editions.map(
+                  getEditionFormat,
+                ),
+              },
+            );
+          }
+
+          const editionSelection = selectBestEdition(editionCandidates, {
+            sourceFormat: userFormat,
+            sourceDuration:
+              extractAudioDurationFromAudiobookshelf(absBook),
+            sourceNarrator: narrator,
+            profile: PROFILES.TITLE_AUTHOR,
+            formatMapper: getEditionFormat,
+          });
+
+          if (editionSelection) {
+            selectedEditionResult = {
+              bookId: bookWithEditions.id || bestBookMatch.id,
+              title: bookWithEditions.title || bestBookMatch.title,
+              edition: editionSelection.edition,
+              score: editionSelection.score,
+              narratorName: extractNarratorFromSearchResult(
+                editionSelection.edition,
+              ),
+              selectionReason: editionSelection.breakdown,
+              alternativeEditions: editionSelection.alternatives,
+            };
           }
         }
 
