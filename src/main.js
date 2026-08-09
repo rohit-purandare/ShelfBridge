@@ -568,7 +568,7 @@ async function processStartupSessions(users, globalConfig) {
       });
 
       // Initialize cache to check for active sessions
-      const cache = new BookCache(`data/.book_cache_${user.id}.db`);
+      const cache = new BookCache();
       await cache.init();
 
       // Get all active sessions for this user
