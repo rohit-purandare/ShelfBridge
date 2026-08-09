@@ -2261,6 +2261,22 @@ export class SyncManager {
           syncResult.actions.push(
             `[DRY RUN] Would add matched book to library`,
           );
+
+          // Continue through the same post-add sync path as live mode without
+          // issuing a write to Hardcover.
+          if (!hardcoverMatch.userBook) {
+            hardcoverMatch.userBook = {
+              id: `dry-run-${bookId}`,
+              book: {
+                id: bookId,
+                title: hardcoverMatch.book?.title || title,
+                contributions: [],
+              },
+            };
+          } else {
+            hardcoverMatch.userBook.id = `dry-run-${bookId}`;
+          }
+          hardcoverMatch._isSearchResult = false;
         }
       } catch (error) {
         logger.error(
