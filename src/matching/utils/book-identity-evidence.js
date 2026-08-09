@@ -1,5 +1,6 @@
 import { normalizeAuthor } from './text-matching.js';
 import {
+  isCanonicalTitleReductionSafe,
   isCollectionTitle,
   normalizeIdentityTitle,
   normalizeWorkTitle,
@@ -57,7 +58,9 @@ export function evaluateStrongBookIdentity(
     !!sourceTitle && sourceTitle === candidateIdentityTitle;
   const canonicalTitleMatch =
     !!sourceWorkTitle && sourceWorkTitle === candidateIdentityTitle;
-  const titleMatch = fullTitleMatch || canonicalTitleMatch;
+  const safeCanonicalTitleMatch =
+    canonicalTitleMatch && isCanonicalTitleReductionSafe(targetTitle);
+  const titleMatch = fullTitleMatch || safeCanonicalTitleMatch;
   const collectionConflict =
     isCollectionTitle(candidateTitle) && !isCollectionTitle(targetTitle);
 
@@ -79,7 +82,9 @@ export function evaluateStrongBookIdentity(
   if (collectionConflict) {
     reason = 'candidate is a collection but source is a single work';
   } else if (!titleMatch) {
-    reason = 'candidate is neither the exact nor canonical source title';
+    reason = canonicalTitleMatch
+      ? 'canonical title reduction discarded an unverified work suffix'
+      : 'candidate is neither the exact nor canonical source title';
   } else if (authorOverlap) {
     reason = fullTitleMatch
       ? 'exact title with overlapping author'
@@ -95,6 +100,7 @@ export function evaluateStrongBookIdentity(
     reason,
     fullTitleMatch,
     canonicalTitleMatch,
+    safeCanonicalTitleMatch,
     authorOverlap,
     candidateAuthorMissing,
   };

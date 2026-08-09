@@ -208,6 +208,70 @@ describe('Strong title/author identity evidence', () => {
     assert.ok(score.totalScore < 70);
   });
 
+  for (const source of ['The Sandman: Act II', 'The Sandman: Act III']) {
+    it(`rejects the base Sandman work for ${source}`, () => {
+      const score = calculateBookIdentificationScore(
+        searchResult('The Sandman', ['Neil Gaiman', 'Dirk Maggs']),
+        source,
+        'Neil Gaiman, Dirk Maggs',
+      );
+
+      assert.equal(score.strongIdentityEvidence.canonicalTitleMatch, true);
+      assert.equal(score.strongIdentityEvidence.safeCanonicalTitleMatch, false);
+      assert.equal(score.strongIdentityEvidence.matches, false);
+      assert.ok(score.totalScore < 70);
+    });
+  }
+
+  it('rejects an arbitrary separator-truncated sequel title', () => {
+    const score = calculateBookIdentificationScore(
+      searchResult('Dune', ['Frank Herbert']),
+      'Dune: Messiah',
+      'Frank Herbert',
+    );
+
+    assert.equal(score.strongIdentityEvidence.canonicalTitleMatch, true);
+    assert.equal(score.strongIdentityEvidence.safeCanonicalTitleMatch, false);
+    assert.equal(score.strongIdentityEvidence.matches, false);
+    assert.ok(score.totalScore < 70);
+  });
+
+  it('does not select or cache the base Sandman work for Act II', async () => {
+    const baseWork = searchResult('The Sandman', [
+      'Neil Gaiman',
+      'Dirk Maggs',
+    ]);
+    const hardcoverClient = {
+      searchBooksForMatching: mock.fn(async () => [baseWork]),
+      getBookDetailsWithEditions: mock.fn(),
+    };
+    const cache = {
+      generateTitleAuthorIdentifier: () => 'title-author-key',
+      getCachedBookInfo: mock.fn(async () => null),
+      storeEditionMapping: mock.fn(async () => true),
+    };
+    const matcher = new TitleAuthorMatcher(hardcoverClient, cache, {
+      title_author_matching: { confidence_threshold: 0.7 },
+    });
+
+    const match = await matcher.findMatch(
+      {
+        title: 'The Sandman: Act II',
+        author: 'Neil Gaiman, Dirk Maggs',
+      },
+      'test-user',
+      () => null,
+      () => null,
+    );
+
+    assert.equal(match, null);
+    assert.equal(cache.storeEditionMapping.mock.callCount(), 0);
+    assert.equal(
+      hardcoverClient.getBookDetailsWithEditions.mock.callCount(),
+      0,
+    );
+  });
+
   it('selects a lower-scoring exact title instead of a higher-scoring unsafe candidate', async () => {
     const unsafe = searchResult('Fourth Wing, Iron Flame', [
       'Rebecca Yarros',
