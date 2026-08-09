@@ -16,7 +16,7 @@ export function normalizeIdentityTitle(title) {
 
 export function normalizeWorkTitle(title) {
   const withoutAnnotations = stripAudiobookAnnotations(title);
-  return normalizeTitle(withoutAnnotations.split(/[:–—]/, 1)[0]);
+  return normalizeTitle(withoutAnnotations.split(/[-:–—]/, 1)[0]);
 }
 
 export function isCollectionTitle(title) {

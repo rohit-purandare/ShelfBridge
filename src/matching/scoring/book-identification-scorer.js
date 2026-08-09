@@ -23,6 +23,7 @@ import {
   extractSeries as extractSeriesFromSearchResult,
   extractPublicationYear as extractPublicationYearFromSearchResult,
 } from '../utils/hardcover-extractor.js';
+import { evaluateStrongBookIdentity } from '../utils/book-identity-evidence.js';
 
 /**
  * Calculate book identification confidence score
@@ -70,6 +71,11 @@ export function calculateBookIdentificationScore(
 
   // Extract activity data (still relevant for book disambiguation)
   const resultActivity = extractActivityFromSearchResult(searchResult);
+  const strongIdentityEvidence = evaluateStrongBookIdentity(
+    searchResult,
+    targetTitle,
+    targetAuthor,
+  );
 
   // ============================================================================
   // BOOK IDENTIFICATION FACTORS (Edition-agnostic)
@@ -228,6 +234,7 @@ export function calculateBookIdentificationScore(
     breakdown,
     confidence,
     isBookMatch,
+    strongIdentityEvidence,
     coreFactorsScore: titleScore * 0.35 + authorScore * 0.25, // Title + Author only
   };
 }
