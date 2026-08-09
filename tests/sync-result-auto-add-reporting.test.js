@@ -34,5 +34,14 @@ describe('Post-add sync reporting', () => {
       dry_run: true,
     });
     assert.ok(output.includes('├─ 1 would be updated'));
+
+    const liveOutput = formatter._buildHardcoverUpdatesColumn(result, {
+      dry_run: false,
+    });
+    assert.ok(liveOutput.includes('├─ 1 book updated'));
+    assert.equal(
+      liveOutput.some(line => line.includes('API calls made')),
+      false,
+    );
   });
 });
