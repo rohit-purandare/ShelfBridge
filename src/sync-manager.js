@@ -2195,6 +2195,7 @@ export class SyncManager {
           } else {
             hardcoverMatch.userBook.id = `dry-run-${bookId}`;
           }
+          hardcoverMatch._isDryRunSimulatedAdd = true;
           hardcoverMatch._isSearchResult = false;
         }
       } catch (error) {
@@ -3258,7 +3259,16 @@ export class SyncManager {
 
       // Disable protection for force sync, or for first sync only when
       // Hardcover has no existing progress to protect.
-      if (shouldProtectAgainstRegression && isForceSync) {
+      if (
+        shouldProtectAgainstRegression &&
+        hardcoverMatch._isDryRunSimulatedAdd
+      ) {
+        shouldProtectAgainstRegression = false;
+        logger.debug(
+          `Skipping existing progress lookup for simulated addition: ${title}`,
+          { bookId: hardcoverMatch.book?.id },
+        );
+      } else if (shouldProtectAgainstRegression && isForceSync) {
         shouldProtectAgainstRegression = false;
         logger.debug(
           `Disabling progress regression protection for ${title}: force sync enabled`,
