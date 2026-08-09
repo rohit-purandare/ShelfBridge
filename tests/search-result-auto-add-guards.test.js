@@ -220,6 +220,74 @@ describe('Search-result auto-add guards', () => {
     assert.equal(match.edition.id, 30402186);
   });
 
+  it('reserves direct search-result additions before concurrent records can add the same work', async () => {
+    const syncExistingBook = mock.fn(async () => ({
+      status: 'completed',
+      reason: 'dry-run completion preview',
+    }));
+    const manager = Object.create(SyncManager.prototype);
+
+    Object.assign(manager, {
+      userId: 'test-user',
+      dryRun: true,
+      verbose: false,
+      timezone: 'UTC',
+      autoAddReservations: new Map(),
+      globalConfig: {
+        force_sync: true,
+        auto_add_books: true,
+        min_progress_threshold: 5,
+      },
+      bookMatcher: {
+        findMatch: mock.fn(async () => ({
+          match: createTwoStageMatch(),
+          extractedMetadata: {},
+        })),
+      },
+      cache: {
+        generateTitleAuthorIdentifier: () =>
+          'title_author:the_martian|andy_weir',
+        getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+      },
+      hardcover: { addBookToLibrary: mock.fn() },
+      sessionManager: {
+        shouldDelayUpdate: mock.fn(async () => ({
+          shouldDelay: false,
+          reason: 'test sync',
+        })),
+        completeSession: mock.fn(async () => false),
+      },
+      _syncExistingBook: syncExistingBook,
+      _clearNegativeSyncSkip: mock.fn(async () => {}),
+    });
+    const createAbsBook = id => ({
+      id,
+      progress_percentage: 100,
+      media: {
+        metadata: {
+          title: 'The Martian',
+          authors: [{ name: 'Andy Weir' }],
+        },
+      },
+    });
+
+    const results = await Promise.all([
+      manager._syncSingleBook(createAbsBook('abs-standard'), null),
+      manager._syncSingleBook(createAbsBook('abs-full-cast'), null),
+    ]);
+
+    assert.deepEqual(
+      results.map(result => result.status).sort(),
+      ['completed', 'skipped'],
+    );
+    assert.equal(syncExistingBook.mock.callCount(), 1);
+    assert.equal(manager.autoAddReservations.size, 1);
+    assert.match(
+      results.find(result => result.status === 'skipped').reason,
+      /already reserved for auto-add/,
+    );
+  });
+
   it('caches the edition ID from a two-stage match', async () => {
     const storeEditionMapping = mock.fn(async () => {});
     const matcher = new TitleAuthorMatcher(null, { storeEditionMapping }, {});

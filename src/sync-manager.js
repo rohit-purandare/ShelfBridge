@@ -2127,6 +2127,28 @@ export class SyncManager {
         return syncResult;
       }
 
+      const reservationKey = String(bookId);
+      this.autoAddReservations ||= new Map();
+      const existingReservation =
+        this.autoAddReservations.get(reservationKey);
+      if (existingReservation) {
+        logger.info(`Skipping duplicate auto-add within current sync`, {
+          title,
+          bookId,
+          editionId,
+          reservedByTitle: existingReservation.title,
+          reservedEditionId: existingReservation.editionId,
+        });
+        syncResult.actions.push(
+          `Skipped duplicate auto-add for Hardcover book ${bookId}`,
+        );
+        syncResult.status = 'skipped';
+        syncResult.reason = `Book ${bookId} already reserved for auto-add in this sync`;
+        syncResult.timing = performance.now() - startTime;
+        return syncResult;
+      }
+      this.autoAddReservations.set(reservationKey, { title, editionId });
+
       try {
         if (!this.dryRun) {
           logger.debug(`Adding title/author matched book to library`, {
@@ -2160,6 +2182,7 @@ export class SyncManager {
             }
             hardcoverMatch._isSearchResult = false; // No longer just a search result
           } else {
+            this.autoAddReservations.delete(reservationKey);
             logger.error(
               `Failed to add title/author matched book to library: API returned null`,
               {
@@ -2199,6 +2222,7 @@ export class SyncManager {
           hardcoverMatch._isSearchResult = false;
         }
       } catch (error) {
+        this.autoAddReservations.delete(reservationKey);
         logger.error(
           `Failed to add title/author matched book to library: ${error.message}`,
         );
