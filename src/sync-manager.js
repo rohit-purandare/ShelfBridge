@@ -19,6 +19,65 @@ import { Transaction } from './utils/transaction.js';
 import SessionManager from './session-manager.js';
 import { currentVersion } from './version.js';
 
+async function acquireAutoAddReservation(manager, bookId, title, editionId) {
+  const reservationKey = String(bookId);
+  manager.autoAddReservations ||= new Map();
+
+  while (true) {
+    const existingReservation = manager.autoAddReservations.get(reservationKey);
+    if (!existingReservation) {
+      let resolveCompletion;
+      const completion = new Promise(resolve => {
+        resolveCompletion = resolve;
+      });
+      const reservation = {
+        title,
+        editionId,
+        completion,
+        resolveCompletion,
+        settled: false,
+      };
+      manager.autoAddReservations.set(reservationKey, reservation);
+      return { acquired: true, reservationKey, reservation };
+    }
+
+    if (!existingReservation.completion) {
+      return {
+        acquired: false,
+        reservationKey,
+        existingReservation,
+      };
+    }
+
+    const succeeded = await existingReservation.completion;
+    if (succeeded) {
+      return {
+        acquired: false,
+        reservationKey,
+        existingReservation,
+      };
+    }
+  }
+}
+
+function settleAutoAddReservation(
+  manager,
+  reservationKey,
+  reservation,
+  succeeded,
+) {
+  if (!reservation || reservation.settled) return;
+
+  reservation.settled = true;
+  if (
+    !succeeded &&
+    manager.autoAddReservations?.get(reservationKey) === reservation
+  ) {
+    manager.autoAddReservations.delete(reservationKey);
+  }
+  reservation.resolveCompletion(succeeded);
+}
+
 export class SyncManager {
   constructor(user, globalConfig, dryRun = false, verbose = false) {
     this.user = user;
@@ -2213,10 +2272,14 @@ export class SyncManager {
       hardcoverMatch.edition = editionResolution.edition;
       editionId = editionResolution.edition.id;
 
-      const reservationKey = String(bookId);
-      this.autoAddReservations ||= new Map();
-      const existingReservation = this.autoAddReservations.get(reservationKey);
-      if (existingReservation) {
+      const reservationState = await acquireAutoAddReservation(
+        this,
+        bookId,
+        title,
+        editionId,
+      );
+      if (!reservationState.acquired) {
+        const { existingReservation } = reservationState;
         logger.info(`Skipping duplicate auto-add within current sync`, {
           title,
           bookId,
@@ -2232,7 +2295,6 @@ export class SyncManager {
         syncResult.timing = performance.now() - startTime;
         return syncResult;
       }
-      this.autoAddReservations.set(reservationKey, { title, editionId });
 
       try {
         if (!this.dryRun) {
@@ -2249,6 +2311,12 @@ export class SyncManager {
           );
 
           if (addResult && addResult.id) {
+            settleAutoAddReservation(
+              this,
+              reservationState.reservationKey,
+              reservationState.reservation,
+              true,
+            );
             syncResult.actions.push(`Added matched book to Hardcover library`);
 
             // Update the match object to look like a regular library match
@@ -2264,7 +2332,12 @@ export class SyncManager {
             }
             hardcoverMatch._isSearchResult = false; // No longer just a search result
           } else {
-            this.autoAddReservations.delete(reservationKey);
+            settleAutoAddReservation(
+              this,
+              reservationState.reservationKey,
+              reservationState.reservation,
+              false,
+            );
             logger.error(
               `Failed to add title/author matched book to library: API returned null`,
               {
@@ -2285,9 +2358,20 @@ export class SyncManager {
           syncResult.actions.push(
             `[DRY RUN] Would add matched book to library`,
           );
+          settleAutoAddReservation(
+            this,
+            reservationState.reservationKey,
+            reservationState.reservation,
+            true,
+          );
         }
       } catch (error) {
-        this.autoAddReservations.delete(reservationKey);
+        settleAutoAddReservation(
+          this,
+          reservationState.reservationKey,
+          reservationState.reservation,
+          false,
+        );
         logger.error(
           `Failed to add title/author matched book to library: ${error.message}`,
         );
@@ -2474,6 +2558,8 @@ export class SyncManager {
       title: title,
       dryRun: this.dryRun,
     });
+
+    let reservationState = null;
 
     try {
       let searchResults = [];
@@ -2980,11 +3066,15 @@ export class SyncManager {
       };
       const bookId = editionResolution.book.id;
       const editionId = edition.id;
-      const reservationKey = String(bookId);
-      this.autoAddReservations ||= new Map();
-      const existingReservation = this.autoAddReservations.get(reservationKey);
+      reservationState = await acquireAutoAddReservation(
+        this,
+        bookId,
+        title,
+        editionId,
+      );
 
-      if (existingReservation) {
+      if (!reservationState.acquired) {
+        const { existingReservation } = reservationState;
         logger.info(`Skipping duplicate auto-add within current sync`, {
           title,
           bookId,
@@ -3002,11 +3092,6 @@ export class SyncManager {
         };
       }
 
-      this.autoAddReservations.set(reservationKey, {
-        title,
-        editionId,
-      });
-
       logger.debug(`Found match in Hardcover`, {
         title: title,
         hardcoverTitle: edition.book.title,
@@ -3020,6 +3105,12 @@ export class SyncManager {
       if (this.dryRun) {
         logger.debug(
           `[DRY RUN] Would add ${title} to library (book_id: ${bookId}, edition_id: ${editionId})`,
+        );
+        settleAutoAddReservation(
+          this,
+          reservationState.reservationKey,
+          reservationState.reservation,
+          true,
         );
         return { status: 'auto_added', title, bookId, editionId };
       }
@@ -3040,6 +3131,12 @@ export class SyncManager {
       );
 
       if (addResult) {
+        settleAutoAddReservation(
+          this,
+          reservationState.reservationKey,
+          reservationState.reservation,
+          true,
+        );
         logger.info(`Successfully added ${title} to library`, {
           userBookId: addResult.id,
           hardcoverTitle: edition.book.title,
@@ -3168,6 +3265,12 @@ export class SyncManager {
           throw cacheError;
         }
       } else {
+        settleAutoAddReservation(
+          this,
+          reservationState.reservationKey,
+          reservationState.reservation,
+          false,
+        );
         logger.error(`Failed to add ${title} to library`, {
           bookId: bookId,
           editionId: editionId,
@@ -3175,6 +3278,14 @@ export class SyncManager {
         return { status: 'error', reason: 'Failed to add to library', title };
       }
     } catch (error) {
+      if (reservationState?.acquired) {
+        settleAutoAddReservation(
+          this,
+          reservationState.reservationKey,
+          reservationState.reservation,
+          false,
+        );
+      }
       logger.error(`Error auto-adding ${title}`, {
         error: error.message,
         stack: error.stack,
