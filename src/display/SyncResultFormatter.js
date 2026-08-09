@@ -178,7 +178,15 @@ export class SyncResultFormatter {
       isDryRun ? '🌐 Hardcover Updates (DRY RUN)' : '🌐 Hardcover Updates',
     ];
 
+    const successfulStatuses = new Set(['synced', 'completed', 'auto_added']);
+    const detailedSuccessfulUpdates =
+      Array.isArray(result.book_details) && result.book_details.length > 0
+        ? result.book_details.filter(book =>
+            successfulStatuses.has(book.status),
+          ).length
+        : null;
     const totalApiCalls =
+      detailedSuccessfulUpdates ??
       result.books_synced + result.books_completed + result.books_auto_added;
     const skippedCalls = result.books_skipped;
 

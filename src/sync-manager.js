@@ -3995,6 +3995,15 @@ export class SyncManager {
   _updateResult(result, syncResult) {
     result.books_processed++;
 
+    const recordedAutoAdd = (syncResult.actions || []).some(
+      action =>
+        action === 'Added matched book to Hardcover library' ||
+        action === '[DRY RUN] Would add matched book to library',
+    );
+    if (recordedAutoAdd) {
+      result.books_auto_added++;
+    }
+
     // Create detailed book info for verbose output
     const bookDetail = {
       title: syncResult.title || 'Unknown Title',
@@ -4038,7 +4047,9 @@ export class SyncManager {
         result.books_completed++;
         break;
       case 'auto_added':
-        result.books_auto_added++;
+        if (!recordedAutoAdd) {
+          result.books_auto_added++;
+        }
         break;
       case 'skipped':
         result.books_skipped++;
