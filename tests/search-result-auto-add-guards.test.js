@@ -148,6 +148,71 @@ describe('Search-result auto-add guards', () => {
     assert.equal(syncExistingBook.mock.callCount(), 1);
   });
 
+  it('continues a dry-run through the live post-add path without a second auto-add', async () => {
+    const match = createTwoStageMatch();
+    const addBookToLibrary = mock.fn(async () => ({ id: 'user-book-1' }));
+    const syncExistingBook = mock.fn(async () => ({
+      status: 'synced',
+      reason: 'dry-run sync preview',
+    }));
+    const manager = Object.create(SyncManager.prototype);
+
+    Object.assign(manager, {
+      userId: 'test-user',
+      dryRun: true,
+      verbose: false,
+      timezone: 'UTC',
+      globalConfig: {
+        force_sync: true,
+        auto_add_books: true,
+        min_progress_threshold: 5,
+      },
+      bookMatcher: {
+        findMatch: mock.fn(async () => ({
+          match,
+          extractedMetadata: {},
+        })),
+      },
+      cache: {
+        generateTitleAuthorIdentifier: () =>
+          'title_author:the_martian|andy_weir',
+        getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+      },
+      hardcover: { addBookToLibrary },
+      sessionManager: {
+        shouldDelayUpdate: mock.fn(async () => ({
+          shouldDelay: false,
+          reason: 'dry-run sync preview',
+        })),
+        completeSession: mock.fn(async () => false),
+      },
+      _syncExistingBook: syncExistingBook,
+      _clearNegativeSyncSkip: mock.fn(async () => {}),
+    });
+
+    const result = await manager._syncSingleBook(
+      {
+        id: 'abs-the-martian',
+        progress_percentage: 100,
+        media: {
+          metadata: {
+            title: 'The Martian',
+            authors: [{ name: 'Andy Weir' }],
+          },
+        },
+      },
+      null,
+    );
+
+    assert.equal(result.status, 'synced');
+    assert.equal(addBookToLibrary.mock.callCount(), 0);
+    assert.equal(syncExistingBook.mock.callCount(), 1);
+    assert.equal(match._isSearchResult, false);
+    assert.equal(match.userBook.id, 'dry-run-292354');
+    assert.equal(match.userBook.book.id, 292354);
+    assert.equal(match.edition.id, 30402186);
+  });
+
   it('caches the edition ID from a two-stage match', async () => {
     const storeEditionMapping = mock.fn(async () => {});
     const matcher = new TitleAuthorMatcher(null, { storeEditionMapping }, {});
