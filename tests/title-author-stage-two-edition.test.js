@@ -6,9 +6,14 @@ import { TitleAuthorMatcher } from '../src/matching/strategies/title-author-matc
 const author = 'TheFirstDefier, JF Brink';
 
 function createAbsBook(number, duration) {
+  const numberedTitle = number ? ` ${number}` : '';
+  const title = `Defiance of the Fall${numberedTitle}: A LitRPG Adventure`;
   return {
-    id: `abs-defiance-${number}`,
-    title: `Defiance of the Fall ${number}: A LitRPG Adventure`,
+    id: `abs-defiance-${number || 1}`,
+    title:
+      number === 5
+        ? `${title} (Defiance of the Fall, Book 5)`
+        : title,
     author,
     narrator: 'Pavi Proczko',
     duration,
@@ -16,17 +21,22 @@ function createAbsBook(number, duration) {
   };
 }
 
-function createMatcher(absBook, bookDetails) {
+function searchResult(book) {
+  return {
+    id: book.id,
+    title: book.title,
+    contributions: (book.authors || []).map(name => ({ author: { name } })),
+    users_count: book.usersCount,
+    ratings_count: book.ratingsCount,
+  };
+}
+
+function createMatcher({ absBook, combinedResults, canonicalResults, books }) {
   const hardcoverClient = {
-    searchBooksForMatching: mock.fn(async () => [
-      {
-        id: bookDetails.id,
-        title: absBook.title,
-        author_names: [author],
-        activity: 100,
-      },
-    ]),
-    getBookDetailsWithEditions: mock.fn(async () => bookDetails),
+    searchBooksForMatching: mock.fn(async (_title, searchAuthor) =>
+      (searchAuthor ? combinedResults : canonicalResults).map(searchResult),
+    ),
+    getBookDetailsWithEditions: mock.fn(async bookId => books.get(bookId)),
   };
   const cache = {
     generateTitleAuthorIdentifier: (title, bookAuthor) =>
@@ -48,44 +58,190 @@ function createMatcher(absBook, bookDetails) {
 
 describe('Title/author Stage 2 edition selection', () => {
   for (const example of [
-    { number: 2, bookId: 2636424, editionId: 32941995, duration: 88226.78 },
-    { number: 3, bookId: 2636426, editionId: 32941997, duration: 82104.4 },
-    { number: 5, bookId: 2636422, editionId: 32941991, duration: 87120.2 },
+    {
+      number: 2,
+      duplicateBookId: 2636424,
+      duplicateEditionId: 32941995,
+      canonicalBookId: 545671,
+      canonicalEditionId: 31145800,
+      duration: 88226.78,
+      editionDuration: 88200,
+    },
+    {
+      number: 3,
+      duplicateBookId: 2636426,
+      duplicateEditionId: 32941997,
+      canonicalBookId: 545669,
+      canonicalEditionId: 31855844,
+      duration: 88440,
+      editionDuration: 88440,
+    },
+    {
+      number: 5,
+      duplicateBookId: 2636422,
+      duplicateEditionId: 32941991,
+      canonicalBookId: 637820,
+      canonicalEditionId: 31862655,
+      duration: 87120.2,
+      editionDuration: 87060,
+    },
   ]) {
-    it(`keeps Defiance of the Fall ${example.number} matched when the identified work only has a Read edition`, async () => {
+    it(`expands Defiance of the Fall ${example.number} to the canonical work with a Listened edition`, async () => {
       const absBook = createAbsBook(example.number, example.duration);
-      const { hardcoverClient, matcher } = createMatcher(absBook, {
-        id: example.bookId,
-        title: absBook.title,
+      const duplicateBook = {
+        id: example.duplicateBookId,
+        title: absBook.title.replace(/ \(Defiance.*$/, ''),
+        authors: [],
+        usersCount: example.number === 2 ? 1 : 0,
         editions: [
           {
-            id: example.editionId,
+            id: example.duplicateEditionId,
             reading_format: { format: 'Read' },
             pages: 700,
-            score: 280,
             users_count: 0,
           },
         ],
+      };
+      const canonicalBook = {
+        id: example.canonicalBookId,
+        title: `Defiance of the Fall ${example.number}`,
+        authors: ['TheFirstDefier'],
+        usersCount: 200,
+        ratingsCount: 100,
+        editions: [
+          {
+            id: example.canonicalEditionId,
+            asin: `canonical-asin-${example.number}`,
+            reading_format: { format: 'Listened' },
+            audio_seconds: example.editionDuration,
+            users_count: 8,
+            contributions: [
+              {
+                contribution: 'Narrator',
+                author: { name: 'Pavi Proczko' },
+              },
+            ],
+          },
+        ],
+      };
+      const { hardcoverClient, matcher } = createMatcher({
+        absBook,
+        combinedResults: [duplicateBook],
+        canonicalResults: [canonicalBook, duplicateBook],
+        books: new Map([
+          [duplicateBook.id, duplicateBook],
+          [canonicalBook.id, canonicalBook],
+        ]),
       });
 
       const result = await matcher.findMatch(absBook, 'test-user');
 
-      assert.equal(result.book.id, example.bookId);
-      assert.equal(result.edition.id, example.editionId);
-      assert.equal(result.edition.format, 'Read');
-      assert.ok(result._bookIdentificationScore.totalScore >= 70);
+      assert.equal(result.book.id, example.canonicalBookId);
+      assert.equal(result.edition.id, example.canonicalEditionId);
+      assert.equal(result.edition.format, 'Listened');
+      assert.equal(
+        result._bookIdentificationScore.strongIdentityEvidence.matches,
+        true,
+      );
+      assert.equal(
+        matcher.config.title_author_matching.confidence_threshold,
+        0.7,
+      );
+      assert.equal(
+        hardcoverClient.searchBooksForMatching.mock.callCount(),
+        2,
+      );
+      assert.equal(
+        hardcoverClient.searchBooksForMatching.mock.calls[1].arguments[0],
+        `defiance of the fall ${example.number}`,
+      );
+      assert.equal(
+        hardcoverClient.searchBooksForMatching.mock.calls[1].arguments[1],
+        null,
+      );
       assert.equal(
         hardcoverClient.getBookDetailsWithEditions.mock.callCount(),
-        1,
+        2,
+      );
+      assert.equal(
+        hardcoverClient.getBookDetailsWithEditions.mock.calls[0].arguments[0],
+        example.duplicateBookId,
+      );
+      assert.equal(
+        hardcoverClient.getBookDetailsWithEditions.mock.calls[1].arguments[0],
+        example.canonicalBookId,
       );
     });
   }
 
+  it('recovers unnumbered Defiance book 1 after unsafe combined-search results', async () => {
+    const absBook = createAbsBook(null, 84609.8);
+    const unsafeResults = [15, 17].map(number => ({
+      id: `defiance-${number}`,
+      title: `Defiance of the Fall ${number}`,
+      authors: ['TheFirstDefier', 'JF Brink'],
+      usersCount: number === 15 ? 82 : 18,
+      editions: [],
+    }));
+    const canonicalBook = {
+      id: 545665,
+      title: 'Defiance of the Fall',
+      authors: ['TheFirstDefier'],
+      usersCount: 396,
+      ratingsCount: 172,
+      editions: [
+        {
+          id: 31145227,
+          asin: 'B094JZYWLG',
+          reading_format: { format: 'Listened' },
+          audio_seconds: 84540,
+          users_count: 8,
+          contributions: [
+            {
+              contribution: 'Narrator',
+              author: { name: 'Pavi Proczko' },
+            },
+          ],
+        },
+      ],
+    };
+    const { hardcoverClient, matcher } = createMatcher({
+      absBook,
+      combinedResults: unsafeResults,
+      canonicalResults: [canonicalBook, ...unsafeResults],
+      books: new Map([[canonicalBook.id, canonicalBook]]),
+    });
+
+    const result = await matcher.findMatch(absBook, 'test-user');
+
+    assert.equal(result.book.id, 545665);
+    assert.equal(result.edition.id, 31145227);
+    assert.equal(result.edition.format, 'Listened');
+    assert.equal(
+      result._bookIdentificationScore.strongIdentityEvidence.matches,
+      true,
+    );
+    assert.equal(
+      matcher.config.title_author_matching.confidence_threshold,
+      0.7,
+    );
+    assert.equal(
+      hardcoverClient.searchBooksForMatching.mock.calls[1].arguments[0],
+      'defiance of the fall',
+    );
+    assert.equal(
+      hardcoverClient.getBookDetailsWithEditions.mock.callCount(),
+      1,
+    );
+  });
+
   it('selects the duration-matched Listened edition for Defiance of the Fall 4', async () => {
     const absBook = createAbsBook(4, 82050.72);
-    const { matcher } = createMatcher(absBook, {
+    const canonicalBook = {
       id: 545679,
       title: 'Defiance of the Fall 4',
+      authors: ['TheFirstDefier'],
+      usersCount: 235,
       editions: [
         {
           id: 31476151,
@@ -109,6 +265,12 @@ describe('Title/author Stage 2 edition selection', () => {
           users_count: 100000,
         },
       ],
+    };
+    const { hardcoverClient, matcher } = createMatcher({
+      absBook,
+      combinedResults: [canonicalBook],
+      canonicalResults: [],
+      books: new Map([[canonicalBook.id, canonicalBook]]),
     });
 
     const result = await matcher.findMatch(absBook, 'test-user');
@@ -120,6 +282,17 @@ describe('Title/author Stage 2 edition selection', () => {
       result._editionSelectionResult.selectionReason.duration.score,
       100,
     );
-    assert.ok(result._bookIdentificationScore.totalScore >= 70);
+    assert.equal(
+      result._bookIdentificationScore.strongIdentityEvidence.matches,
+      true,
+    );
+    assert.equal(
+      matcher.config.title_author_matching.confidence_threshold,
+      0.7,
+    );
+    assert.equal(
+      hardcoverClient.searchBooksForMatching.mock.callCount(),
+      1,
+    );
   });
 });

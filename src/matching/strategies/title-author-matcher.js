@@ -27,6 +27,7 @@ import {
   selectBestEdition,
 } from '../utils/unified-edition-scorer.js';
 import { normalizeTitle } from '../utils/text-matching.js';
+import { normalizeWorkTitle } from '../utils/book-title-identity.js';
 
 function getEditionFormat(edition) {
   return edition?.reading_format?.format || edition?.physical_format || null;
@@ -43,6 +44,24 @@ function getPreferredFormatCandidates(editions, userFormat) {
   });
 
   return listenedEditions.length > 0 ? listenedEditions : editions;
+}
+
+function hasPreferredFormat(editions, userFormat) {
+  if (userFormat !== 'audiobook') return true;
+
+  return editions.some(edition => {
+    const format = getEditionFormat(edition)?.toLowerCase();
+    return format === 'listened' || format === 'audiobook';
+  });
+}
+
+function isAcceptableBookMatch(result, confidenceThreshold) {
+  const identificationScore = result?._bookIdentificationScore;
+  return (
+    (identificationScore?.isBookMatch &&
+      identificationScore.totalScore >= confidenceThreshold * 100) ||
+    identificationScore?.strongIdentityEvidence?.matches === true
+  );
 }
 
 /**
@@ -174,12 +193,122 @@ export class TitleAuthorMatcher {
         },
       });
 
-      const searchResults = await this.hardcoverClient.searchBooksForMatching(
+      let searchResults = await this.hardcoverClient.searchBooksForMatching(
         normalizedSearchTitle, // Use normalized title for API search
         author,
         narrator,
         maxResults,
       );
+
+      const initialCandidateCount = searchResults.length;
+      const prefetchedBookDetails = new Map();
+      const preliminaryScoredResults = searchResults
+        .map(result => {
+          try {
+            return {
+              ...result,
+              _bookIdentificationScore: calculateBookIdentificationScore(
+                result,
+                title,
+                author,
+                absBook,
+              ),
+            };
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .sort(
+          (a, b) =>
+            b._bookIdentificationScore.totalScore -
+            a._bookIdentificationScore.totalScore,
+        );
+      const preliminaryBookMatch = preliminaryScoredResults.find(result =>
+        isAcceptableBookMatch(result, confidenceThreshold),
+      );
+
+      let canonicalExpansionReason = null;
+      if (searchResults.length > 0 && !preliminaryBookMatch) {
+        canonicalExpansionReason = 'no acceptable combined-search candidate';
+      } else if (preliminaryBookMatch && userFormat === 'audiobook') {
+        let preliminaryBookWithEditions = preliminaryBookMatch;
+        if (!preliminaryBookWithEditions.editions?.length) {
+          try {
+            preliminaryBookWithEditions =
+              await this.hardcoverClient.getBookDetailsWithEditions(
+                preliminaryBookMatch.id,
+              );
+            if (preliminaryBookWithEditions) {
+              prefetchedBookDetails.set(
+                String(preliminaryBookMatch.id),
+                preliminaryBookWithEditions,
+              );
+            }
+          } catch (error) {
+            logger.warn(
+              `Failed to preflight editions for book ID ${preliminaryBookMatch.id}:`,
+              error.message,
+            );
+          }
+        }
+
+        if (
+          !hasPreferredFormat(
+            preliminaryBookWithEditions?.editions || [],
+            userFormat,
+          )
+        ) {
+          canonicalExpansionReason =
+            'accepted candidate has no preferred-format edition';
+        }
+      }
+
+      const canonicalSearchTitle = normalizeWorkTitle(title);
+      const initialSearchUsedTitleOnly = searchResults.some(result =>
+        String(result?._searchMetadata?.searchStrategy || '').startsWith(
+          'title_only',
+        ),
+      );
+      const canExpandCanonicalCandidates =
+        canonicalExpansionReason &&
+        canonicalSearchTitle &&
+        (canonicalSearchTitle !== normalizedSearchTitle ||
+          (searchResults.length > 0 &&
+            author &&
+            !initialSearchUsedTitleOnly));
+
+      if (canExpandCanonicalCandidates) {
+        logger.debug(`Expanding canonical candidates for "${title}"`, {
+          reason: canonicalExpansionReason,
+          originalSearchTitle: normalizedSearchTitle,
+          canonicalSearchTitle,
+        });
+
+        const canonicalResults =
+          await this.hardcoverClient.searchBooksForMatching(
+            canonicalSearchTitle,
+            null,
+            narrator,
+            maxResults,
+          );
+        const candidatesByBookId = new Map(
+          searchResults.map(result => [String(result.id), result]),
+        );
+        for (const result of canonicalResults) {
+          const bookId = String(result.id);
+          if (!candidatesByBookId.has(bookId)) {
+            candidatesByBookId.set(bookId, result);
+          }
+        }
+        searchResults = [...candidatesByBookId.values()];
+
+        logger.debug(`Canonical candidate expansion completed for "${title}"`, {
+          reason: canonicalExpansionReason,
+          addedCandidates: searchResults.length - initialCandidateCount,
+          totalCandidates: searchResults.length,
+        });
+      }
 
       logger.debug(`Title/author search results for "${title}"`, {
         resultCount: searchResults.length,
@@ -382,14 +511,9 @@ export class TitleAuthorMatcher {
       // title/author evidence to recover exact works hidden by source subtitles
       // or missing Hardcover author metadata.
       const bestScoredBook = bookScoredResults[0];
-      const bestBookMatch = bookScoredResults.find(result => {
-        const identificationScore = result._bookIdentificationScore;
-        return (
-          (identificationScore.isBookMatch &&
-            identificationScore.totalScore >= confidenceThreshold * 100) ||
-          identificationScore.strongIdentityEvidence?.matches === true
-        );
-      });
+      const bestBookMatch = bookScoredResults.find(result =>
+        isAcceptableBookMatch(result, confidenceThreshold),
+      );
 
       if (bestBookMatch) {
         if (
@@ -416,7 +540,8 @@ export class TitleAuthorMatcher {
 
         let selectedEditionResult = null;
         let finalMatch = null;
-        let bookWithEditions = bestBookMatch;
+        let bookWithEditions =
+          prefetchedBookDetails.get(String(bestBookMatch.id)) || bestBookMatch;
 
         if (!bookWithEditions.editions?.length) {
           logger.debug(`Fetching editions for book ID ${bestBookMatch.id}`);
