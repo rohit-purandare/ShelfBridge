@@ -15,6 +15,8 @@ import { TitleAuthorMatcher } from './strategies/title-author-matcher.js';
 import {
   extractTitle,
   extractAuthor,
+  extractNarrator,
+  extractAudioDurationFromAudiobookshelf,
   detectUserBookFormat,
 } from './utils/audiobookshelf-extractor.js';
 import { getIsbnVariants, normalizeAsin } from './utils/text-matching.js';
@@ -359,6 +361,18 @@ export class BookMatcher {
               sourceFormat,
               matchType,
             );
+          } else if (
+            strategy.getTier() <= 2 &&
+            match._isSearchResult
+          ) {
+            const sourceFormat = detectUserBookFormat(absBook);
+            const matchType = match._matchType || 'identifier_search_result';
+            match = await this._enhanceIdentifierSearchResultEdition(
+              match,
+              absBook,
+              sourceFormat,
+              matchType,
+            );
           }
 
           logger.debug(
@@ -576,6 +590,107 @@ export class BookMatcher {
       _upgradeReason: hasLength
         ? 'format_match_improvement'
         : 'length_data_enrichment',
+      _scoreImprovement: result.improvement,
+    };
+  }
+
+  /**
+   * Treat a new identifier result as work-level evidence when its exact
+   * edition has the wrong format or lacks format-appropriate length data.
+   * This keeps exact, usable audiobook matches untouched while allowing a
+   * print/ebook ISBN to resolve to the best audiobook edition on that work.
+   */
+  async _enhanceIdentifierSearchResultEdition(
+    match,
+    absBook,
+    sourceFormat = null,
+    matchType = 'identifier_search_result',
+  ) {
+    const currentEdition = match?.edition;
+    const bookId = match?.book?.id || currentEdition?.book?.id;
+    if (!currentEdition || !bookId) {
+      return match;
+    }
+
+    const currentFormat = this.formatMapper
+      ? this.formatMapper(currentEdition)
+      : currentEdition.format || currentEdition.reading_format?.format;
+    const hasExpectedLength =
+      sourceFormat === 'audiobook'
+        ? Number(currentEdition.audio_seconds) > 0
+        : Number(currentEdition.pages) > 0;
+
+    if (currentFormat === sourceFormat && hasExpectedLength) {
+      return match;
+    }
+
+    let book;
+    try {
+      book = await this.hardcoverClient.getBookDetailsWithEditions(bookId);
+    } catch (error) {
+      logger.warn('Failed to fetch editions for identifier search result', {
+        bookId,
+        editionId: currentEdition.id,
+        error: error.message,
+      });
+      return match;
+    }
+
+    if (!book?.editions?.length) {
+      return match;
+    }
+
+    const { selectBestEdition, PROFILES } =
+      await import('./utils/unified-edition-scorer.js');
+    const identifierProfile = {
+      ...PROFILES.TITLE_AUTHOR,
+      name: 'IDENTIFIER_SEARCH_RESULT',
+      minImprovement: 5,
+    };
+    const result = selectBestEdition(book.editions, {
+      sourceFormat,
+      sourceDuration: extractAudioDurationFromAudiobookshelf(absBook),
+      sourceNarrator: extractNarrator(absBook),
+      profile: identifierProfile,
+      currentEdition,
+      formatMapper: this.formatMapper,
+    });
+
+    if (!result?.edition || !result.shouldUpgrade) {
+      return match;
+    }
+
+    const selectedEdition = {
+      ...result.edition,
+      format:
+        result.edition.format ||
+        result.edition.reading_format?.format ||
+        result.edition.physical_format ||
+        'unknown',
+      book: currentEdition.book || {
+        id: book.id || bookId,
+        title: book.title,
+        contributions: book.contributions || [],
+      },
+    };
+
+    logger.info('Upgraded identifier search result to ABS-aware edition', {
+      bookId,
+      originalEditionId: currentEdition.id,
+      selectedEditionId: selectedEdition.id,
+      sourceFormat,
+      selectedFormat: selectedEdition.format,
+      scoreImprovement: result.improvement.toFixed(1),
+    });
+
+    return {
+      ...match,
+      edition: selectedEdition,
+      book: match.book || selectedEdition.book,
+      _originalEditionId: currentEdition.id,
+      _matchType: `${matchType}_cross_edition_enriched`,
+      _editionUpgraded: true,
+      _upgradeReason: 'identifier_work_edition_selection',
       _scoreImprovement: result.improvement,
     };
   }
