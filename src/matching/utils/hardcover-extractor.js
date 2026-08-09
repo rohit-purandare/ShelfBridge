@@ -267,6 +267,14 @@ export function extractActivityFromSearchResult(searchResult) {
     return Number(searchResult.rating_count) || 0;
   }
 
+  if (searchResult.users_count !== undefined) {
+    return Number(searchResult.users_count) || 0;
+  }
+
+  if (searchResult.ratings_count !== undefined) {
+    return Number(searchResult.ratings_count) || 0;
+  }
+
   // Check book-level activity
   if (searchResult.book) {
     if (searchResult.book.activity !== undefined) {
@@ -279,6 +287,14 @@ export function extractActivityFromSearchResult(searchResult) {
 
     if (searchResult.book.rating_count !== undefined) {
       return Number(searchResult.book.rating_count) || 0;
+    }
+
+    if (searchResult.book.users_count !== undefined) {
+      return Number(searchResult.book.users_count) || 0;
+    }
+
+    if (searchResult.book.ratings_count !== undefined) {
+      return Number(searchResult.book.ratings_count) || 0;
     }
   }
 

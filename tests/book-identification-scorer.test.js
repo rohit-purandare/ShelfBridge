@@ -118,6 +118,34 @@ describe('BookIdentificationScorer', () => {
       );
     });
 
+    it('should prefer a canonical search result using users_count activity', () => {
+      const canonical = calculateBookIdentificationScore(
+        {
+          title: 'A Crown of Swords',
+          author_names: ['Robert Jordan'],
+          publication_year: 1996,
+          users_count: 2039,
+        },
+        'A Crown of Swords: Book Seven of The Wheel of Time',
+        'Robert Jordan',
+        { publicationYear: 2006 },
+      );
+      const duplicate = calculateBookIdentificationScore(
+        {
+          title: 'A Crown of Swords',
+          author_names: ['Jordan, Robert'],
+          users_count: 1,
+        },
+        'A Crown of Swords: Book Seven of The Wheel of Time',
+        'Robert Jordan',
+        { publicationYear: 2006 },
+      );
+
+      assert.ok(canonical.totalScore > duplicate.totalScore);
+      assert.equal(canonical.breakdown.activity.value, 2039);
+      assert.equal(duplicate.breakdown.activity.value, 1);
+    });
+
     it('should apply publication year scoring correctly', () => {
       const searchResult = {
         title: 'Recent Book',
