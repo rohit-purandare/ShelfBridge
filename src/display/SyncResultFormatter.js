@@ -179,29 +179,29 @@ export class SyncResultFormatter {
     ];
 
     const successfulStatuses = new Set(['synced', 'completed', 'auto_added']);
-    const detailedSuccessfulUpdates =
+    const detailedSuccessfulBooks =
       Array.isArray(result.book_details) && result.book_details.length > 0
         ? result.book_details.filter(book =>
             successfulStatuses.has(book.status),
           ).length
         : null;
-    const totalApiCalls =
-      detailedSuccessfulUpdates ??
+    const successfulBooks =
+      detailedSuccessfulBooks ??
       result.books_synced + result.books_completed + result.books_auto_added;
-    const skippedCalls = result.books_skipped;
+    const skippedBooks = result.books_skipped;
 
     if (isDryRun) {
       // In dry-run mode, show what would happen
-      rightColumn.push(`├─ ${totalApiCalls} would be updated`);
+      rightColumn.push(`├─ ${successfulBooks} would be updated`);
       rightColumn.push(`├─ 0 API calls made (dry run)`);
       rightColumn.push(`├─ ${result.errors.length} would fail`);
-      rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
+      rightColumn.push(`└─ ${skippedBooks} skipped (no changes)`);
     } else {
       // Normal mode, show actual results
-      rightColumn.push(`├─ ${totalApiCalls} API calls made`);
-      rightColumn.push(`├─ ${totalApiCalls} successful`);
+      const bookLabel = successfulBooks === 1 ? 'book' : 'books';
+      rightColumn.push(`├─ ${successfulBooks} ${bookLabel} updated`);
       rightColumn.push(`├─ ${result.errors.length} failed`);
-      rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
+      rightColumn.push(`└─ ${skippedBooks} skipped (no changes)`);
     }
 
     return rightColumn;
