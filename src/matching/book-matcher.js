@@ -659,6 +659,13 @@ export class BookMatcher {
     );
   }
 
+  getTitleAuthorMatchFailure(absBook) {
+    const titleAuthorStrategy = this.strategies.find(
+      strategy => strategy.getName?.() === 'title_author',
+    );
+    return titleAuthorStrategy?.getMatchFailure?.(absBook) || null;
+  }
+
   /**
    * Get matching statistics
    * @returns {Object} - Statistics about matching strategies

@@ -2371,6 +2371,7 @@ export class SyncManager {
 
     try {
       let searchResults = [];
+      let titleAuthorFailure = null;
 
       // Search for the book by ISBN or ASIN. These are read-only API calls, so
       // dry-run should still execute them to preview accurate auto-add results.
@@ -2600,6 +2601,9 @@ export class SyncManager {
                 absBook,
                 this.userId,
               );
+            titleAuthorFailure = titleAuthorMatch
+              ? null
+              : this.bookMatcher.getTitleAuthorMatchFailure?.(absBook) || null;
 
             if (titleAuthorMatch && titleAuthorMatch._isSearchResult) {
               // Final duplicate check: verify book isn't already in library
@@ -2802,19 +2806,28 @@ export class SyncManager {
             if (identifiers.asin)
               searchedIdentifiersList.push(`ASIN: ${identifiers.asin}`);
 
+            const matchWasRejected =
+              titleAuthorFailure?.outcome === 'MATCH_REJECTED';
             this._trackFailedBook(result, {
               title,
               author,
               identifiers,
-              category: 'NOT_FOUND',
-              reason:
-                'Book not found in Hardcover database after searching by identifiers and title/author',
-              suggestions: [
-                'Manually add this book to your Hardcover library first',
-                'Check if the ISBN/ASIN in Audiobookshelf metadata is correct',
-                'Try updating the book metadata in Audiobookshelf with corrected identifiers',
-                'Search for the book manually in Hardcover to see if it exists under a different title or edition',
-              ],
+              category: matchWasRejected ? 'MATCH_REJECTED' : 'NOT_FOUND',
+              reason: matchWasRejected
+                ? titleAuthorFailure.reason
+                : 'Book not found in Hardcover database after searching by identifiers and title/author',
+              suggestions: matchWasRejected
+                ? [
+                    'Review the rejected Hardcover candidate before adding it manually',
+                    'Check the title and author metadata in Audiobookshelf',
+                    'Do not lower the global confidence threshold without reviewing false-positive risk',
+                  ]
+                : [
+                    'Manually add this book to your Hardcover library first',
+                    'Check if the ISBN/ASIN in Audiobookshelf metadata is correct',
+                    'Try updating the book metadata in Audiobookshelf with corrected identifiers',
+                    'Search for the book manually in Hardcover to see if it exists under a different title or edition',
+                  ],
               details: {
                 searchedIdentifiers:
                   searchedIdentifiersList.join(', ') ||
@@ -2822,6 +2835,13 @@ export class SyncManager {
                 titleSearched: title,
                 authorSearched: author,
                 dryRun: this.dryRun,
+                rejectedCandidate: matchWasRejected
+                  ? {
+                      title: titleAuthorFailure.candidateTitle,
+                      bookId: titleAuthorFailure.candidateBookId,
+                      score: titleAuthorFailure.candidateScore,
+                    }
+                  : undefined,
               },
             });
           }
