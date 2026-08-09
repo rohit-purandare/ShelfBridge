@@ -190,18 +190,26 @@ export function calculateBookIdentificationScore(
     };
   }
 
-  const targetTitleNumbers = extractTitleNumbers(targetTitle);
-  const resultTitleNumbers = extractTitleNumbers(resultTitle);
-  if (
-    targetTitleNumbers.length > 0 &&
-    resultTitleNumbers.length > 0 &&
-    targetTitleNumbers.join(',') !== resultTitleNumbers.join(',')
-  ) {
+  if (strongIdentityEvidence.explicitWorkPartConflict) {
     score -= 100;
     breakdown.titleNumberMismatchPenalty = {
       score: -100,
-      reason: `Conflicting title numbers (${targetTitleNumbers.join(', ')} vs ${resultTitleNumbers.join(', ')}) - likely different works`,
+      reason: 'Conflicting explicit volume or part numbers - different works',
     };
+  } else {
+    const targetTitleNumbers = extractTitleNumbers(targetTitle);
+    const resultTitleNumbers = extractTitleNumbers(resultTitle);
+    if (
+      targetTitleNumbers.length > 0 &&
+      resultTitleNumbers.length > 0 &&
+      targetTitleNumbers.join(',') !== resultTitleNumbers.join(',')
+    ) {
+      score -= 100;
+      breakdown.titleNumberMismatchPenalty = {
+        score: -100,
+        reason: `Conflicting title numbers (${targetTitleNumbers.join(', ')} vs ${resultTitleNumbers.join(', ')}) - likely different works`,
+      };
+    }
   }
 
   // ============================================================================

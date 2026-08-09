@@ -1,5 +1,6 @@
 import { calculateTextSimilarity } from './text-matching.js';
 import {
+  hasConflictingExplicitWorkParts,
   isCollectionTitle,
   normalizeIdentityTitle,
   normalizeWorkTitle,
@@ -12,6 +13,9 @@ import {
  */
 export function isIdentifierTitlePlausible(sourceTitle, candidateTitle) {
   if (!sourceTitle || !candidateTitle) return true;
+  if (hasConflictingExplicitWorkParts(sourceTitle, candidateTitle)) {
+    return false;
+  }
 
   const normalizedSource = normalizeIdentityTitle(sourceTitle);
   const normalizedCandidate = normalizeIdentityTitle(candidateTitle);

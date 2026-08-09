@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { calculateBookIdentificationScore } from '../src/matching/scoring/book-identification-scorer.js';
 import { TitleAuthorMatcher } from '../src/matching/strategies/title-author-matcher.js';
+import { isIdentifierTitlePlausible } from '../src/matching/utils/identifier-title-validator.js';
 import { normalizeAsin } from '../src/matching/utils/text-matching.js';
 
 describe('Numbered title matching', () => {
@@ -71,5 +72,45 @@ describe('Numbered title matching', () => {
 
     assert.equal(score.isBookMatch, true);
     assert.equal(score.breakdown.titleNumberMismatchPenalty, undefined);
+  });
+
+  it('rejects conflicting explicit volume numbers before normalization', () => {
+    const score = calculateBookIdentificationScore(
+      {
+        title: 'Overlord Vol. 9',
+        author_names: ['Kugane Maruyama'],
+      },
+      'Overlord Vol. 1',
+      'Kugane Maruyama',
+    );
+
+    assert.equal(score.totalScore, 0);
+    assert.equal(score.isBookMatch, false);
+    assert.equal(score.strongIdentityEvidence.matches, false);
+    assert.equal(score.strongIdentityEvidence.explicitWorkPartConflict, true);
+    assert.ok(score.breakdown.titleNumberMismatchPenalty);
+    assert.equal(
+      isIdentifierTitlePlausible('Overlord Vol. 1', 'Overlord Vol. 9'),
+      false,
+    );
+  });
+
+  it('allows equivalent Roman and numeric volume numbers', () => {
+    const score = calculateBookIdentificationScore(
+      {
+        title: 'Overlord Vol. 2',
+        author_names: ['Kugane Maruyama'],
+      },
+      'Overlord Volume II',
+      'Kugane Maruyama',
+    );
+
+    assert.equal(score.isBookMatch, true);
+    assert.equal(score.strongIdentityEvidence.explicitWorkPartConflict, false);
+    assert.equal(score.breakdown.titleNumberMismatchPenalty, undefined);
+    assert.equal(
+      isIdentifierTitlePlausible('Overlord Volume II', 'Overlord Vol. 2'),
+      true,
+    );
   });
 });

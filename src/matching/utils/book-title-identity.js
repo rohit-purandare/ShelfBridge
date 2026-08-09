@@ -8,6 +8,8 @@ const SAFE_CANONICAL_SUFFIX_PATTERN =
 const SPLIT_AUDIO_PART_PATTERN = /[[(]\s*\d+\s+of\s+\d+\s*[\])]/i;
 const AUDIOBOOK_ANNOTATION_TEST_PATTERN =
   /[[(]\s*(?:abridged|audio\s+drama|audio\s+edition|audiobook|dramatized\s+adaptation|full\s+cast(?:\s+production)?|graphic\s*audio|unabridged)\s*[\])]/i;
+const EXPLICIT_WORK_PART_PATTERN =
+  /(?:\b(?:vol(?:ume)?|bk|book|pt|part)\b\.?\s*|#\s*)([a-z]+|\d+(?:\.\d+)?)/i;
 
 export const COLLECTION_TITLE_PATTERN =
   /\b(?:box(?:ed)?\s+set|collection(?:\s+set)?|omnibus|bundle|(?:two|three|four|five|six|seven|eight|nine|\d+)\s+books?)\b/i;
@@ -23,6 +25,25 @@ export function normalizeIdentityTitle(title) {
 export function normalizeWorkTitle(title) {
   const withoutAnnotations = stripAudiobookAnnotations(title);
   return normalizeTitle(withoutAnnotations.split(/[-:–—]/, 1)[0]);
+}
+
+function extractExplicitWorkPartNumber(title) {
+  const value = String(title || '').match(EXPLICIT_WORK_PART_PATTERN)?.[1];
+  if (!value) return null;
+  if (/^\d+(?:\.\d+)?$/.test(value)) return Number(value);
+
+  const normalized = normalizeTitle(value);
+  return /^\d+$/.test(normalized) ? Number(normalized) : null;
+}
+
+export function hasConflictingExplicitWorkParts(sourceTitle, candidateTitle) {
+  const sourcePart = extractExplicitWorkPartNumber(sourceTitle);
+  const candidatePart = extractExplicitWorkPartNumber(candidateTitle);
+  return (
+    sourcePart !== null &&
+    candidatePart !== null &&
+    sourcePart !== candidatePart
+  );
 }
 
 export function isCanonicalTitleReductionSafe(title) {

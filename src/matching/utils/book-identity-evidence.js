@@ -1,5 +1,6 @@
 import { normalizeAuthor } from './text-matching.js';
 import {
+  hasConflictingExplicitWorkParts,
   isCanonicalTitleReductionSafe,
   isCollectionTitle,
   normalizeIdentityTitle,
@@ -63,6 +64,10 @@ export function evaluateStrongBookIdentity(
   const titleMatch = fullTitleMatch || safeCanonicalTitleMatch;
   const collectionConflict =
     isCollectionTitle(candidateTitle) && !isCollectionTitle(targetTitle);
+  const explicitWorkPartConflict = hasConflictingExplicitWorkParts(
+    targetTitle,
+    candidateTitle,
+  );
 
   const candidateAuthors = getCandidateAuthorNames(searchResult);
   const authorOverlap = hasAuthorOverlap(targetAuthor, candidateAuthors);
@@ -76,10 +81,13 @@ export function evaluateStrongBookIdentity(
   const matches =
     titleMatch &&
     !collectionConflict &&
+    !explicitWorkPartConflict &&
     (authorOverlap || (candidateAuthorMissing && distinctiveExactTitle));
 
   let reason = 'insufficient deterministic evidence';
-  if (collectionConflict) {
+  if (explicitWorkPartConflict) {
+    reason = 'source and candidate have conflicting volume or part numbers';
+  } else if (collectionConflict) {
     reason = 'candidate is a collection but source is a single work';
   } else if (!titleMatch) {
     reason = canonicalTitleMatch
@@ -101,6 +109,7 @@ export function evaluateStrongBookIdentity(
     fullTitleMatch,
     canonicalTitleMatch,
     safeCanonicalTitleMatch,
+    explicitWorkPartConflict,
     authorOverlap,
     candidateAuthorMissing,
   };
