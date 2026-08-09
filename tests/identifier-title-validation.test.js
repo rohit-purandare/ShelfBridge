@@ -31,6 +31,13 @@ describe('Identifier title validation', () => {
       ),
       true,
     );
+    assert.equal(
+      isIdentifierTitlePlausible(
+        "The Emperor's Soul [Dramatized Adaptation]: Elantris",
+        "The Emperor's Soul",
+      ),
+      true,
+    );
   });
 
   it('does not return a conflicting global ASIN result', async () => {
