@@ -317,9 +317,12 @@ describe('Search-result auto-add guards', () => {
   it('continues a dry-run through the live post-add path without a second auto-add', async () => {
     const match = createTwoStageMatch();
     const addBookToLibrary = mock.fn(async () => ({ id: 'user-book-1' }));
-    const syncExistingBook = mock.fn(async () => ({
-      status: 'synced',
-      reason: 'dry-run sync preview',
+    const getBookCurrentProgress = mock.fn(async () => ({
+      has_progress: true,
+    }));
+    const handleCompletionStatus = mock.fn(async () => ({
+      status: 'completed',
+      reason: 'dry-run completion preview',
     }));
     const manager = Object.create(SyncManager.prototype);
 
@@ -343,8 +346,9 @@ describe('Search-result auto-add guards', () => {
         generateTitleAuthorIdentifier: () =>
           'title_author:the_martian|andy_weir',
         getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+        getSyncTracking: mock.fn(async () => ({ total_syncs: 2 })),
       },
-      hardcover: { addBookToLibrary },
+      hardcover: { addBookToLibrary, getBookCurrentProgress },
       sessionManager: {
         shouldDelayUpdate: mock.fn(async () => ({
           shouldDelay: false,
@@ -352,7 +356,8 @@ describe('Search-result auto-add guards', () => {
         })),
         completeSession: mock.fn(async () => false),
       },
-      _syncExistingBook: syncExistingBook,
+      _selectEditionWithCache: mock.fn(async () => match.edition),
+      _handleCompletionStatus: handleCompletionStatus,
       _clearNegativeSyncSkip: mock.fn(async () => {}),
     });
 
@@ -370,10 +375,12 @@ describe('Search-result auto-add guards', () => {
       null,
     );
 
-    assert.equal(result.status, 'synced');
+    assert.equal(result.status, 'completed');
     assert.equal(addBookToLibrary.mock.callCount(), 0);
-    assert.equal(syncExistingBook.mock.callCount(), 1);
+    assert.equal(getBookCurrentProgress.mock.callCount(), 0);
+    assert.equal(handleCompletionStatus.mock.callCount(), 1);
     assert.equal(match._isSearchResult, false);
+    assert.equal(match._isDryRunSimulatedAdd, true);
     assert.equal(match.userBook.id, 'dry-run-292354');
     assert.equal(match.userBook.book.id, 292354);
     assert.equal(match.edition.id, 30402186);
