@@ -6,6 +6,7 @@ import ProgressManager from './progress-manager.js';
 import {
   BookMatcher,
   extractAuthor,
+  extractAudioDurationFromAudiobookshelf,
   extractBookIdentifiers,
   extractTitle,
   getIsbnVariants,
@@ -721,6 +722,150 @@ export class SyncManager {
     }
   }
 
+  _getEditionProgressBasis(edition) {
+    if (!edition) return null;
+
+    const audioSeconds = Number(edition.audio_seconds);
+    const pages = Number(edition.pages);
+    const format = ProgressManager.getFormatFromEdition(edition);
+
+    if (
+      format === 'audiobook' &&
+      Number.isFinite(audioSeconds) &&
+      audioSeconds > 0
+    ) {
+      return { type: 'seconds', total: audioSeconds, useSeconds: true };
+    }
+
+    if (Number.isFinite(pages) && pages > 0) {
+      return { type: 'pages', total: pages, useSeconds: false };
+    }
+
+    if (Number.isFinite(audioSeconds) && audioSeconds > 0) {
+      return { type: 'seconds', total: audioSeconds, useSeconds: true };
+    }
+
+    return null;
+  }
+
+  _isEditionProgressCapable(edition) {
+    return this._getEditionProgressBasis(edition) !== null;
+  }
+
+  _getCachedEditionRepairState(editionId) {
+    if (!Array.isArray(this.hardcoverBooks)) {
+      return { requiresRepair: false, reason: null };
+    }
+
+    const userBook = this._findUserBookByEditionId(editionId);
+    if (!userBook) {
+      return {
+        requiresRepair: true,
+        reason:
+          'cached edition is not present in the current Hardcover library',
+      };
+    }
+
+    const edition = this._findEditionInUserBook(userBook, editionId);
+    if (!edition) {
+      return {
+        requiresRepair: true,
+        reason: 'cached edition details are unavailable',
+      };
+    }
+
+    if (!this._isEditionProgressCapable(edition)) {
+      return {
+        requiresRepair: true,
+        reason: 'cached edition has neither audiobook duration nor page count',
+      };
+    }
+
+    return { requiresRepair: false, reason: null };
+  }
+
+  _selectProgressCapableEdition(absBook, userBook, preferredEdition, title) {
+    if (this._isEditionProgressCapable(preferredEdition)) {
+      return {
+        ...preferredEdition,
+        format: this._mapHardcoverFormatToInternal(preferredEdition),
+      };
+    }
+
+    const editions = userBook?.book?.editions || [];
+    const sourceFormat = ProgressManager.getBookFormat(absBook);
+    const sourceDuration = extractAudioDurationFromAudiobookshelf(absBook);
+    const seenEditionIds = new Set();
+    const candidates = [];
+
+    for (const edition of [...editions, preferredEdition]) {
+      if (!edition || seenEditionIds.has(String(edition.id))) continue;
+      seenEditionIds.add(String(edition.id));
+
+      const basis = this._getEditionProgressBasis(edition);
+      if (!basis) continue;
+
+      const editionFormat = ProgressManager.getFormatFromEdition(edition);
+      const formatRank =
+        sourceFormat === 'audiobook'
+          ? basis.useSeconds
+            ? 0
+            : 1
+          : basis.useSeconds
+            ? 1
+            : 0;
+      const durationDifference =
+        basis.useSeconds && sourceDuration
+          ? Math.abs(basis.total - sourceDuration)
+          : Number.POSITIVE_INFINITY;
+
+      candidates.push({
+        edition,
+        basis,
+        editionFormat,
+        formatRank,
+        durationDifference,
+        popularity: Number(edition.users_count || edition.score || 0),
+      });
+    }
+
+    candidates.sort((left, right) => {
+      if (left.formatRank !== right.formatRank) {
+        return left.formatRank - right.formatRank;
+      }
+      if (left.durationDifference !== right.durationDifference) {
+        return left.durationDifference - right.durationDifference;
+      }
+      return right.popularity - left.popularity;
+    });
+
+    const replacement = candidates[0];
+    if (!replacement) {
+      logger.error(`No progress-capable Hardcover edition found for ${title}`, {
+        preferredEditionId: preferredEdition?.id,
+        preferredFormat: preferredEdition?.reading_format?.format,
+        preferredAudioSeconds: preferredEdition?.audio_seconds,
+        preferredPages: preferredEdition?.pages,
+        availableEditions: editions.length,
+      });
+      return null;
+    }
+
+    logger.warn(`Replacing unusable Hardcover edition for ${title}`, {
+      previousEditionId: preferredEdition?.id,
+      replacementEditionId: replacement.edition.id,
+      replacementFormat: replacement.editionFormat,
+      progressUnit: replacement.basis.type,
+      sourceDuration,
+      replacementTotal: replacement.basis.total,
+    });
+
+    return {
+      ...replacement.edition,
+      format: this._mapHardcoverFormatToInternal(replacement.edition),
+    };
+  }
+
   /**
    * Format timestamp for display using configured timezone
    * @param {string|number} timestamp - Timestamp value (ISO string or milliseconds)
@@ -1083,6 +1228,7 @@ export class SyncManager {
 
         let hasChanged = true; // Default to true (needs sync)
         let cacheFoundEarly = false;
+        let requiresProgressRepair = false;
 
         // Try each cache key to find existing progress data and cached match info
         let cachedMatchInfo = null;
@@ -1116,7 +1262,26 @@ export class SyncManager {
                 type,
               );
 
-              if (!progressChanged) {
+              const repairState = this._getCachedEditionRepairState(
+                cachedInfo.edition_id,
+              );
+
+              if (!progressChanged && repairState.requiresRepair) {
+                requiresProgressRepair = true;
+                hasChanged = true;
+                cacheFoundEarly = false;
+                logger.warn(
+                  `Cached progress for ${title} requires repair despite an unchanged percentage`,
+                  {
+                    cacheKey: key,
+                    cacheType: type,
+                    editionId: cachedInfo.edition_id,
+                    progress: validatedProgress,
+                    reason: repairState.reason,
+                  },
+                );
+                break;
+              } else if (!progressChanged) {
                 hasChanged = false;
                 cacheFoundEarly = true;
                 logger.debug(
@@ -1152,7 +1317,7 @@ export class SyncManager {
 
         // ALWAYS check title/author cache for comprehensive optimization
         // This handles books that gained identifiers after being originally matched by title/author
-        if (hasChanged) {
+        if (hasChanged && !requiresProgressRepair) {
           // Try MULTIPLE title/author cache patterns for backward compatibility with existing cache entries
           const titleAuthorPatterns = [
             // 1. Current standard pattern (TitleAuthorMatcher)
@@ -3021,7 +3186,7 @@ export class SyncManager {
         absBook,
         `book "${title}" completion check`,
         {},
-        edition, // Pass edition for consistent format detection
+        selectedEdition, // Use the progress-capable edition selected for this sync
       );
 
       if (isComplete) {
@@ -3133,7 +3298,7 @@ export class SyncManager {
           title: title,
           author: author,
           userBookId: userBook.id,
-          editionId: edition.id,
+          editionId: edition?.id,
         },
       );
     }
@@ -3149,25 +3314,34 @@ export class SyncManager {
       );
     }
 
-    if (cachedEditionId) {
-      // Find the cached edition in the book's editions
-      const book = userBook.book;
-      if (book && book.editions) {
-        const cachedEdition = book.editions.find(e => e.id === cachedEditionId);
-        if (cachedEdition) {
-          // Apply format extraction consistently
-          return {
-            ...cachedEdition,
-            format: this._mapHardcoverFormatToInternal(cachedEdition),
-          };
-        }
-      }
-    }
+    const cachedEdition = cachedEditionId
+      ? userBook.book?.editions?.find(
+          candidate => String(candidate.id) === String(cachedEditionId),
+        )
+      : null;
+    const preferredEdition = cachedEdition || edition;
+    const selectedEdition = this._selectProgressCapableEdition(
+      absBook,
+      userBook,
+      preferredEdition,
+      title,
+    );
 
-    // Use the matched edition and cache it in transaction
-    if (edition) {
-      // Use author from metadata (already extracted)
+    if (!selectedEdition) return null;
 
+    const editionChanged =
+      !cachedEditionId ||
+      String(selectedEdition.id) !== String(cachedEditionId);
+    const shouldDeferReplacementCache = cachedEditionId && editionChanged;
+
+    if (shouldDeferReplacementCache) {
+      logger.debug(`Deferring replacement edition cache update for ${title}`, {
+        cachedEditionId,
+        replacementEditionId: selectedEdition.id,
+        reason:
+          'Replacement will be cached only after Hardcover confirms progress',
+      });
+    } else if (editionChanged) {
       try {
         // Only store edition mapping if we have a valid identifier
         if (identifierValue && identifierType) {
@@ -3178,7 +3352,7 @@ export class SyncManager {
                   this.userId,
                   identifierValue,
                   title,
-                  edition.id,
+                  selectedEdition.id,
                   identifierType,
                   author,
                 ),
@@ -3191,7 +3365,7 @@ export class SyncManager {
           logger.debug(`Successfully cached edition mapping for ${title}`, {
             identifier: identifierValue,
             identifierType: identifierType,
-            editionId: edition.id,
+            editionId: selectedEdition.id,
           });
         } else {
           logger.warn(
@@ -3202,8 +3376,6 @@ export class SyncManager {
             },
           );
         }
-
-        return edition;
       } catch (error) {
         logger.error(
           `Failed to cache edition mapping for ${title}: ${error.message}`,
@@ -3213,12 +3385,10 @@ export class SyncManager {
             stack: error.stack,
           },
         );
-        // Still return the edition even if caching fails
-        return edition;
       }
     }
 
-    return null;
+    return selectedEdition;
   }
 
   async _handleCompletionStatus(
@@ -3405,7 +3575,7 @@ export class SyncManager {
       progress: progressPercent,
       userBookId: userBookId,
       editionId: edition.id,
-      format: edition.audio_seconds ? 'audiobook' : 'text',
+      format: ProgressManager.getFormatFromEdition(edition),
     });
 
     if (this.dryRun) {
@@ -3416,37 +3586,35 @@ export class SyncManager {
     }
 
     try {
-      // Calculate current progress value
-      let currentProgress = 0;
-      let useSeconds = false;
-
-      if (edition.audio_seconds) {
-        currentProgress = ProgressManager.calculateCurrentPosition(
-          progressPercent,
-          edition.audio_seconds,
-          {
-            type: 'seconds',
-            context: `book "${title}" audio progress calculation`,
-          },
-        );
-        useSeconds = true;
-      } else if (edition.pages) {
-        currentProgress = ProgressManager.calculateCurrentPosition(
-          progressPercent,
-          edition.pages,
-          {
-            type: 'pages',
-            context: `book "${title}" page progress calculation`,
-          },
-        );
+      const progressBasis = this._getEditionProgressBasis(edition);
+      if (!progressBasis) {
+        const reason =
+          'Selected Hardcover edition has neither audiobook duration nor page count';
+        logger.error(`Cannot update progress for ${title}: ${reason}`, {
+          editionId: edition.id,
+          readingFormat: edition.reading_format?.format,
+          audioSeconds: edition.audio_seconds,
+          pages: edition.pages,
+        });
+        return { status: 'error', reason, title };
       }
+
+      const useSeconds = progressBasis.useSeconds;
+      const currentProgress = ProgressManager.calculateCurrentPosition(
+        progressPercent,
+        progressBasis.total,
+        {
+          type: progressBasis.type,
+          context: `book "${title}" ${progressBasis.type} progress calculation`,
+        },
+      );
 
       logger.debug(
         `📊 Calculated ${title} progress: ${progressPercent.toFixed(1)}%`,
         {
           [useSeconds ? 'progress' : 'progress']: useSeconds
-            ? `${formatDurationForLogging(currentProgress)} of ${formatDurationForLogging(edition.audio_seconds)}`
-            : `page ${currentProgress} of ${edition.pages}`,
+            ? `${formatDurationForLogging(currentProgress)} of ${formatDurationForLogging(progressBasis.total)}`
+            : `page ${currentProgress} of ${progressBasis.total}`,
           format: edition.format || (useSeconds ? 'audiobook' : 'book'),
         },
       );
