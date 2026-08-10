@@ -1,9 +1,24 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, it, mock } from 'node:test';
+import { BookCache } from '../src/book-cache.js';
 import { HardcoverClient } from '../src/hardcover-client.js';
+import SessionManager from '../src/session-manager.js';
 import { SyncManager } from '../src/sync-manager.js';
 
 const clients = [];
+const caches = [];
+const tempDirs = [];
+
+const repairFixture = {
+  userId: 'test-user',
+  title: 'We’ll Always Have Summer: Summer I Turned Pretty, Book 3',
+  author: 'Jenny Han',
+  asin: 'B09WZF7395',
+  progress: 41.00631606693597,
+};
 
 function createManager() {
   const manager = Object.create(SyncManager.prototype);
@@ -19,9 +34,140 @@ function createClient() {
   return client;
 }
 
+function createAbsBook({ finished = false } = {}) {
+  return {
+    id: 'abs-book-1',
+    progress_percentage: finished ? 100 : repairFixture.progress,
+    is_finished: finished,
+    started_at: Date.parse('2026-08-05T16:51:24.238Z'),
+    last_listened_at: Date.parse('2026-08-09T16:57:15.911Z'),
+    finished_at: finished ? Date.parse('2026-08-10T12:00:00.000Z') : null,
+    media: {
+      duration: 30000,
+      metadata: {
+        title: repairFixture.title,
+        authors: [{ name: repairFixture.author }],
+        asin: repairFixture.asin,
+      },
+    },
+  };
+}
+
+async function createRepairScenario({
+  finished = false,
+  updateResult = {
+    id: 6226610,
+    progress: repairFixture.progress,
+    progress_seconds: 12302,
+    edition_id: 400,
+  },
+} = {}) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'shelfbridge-repair-'));
+  tempDirs.push(dir);
+
+  const cache = new BookCache(path.join(dir, 'cache.db'));
+  caches.push(cache);
+  await cache.init();
+
+  const unusableEdition = {
+    id: 32426186,
+    asin: repairFixture.asin,
+    reading_format: { format: 'Listened' },
+    audio_seconds: null,
+    pages: null,
+  };
+  const replacementEdition = {
+    id: 400,
+    reading_format: { format: 'Listened' },
+    audio_seconds: 30000,
+    pages: null,
+  };
+  const userBook = {
+    id: 17164525,
+    status_id: finished ? 3 : 2,
+    book: {
+      title: repairFixture.title,
+      editions: [unusableEdition, replacementEdition],
+    },
+  };
+
+  await cache.storeBookSyncData(
+    repairFixture.userId,
+    repairFixture.asin,
+    repairFixture.title,
+    unusableEdition.id,
+    'asin',
+    repairFixture.author,
+    finished ? 100 : repairFixture.progress,
+    '2026-08-09T16:57:15.911Z',
+    '2026-08-05T16:51:24.238Z',
+    finished ? 3 : 2,
+    unusableEdition.id,
+  );
+
+  if (finished) {
+    await cache.storeBookCompletionData(
+      repairFixture.userId,
+      repairFixture.asin,
+      repairFixture.title,
+      'asin',
+      '2026-08-10T12:00:00.000Z',
+      '2026-08-05T16:51:24.238Z',
+      '2026-08-10T12:00:00.000Z',
+      3,
+      unusableEdition.id,
+    );
+  }
+
+  const updateReadingProgress = mock.fn(async () => updateResult);
+  const markBookCompleted = mock.fn(async () => true);
+  const findMatch = mock.fn(async () => {
+    throw new Error('Expensive matching should not run during cache repair');
+  });
+
+  const manager = Object.create(SyncManager.prototype);
+  Object.assign(manager, {
+    userId: repairFixture.userId,
+    globalConfig: {
+      auto_add_books: false,
+      force_sync: false,
+      min_progress_threshold: 5,
+      prevent_progress_regression: false,
+      reread_detection: {},
+    },
+    dryRun: false,
+    verbose: false,
+    timezone: 'UTC',
+    cache,
+    sessionManager: new SessionManager(cache, { enabled: false }),
+    bookMatcher: { findMatch },
+    hardcoverBooks: [userBook],
+    hardcover: {
+      updateReadingProgress,
+      markBookCompleted,
+    },
+  });
+
+  return {
+    cache,
+    manager,
+    unusableEdition,
+    replacementEdition,
+    updateReadingProgress,
+    markBookCompleted,
+    findMatch,
+  };
+}
+
 afterEach(() => {
   while (clients.length > 0) {
     clients.pop().cleanup();
+  }
+  while (caches.length > 0) {
+    caches.pop().close();
+  }
+  while (tempDirs.length > 0) {
+    rmSync(tempDirs.pop(), { recursive: true, force: true });
   }
 });
 
@@ -248,5 +394,92 @@ describe('Hardcover null progress repair', () => {
 
     assert.equal(result.id, 6130328);
     assert.equal(result.progress_seconds, 19181);
+  });
+
+  it('repairs unchanged cached progress through the full per-book sync path', async () => {
+    const scenario = await createRepairScenario();
+
+    const firstResult = await scenario.manager._syncSingleBook(
+      createAbsBook(),
+      null,
+    );
+
+    assert.equal(firstResult.status, 'synced');
+    assert.equal(scenario.findMatch.mock.callCount(), 0);
+    assert.equal(scenario.updateReadingProgress.mock.callCount(), 1);
+
+    const updateCall = scenario.updateReadingProgress.mock.calls[0].arguments;
+    assert.equal(updateCall[0], 17164525);
+    assert.ok(updateCall[1] > 0);
+    assert.equal(updateCall[3], scenario.replacementEdition.id);
+    assert.equal(updateCall[4], true);
+
+    const cachedEdition = await scenario.cache.getEditionForBook(
+      repairFixture.userId,
+      repairFixture.asin,
+      repairFixture.title,
+      'asin',
+    );
+    assert.equal(cachedEdition, scenario.replacementEdition.id);
+
+    const secondResult = await scenario.manager._syncSingleBook(
+      createAbsBook(),
+      null,
+    );
+
+    assert.equal(secondResult.status, 'skipped');
+    assert.match(secondResult.reason, /Progress unchanged/);
+    assert.equal(scenario.updateReadingProgress.mock.callCount(), 1);
+  });
+
+  it('keeps the old cache mapping when the repair write fails', async () => {
+    const scenario = await createRepairScenario({ updateResult: false });
+
+    const result = await scenario.manager._syncSingleBook(
+      createAbsBook(),
+      null,
+    );
+
+    assert.equal(result.status, 'error');
+    assert.equal(scenario.updateReadingProgress.mock.callCount(), 1);
+    const cachedEdition = await scenario.cache.getEditionForBook(
+      repairFixture.userId,
+      repairFixture.asin,
+      repairFixture.title,
+      'asin',
+    );
+    assert.equal(cachedEdition, scenario.unusableEdition.id);
+  });
+
+  it('repairs completed books once and persists the replacement edition', async () => {
+    const scenario = await createRepairScenario({ finished: true });
+
+    const firstResult = await scenario.manager._syncSingleBook(
+      createAbsBook({ finished: true }),
+      null,
+    );
+
+    assert.equal(firstResult.status, 'completed');
+    assert.equal(scenario.markBookCompleted.mock.callCount(), 1);
+    assert.equal(
+      scenario.markBookCompleted.mock.calls[0].arguments[1],
+      scenario.replacementEdition.id,
+    );
+
+    const cachedEdition = await scenario.cache.getEditionForBook(
+      repairFixture.userId,
+      repairFixture.asin,
+      repairFixture.title,
+      'asin',
+    );
+    assert.equal(cachedEdition, scenario.replacementEdition.id);
+
+    const secondResult = await scenario.manager._syncSingleBook(
+      createAbsBook({ finished: true }),
+      null,
+    );
+
+    assert.equal(secondResult.status, 'skipped');
+    assert.equal(scenario.markBookCompleted.mock.callCount(), 1);
   });
 });

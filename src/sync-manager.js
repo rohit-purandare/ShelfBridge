@@ -1163,6 +1163,8 @@ export class SyncManager {
 
     // OPTIMIZATION: Check progress change BEFORE expensive book matching using multi-key cache lookup
     let shouldPerformExpensiveMatching = true;
+    let requiresProgressRepair = false;
+    let progressRepairReason = null;
 
     // Declare variables that might be set during optimization
     let matchResult, hardcoverMatch, extractedMetadata;
@@ -1228,8 +1230,6 @@ export class SyncManager {
 
         let hasChanged = true; // Default to true (needs sync)
         let cacheFoundEarly = false;
-        let requiresProgressRepair = false;
-
         // Try each cache key to find existing progress data and cached match info
         let cachedMatchInfo = null;
 
@@ -1268,6 +1268,7 @@ export class SyncManager {
 
               if (!progressChanged && repairState.requiresRepair) {
                 requiresProgressRepair = true;
+                progressRepairReason = repairState.reason;
                 hasChanged = true;
                 cacheFoundEarly = false;
                 logger.warn(
@@ -2200,7 +2201,7 @@ export class SyncManager {
     }
 
     // Check if book needs sync (status, progress, edition, or session changes)
-    if (!this.globalConfig.force_sync) {
+    if (!this.globalConfig.force_sync && !requiresProgressRepair) {
       const syncCheck = await this.cache.needsSyncCheck(
         this.userId,
         identifier,
@@ -2244,6 +2245,14 @@ export class SyncManager {
       }
 
       syncResult.progress_changed = syncCheck.changes.progressChanged;
+    } else if (requiresProgressRepair) {
+      logger.warn(`Bypassing unchanged-progress cache for ${title}`, {
+        reason: progressRepairReason,
+        cachedEditionId: hardcoverMatch.edition?.id,
+      });
+      syncResult.actions.push(
+        `Repairing cached Hardcover edition: ${progressRepairReason}`,
+      );
     } else {
       syncResult.progress_changed = true;
     }
@@ -2310,6 +2319,7 @@ export class SyncManager {
       title,
       author,
       result,
+      { requiresProgressRepair, progressRepairReason },
     );
 
     // Merge results
@@ -3016,7 +3026,10 @@ export class SyncManager {
     title,
     author,
     result = null,
+    repairOptions = {},
   ) {
+    const { requiresProgressRepair = false, progressRepairReason = null } =
+      repairOptions;
     const progressPercent = ProgressManager.extractProgressPercentage(absBook);
     const { userBook, edition } = hardcoverMatch;
 
@@ -3212,7 +3225,8 @@ export class SyncManager {
         if (
           cachedInfo.exists &&
           cachedInfo.finished_at &&
-          !this.globalConfig.force_sync
+          !this.globalConfig.force_sync &&
+          !requiresProgressRepair
         ) {
           logger.debug(
             `Book ${title} already marked as completed, skipping re-processing`,
@@ -3223,16 +3237,14 @@ export class SyncManager {
             },
           );
           return { status: 'completed', title, cached: true };
-        } else if (
-          cachedInfo.exists &&
-          cachedInfo.finished_at &&
-          this.globalConfig.force_sync
-        ) {
-          logger.debug(`Force sync: Re-processing completed book ${title}`, {
+        } else if (cachedInfo.exists && cachedInfo.finished_at) {
+          logger.debug(`Re-processing completed book ${title}`, {
             finishedAt: cachedInfo.finished_at,
             lastSync: cachedInfo.last_sync,
             userBookId: userBook.id,
-            forceSync: true,
+            forceSync: this.globalConfig.force_sync === true,
+            requiresProgressRepair,
+            progressRepairReason,
           });
         }
 
@@ -3529,6 +3541,7 @@ export class SyncManager {
             absBook.finished_at,
             3, // Completed books have status "Read"
             edition.id, // Store edition_id for cache comparison
+            extractAuthor(absBook) || 'Unknown Author',
           );
 
           await transaction.commit();

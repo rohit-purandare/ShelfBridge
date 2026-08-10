@@ -754,6 +754,7 @@ export class BookCache {
    * @param {string} finishedAt - Finished reading timestamp
    * @param {number} statusId - Book status ID (typically 3 for completed)
    * @param {number} hardcoverEditionId - Hardcover edition ID for cache comparison
+   * @param {string} author - Book author used when refreshing the edition mapping
    */
   async storeBookCompletionData(
     userId,
@@ -765,6 +766,7 @@ export class BookCache {
     finishedAt = null,
     statusId = null,
     hardcoverEditionId = null,
+    author = null,
   ) {
     // Validate input data
     const validationErrors = this._validateBookData(
@@ -778,7 +780,22 @@ export class BookCache {
       throw new Error(`Invalid input data: ${validationErrors.join(', ')}`);
     }
 
-    const operations = [
+    const operations = [];
+
+    if (hardcoverEditionId && author) {
+      operations.push(() =>
+        this._storeEditionMappingOperation(
+          userId,
+          identifier,
+          title,
+          hardcoverEditionId,
+          identifierType,
+          author,
+        ),
+      );
+    }
+
+    operations.push(
       () =>
         this._storeProgressOperation(
           userId,
@@ -799,7 +816,7 @@ export class BookCache {
           identifierType,
           finishedAt,
         ),
-    ];
+    );
 
     return await this.executeTransaction(operations, {
       description: `Store completion data for ${title}`,
