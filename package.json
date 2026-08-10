@@ -78,7 +78,7 @@
   },
   "overrides": {
     "ansi-regex": "6.2.2",
-    "color-name": "2.1.0",
+    "color-name": "2.1.1",
     "is-arrayish": "0.3.4",
     "supports-color": "10.2.2",
     "strip-ansi": "7.1.0",
