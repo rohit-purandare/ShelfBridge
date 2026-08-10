@@ -58,6 +58,21 @@ node scripts/test-native-modules.js
 npm run test:native
 ```
 
+### `test-book-cache-lifecycle.js`
+
+Runtime teardown regression check:
+
+- Exercises the actual ShelfBridge `BookCache` wrapper
+- Repeats initialization, writes, reads, and clean shutdowns
+- Uses natural process teardown so native cleanup-hook crashes fail the command
+- Runs automatically while building the Docker runtime image
+
+```bash
+node scripts/test-book-cache-lifecycle.js
+# Or via npm script
+npm run test:native-lifecycle
+```
+
 ### `validate-better-sqlite3.js`
 
 Comprehensive better-sqlite3 validation suite:

@@ -779,6 +779,8 @@ docker inspect shelfbridge
 ### Performance
 
 - **Optimized Docker builds**: Multi-stage builds with Alpine Linux base for better compatibility (~530MB)
+- **Pinned runtime**: Docker builds use the verified Node.js 24.19.0 / Alpine 3.24 image digest so native-module compatibility cannot change between releases
+- **Native lifecycle validation**: Image builds exercise ShelfBridge's full SQLite cache lifecycle and fail on native teardown errors
 - **Build cache efficiency**: BuildKit cache mounts speed up CI/CD builds
 - **Use named volumes**: Better performance than bind mounts
 - **Appropriate resources**: Don't over-allocate memory/CPU

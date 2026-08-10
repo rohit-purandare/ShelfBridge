@@ -15,7 +15,7 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 | Workflow                       | Trigger                     | Purpose                         | Status    |
 | ------------------------------ | --------------------------- | ------------------------------- | --------- |
 | [CI](#continuous-integration)  | PRs + feature branch pushes | Tests and Docker build testing  | ✅ Active |
-| [Release](#release-management) | Pushes to main              | Automated releases + publishing | ✅ Active |
+| [Release](#release-management) | Main pushes + manual tags   | Automated releases + publishing | ✅ Active |
 | [Code Quality](#code-quality)  | PRs + main pushes           | Linting and security analysis   | ✅ Active |
 
 ---
@@ -76,7 +76,8 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 
 ### Triggers
 
-- Pushes to `main` branch only
+- Pushes to `main` for the standard Release Please flow
+- Manual dispatch with an existing `vMAJOR.MINOR.PATCH` tag for direct hotfix publishing
 
 ### Jobs
 
@@ -88,10 +89,11 @@ ShelfBridge uses **3 streamlined GitHub Actions workflows** following industry s
 - Creates GitHub releases with release notes
 - **Full git history** (`fetch-depth: 0`) for accurate versioning
 - Uses the `RELEASE_PLEASE_TOKEN` repository secret so release PRs can trigger required CI checks
+- Skips a main-branch commit containing `[skip release-please]`; this is reserved for a fully versioned direct hotfix
 
 #### 2. **Docker Publish**
 
-- **Condition:** Only when a release is created
+- **Condition:** When Release Please creates a release or a maintainer manually dispatches an existing release tag
 - **Multi-architecture builds:** AMD64 + ARM64
 - **Security features:**
   - SBOM (Software Bill of Materials) generation
@@ -112,12 +114,12 @@ ghcr.io/rohit-purandare/shelfbridge:v1
 ghcr.io/rohit-purandare/shelfbridge:1
 ```
 
-**Technical Implementation:** The workflow uses `RELEASE_PLEASE_TOKEN` instead of the default `GITHUB_TOKEN` because resources created with `GITHUB_TOKEN` do not trigger follow-on workflow runs. This allows required CI checks to run on release PRs. The Docker metadata step also uses the `value` parameter in semver tag patterns to explicitly provide the version from release-please outputs (`needs.release-please.outputs.tag_name`).
+**Technical Implementation:** The workflow uses `RELEASE_PLEASE_TOKEN` instead of the default `GITHUB_TOKEN` because resources created with `GITHUB_TOKEN` do not trigger follow-on workflow runs. This allows required CI checks to run on release PRs. The Docker metadata step also uses the `value` parameter in semver tag patterns to explicitly provide either the Release Please tag or the validated manual hotfix tag.
 
 #### 4. **Image Verification**
 
 - Pulls published images to verify registry availability
-- Tests basic functionality of published images
+- Tests native module loading and the complete ShelfBridge cache lifecycle on AMD64 and ARM64
 - Fails build if images are not accessible
 
 #### 5. **Release Notification**
@@ -258,6 +260,18 @@ git checkout main && git pull
 #   2. Merge release PR
 #   3. Docker images published automatically
 ```
+
+### Direct Hotfix Release
+
+Use this only when an urgent patch must bypass the Release Please PR cycle:
+
+1. Update `package.json`, `package-lock.json`, `CHANGELOG.md`, and `.release-please-manifest.json` to the hotfix version.
+2. Merge the verified hotfix with `[skip release-please]` in the main-branch commit message.
+3. Create and push the matching `vMAJOR.MINOR.PATCH` tag and create the GitHub release.
+4. Manually run the Release workflow with that existing tag.
+5. Wait for the multi-architecture image and published-image lifecycle checks to pass.
+
+The manual workflow reuses the normal Docker metadata, SBOM, provenance, attestation, tagging, and verification steps; it only skips Release Please version generation.
 
 ### Monitoring
 
