@@ -5,6 +5,13 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.13](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.12...v1.23.13) (2026-08-10)
+
+
+### ## 🔧 Bug Fixes
+
+* prevent native cache cleanup crashes on Node.js 24
+
 ## [1.23.12](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.11...v1.23.12) (2026-08-10)
 
 

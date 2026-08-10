@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.4
 
+ARG NODE_IMAGE=node:24.19.0-alpine3.24@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43
+
 # ===== BUILD STAGE =====
-FROM node:24-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 
 # Install build dependencies for native modules
 RUN apk add --no-cache \
@@ -54,7 +56,7 @@ RUN --mount=type=cache,target=/root/.npm \
     echo "🎯 ALPINE MUSL COMPATIBILITY VERIFIED!"
 
 # ===== RUNTIME STAGE =====
-FROM node:24-alpine AS runtime
+FROM ${NODE_IMAGE} AS runtime
 
 # Install runtime dependencies (dumb-init for proper signal handling, and su-exec for user switching)
 RUN apk add --no-cache \
@@ -91,6 +93,10 @@ RUN mkdir -p /app/.config-template && \
 RUN mkdir -p logs data config && \
     chmod 755 logs data config && \
     chown -R node:node /app
+
+# Exercise ShelfBridge's real cache lifecycle in the final runtime image.
+# Raw better-sqlite3 smoke tests do not expose native cleanup-hook failures.
+RUN su-exec node:node npm run test:native-lifecycle
 
 # Add comprehensive health check to ensure better-sqlite3 is always working
 # This performs multiple operations to catch any runtime issues

@@ -5,11 +5,18 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing semver tag to publish (for example, v1.23.13)
+        required: true
+        type: string
 
 jobs:
   # Release Please handles versioning and changelog generation
   release-please:
     name: Release Please
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip release-please]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -50,7 +57,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: >-
+      always() &&
+      (needs.release-please.outputs.release_created == 'true' ||
+      github.event_name == 'workflow_dispatch')
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }}
     permissions:
       contents: read
       packages: write
@@ -62,10 +74,20 @@ jobs:
       tags: ${{ steps.meta.outputs.tags }}
 
     steps:
+      - name: Validate manual release tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Manual release tag must use the form v1.2.3"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 1 # Shallow clone for performance
 
       - name: Set up QEMU
@@ -88,12 +110,12 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/shelfbridge
           tags: |
             # Semantic versioning using release-please outputs
-            type=semver,pattern=v{{version}},value=${{ needs.release-please.outputs.tag_name }}
-            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.tag_name }}
-            type=semver,pattern=v{{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.tag_name }}
-            type=semver,pattern=v{{major}},value=${{ needs.release-please.outputs.tag_name }}
-            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.tag_name }}
+            type=semver,pattern=v{{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern=v{{major}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
             # Latest tag for releases
             type=raw,value=latest
           labels: |
@@ -137,6 +159,8 @@ jobs:
             echo "🧪 Testing native module on $platform..."
             docker run --rm --pull=always --platform "$platform" --entrypoint="" \
               "$IMAGE@$platform_digest" npm run test:native
+            docker run --rm --pull=always --platform "$platform" --user 1000:1000 --entrypoint="" \
+              "$IMAGE@$platform_digest" npm run test:native-lifecycle
           }
 
           echo "🔍 Verifying multi-architecture manifest..."
@@ -163,18 +187,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [release-please, docker-publish]
-    if: needs.release-please.outputs.release_created == 'true'
+    if: always() && needs.docker-publish.result == 'success'
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release-please.outputs.tag_name }}
     permissions: {}
 
     steps:
       - name: Display release summary
         run: |
-          echo "🎉 Release ${{ needs.release-please.outputs.tag_name }} Published Successfully!"
+          echo "🎉 Release $RELEASE_TAG Published Successfully!"
           echo ""
           echo "📋 Release Details:"
-          echo "  • Version: ${{ needs.release-please.outputs.version }}"
-          echo "  • Tag: ${{ needs.release-please.outputs.tag_name }}"
-          echo "  • Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release-please.outputs.tag_name }}"
+          echo "  • Version: ${RELEASE_TAG#v}"
+          echo "  • Tag: $RELEASE_TAG"
+          echo "  • Release URL: https://github.com/${{ github.repository }}/releases/tag/$RELEASE_TAG"
           echo ""
           echo "🐳 Docker Images Published:"
           echo "  • Image Digest: ${{ needs.docker-publish.outputs.digest }}"
@@ -185,4 +211,4 @@ jobs:
           echo ""
           echo "📦 Usage:"
           echo "  docker pull ghcr.io/${{ github.repository_owner }}/shelfbridge:latest"
-          echo "  docker pull ghcr.io/${{ github.repository_owner }}/shelfbridge:${{ needs.release-please.outputs.version }}"
+          echo "  docker pull ghcr.io/${{ github.repository_owner }}/shelfbridge:${RELEASE_TAG#v}"
