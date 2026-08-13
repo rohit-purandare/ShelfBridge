@@ -267,6 +267,29 @@ describe('SyncResultFormatter Integration with DisplayLogger', () => {
     });
   });
 
+  describe('Hardcover update summary', () => {
+    test('reports book outcomes instead of estimated API call counts', () => {
+      const lines = formatter._buildHardcoverUpdatesColumn(
+        {
+          books_synced: 0,
+          books_completed: 1,
+          books_auto_added: 0,
+          books_skipped: 25,
+          errors: ['Verity: No suitable edition found'],
+        },
+        { dry_run: false },
+      );
+
+      assert(lines.includes('├─ 1 successful book update'));
+      assert(lines.includes('├─ 1 processing error'));
+      assert(lines.includes('└─ 25 skipped (no changes)'));
+      assert.equal(
+        lines.some(line => line.includes('API calls made')),
+        false,
+      );
+    });
+  });
+
   describe('error handling', () => {
     test('displays errors using displayLogger.error for warnings', async () => {
       const mockResult = {

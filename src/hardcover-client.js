@@ -1795,12 +1795,11 @@ export class HardcoverClient {
   }
 
   /**
-   * Get edition information from book ID for auto-add operations
-   * @param {string|number} bookId - Book ID
-   * @param {string} format - Preferred format (audiobook, ebook, etc.)
-   * @returns {Object|null} - Best edition for the book or null if not found
+   * Get every edition associated with a Hardcover book.
+   * @param {string|number} bookId - Hardcover book ID
+   * @returns {Object|null} - Book metadata and editions, or null if unavailable
    */
-  async getPreferredEditionFromBookId(bookId, preferredFormat = 'audiobook') {
+  async getBookEditions(bookId) {
     const query = `
       query getEditionsFromBook($bookId: Int!) {
         books(where: {id: {_eq: $bookId}}, limit: 1) {
@@ -1827,64 +1826,93 @@ export class HardcoverClient {
 
     try {
       const result = await this._executeQuery(query, variables);
+      const book = result?.books?.[0];
 
-      if (result && result.books && result.books.length > 0) {
-        const book = result.books[0];
-        if (book.editions && book.editions.length > 0) {
-          // Use unified scorer for consistent edition selection
-          const { selectBestEdition, PROFILES } =
-            await import('./matching/utils/unified-edition-scorer.js');
-
-          // Format mapper for reading_format field
-          const formatMapper = edition =>
-            edition.reading_format?.format || edition.physical_format;
-
-          const context = {
-            sourceFormat: preferredFormat,
-            formatMapper,
-            profile: PROFILES.DEFAULT, // Simple selection for edition lookup
-          };
-
-          const result = selectBestEdition(book.editions, context);
-
-          const bestEdition = result?.edition || book.editions[0];
-
-          logger.debug(`Selected edition for book ${bookId}`, {
-            bookTitle: book.title,
-            editionId: bestEdition.id,
-            format: formatMapper(bestEdition),
-            usersCount: bestEdition.users_count,
-            score: result?.score?.toFixed(2) || 'N/A',
-            totalEditions: book.editions.length,
-          });
-
-          return {
-            bookId: book.id,
-            title: book.title,
-            edition: {
-              id: bestEdition.id,
-              asin: bestEdition.asin,
-              isbn_10: bestEdition.isbn_10,
-              isbn_13: bestEdition.isbn_13,
-              pages: bestEdition.pages,
-              audio_seconds: bestEdition.audio_seconds,
-              physical_format: bestEdition.physical_format,
-              reading_format: bestEdition.reading_format,
-              users_count: bestEdition.users_count,
-              format: formatMapper(bestEdition), // Add format field for consistency
-            },
-            score: result?.score,
-          };
-        }
+      if (!book) {
+        logger.warn('No book found while looking up editions', { bookId });
+        return null;
       }
 
-      logger.warn('No editions found for book', { bookId });
-      return null;
+      return {
+        bookId: book.id,
+        title: book.title,
+        editions: book.editions || [],
+      };
     } catch (error) {
       logger.error('Error looking up editions from book ID:', error.message, {
         bookId,
         error: error.message,
       });
+      return null;
+    }
+  }
+
+  /**
+   * Get edition information from book ID for auto-add operations
+   * @param {string|number} bookId - Book ID
+   * @param {string} format - Preferred format (audiobook, ebook, etc.)
+   * @returns {Object|null} - Best edition for the book or null if not found
+   */
+  async getPreferredEditionFromBookId(bookId, preferredFormat = 'audiobook') {
+    const book = await this.getBookEditions(bookId);
+    if (!book?.editions?.length) {
+      logger.warn('No editions found for book', { bookId });
+      return null;
+    }
+
+    try {
+      // Use unified scorer for consistent edition selection
+      const { selectBestEdition, PROFILES } =
+        await import('./matching/utils/unified-edition-scorer.js');
+
+      // Format mapper for reading_format field
+      const formatMapper = edition =>
+        edition.reading_format?.format || edition.physical_format;
+
+      const context = {
+        sourceFormat: preferredFormat,
+        formatMapper,
+        profile: PROFILES.DEFAULT, // Simple selection for edition lookup
+      };
+
+      const result = selectBestEdition(book.editions, context);
+      const bestEdition = result?.edition || book.editions[0];
+
+      logger.debug(`Selected edition for book ${bookId}`, {
+        bookTitle: book.title,
+        editionId: bestEdition.id,
+        format: formatMapper(bestEdition),
+        usersCount: bestEdition.users_count,
+        score: result?.score?.toFixed(2) || 'N/A',
+        totalEditions: book.editions.length,
+      });
+
+      return {
+        bookId: book.bookId,
+        title: book.title,
+        edition: {
+          id: bestEdition.id,
+          asin: bestEdition.asin,
+          isbn_10: bestEdition.isbn_10,
+          isbn_13: bestEdition.isbn_13,
+          pages: bestEdition.pages,
+          audio_seconds: bestEdition.audio_seconds,
+          physical_format: bestEdition.physical_format,
+          reading_format: bestEdition.reading_format,
+          users_count: bestEdition.users_count,
+          format: formatMapper(bestEdition), // Add format field for consistency
+        },
+        score: result?.score,
+      };
+    } catch (error) {
+      logger.error(
+        'Error selecting preferred edition from book:',
+        error.message,
+        {
+          bookId,
+          error: error.message,
+        },
+      );
       return null;
     }
   }

@@ -178,21 +178,24 @@ export class SyncResultFormatter {
       isDryRun ? '🌐 Hardcover Updates (DRY RUN)' : '🌐 Hardcover Updates',
     ];
 
-    const totalApiCalls =
+    const successfulBookUpdates =
       result.books_synced + result.books_completed + result.books_auto_added;
     const skippedCalls = result.books_skipped;
 
     if (isDryRun) {
       // In dry-run mode, show what would happen
-      rightColumn.push(`├─ ${totalApiCalls} would be updated`);
+      rightColumn.push(`├─ ${successfulBookUpdates} would be updated`);
       rightColumn.push(`├─ 0 API calls made (dry run)`);
       rightColumn.push(`├─ ${result.errors.length} would fail`);
       rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
     } else {
-      // Normal mode, show actual results
-      rightColumn.push(`├─ ${totalApiCalls} API calls made`);
-      rightColumn.push(`├─ ${totalApiCalls} successful`);
-      rightColumn.push(`├─ ${result.errors.length} failed`);
+      const updateLabel =
+        successfulBookUpdates === 1 ? 'book update' : 'book updates';
+      const errorLabel =
+        result.errors.length === 1 ? 'processing error' : 'processing errors';
+
+      rightColumn.push(`├─ ${successfulBookUpdates} successful ${updateLabel}`);
+      rightColumn.push(`├─ ${result.errors.length} ${errorLabel}`);
       rightColumn.push(`└─ ${skippedCalls} skipped (no changes)`);
     }
 
