@@ -811,21 +811,14 @@ export class HardcoverClient {
     const variables = { userBookId: safeParseInt(userBookId, 'userBookId') };
     try {
       const result = await this._executeQuery(query, variables);
-      if (
-        result &&
-        result.user_book_reads &&
-        result.user_book_reads.length > 0
-      ) {
-        return {
-          latest_read: result.user_book_reads[0],
-          user_book:
-            result.user_books && result.user_books[0]
-              ? result.user_books[0]
-              : null,
-          has_progress: true,
-        };
-      }
-      return { latest_read: null, user_book: null, has_progress: false };
+      const latestRead = result?.user_book_reads?.[0] ?? null;
+      const userBook = result?.user_books?.[0] ?? null;
+
+      return {
+        latest_read: latestRead,
+        user_book: userBook,
+        has_progress: latestRead !== null,
+      };
     } catch (error) {
       logger.error('Error getting book current progress:', error.message);
       return { latest_read: null, user_book: null, has_progress: false };
