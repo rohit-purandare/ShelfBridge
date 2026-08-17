@@ -100,7 +100,8 @@ This project uses a simplified, industry-standard workflow architecture with thr
 1. Create feature branch: `git checkout -b feature/my-feature`
 2. Make changes and commit with conventional commit messages
 3. Push the branch and create a PR
-4. CI and Code Quality validate the pull request
+4. Use a conventional commit-style PR title (for example, `fix: correct sync behavior`) so squash merges remain releasable
+5. CI and Code Quality validate the pull request
 
 ### For Releases:
 
