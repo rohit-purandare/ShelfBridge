@@ -5,6 +5,13 @@ All notable changes to ShelfBridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.14](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.13...v1.23.14) (2026-08-17)
+
+
+### ## 🔧 Bug Fixes
+
+* auto add progress-capable edition ([#228](https://github.com/rohit-purandare/ShelfBridge/issues/228)) ([#234](https://github.com/rohit-purandare/ShelfBridge/issues/234)) ([cad0bb4](https://github.com/rohit-purandare/ShelfBridge/commit/cad0bb49b1971ab51951f3a0a80d25f1a048eaad))
+
 ## [1.23.13](https://github.com/rohit-purandare/ShelfBridge/compare/v1.23.12...v1.23.13) (2026-08-10)
 
 
