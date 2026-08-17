@@ -110,6 +110,13 @@ describe('Identifier title validation', () => {
       _mapHardcoverFormatToInternal:
         SyncManager.prototype._mapHardcoverFormatToInternal,
       _areFormatsCompatible: SyncManager.prototype._areFormatsCompatible,
+      _getEditionProgressBasis: SyncManager.prototype._getEditionProgressBasis,
+      _isEditionProgressCapable:
+        SyncManager.prototype._isEditionProgressCapable,
+      _selectProgressCapableEdition:
+        SyncManager.prototype._selectProgressCapableEdition,
+      _resolveProgressCapableAutoAddEdition:
+        SyncManager.prototype._resolveProgressCapableAutoAddEdition,
     };
 
     const result = await SyncManager.prototype._tryAutoAddBook.call(
