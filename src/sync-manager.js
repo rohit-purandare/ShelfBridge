@@ -2499,11 +2499,13 @@ export class SyncManager {
           sourceFormat,
         );
 
-        if (!hasCompatibleFormat) {
+        if (!hasCompatibleFormat || sourceFormat === 'audiobook') {
           logger.info(
-            `Format mismatch in identifier search for "${title}" - triggering title/author fallback`,
+            `Checking other editions of the identifier-matched book`,
             {
+              title,
               sourceFormat,
+              identifierResultCompatible: hasCompatibleFormat,
               identifiersSearched: {
                 asin: identifiers.asin || 'N/A',
                 isbn: identifiers.isbn || 'N/A',
@@ -2515,8 +2517,59 @@ export class SyncManager {
             },
           );
 
-          // Clear search results to trigger title/author fallback
-          searchResults = [];
+          const matchedBookIds = [
+            ...new Set(
+              searchResults.map(result => result.book?.id).filter(Boolean),
+            ),
+          ];
+          const compatibleEditions = [];
+
+          if (this.hardcover.getBookDetailsWithEditions) {
+            for (const bookId of matchedBookIds) {
+              const bookDetails =
+                await this.hardcover.getBookDetailsWithEditions(bookId);
+              if (!bookDetails?.editions) continue;
+
+              for (const edition of bookDetails.editions) {
+                const editionFormat =
+                  this._mapHardcoverFormatToInternal(edition);
+                if (this._areFormatsCompatible(sourceFormat, editionFormat)) {
+                  compatibleEditions.push({
+                    ...edition,
+                    book: {
+                      id: bookDetails.id,
+                      title: bookDetails.title,
+                      contributions: bookDetails.contributions,
+                    },
+                  });
+                }
+              }
+            }
+          }
+
+          if (compatibleEditions.length > 0) {
+            logger.info(
+              `Found compatible editions on identifier-matched book`,
+              {
+                title,
+                sourceFormat,
+                matchedBookIds,
+                compatibleEditionCount: compatibleEditions.length,
+              },
+            );
+            searchResults = compatibleEditions;
+          } else if (hasCompatibleFormat) {
+            logger.info(
+              `Could not load other editions; keeping compatible identifier result`,
+              { title, sourceFormat, matchedBookIds },
+            );
+          } else {
+            logger.info(
+              `No compatible edition found on identifier-matched book - triggering title/author fallback`,
+              { title, sourceFormat, matchedBookIds },
+            );
+            searchResults = [];
+          }
         }
       }
 
@@ -4292,17 +4345,15 @@ export class SyncManager {
       return true;
     }
 
-    // Audiobook and ebook are compatible (cross-digital)
-    if (
-      (sourceFormat === 'audiobook' && editionFormat === 'ebook') ||
-      (sourceFormat === 'ebook' && editionFormat === 'audiobook')
-    ) {
-      return true;
+    // An audiobook must use a listened edition so progress is recorded in
+    // seconds against the correct medium.
+    if (sourceFormat === 'audiobook') {
+      return false;
     }
 
-    // Physical edition ('book') is NOT compatible with audiobook
-    if (sourceFormat === 'audiobook' && editionFormat === 'book') {
-      return false;
+    // Ebook sources may still use an audiobook edition as a digital fallback.
+    if (sourceFormat === 'ebook' && editionFormat === 'audiobook') {
+      return true;
     }
 
     // Allow ebook → physical fallback (acceptable)
