@@ -361,10 +361,7 @@ export class BookMatcher {
               sourceFormat,
               matchType,
             );
-          } else if (
-            strategy.getTier() <= 2 &&
-            match._isSearchResult
-          ) {
+          } else if (strategy.getTier() <= 2 && match._isSearchResult) {
             const sourceFormat = detectUserBookFormat(absBook);
             const matchType = match._matchType || 'identifier_search_result';
             match = await this._enhanceIdentifierSearchResultEdition(
