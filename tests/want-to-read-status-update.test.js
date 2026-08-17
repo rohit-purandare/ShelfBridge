@@ -104,6 +104,38 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         statusWasUpdated: true,
       });
     });
+
+    it('should not insert first progress when the status update fails', async () => {
+      const client = new HardcoverClient(mockToken);
+
+      client._executeQuery = mock.fn(async () => ({
+        user_book_reads: [],
+        user_books: [
+          {
+            id: mockUserBookId,
+            status_id: 1,
+          },
+        ],
+      }));
+      client.updateBookStatus = mock.fn(async () => false);
+      client.insertUserBookRead = mock.fn(async () => ({
+        id: mockReadId,
+        progress_seconds: mockCurrentProgress,
+      }));
+
+      const result = await client.updateReadingProgress(
+        mockUserBookId,
+        mockCurrentProgress,
+        mockProgressPercentage,
+        mockEditionId,
+        true,
+        '2024-01-01',
+      );
+
+      assert.equal(result, false);
+      assert.equal(client.updateBookStatus.mock.callCount(), 1);
+      assert.equal(client.insertUserBookRead.mock.callCount(), 0);
+    });
   });
 
   describe('updateReadingProgress - Status Transition Tests', () => {

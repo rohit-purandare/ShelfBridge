@@ -261,7 +261,15 @@ export class HardcoverClient {
           newStatus: 2,
         },
       );
-      await this.updateBookStatus(userBookId, 2);
+      const updatedBook = await this.updateBookStatus(userBookId, 2);
+      if (!updatedBook) {
+        logger.error('Failed to update book status before syncing progress', {
+          userBookId,
+          currentStatus: 1,
+          requestedStatus: 2,
+        });
+        return false;
+      }
       currentStatusId = 2;
       statusWasUpdated = true;
     }
