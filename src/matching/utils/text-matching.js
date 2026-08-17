@@ -738,13 +738,6 @@ export function getIsbnVariants(isbn) {
 
 export function normalizeAsin(asin) {
   if (!asin) return null;
-  const normalized = asin.replace(/\s/g, '').toUpperCase();
-  if (
-    normalized.length === 10 &&
-    /^[A-Z]/.test(normalized) &&
-    !/^\d+$/.test(normalized)
-  ) {
-    return normalized;
-  }
-  return null;
+  const normalized = String(asin).replace(/\s/g, '').toUpperCase();
+  return /^[A-Z0-9]{10}$/.test(normalized) ? normalized : null;
 }
