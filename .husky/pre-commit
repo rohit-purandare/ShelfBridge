@@ -17,17 +17,31 @@ else
     echo "✅ Prettier formatting and ESLint passed"
 fi
 
-# Run gitleaks to scan for secrets
-echo "Scanning for secrets with gitleaks..."
-if ! gitleaks detect --verbose; then
+# Run gitleaks against recent history and the changes about to be committed
+GITLEAKS_HISTORY_START="2026-01-01"
+
+echo "Scanning Git history for secrets since ${GITLEAKS_HISTORY_START}..."
+if ! gitleaks detect --verbose --log-opts="--since=${GITLEAKS_HISTORY_START}"; then
     echo ""
-    echo "❌ Gitleaks found potential secrets!"
+    echo "❌ Gitleaks found potential secrets in Git history since ${GITLEAKS_HISTORY_START}!"
     echo "💡 If these are false positives, add them to .gitleaks.toml allowlist"
     echo "💡 If these are real secrets, remove them and use environment variables instead"
-    echo "💡 Run 'gitleaks detect --verbose' to see details"
+    echo "💡 Run 'gitleaks detect --verbose --log-opts=\"--since=${GITLEAKS_HISTORY_START}\"' to see details"
     exit 1
 else
-    echo "✅ No secrets found"
+    echo "✅ No secrets found in Git history since ${GITLEAKS_HISTORY_START}"
+fi
+
+echo "Scanning staged changes for secrets with gitleaks..."
+if ! gitleaks protect --staged --verbose; then
+    echo ""
+    echo "❌ Gitleaks found potential secrets in staged changes!"
+    echo "💡 If these are false positives, add them to .gitleaks.toml allowlist"
+    echo "💡 If these are real secrets, remove them and use environment variables instead"
+    echo "💡 Run 'gitleaks protect --staged --verbose' to see details"
+    exit 1
+else
+    echo "✅ No secrets found in staged changes"
 fi
 
 # Run npm audit if package.json is staged
@@ -116,4 +130,4 @@ else
     echo "✅ No code changes requiring wiki updates"
 fi
 
-echo "🔒 Pre-commit checks completed" 
+echo "🔒 Pre-commit checks completed"

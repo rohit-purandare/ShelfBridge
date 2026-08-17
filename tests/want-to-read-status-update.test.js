@@ -1,4 +1,4 @@
-import { describe, it, mock, beforeEach } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
 import { HardcoverClient } from '../src/hardcover-client.js';
 
@@ -20,6 +20,91 @@ describe('HardcoverClient - Want to Read Status Update', () => {
   const mockReadId = 789;
   const mockCurrentProgress = 50; // pages or seconds
   const mockProgressPercentage = 25.5;
+
+  describe('getBookCurrentProgress - First Progress Sync', () => {
+    it('should preserve user_book when no reading progress exists', async () => {
+      const client = new HardcoverClient(mockToken);
+
+      client._executeQuery = mock.fn(async () => ({
+        user_book_reads: [],
+        user_books: [
+          {
+            id: mockUserBookId,
+            status_id: 1,
+          },
+        ],
+      }));
+
+      const result = await client.getBookCurrentProgress(mockUserBookId);
+
+      assert.deepStrictEqual(result, {
+        latest_read: null,
+        user_book: {
+          id: mockUserBookId,
+          status_id: 1,
+        },
+        has_progress: false,
+      });
+    });
+
+    it('should update Want to Read status before inserting first progress', async () => {
+      const client = new HardcoverClient(mockToken);
+      const callOrder = [];
+
+      client._executeQuery = mock.fn(async () => ({
+        user_book_reads: [],
+        user_books: [
+          {
+            id: mockUserBookId,
+            status_id: 1,
+          },
+        ],
+      }));
+      client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        callOrder.push('updateBookStatus');
+        return { id: userBookId, status_id: statusId };
+      });
+      client.insertUserBookRead = mock.fn(async () => {
+        callOrder.push('insertUserBookRead');
+        return {
+          id: mockReadId,
+          progress_seconds: mockCurrentProgress,
+        };
+      });
+
+      const result = await client.updateReadingProgress(
+        mockUserBookId,
+        mockCurrentProgress,
+        mockProgressPercentage,
+        mockEditionId,
+        true,
+        '2024-01-01',
+      );
+
+      assert.deepStrictEqual(client.updateBookStatus.mock.calls[0].arguments, [
+        mockUserBookId,
+        2,
+      ]);
+      assert.deepStrictEqual(
+        client.insertUserBookRead.mock.calls[0].arguments,
+        [
+          mockUserBookId,
+          mockCurrentProgress,
+          mockEditionId,
+          '2024-01-01',
+          true,
+        ],
+      );
+      assert.deepStrictEqual(callOrder, [
+        'updateBookStatus',
+        'insertUserBookRead',
+      ]);
+      assert.deepStrictEqual(result._statusInfo, {
+        currentStatusId: 2,
+        statusWasUpdated: true,
+      });
+    });
+  });
 
   describe('updateReadingProgress - Status Transition Tests', () => {
     it('should update status from Want to Read (1) to Currently Reading (2)', async () => {
