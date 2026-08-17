@@ -26,11 +26,16 @@ function createManager(bookDetails) {
         'title_author:rhythm_of_war|brandon_sanderson',
       getCachedBookInfo: mock.fn(async () => ({ exists: false })),
     },
-    _checkFormatCompatibility:
-      SyncManager.prototype._checkFormatCompatibility,
+    _checkFormatCompatibility: SyncManager.prototype._checkFormatCompatibility,
     _mapHardcoverFormatToInternal:
       SyncManager.prototype._mapHardcoverFormatToInternal,
     _areFormatsCompatible: SyncManager.prototype._areFormatsCompatible,
+    _getEditionProgressBasis: SyncManager.prototype._getEditionProgressBasis,
+    _isEditionProgressCapable: SyncManager.prototype._isEditionProgressCapable,
+    _selectProgressCapableEdition:
+      SyncManager.prototype._selectProgressCapableEdition,
+    _resolveProgressCapableAutoAddEdition:
+      SyncManager.prototype._resolveProgressCapableAutoAddEdition,
   };
 }
 
@@ -210,9 +215,6 @@ describe('Audiobook auto-add edition selection', () => {
 
     assert.equal(result.status, 'auto_added');
     assert.equal(result.bookId, 'rhythm-book');
-    assert.equal(
-      result.editionId,
-      'different-identifier-close-audiobook',
-    );
+    assert.equal(result.editionId, 'different-identifier-close-audiobook');
   });
 });
