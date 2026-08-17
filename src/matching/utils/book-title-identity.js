@@ -7,7 +7,9 @@ export const COLLECTION_TITLE_PATTERN =
   /\b(?:box(?:ed)?\s+set|collection(?:\s+set)?|omnibus|bundle|(?:two|three|four|five|six|seven|eight|nine|\d+)\s+books?)\b/i;
 
 export function stripAudiobookAnnotations(title) {
-  return String(title || '').replace(AUDIOBOOK_ANNOTATION_PATTERN, ' ').trim();
+  return String(title || '')
+    .replace(AUDIOBOOK_ANNOTATION_PATTERN, ' ')
+    .trim();
 }
 
 export function normalizeIdentityTitle(title) {
