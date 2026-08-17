@@ -136,7 +136,9 @@ describe('Identifier title validation', () => {
     );
 
     assert.equal(result.status, 'auto_added');
-    assert.equal(result.bookId, 'fourth-wing-book');
-    assert.equal(result.editionId, 'fourth-wing-audio');
+    assert.deepEqual(
+      manager.hardcover.addBookToLibrary.mock.calls[0].arguments,
+      ['fourth-wing-book', 2, 'fourth-wing-audio'],
+    );
   });
 });
