@@ -16,10 +16,7 @@ describe('BookCache transaction timeout', () => {
       );
 
       assert.deepEqual(results, [4321]);
-      assert.equal(
-        cache.db.pragma('busy_timeout', { simple: true }),
-        1234,
-      );
+      assert.equal(cache.db.pragma('busy_timeout', { simple: true }), 1234);
     } finally {
       cache.close();
     }
