@@ -74,7 +74,7 @@ describe('Identifier title validation', () => {
     };
     const manager = {
       userId: 'test-user',
-      dryRun: true,
+      dryRun: false,
       hardcoverBooks: [],
       globalConfig: { force_sync: false },
       hardcover: {
@@ -89,7 +89,7 @@ describe('Identifier title validation', () => {
             reading_format: { format: 'Listened' },
           },
         ]),
-        addBookToLibrary: mock.fn(),
+        addBookToLibrary: mock.fn(async () => ({ id: 'user-book-1' })),
       },
       bookMatcher: {
         findMatchByTitleAuthor: mock.fn(async () => ({
@@ -104,6 +104,7 @@ describe('Identifier title validation', () => {
         generateTitleAuthorIdentifier: () =>
           'title_author:fourth_wing|rebecca_yarros',
         getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+        storeBookSyncData: mock.fn(async () => {}),
       },
       _checkFormatCompatibility:
         SyncManager.prototype._checkFormatCompatibility,
