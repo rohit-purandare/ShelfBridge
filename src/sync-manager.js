@@ -2261,6 +2261,23 @@ export class SyncManager {
           syncResult.actions.push(
             `[DRY RUN] Would add matched book to library`,
           );
+
+          // Continue through the same post-add sync path as live mode without
+          // issuing a write to Hardcover.
+          if (!hardcoverMatch.userBook) {
+            hardcoverMatch.userBook = {
+              id: `dry-run-${bookId}`,
+              book: {
+                id: bookId,
+                title: hardcoverMatch.book?.title || title,
+                contributions: [],
+              },
+            };
+          } else {
+            hardcoverMatch.userBook.id = `dry-run-${bookId}`;
+          }
+          hardcoverMatch._isDryRunSimulatedAdd = true;
+          hardcoverMatch._isSearchResult = false;
         }
       } catch (error) {
         logger.error(
@@ -2574,12 +2591,12 @@ export class SyncManager {
             },
             targetTitle: title,
             targetAuthor: author || 'N/A',
-            fallbackEnabled: !this.dryRun,
+            fallbackEnabled: true,
             titleAuthorId: titleAuthorId,
           },
         );
 
-        if (!this.dryRun) {
+        if (searchResults.length === 0) {
           try {
             // Use BookMatcher's title/author matching with library context
             // This enables duplicate detection and "Want to Read" update logic
@@ -2835,7 +2852,7 @@ export class SyncManager {
               `Could not find ${title} in Hardcover database after all search attempts`,
               {
                 searchedIdentifiers: identifiers,
-                titleAuthorAttempted: !this.dryRun,
+                titleAuthorAttempted: true,
                 dryRun: this.dryRun,
               },
             );
@@ -3213,7 +3230,16 @@ export class SyncManager {
 
       // Disable protection for force sync, or for first sync only when
       // Hardcover has no existing progress to protect.
-      if (shouldProtectAgainstRegression && isForceSync) {
+      if (
+        shouldProtectAgainstRegression &&
+        hardcoverMatch._isDryRunSimulatedAdd
+      ) {
+        shouldProtectAgainstRegression = false;
+        logger.debug(
+          `Skipping existing progress lookup for simulated addition: ${title}`,
+          { bookId: hardcoverMatch.book?.id },
+        );
+      } else if (shouldProtectAgainstRegression && isForceSync) {
         shouldProtectAgainstRegression = false;
         logger.debug(
           `Disabling progress regression protection for ${title}: force sync enabled`,

@@ -314,6 +314,78 @@ describe('Search-result auto-add guards', () => {
     assert.equal(addBookToLibrary.mock.callCount(), 0);
   });
 
+  it('continues a dry-run through the live post-add path without a second auto-add', async () => {
+    const match = createTwoStageMatch();
+    const addBookToLibrary = mock.fn(async () => ({ id: 'user-book-1' }));
+    const getBookCurrentProgress = mock.fn(async () => ({
+      has_progress: true,
+    }));
+    const handleCompletionStatus = mock.fn(async () => ({
+      status: 'completed',
+      reason: 'dry-run completion preview',
+    }));
+    const manager = Object.create(SyncManager.prototype);
+
+    Object.assign(manager, {
+      userId: 'test-user',
+      dryRun: true,
+      verbose: false,
+      timezone: 'UTC',
+      globalConfig: {
+        force_sync: true,
+        auto_add_books: true,
+        min_progress_threshold: 5,
+      },
+      bookMatcher: {
+        findMatch: mock.fn(async () => ({
+          match,
+          extractedMetadata: {},
+        })),
+      },
+      cache: {
+        generateTitleAuthorIdentifier: () =>
+          'title_author:the_martian|andy_weir',
+        getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+        getSyncTracking: mock.fn(async () => ({ total_syncs: 2 })),
+      },
+      hardcover: { addBookToLibrary, getBookCurrentProgress },
+      sessionManager: {
+        shouldDelayUpdate: mock.fn(async () => ({
+          shouldDelay: false,
+          reason: 'dry-run sync preview',
+        })),
+        completeSession: mock.fn(async () => false),
+      },
+      _selectEditionWithCache: mock.fn(async () => match.edition),
+      _handleCompletionStatus: handleCompletionStatus,
+      _clearNegativeSyncSkip: mock.fn(async () => {}),
+    });
+
+    const result = await manager._syncSingleBook(
+      {
+        id: 'abs-the-martian',
+        progress_percentage: 100,
+        media: {
+          metadata: {
+            title: 'The Martian',
+            authors: [{ name: 'Andy Weir' }],
+          },
+        },
+      },
+      null,
+    );
+
+    assert.equal(result.status, 'completed');
+    assert.equal(addBookToLibrary.mock.callCount(), 0);
+    assert.equal(getBookCurrentProgress.mock.callCount(), 0);
+    assert.equal(handleCompletionStatus.mock.callCount(), 1);
+    assert.equal(match._isSearchResult, false);
+    assert.equal(match._isDryRunSimulatedAdd, true);
+    assert.equal(match.userBook.id, 'dry-run-292354');
+    assert.equal(match.userBook.book.id, 292354);
+    assert.equal(match.edition.id, 30402186);
+  });
+
   it('caches the edition ID from a two-stage match', async () => {
     const storeEditionMapping = mock.fn(async () => {});
     const matcher = new TitleAuthorMatcher(null, { storeEditionMapping }, {});
