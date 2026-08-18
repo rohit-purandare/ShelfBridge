@@ -150,12 +150,23 @@ export class IsbnMatcher {
     }
 
     const match = identifierLookup[lookupIsbn];
+    const hardcoverTitle = match.userBook?.book?.title;
+
+    if (!isIdentifierTitlePlausible(title, hardcoverTitle)) {
+      logger.warn(`Rejected direct ISBN match with conflicting title`, {
+        isbn: identifiers.isbn,
+        matchedIsbn: lookupIsbn,
+        sourceTitle: title,
+        hardcoverTitle,
+      });
+      return null;
+    }
 
     logger.debug(`Found ISBN match for ${title}`, {
       isbn: identifiers.isbn,
       matchedIsbn: lookupIsbn,
       isbnVariants,
-      hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
+      hardcoverTitle: hardcoverTitle || 'Unknown Title',
       userBookId: match.userBook?.id || 'No User Book ID',
       editionId: match.edition.id,
     });

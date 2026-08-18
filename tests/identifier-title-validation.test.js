@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 
 import { AsinMatcher } from '../src/matching/strategies/asin-matcher.js';
+import { IsbnMatcher } from '../src/matching/strategies/isbn-matcher.js';
 import { isIdentifierTitlePlausible } from '../src/matching/utils/identifier-title-validator.js';
 import { SyncManager } from '../src/sync-manager.js';
 
@@ -101,6 +102,36 @@ describe('Identifier title validation', () => {
     );
 
     assert.equal(result, null);
+  });
+
+  it('rejects conflicting direct ASIN and ISBN library matches', async () => {
+    const conflictingMatch = {
+      userBook: {
+        id: 'collection-user-book',
+        book: {
+          title:
+            'The Empyrean Series, 3 Books Collection Set, Fourth Wing, Iron Flame, Onyx Storm, by Rebecca Yarros',
+        },
+      },
+      edition: { id: 'collection-edition' },
+    };
+    const absBook = {
+      media: { metadata: { title: 'Fourth Wing: Empyrean, Book 1' } },
+    };
+
+    const asinResult = await new AsinMatcher().findMatch(
+      absBook,
+      { asin: 'B0BVD25SYT' },
+      { B0BVD25SYT: conflictingMatch },
+    );
+    const isbnResult = await new IsbnMatcher().findMatch(
+      absBook,
+      { isbn: '9780575082014' },
+      { 9780575082014: conflictingMatch },
+    );
+
+    assert.equal(asinResult, null);
+    assert.equal(isbnResult, null);
   });
 
   it('falls back to title matching after rejecting an identifier title', async () => {

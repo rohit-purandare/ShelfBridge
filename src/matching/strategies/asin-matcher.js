@@ -160,10 +160,20 @@ export class AsinMatcher {
     }
 
     const match = identifierLookup[identifiers.asin];
+    const hardcoverTitle = match.userBook?.book?.title;
+
+    if (!isIdentifierTitlePlausible(title, hardcoverTitle)) {
+      logger.warn(`Rejected direct ASIN match with conflicting title`, {
+        asin: identifiers.asin,
+        sourceTitle: title,
+        hardcoverTitle,
+      });
+      return null;
+    }
 
     logger.debug(`Found ASIN match for ${title}`, {
       asin: identifiers.asin,
-      hardcoverTitle: match.userBook.book.title,
+      hardcoverTitle,
       userBookId: match.userBook.id,
       editionId: match.edition.id,
     });
