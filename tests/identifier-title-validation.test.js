@@ -86,9 +86,15 @@ describe('Identifier title validation', () => {
     }
   });
 
-  it('fails closed for alternate titles without corroborating metadata', () => {
+  it('intentionally fails closed for regional titles without corroborating metadata', () => {
+    // These are the same work under UK and US titles. Title-only validation
+    // cannot establish that alias, so metadata-aware fallback must decide it.
     assert.equal(
       isIdentifierTitlePlausible('Northern Lights', 'The Golden Compass'),
+      false,
+    );
+    assert.equal(
+      isIdentifierTitlePlausible('The Golden Compass', 'Northern Lights'),
       false,
     );
   });
