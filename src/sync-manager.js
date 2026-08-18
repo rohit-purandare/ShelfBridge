@@ -2453,6 +2453,25 @@ export class SyncManager {
 
     try {
       let searchResults = [];
+      const filterPlausibleResults = (results, identifierType, identifier) => {
+        const plausibleResults = results.filter(searchResult =>
+          isIdentifierTitlePlausible(title, searchResult.book?.title),
+        );
+
+        if (plausibleResults.length < results.length) {
+          logger.warn(
+            `Rejected ${identifierType} results with conflicting titles`,
+            {
+              identifier,
+              sourceTitle: title,
+              rejectedCount: results.length - plausibleResults.length,
+              remainingCount: plausibleResults.length,
+            },
+          );
+        }
+
+        return plausibleResults;
+      };
 
       // Search for the book by ISBN or ASIN. These are read-only API calls, so
       // dry-run should still execute them to preview accurate auto-add results.
@@ -2471,6 +2490,11 @@ export class SyncManager {
             title: r.book?.title,
           })),
         });
+        searchResults = filterPlausibleResults(
+          searchResults,
+          'ASIN',
+          identifiers.asin,
+        );
       }
 
       if (searchResults.length === 0 && identifiers.isbn) {
@@ -2488,21 +2512,11 @@ export class SyncManager {
             title: r.book?.title,
           })),
         });
-      }
-
-      if (searchResults.length > 0) {
-        const unvalidatedCount = searchResults.length;
-        searchResults = searchResults.filter(searchResult =>
-          isIdentifierTitlePlausible(title, searchResult.book?.title),
+        searchResults = filterPlausibleResults(
+          searchResults,
+          'ISBN',
+          identifiers.isbn,
         );
-
-        if (searchResults.length < unvalidatedCount) {
-          logger.warn(`Rejected identifier results with conflicting titles`, {
-            sourceTitle: title,
-            rejectedCount: unvalidatedCount - searchResults.length,
-            remainingCount: searchResults.length,
-          });
-        }
       }
 
       // Check format compatibility after identifier search

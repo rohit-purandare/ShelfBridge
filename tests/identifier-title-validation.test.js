@@ -6,6 +6,43 @@ import { IsbnMatcher } from '../src/matching/strategies/isbn-matcher.js';
 import { isIdentifierTitlePlausible } from '../src/matching/utils/identifier-title-validator.js';
 import { SyncManager } from '../src/sync-manager.js';
 
+function createAutoAddManager({
+  asinResults = [],
+  isbnResults = [],
+  titleAuthorMatch = null,
+}) {
+  return {
+    userId: 'test-user',
+    dryRun: false,
+    hardcoverBooks: [],
+    globalConfig: { force_sync: false },
+    hardcover: {
+      searchBooksByAsin: mock.fn(async () => asinResults),
+      searchBooksByIsbn: mock.fn(async () => isbnResults),
+      addBookToLibrary: mock.fn(async () => ({ id: 'user-book-1' })),
+    },
+    bookMatcher: {
+      findMatchByTitleAuthor: mock.fn(async () => titleAuthorMatch),
+    },
+    cache: {
+      generateTitleAuthorIdentifier: () =>
+        'title_author:fourth_wing|rebecca_yarros',
+      getCachedBookInfo: mock.fn(async () => ({ exists: false })),
+      storeBookSyncData: mock.fn(async () => {}),
+    },
+    _checkFormatCompatibility: SyncManager.prototype._checkFormatCompatibility,
+    _mapHardcoverFormatToInternal:
+      SyncManager.prototype._mapHardcoverFormatToInternal,
+    _areFormatsCompatible: SyncManager.prototype._areFormatsCompatible,
+    _getEditionProgressBasis: SyncManager.prototype._getEditionProgressBasis,
+    _isEditionProgressCapable: SyncManager.prototype._isEditionProgressCapable,
+    _selectProgressCapableEdition:
+      SyncManager.prototype._selectProgressCapableEdition,
+    _resolveProgressCapableAutoAddEdition:
+      SyncManager.prototype._resolveProgressCapableAutoAddEdition,
+  };
+}
+
 describe('Identifier title validation', () => {
   it('rejects a single book mapped to a multi-book collection', () => {
     assert.equal(
@@ -142,53 +179,26 @@ describe('Identifier title validation', () => {
       audio_seconds: 76920,
       reading_format: { format: 'Listened' },
     };
-    const manager = {
-      userId: 'test-user',
-      dryRun: false,
-      hardcoverBooks: [],
-      globalConfig: { force_sync: false },
-      hardcover: {
-        searchBooksByAsin: mock.fn(async () => [
-          {
-            id: 'collection-edition',
-            book: {
-              id: 'collection-book',
-              title:
-                'The Empyrean Series, 3 Books Collection Set, Fourth Wing, Iron Flame, Onyx Storm, by Rebecca Yarros',
-            },
-            reading_format: { format: 'Listened' },
+    const manager = createAutoAddManager({
+      asinResults: [
+        {
+          id: 'collection-edition',
+          book: {
+            id: 'collection-book',
+            title:
+              'The Empyrean Series, 3 Books Collection Set, Fourth Wing, Iron Flame, Onyx Storm, by Rebecca Yarros',
           },
-        ]),
-        addBookToLibrary: mock.fn(async () => ({ id: 'user-book-1' })),
+          reading_format: { format: 'Listened' },
+        },
+      ],
+      titleAuthorMatch: {
+        userBook: null,
+        book: correctBook,
+        edition: correctEdition,
+        _matchType: 'title_author_two_stage',
+        _isSearchResult: true,
       },
-      bookMatcher: {
-        findMatchByTitleAuthor: mock.fn(async () => ({
-          userBook: null,
-          book: correctBook,
-          edition: correctEdition,
-          _matchType: 'title_author_two_stage',
-          _isSearchResult: true,
-        })),
-      },
-      cache: {
-        generateTitleAuthorIdentifier: () =>
-          'title_author:fourth_wing|rebecca_yarros',
-        getCachedBookInfo: mock.fn(async () => ({ exists: false })),
-        storeBookSyncData: mock.fn(async () => {}),
-      },
-      _checkFormatCompatibility:
-        SyncManager.prototype._checkFormatCompatibility,
-      _mapHardcoverFormatToInternal:
-        SyncManager.prototype._mapHardcoverFormatToInternal,
-      _areFormatsCompatible: SyncManager.prototype._areFormatsCompatible,
-      _getEditionProgressBasis: SyncManager.prototype._getEditionProgressBasis,
-      _isEditionProgressCapable:
-        SyncManager.prototype._isEditionProgressCapable,
-      _selectProgressCapableEdition:
-        SyncManager.prototype._selectProgressCapableEdition,
-      _resolveProgressCapableAutoAddEdition:
-        SyncManager.prototype._resolveProgressCapableAutoAddEdition,
-    };
+    });
 
     const result = await SyncManager.prototype._tryAutoAddBook.call(
       manager,
@@ -206,6 +216,56 @@ describe('Identifier title validation', () => {
     );
 
     assert.equal(result.status, 'auto_added');
+    assert.deepEqual(
+      manager.hardcover.addBookToLibrary.mock.calls[0].arguments,
+      ['fourth-wing-book', 2, 'fourth-wing-audio'],
+    );
+  });
+
+  it('tries ISBN after rejecting conflicting ASIN results', async () => {
+    const manager = createAutoAddManager({
+      asinResults: [
+        {
+          id: 'collection-edition',
+          book: {
+            id: 'collection-book',
+            title:
+              'The Empyrean Series, 3 Books Collection Set, Fourth Wing, Iron Flame, Onyx Storm, by Rebecca Yarros',
+          },
+          reading_format: { format: 'Listened' },
+        },
+      ],
+      isbnResults: [
+        {
+          id: 'fourth-wing-audio',
+          book: { id: 'fourth-wing-book', title: 'Fourth Wing' },
+          audio_seconds: 76920,
+          reading_format: { format: 'Listened' },
+        },
+      ],
+    });
+
+    const result = await SyncManager.prototype._tryAutoAddBook.call(
+      manager,
+      {
+        media: {
+          metadata: {
+            title: 'Fourth Wing: Empyrean, Book 1',
+            author: 'Rebecca Yarros',
+          },
+        },
+      },
+      { asin: 'B0BVD25SYT', isbn: '9781649374042' },
+      'Fourth Wing: Empyrean, Book 1',
+      'Rebecca Yarros',
+    );
+
+    assert.equal(result.status, 'auto_added');
+    assert.equal(manager.hardcover.searchBooksByIsbn.mock.calls.length, 1);
+    assert.equal(
+      manager.bookMatcher.findMatchByTitleAuthor.mock.calls.length,
+      0,
+    );
     assert.deepEqual(
       manager.hardcover.addBookToLibrary.mock.calls[0].arguments,
       ['fourth-wing-book', 2, 'fourth-wing-audio'],
