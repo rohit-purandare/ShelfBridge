@@ -14,6 +14,45 @@ describe('Identifier title validation', () => {
       ),
       false,
     );
+    assert.equal(
+      isIdentifierTitlePlausible(
+        'Fourth Wing: 3 Book Collection',
+        'Fourth Wing',
+      ),
+      false,
+    );
+    assert.equal(
+      isIdentifierTitlePlausible(
+        'Fourth Wing: 3 Book Collection',
+        'Fourth Wing: 2 Book Collection',
+      ),
+      false,
+    );
+  });
+
+  it('rejects distinct works with shared series or volume titles', () => {
+    const conflictingTitles = [
+      ['The Sandman: Act II', 'The Sandman: Act I'],
+      ['Mistborn: The Final Empire', 'Mistborn: The Well of Ascension'],
+      ['Example Book 1', 'Example Book 2'],
+      ['Example Volume 1', 'Example Volume 2'],
+      ['Example Part One', 'Example Part Two'],
+    ];
+
+    for (const [sourceTitle, candidateTitle] of conflictingTitles) {
+      assert.equal(
+        isIdentifierTitlePlausible(sourceTitle, candidateTitle),
+        false,
+        `${sourceTitle} should not match ${candidateTitle}`,
+      );
+    }
+  });
+
+  it('fails closed for alternate titles without corroborating metadata', () => {
+    assert.equal(
+      isIdentifierTitlePlausible('Northern Lights', 'The Golden Compass'),
+      false,
+    );
   });
 
   it('accepts common subtitle differences for the same book', () => {
