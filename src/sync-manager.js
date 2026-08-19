@@ -11,6 +11,7 @@ import {
   extractTitle,
   getIsbnVariants,
 } from './matching/index.js';
+import { isIdentifierTitlePlausible } from './matching/utils/identifier-title-validator.js';
 import { formatDurationForLogging } from './utils/time.js';
 import { DateTime } from 'luxon';
 import { setMaxListeners } from 'events';
@@ -2452,6 +2453,25 @@ export class SyncManager {
 
     try {
       let searchResults = [];
+      const filterPlausibleResults = (results, identifierType, identifier) => {
+        const plausibleResults = results.filter(searchResult =>
+          isIdentifierTitlePlausible(title, searchResult.book?.title),
+        );
+
+        if (plausibleResults.length < results.length) {
+          logger.warn(
+            `Rejected ${identifierType} results with conflicting titles`,
+            {
+              identifier,
+              sourceTitle: title,
+              rejectedCount: results.length - plausibleResults.length,
+              remainingCount: plausibleResults.length,
+            },
+          );
+        }
+
+        return plausibleResults;
+      };
 
       // Search for the book by ISBN or ASIN. These are read-only API calls, so
       // dry-run should still execute them to preview accurate auto-add results.
@@ -2470,6 +2490,11 @@ export class SyncManager {
             title: r.book?.title,
           })),
         });
+        searchResults = filterPlausibleResults(
+          searchResults,
+          'ASIN',
+          identifiers.asin,
+        );
       }
 
       if (searchResults.length === 0 && identifiers.isbn) {
@@ -2487,6 +2512,11 @@ export class SyncManager {
             title: r.book?.title,
           })),
         });
+        searchResults = filterPlausibleResults(
+          searchResults,
+          'ISBN',
+          identifiers.isbn,
+        );
       }
 
       // Check format compatibility after identifier search

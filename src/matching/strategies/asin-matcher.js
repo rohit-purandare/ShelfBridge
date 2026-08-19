@@ -7,6 +7,7 @@
 
 import logger from '../../logger.js';
 import { extractTitle } from '../utils/audiobookshelf-extractor.js';
+import { isIdentifierTitlePlausible } from '../utils/identifier-title-validator.js';
 
 /**
  * ASIN Matching Strategy - Tier 1
@@ -56,9 +57,22 @@ export class AsinMatcher {
             `ASIN search returned ${searchResults.length} results for ${identifiers.asin}`,
           );
 
-          if (searchResults.length > 0) {
+          const plausibleResults = searchResults.filter(result => {
+            const hardcoverTitle = result.book?.title;
+            const plausible = isIdentifierTitlePlausible(title, hardcoverTitle);
+            if (!plausible) {
+              logger.warn(`Rejected ASIN result with conflicting title`, {
+                asin: identifiers.asin,
+                sourceTitle: title,
+                hardcoverTitle,
+              });
+            }
+            return plausible;
+          });
+
+          if (plausibleResults.length > 0) {
             // Check if we have any edition of the same book
-            for (const result of searchResults) {
+            for (const result of plausibleResults) {
               const bookId = result.book?.id;
               if (bookId) {
                 logger.debug(
@@ -110,7 +124,7 @@ export class AsinMatcher {
             }
 
             // If we found ASIN results but user doesn't have the book, return for auto-add consideration
-            const firstResult = searchResults[0];
+            const firstResult = plausibleResults[0];
             logger.debug(
               `📍 ASIN match found in Hardcover database but not in user library - returning for auto-add consideration`,
               {
@@ -146,10 +160,20 @@ export class AsinMatcher {
     }
 
     const match = identifierLookup[identifiers.asin];
+    const hardcoverTitle = match.userBook?.book?.title;
+
+    if (!isIdentifierTitlePlausible(title, hardcoverTitle)) {
+      logger.warn(`Rejected direct ASIN match with conflicting title`, {
+        asin: identifiers.asin,
+        sourceTitle: title,
+        hardcoverTitle,
+      });
+      return null;
+    }
 
     logger.debug(`Found ASIN match for ${title}`, {
       asin: identifiers.asin,
-      hardcoverTitle: match.userBook.book.title,
+      hardcoverTitle,
       userBookId: match.userBook.id,
       editionId: match.edition.id,
     });

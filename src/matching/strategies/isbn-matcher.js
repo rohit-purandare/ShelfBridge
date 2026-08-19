@@ -7,6 +7,7 @@
 
 import logger from '../../logger.js';
 import { extractTitle } from '../utils/audiobookshelf-extractor.js';
+import { isIdentifierTitlePlausible } from '../utils/identifier-title-validator.js';
 import { getIsbnVariants } from '../utils/text-matching.js';
 
 /**
@@ -61,9 +62,22 @@ export class IsbnMatcher {
             `ISBN search returned ${searchResults.length} results for ${identifiers.isbn}`,
           );
 
-          if (searchResults.length > 0) {
+          const plausibleResults = searchResults.filter(result => {
+            const hardcoverTitle = result.book?.title;
+            const plausible = isIdentifierTitlePlausible(title, hardcoverTitle);
+            if (!plausible) {
+              logger.warn(`Rejected ISBN result with conflicting title`, {
+                isbn: identifiers.isbn,
+                sourceTitle: title,
+                hardcoverTitle,
+              });
+            }
+            return plausible;
+          });
+
+          if (plausibleResults.length > 0) {
             // Check if we have any edition of the same book
-            for (const result of searchResults) {
+            for (const result of plausibleResults) {
               const bookId = result.book?.id;
               if (bookId) {
                 logger.debug(
@@ -100,7 +114,7 @@ export class IsbnMatcher {
             }
 
             // If we found ISBN results but user doesn't have the book, return for auto-add consideration
-            const firstResult = searchResults[0];
+            const firstResult = plausibleResults[0];
             logger.debug(
               `📍 ISBN match found in Hardcover database but not in user library - returning for auto-add consideration`,
               {
@@ -136,12 +150,23 @@ export class IsbnMatcher {
     }
 
     const match = identifierLookup[lookupIsbn];
+    const hardcoverTitle = match.userBook?.book?.title;
+
+    if (!isIdentifierTitlePlausible(title, hardcoverTitle)) {
+      logger.warn(`Rejected direct ISBN match with conflicting title`, {
+        isbn: identifiers.isbn,
+        matchedIsbn: lookupIsbn,
+        sourceTitle: title,
+        hardcoverTitle,
+      });
+      return null;
+    }
 
     logger.debug(`Found ISBN match for ${title}`, {
       isbn: identifiers.isbn,
       matchedIsbn: lookupIsbn,
       isbnVariants,
-      hardcoverTitle: match.userBook?.book?.title || 'Unknown Title',
+      hardcoverTitle: hardcoverTitle || 'Unknown Title',
       userBookId: match.userBook?.id || 'No User Book ID',
       editionId: match.edition.id,
     });
