@@ -78,7 +78,7 @@
     "node": "^22.0.0 || ^24.0.0"
   },
   "overrides": {
-    "ansi-regex": "6.2.2",
+    "ansi-regex": "6.3.0",
     "color-name": "2.1.1",
     "is-arrayish": "0.3.4",
     "supports-color": "10.2.2",
