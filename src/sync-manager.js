@@ -752,7 +752,7 @@ export class SyncManager {
     return this._getEditionProgressBasis(edition) !== null;
   }
 
-  _getCachedProgressRepairState(editionId) {
+  _getCachedEditionRepairState(editionId) {
     if (!Array.isArray(this.hardcoverBooks)) {
       return { requiresRepair: false, reason: null };
     }
@@ -778,21 +778,6 @@ export class SyncManager {
       return {
         requiresRepair: true,
         reason: 'cached edition has neither audiobook duration nor page count',
-      };
-    }
-
-    const latestRead = userBook.user_book_reads?.[0];
-    if (
-      userBook.status_id === 2 &&
-      latestRead?.id &&
-      !latestRead.finished_at &&
-      latestRead.progress == null &&
-      latestRead.progress_pages == null &&
-      latestRead.progress_seconds == null
-    ) {
-      return {
-        requiresRepair: true,
-        reason: 'latest Hardcover read is empty',
       };
     }
 
@@ -1346,7 +1331,7 @@ export class SyncManager {
                 type,
               );
 
-              const repairState = this._getCachedProgressRepairState(
+              const repairState = this._getCachedEditionRepairState(
                 cachedInfo.edition_id,
               );
 
@@ -1489,23 +1474,7 @@ export class SyncManager {
                   'title_author',
                 );
 
-              const repairState = this._getCachedProgressRepairState(
-                bestCacheMatch.edition_id,
-              );
-
-              if (!titleAuthorProgressChanged && repairState.requiresRepair) {
-                requiresProgressRepair = true;
-                progressRepairReason = repairState.reason;
-                hasChanged = true;
-                cacheFoundEarly = false;
-                cachedMatchInfo = {
-                  identifier: bestCachePattern,
-                  identifierType: 'title_author',
-                  editionId: bestCacheMatch.edition_id,
-                  lastProgress: bestCacheMatch.progress_percent,
-                  lastSync: bestCacheMatch.last_sync,
-                };
-              } else if (!titleAuthorProgressChanged) {
+              if (!titleAuthorProgressChanged) {
                 hasChanged = false;
                 cacheFoundEarly = true;
                 shouldPerformExpensiveMatching = false; // Skip expensive matching entirely
@@ -2367,7 +2336,7 @@ export class SyncManager {
         cachedEditionId: hardcoverMatch.edition?.id,
       });
       syncResult.actions.push(
-        `Repairing cached Hardcover progress: ${progressRepairReason}`,
+        `Repairing cached Hardcover edition: ${progressRepairReason}`,
       );
     } else {
       syncResult.progress_changed = true;

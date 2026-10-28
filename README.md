@@ -165,7 +165,7 @@ users:
 - ✅ **Multi-user support** - Sync multiple users from one server
 - ✅ **Library filtering** - Sync specific libraries or exclude unwanted ones
 - ✅ **Progress protection** - Prevent accidental progress regression
-- ✅ **Reading status sync** - Reuse Hardcover's automatic read when moving from Want to Read to Currently Reading; repair empty current reads even when cached progress is unchanged
+- ✅ **Reading status sync** - Reuse Hardcover's automatic read when moving from Want to Read to Currently Reading, preserving existing reading history
 - ✅ **Smart matching** - Advanced 3-tier matching: ASIN → ISBN → Title/Author with intelligent fuzzy matching
 - ✅ **Docker support** - Easy deployment with containers
 - ✅ **Comprehensive logging** - Detailed sync reports and error tracking

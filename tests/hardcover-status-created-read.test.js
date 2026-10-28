@@ -48,6 +48,7 @@ function createBackend({
   statusId = 1,
   autoCreate = true,
   statusError = false,
+  initialReadError = null,
   refreshError = null,
   rejectProgress = false,
 } = {}) {
@@ -76,13 +77,12 @@ function createBackend({
         user_book_reads: state.reads.slice(-1),
         user_books: [userBook()],
       };
-      if (state.fetches > 1) {
-        if (refreshError === 'throw') throw new Error('Refresh failed');
-        if (refreshError === 'missing reads') delete response.user_book_reads;
-        if (refreshError === 'missing book') response.user_books = [];
-        if (refreshError === 'stale status')
-          response.user_books[0].status_id = 1;
-      }
+      const readError = state.fetches === 1 ? initialReadError : refreshError;
+      if (readError === 'throw') throw new Error('Progress query failed');
+      if (readError === 'missing reads') delete response.user_book_reads;
+      if (readError === 'missing books') delete response.user_books;
+      if (readError === 'missing book') response.user_books = [];
+      if (readError === 'stale status') response.user_books[0].status_id = 1;
       return structuredClone(response);
     }
     if (query.includes('mutation updateBookStatus')) {
@@ -182,7 +182,7 @@ async function createCachedScenario(options = {}, identifierType = 'asin') {
     edition.id,
   );
   const findMatch = mock.fn(async () => {
-    throw new Error('Cached repair must not need expensive matching');
+    throw new Error('Cached sync must not need expensive matching');
   });
   const manager = Object.create(SyncManager.prototype);
   Object.assign(manager, {
@@ -378,72 +378,111 @@ describe('Hardcover status-created reads (#252)', () => {
     assert.equal(result.id, newReadId);
     assert.equal(state.reads.at(-1).started_at, '2026-10-07');
   });
+
+  for (const initialReadError of [
+    'throw',
+    'missing reads',
+    'missing books',
+    'missing book',
+  ]) {
+    it(`does not write when the initial progress query has ${initialReadError}`, async () => {
+      const { client, state, writes } = createBackend({ initialReadError });
+      const before = structuredClone(state.reads);
+      const result = await client.updateReadingProgress(
+        123,
+        1702,
+        progressPercent,
+        edition.id,
+        true,
+        startedAt,
+      );
+      assert.equal(result, false);
+      assert.equal(writes.length, 0);
+      assert.equal(state.statusId, 1);
+      assert.deepEqual(state.reads, before);
+      assert.equal(client._executeQuery.mock.callCount(), 1);
+    });
+  }
 });
 
-describe('Cache recovery for existing empty Hardcover reads', () => {
-  const emptyRead = makeRead({
+describe('Cache safety for Hardcover reading sessions', () => {
+  const newSession = makeRead({
     id: newReadId,
+    started_at: '2026-10-28',
     progress: null,
     progress_seconds: null,
   });
+  const completed = makeRead({
+    finished_at: '2026-10-08',
+    progress: 100,
+    progress_seconds: edition.audio_seconds,
+  });
 
-  for (const identifierType of ['asin', 'title_author']) {
-    it(`repairs unchanged ${identifierType} progress once, then resumes cache skips`, async () => {
-      const scenario = await createCachedScenario(
-        { reads: [makeRead(), emptyRead] },
+  for (const { identifierType, withAsin } of [
+    { identifierType: 'asin', withAsin: true },
+    { identifierType: 'title_author', withAsin: true },
+    { identifierType: 'title_author', withAsin: false },
+  ]) {
+    it(`leaves a new reread untouched with unchanged progress via ${identifierType}${withAsin ? ' and ASIN' : ''}`, async () => {
+      const reads = [completed, newSession];
+      const scenario = await createCachedScenario({ reads }, identifierType);
+      scenario.manager.globalConfig.prevent_progress_regression = true;
+      const before = await scenario.cache.getCachedBookInfo(
+        userId,
+        scenario.identifier,
+        title,
         identifierType,
       );
-      // An ASIN book with an older title/author cache entry exercises fallback lookup.
-      const first = await scenario.manager._syncSingleBook(
-        createAbsBook(),
-        null,
-      );
-      assert.equal(first.status, 'synced');
-      assert.equal(scenario.writes.length, 1);
-      assert.equal(scenario.writes[0].id, newReadId);
-      assert.equal(scenario.writes[0].insert, false);
-      assert.equal(scenario.state.reads.at(-1).progress_seconds, 1702);
-      assert.equal(scenario.findMatch.mock.callCount(), 0);
 
-      // Each scheduled sync fetches the library again before cache checks.
-      scenario.manager.hardcoverBooks = await scenario.client.getUserBooks();
-      const second = await scenario.manager._syncSingleBook(
-        createAbsBook(),
+      const result = await scenario.manager._syncSingleBook(
+        createAbsBook(withAsin),
         null,
       );
-      assert.equal(second.status, 'skipped');
-      assert.match(second.reason, /Progress unchanged/);
-      assert.equal(scenario.writes.length, 1);
-      assert.equal(
-        await scenario.cache.getEditionForBook(
-          userId,
-          scenario.identifier,
-          title,
-          identifierType,
-        ),
-        edition.id,
+
+      assert.equal(result.status, 'skipped');
+      assert.match(result.reason, /Progress unchanged/);
+      assert.equal(scenario.writes.length, 0);
+      assert.equal(scenario.state.fetches, 0);
+      assert.equal(scenario.findMatch.mock.callCount(), 0);
+      assert.deepEqual(scenario.state.reads, reads);
+      const after = await scenario.cache.getCachedBookInfo(
+        userId,
+        scenario.identifier,
+        title,
+        identifierType,
       );
+      assert.deepEqual(after, before);
     });
   }
 
-  it('also repairs a book with no ASIN using its title/author cache', async () => {
-    const scenario = await createCachedScenario(
-      { reads: [emptyRead] },
-      'title_author',
-    );
+  it('allows an explicit forced sync to populate an existing empty latest read', async () => {
+    const reads = [makeRead(), newSession];
+    const scenario = await createCachedScenario({ reads });
+    scenario.manager.globalConfig.force_sync = true;
+    scenario.findMatch.mock.mockImplementation(async () => ({
+      match: { userBook: scenario.manager.hardcoverBooks[0], edition },
+      extractedMetadata: { title, author, identifiers: { asin } },
+    }));
+
     const result = await scenario.manager._syncSingleBook(
-      createAbsBook(false),
+      createAbsBook(),
       null,
     );
+
     assert.equal(result.status, 'synced');
+    assert.equal(scenario.writes.length, 1);
     assert.equal(scenario.writes[0].id, newReadId);
-    assert.equal(scenario.findMatch.mock.callCount(), 0);
+    assert.equal(scenario.writes[0].insert, false);
+    assert.equal(scenario.state.reads.length, reads.length);
+    assert.deepEqual(scenario.state.reads[0], reads[0]);
+    assert.equal(scenario.state.reads.at(-1).progress_seconds, 1702);
   });
 
-  it('retries a failed repair without changing the cached success data', async () => {
+  it('leaves the cache unchanged after an initial fetch failure and retries successfully', async () => {
     const scenario = await createCachedScenario({
-      reads: [emptyRead],
-      rejectProgress: true,
+      statusId: 1,
+      cachedProgress: 0,
+      initialReadError: 'throw',
     });
     const before = await scenario.cache.getCachedBookInfo(
       userId,
@@ -451,25 +490,47 @@ describe('Cache recovery for existing empty Hardcover reads', () => {
       title,
       'asin',
     );
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await scenario.manager._syncSingleBook(
-        createAbsBook(),
-        null,
-      );
-      assert.equal(result.status, 'error');
-    }
+    const failed = await scenario.manager._syncSingleBook(
+      createAbsBook(),
+      null,
+    );
+    assert.equal(failed.status, 'error');
+    assert.equal(scenario.writes.length, 0);
+    assert.equal(scenario.state.statusId, 1);
+    assert.deepEqual(
+      await scenario.cache.getCachedBookInfo(userId, asin, title, 'asin'),
+      before,
+    );
+
+    const retried = await scenario.manager._syncSingleBook(
+      createAbsBook(),
+      null,
+    );
+    assert.equal(retried.status, 'synced');
+    assert.equal(scenario.writes.length, 1);
+    assert.equal(scenario.writes[0].id, newReadId);
+    assert.equal(scenario.writes[0].insert, false);
     const after = await scenario.cache.getCachedBookInfo(
       userId,
       asin,
       title,
       'asin',
     );
-    assert.deepEqual(after, before);
-    assert.equal(scenario.writes.length, 2);
+    assert.equal(after.progress_percent, progressPercent);
+    const saved = scenario.cache.db
+      .prepare(
+        'SELECT status_id FROM books WHERE user_id = ? AND identifier = ?',
+      )
+      .get(userId, asin);
+    assert.equal(saved.status_id, 2);
   });
 
-  for (const failure of [{ statusError: true }, { refreshError: 'throw' }]) {
-    it(`does not cache success when the transition ${failure.statusError ? 'is rejected' : 'cannot be refreshed'}`, async () => {
+  for (const failure of [
+    { statusError: true },
+    { refreshError: 'throw' },
+    { rejectProgress: true },
+  ]) {
+    it(`does not cache success when ${failure.statusError ? 'the status change is rejected' : failure.refreshError ? 'the transition cannot be refreshed' : 'the progress write is rejected'}`, async () => {
       const scenario = await createCachedScenario({
         statusId: 1,
         cachedProgress: 0,
@@ -486,7 +547,7 @@ describe('Cache recovery for existing empty Hardcover reads', () => {
         null,
       );
       assert.equal(result.status, 'error');
-      assert.equal(scenario.writes.length, 0);
+      assert.equal(scenario.writes.length, failure.rejectProgress ? 1 : 0);
       const after = await scenario.cache.getCachedBookInfo(
         userId,
         asin,
@@ -499,7 +560,7 @@ describe('Cache recovery for existing empty Hardcover reads', () => {
 
   for (const read of [
     makeRead(),
-    makeRead({ finished_at: startedAt }),
+    completed,
     makeRead({ progress: 0, progress_seconds: 0 }),
   ]) {
     it(`keeps unchanged cache skips for ${read.finished_at ? 'completed' : read.progress === 0 ? 'zero-progress' : 'populated'} reads`, async () => {

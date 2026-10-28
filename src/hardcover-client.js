@@ -122,13 +122,6 @@ export class HardcoverClient {
                     ) {
                         id
                         status_id
-                        user_book_reads(order_by: {id: desc}, limit: 1) {
-                            id
-                            finished_at
-                            progress
-                            progress_pages
-                            progress_seconds
-                        }
                         book {
                             id
                             title
@@ -252,6 +245,17 @@ export class HardcoverClient {
   ) {
     // Check for existing progress (still used for re-read detection and regression checks)
     let progressInfo = await this.getBookCurrentProgress(userBookId);
+    // A successful query with no reads still includes the user_book. Without
+    // that state, we cannot safely decide whether to update or insert a read.
+    if (!progressInfo?.user_book) {
+      logger.error(
+        'Could not fetch current reading state; skipping progress update',
+        {
+          userBookId,
+        },
+      );
+      return false;
+    }
 
     // Track status for return value
     let currentStatusId = progressInfo?.user_book?.status_id || null;
