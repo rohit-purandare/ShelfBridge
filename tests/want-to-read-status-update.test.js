@@ -48,6 +48,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
     });
 
     it('should update Want to Read status before inserting first progress', async () => {
+      let currentStatus = 1;
       const client = new HardcoverClient(mockToken);
       const callOrder = [];
 
@@ -56,11 +57,12 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         user_books: [
           {
             id: mockUserBookId,
-            status_id: 1,
+            status_id: currentStatus,
           },
         ],
       }));
       client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        currentStatus = statusId;
         callOrder.push('updateBookStatus');
         return { id: userBookId, status_id: statusId };
       });
@@ -108,6 +110,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
 
   describe('updateReadingProgress - Status Transition Tests', () => {
     it('should update status from Want to Read (1) to Currently Reading (2)', async () => {
+      let currentStatus = 1;
       const client = new HardcoverClient(mockToken);
 
       // Mock book with Want to Read status
@@ -120,15 +123,15 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         },
         user_book: {
           id: mockUserBookId,
-          status_id: 1, // Want to Read
+          status_id: currentStatus, // Want to Read
         },
       }));
 
       // Mock updateBookStatus to verify it's called
-      client.updateBookStatus = mock.fn(async (userBookId, statusId) => ({
-        id: userBookId,
-        status_id: statusId,
-      }));
+      client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        currentStatus = statusId;
+        return { id: userBookId, status_id: statusId };
+      });
 
       // Mock _shouldCreateNewReadingSession to return false
       client._shouldCreateNewReadingSession = mock.fn(() => ({
@@ -279,6 +282,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
     });
 
     it('should update status for audiobooks with seconds', async () => {
+      let currentStatus = 1;
       const client = new HardcoverClient(mockToken);
       const mockAudioSeconds = 3600; // 1 hour
 
@@ -292,14 +296,14 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         },
         user_book: {
           id: mockUserBookId,
-          status_id: 1, // Want to Read
+          status_id: currentStatus, // Want to Read
         },
       }));
 
-      client.updateBookStatus = mock.fn(async (userBookId, statusId) => ({
-        id: userBookId,
-        status_id: statusId,
-      }));
+      client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        currentStatus = statusId;
+        return { id: userBookId, status_id: statusId };
+      });
 
       client._shouldCreateNewReadingSession = mock.fn(() => ({
         createNew: false,
@@ -553,6 +557,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
     });
 
     it('should handle new reading session creation with Want to Read status', async () => {
+      let currentStatus = 1;
       const client = new HardcoverClient(mockToken);
 
       // Mock book with Want to Read status but should create new session
@@ -561,14 +566,14 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         latest_read: null,
         user_book: {
           id: mockUserBookId,
-          status_id: 1, // Want to Read
+          status_id: currentStatus, // Want to Read
         },
       }));
 
-      client.updateBookStatus = mock.fn(async (userBookId, statusId) => ({
-        id: userBookId,
-        status_id: statusId,
-      }));
+      client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        currentStatus = statusId;
+        return { id: userBookId, status_id: statusId };
+      });
 
       // Mock _shouldCreateNewReadingSession to return true
       client._shouldCreateNewReadingSession = mock.fn(() => ({
@@ -610,6 +615,7 @@ describe('HardcoverClient - Want to Read Status Update', () => {
 
   describe('Integration with existing progress update flow', () => {
     it('should update status before updating progress', async () => {
+      let currentStatus = 1;
       const client = new HardcoverClient(mockToken);
       const callOrder = [];
 
@@ -623,12 +629,13 @@ describe('HardcoverClient - Want to Read Status Update', () => {
         },
         user_book: {
           id: mockUserBookId,
-          status_id: 1, // Want to Read
+          status_id: currentStatus, // Want to Read
         },
       }));
 
       // Track call order
       client.updateBookStatus = mock.fn(async (userBookId, statusId) => {
+        currentStatus = statusId;
         callOrder.push('updateBookStatus');
         return { id: userBookId, status_id: statusId };
       });

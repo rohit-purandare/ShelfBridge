@@ -249,7 +249,7 @@ describe('Hardcover null progress repair', () => {
       },
     ];
 
-    const repairState = manager._getCachedEditionRepairState(edition.id);
+    const repairState = manager._getCachedProgressRepairState(edition.id);
 
     assert.equal(repairState.requiresRepair, true);
     assert.match(
