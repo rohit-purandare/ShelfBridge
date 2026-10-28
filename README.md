@@ -53,6 +53,10 @@ cp config/config.yaml.example config/config.yaml
 node src/main.js start
 ```
 
+Use `npm ci` for repeatable installs from the lockfile after pulling updates.
+When updating dependencies, keep the security overrides in `package.json` on
+patched versions and verify them with `npm audit --audit-level=moderate`.
+
 ## ⚙️ Configuration Options
 
 ShelfBridge supports two configuration methods to fit different deployment needs:
