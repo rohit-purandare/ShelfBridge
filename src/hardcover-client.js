@@ -244,7 +244,18 @@ export class HardcoverClient {
     rereadConfig = null,
   ) {
     // Check for existing progress (still used for re-read detection and regression checks)
-    const progressInfo = await this.getBookCurrentProgress(userBookId);
+    let progressInfo = await this.getBookCurrentProgress(userBookId);
+    // A successful query with no reads still includes the user_book. Without
+    // that state, we cannot safely decide whether to update or insert a read.
+    if (!progressInfo?.user_book) {
+      logger.error(
+        'Could not fetch current reading state; skipping progress update',
+        {
+          userBookId,
+        },
+      );
+      return false;
+    }
 
     // Track status for return value
     let currentStatusId = progressInfo?.user_book?.status_id || null;
@@ -261,7 +272,23 @@ export class HardcoverClient {
           newStatus: 2,
         },
       );
-      await this.updateBookStatus(userBookId, 2);
+      const updatedBook = await this.updateBookStatus(userBookId, 2);
+      if (updatedBook?.status_id !== 2) {
+        logger.error('Could not change book status to Currently Reading', {
+          userBookId,
+        });
+        return false;
+      }
+
+      // Hardcover can create a read as a side effect of this transition. Use
+      // the refreshed state for both session detection and the progress write.
+      progressInfo = await this.getBookCurrentProgress(userBookId);
+      if (progressInfo?.user_book?.status_id !== 2) {
+        logger.error('Could not refresh reading progress after status change', {
+          userBookId,
+        });
+        return false;
+      }
       currentStatusId = 2;
       statusWasUpdated = true;
     }
@@ -315,8 +342,11 @@ export class HardcoverClient {
       progressInfo.latest_read &&
       progressInfo.latest_read.id
     ) {
-      // Update existing progress - ALWAYS send our start date if provided (Option A)
+      // Prefer the source start date, preserving Hardcover's date if it is absent.
       const readId = progressInfo.latest_read.id;
+      const startDate =
+        (startedAt || progressInfo.latest_read.started_at)?.slice(0, 10) ||
+        null;
 
       const mutation = useSeconds
         ? `
@@ -365,18 +395,16 @@ export class HardcoverClient {
             id: safeParseInt(readId, 'readId'),
             seconds: safeParseInt(currentProgress, 'currentProgress'),
             editionId: safeParseInt(editionId, 'editionId'),
-            startedAt: startedAt ? startedAt.slice(0, 10) : null,
+            startedAt: startDate,
           }
         : {
             id: safeParseInt(readId, 'readId'),
             pages: safeParseInt(currentProgress, 'currentProgress'),
             editionId: safeParseInt(editionId, 'editionId'),
-            startedAt: startedAt ? startedAt.slice(0, 10) : null,
+            startedAt: startDate,
           };
 
-      logger.debug(
-        `Setting start date on update: ${startedAt ? startedAt.slice(0, 10) : 'null'}`,
-      );
+      logger.debug(`Setting start date on update: ${startDate || 'null'}`);
       try {
         const result = await this._executeQuery(mutation, variables);
         const updateResult = result?.update_user_book_read;
@@ -768,9 +796,13 @@ export class HardcoverClient {
 
     try {
       const result = await this._executeQuery(mutation, variables);
-      return (
-        result && result.update_user_book && result.update_user_book.user_book
-      );
+      if (result?.update_user_book?.error) {
+        logger.error(
+          `Hardcover rejected book status update: ${result.update_user_book.error}`,
+        );
+        return false;
+      }
+      return result?.update_user_book?.user_book || false;
     } catch (error) {
       logger.error('Error updating book status:', error.message);
       return false;
@@ -811,6 +843,12 @@ export class HardcoverClient {
     const variables = { userBookId: safeParseInt(userBookId, 'userBookId') };
     try {
       const result = await this._executeQuery(query, variables);
+      if (
+        !Array.isArray(result?.user_book_reads) ||
+        !Array.isArray(result?.user_books)
+      ) {
+        throw new Error('Hardcover returned an incomplete progress response');
+      }
       const latestRead = result?.user_book_reads?.[0] ?? null;
       const userBook = result?.user_books?.[0] ?? null;
 

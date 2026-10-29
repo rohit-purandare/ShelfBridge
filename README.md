@@ -53,6 +53,10 @@ cp config/config.yaml.example config/config.yaml
 node src/main.js start
 ```
 
+Use `npm ci` for repeatable installs from the lockfile after pulling updates.
+When updating dependencies, keep the security overrides in `package.json` on
+patched versions and verify them with `npm audit --audit-level=moderate`.
+
 ## ⚙️ Configuration Options
 
 ShelfBridge supports two configuration methods to fit different deployment needs:
@@ -161,6 +165,7 @@ users:
 - ✅ **Multi-user support** - Sync multiple users from one server
 - ✅ **Library filtering** - Sync specific libraries or exclude unwanted ones
 - ✅ **Progress protection** - Prevent accidental progress regression
+- ✅ **Reading status sync** - Reuse Hardcover's automatic read when moving from Want to Read to Currently Reading, preserving existing reading history
 - ✅ **Smart matching** - Advanced 3-tier matching: ASIN → ISBN → Title/Author with intelligent fuzzy matching
 - ✅ **Docker support** - Easy deployment with containers
 - ✅ **Comprehensive logging** - Detailed sync reports and error tracking

@@ -102,6 +102,7 @@ describe('Want to Read Status Update - Edition Change Integration', () => {
   });
 
   it('should update status from Want to Read when progress is exactly the same', async () => {
+    let currentStatus = 1;
     const userBookId = 123;
     const editionId = 456;
     const progressPercent = 50;
@@ -116,15 +117,15 @@ describe('Want to Read Status Update - Edition Change Integration', () => {
       },
       user_book: {
         id: userBookId,
-        status_id: 1, // Want to Read
+        status_id: currentStatus, // Want to Read
       },
     }));
 
     // Mock updateBookStatus to verify it's called
-    client.updateBookStatus = mock.fn(async (bookId, statusId) => ({
-      id: bookId,
-      status_id: statusId,
-    }));
+    client.updateBookStatus = mock.fn(async (bookId, statusId) => {
+      currentStatus = statusId;
+      return { id: bookId, status_id: statusId };
+    });
 
     // Mock _shouldCreateNewReadingSession
     client._shouldCreateNewReadingSession = mock.fn(() => ({
@@ -473,6 +474,7 @@ describe('Want to Read Status Update - Edition Change Integration', () => {
   });
 
   it('should handle audiobook format with Want to Read status', async () => {
+    let currentStatus = 1;
     const userBookId = 200;
     const editionId = 500;
     const currentSeconds = 3600; // 1 hour
@@ -489,11 +491,14 @@ describe('Want to Read Status Update - Edition Change Integration', () => {
       },
       user_book: {
         id: userBookId,
-        status_id: 1, // Want to Read
+        status_id: currentStatus, // Want to Read
       },
     }));
 
-    client.updateBookStatus = mock.fn(async () => ({}));
+    client.updateBookStatus = mock.fn(async (id, statusId) => {
+      currentStatus = statusId;
+      return { id, status_id: statusId };
+    });
     client._shouldCreateNewReadingSession = mock.fn(() => ({
       createNew: false,
       isRegression: false,
