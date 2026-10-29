@@ -22,6 +22,7 @@ export {
   convertIsbn10To13,
   convertIsbn13To10,
   getIsbnVariants,
+  getIsbn10FromNumericAsin,
   normalizeAsin,
   normalizeTitle,
   normalizeAuthor,
