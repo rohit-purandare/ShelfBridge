@@ -118,5 +118,5 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
 
 # Container configuration
 EXPOSE 3000
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "start"]

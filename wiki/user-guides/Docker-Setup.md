@@ -618,6 +618,26 @@ docker run --rm \
 
 ## 🛠️ Troubleshooting Docker Issues
 
+### Defunct or Zombie Processes
+
+The ShelfBridge image uses `dumb-init` as PID 1 to reap orphaned child processes and forward shutdown signals. The existing startup script still handles configuration setup and user switching, including custom `PUID`/`PGID` settings and Docker's `--user` option.
+
+For older images without the init wrapper, add `init: true` to the existing ShelfBridge service in your Compose file:
+
+```yaml
+services:
+  shelfbridge:
+    init: true
+```
+
+Recreate the container to apply the setting:
+
+```bash
+docker compose up -d shelfbridge
+```
+
+For `docker run` deployments using older images, add the `--init` flag when recreating the container.
+
 ### Container Won't Start or Exits Immediately
 
 **First: Check if this is expected behavior:**
