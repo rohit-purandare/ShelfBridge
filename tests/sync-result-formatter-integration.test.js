@@ -280,8 +280,8 @@ describe('SyncResultFormatter Integration with DisplayLogger', () => {
         { dry_run: false },
       );
 
-      assert(lines.includes('├─ 1 successful book update'));
-      assert(lines.includes('├─ 1 processing error'));
+      assert(lines.includes('├─ 1 book updated'));
+      assert(lines.includes('├─ 1 failed'));
       assert(lines.includes('└─ 25 skipped (no changes)'));
       assert.equal(
         lines.some(line => line.includes('API calls made')),
